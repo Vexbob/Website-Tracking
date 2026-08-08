@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Vexbob</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/config.js"></script>
+    <script src="/js/version.js"></script>
+    <script src="/js/api.js"></script>
+    <style>
+        .login-wrap { max-width: 380px; margin: 4rem auto; padding: 0 1rem; }
+        .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; box-shadow: var(--shadow); }
+        .login-card h1 { text-align: center; font-size: 1.5rem; margin-bottom: 1.5rem; }
+        .login-card input { padding: 0.75rem; font-size: 1rem; }
+        .login-card button { padding: 0.75rem; margin-top: 0.5rem; background: var(--accent); color: #fff; }
+        .login-error { text-align: center; min-height: 1.25rem; }
+    </style>
+</head>
+<body>
+    <div class="login-wrap">
+        <div class="login-card">
+            <h1>Vexbob</h1>
+            <form id="login-form">
+                <input type="text" id="username" placeholder="Benutzername" required autocomplete="username" autofocus>
+                <input type="password" id="password" placeholder="Passwort" required autocomplete="current-password">
+                <button type="submit">Einloggen</button>
+            </form>
+            <p id="error-msg" class="error login-error"></p>
+        </div>
+    </div>
+    <div class="version-tag"></div>
+    <script>
+        var errorP = document.getElementById('error-msg');
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault(); errorP.textContent = '';
+            try {
+                await login(document.getElementById('username').value, document.getElementById('password').value);
+                window.location.href = '/';
+            } catch (err) { errorP.textContent = 'Falsche Zugangsdaten'; }
+        });
+        if (isLoggedIn()) window.location.href = '/';
+    </script>
+</body>
+</html>

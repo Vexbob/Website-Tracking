@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account aktivieren — Vexbob</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/config.js"></script>
+    <script src="/js/version.js"></script>
+    <script src="/js/api.js"></script>
+    <style>
+        .act-wrap { max-width: 420px; margin: 3rem auto; padding: 0 1rem; }
+        .act-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; box-shadow: var(--shadow); }
+        .act-card h1 { text-align: center; font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .act-card .sub { text-align:center; color: var(--text-muted); font-size:0.875rem; margin-bottom: 1.5rem; }
+        .act-card .welcome { text-align:center; padding: 0.75rem; background: var(--green-bg); color: var(--green-dark); border-radius: 8px; margin-bottom: 1rem; font-weight: 600; }
+        :root[data-theme="dark"] .act-card .welcome { background: rgba(34,197,94,0.15); color: #4ade80; }
+        .act-card input { padding: 0.75rem; font-size: 1rem; }
+        .act-card button { padding: 0.75rem; margin-top: 0.5rem; background: var(--green); color: #fff; font-weight: 600; }
+        .act-card button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .act-hint { font-size: 0.75rem; color: var(--text-faint); margin-top: -0.25rem; margin-bottom: 0.75rem; }
+        .act-error { text-align: center; min-height: 1.25rem; color: var(--red); font-size: 0.875rem; }
+        .pw-strength { height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; margin-top: -0.5rem; margin-bottom: 0.75rem; }
+        .pw-strength-fill { height:100%; width:0; transition: width .2s, background .2s; }
+    </style>
+</head>
+<body>
+    <div class="act-wrap">
+        <div class="act-card">
+            <h1>Vexbob</h1>
+            <p class="sub">Willkommen! Bitte lege dein Passwort fest.</p>
+            <div id="loading" style="text-align:center;color:var(--text-muted);padding:2rem 0">Prüfe Einladung…</div>
+            <div id="expired" style="display:none;text-align:center;padding:1rem 0">
+                <p style="color:var(--red);font-weight:600;margin-bottom:0.5rem">Einladung ungültig oder abgelaufen</p>
+                <p style="color:var(--text-muted);font-size:0.875rem">Bitte den Admin um einen neuen Link.</p>
+            </div>
+            <form id="act-form" style="display:none">
+                <div class="welcome" id="welcome"></div>
+                <label>Neues Passwort (mind. 6 Zeichen)</label>
+                <input type="password" id="pw1" required autocomplete="new-password" minlength="6">
+                <div class="pw-strength"><div class="pw-strength-fill" id="strength"></div></div>
+                <label>Passwort wiederholen</label>
+                <input type="password" id="pw2" required autocomplete="new-password" minlength="6">
+                <button type="submit" id="submit-btn">Passwort setzen &amp; anmelden</button>
+            </form>
+            <p id="err" class="act-error"></p>
+        </div>
+    </div>
+    <div class="version-tag"></div>
+    <script>
+        const params = new URLSearchParams(location.search);
+        const token = params.get('t');
+        const errP = document.getElementById('err');
+
+        function updateStrength() {
+            const v = document.getElementById('pw1').value;
+            let score = 0;
+            if (v.length >= 6) score++;
+            if (v.length >= 10) score++;
+            if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+            if (/[0-9]/.test(v)) score++;
+            if (/[^A-Za-z0-9]/.test(v)) score++;
+            const pct = Math.min(100, score * 20);
+            const colors = ['#ef4444','#f59e0b','#eab308','#22c55e','#16a34a'];
+            const el = document.getElementById('strength');
+            el.style.width = pct + '%';
+            el.style.background = colors[Math.max(0, Math.min(colors.length-1, score-1))];
+        }
+
+        async function loadInvite() {
+            if (!token) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('expired').style.display = '';
+                return;
+            }
+            try {
+                const info = await apiCall('/api/invite/' + encodeURIComponent(token));
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('welcome').textContent = 'Hi ' + info.username + ' 👋';
+                document.getElementById('act-form').style.display = '';
+            } catch(e) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('expired').style.display = '';
+            }
+        }
+
+        document.getElementById('pw1').addEventListener('input', updateStrength);
+        document.getElementById('act-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            errP.textContent = '';
+            const pw1 = document.getElementById('pw1').value;
+            const pw2 = document.getElementById('pw2').value;
+            if (pw1.length < 6) { errP.textContent = 'Passwort mind. 6 Zeichen'; return; }
+            if (pw1 !== pw2) { errP.textContent = 'Passwörter stimmen nicht überein'; return; }
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true; btn.textContent = 'Aktiviere…';
+            try {
+                const res = await apiCall('/api/invite/activate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, password: pw1 })
+                });
+                setToken(res.access_token);
+                haptic('success');
+                location.href = '/';
+            } catch(err) {
+                errP.textContent = err.message || 'Fehler bei der Aktivierung';
+                haptic('error');
+                btn.disabled = false; btn.textContent = 'Passwort setzen & anmelden';
+            }
+        });
+        loadInvite();
+    </script>
+</body>
+</html>

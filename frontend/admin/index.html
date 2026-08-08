@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+    <title>Admin — Vexbob</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/config.js"></script>
+    <script src="/js/version.js"></script>
+    <script src="/js/api.js"></script>
+    <style>
+        body{visibility:hidden}body.ready{visibility:visible}
+        .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;box-shadow:var(--shadow-sm)}
+        .card h3{font-size:1rem;margin-bottom:0.875rem;font-weight:600}
+        .form-row{display:grid;grid-template-columns:1fr auto;gap:0.625rem;align-items:end}
+        .form-row label{font-size:0.75rem;color:var(--text-muted);font-weight:500;margin-bottom:2px}
+        .form-row input{margin:0;padding:0.5rem 0.625rem;font-size:0.875rem}
+        .form-row button{margin:0;padding:0.5rem 1rem;font-size:0.875rem;background:var(--green);color:#fff;width:auto;font-weight:600;border-radius:8px}
+        .form-row button:hover{background:var(--green-dark)}
+        @media(max-width:600px){.form-row{grid-template-columns:1fr}}
+        .user-row{display:flex;align-items:center;gap:0.75rem;padding:0.75rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;flex-wrap:wrap}
+        .user-name{flex:1;min-width:120px;font-weight:600;color:var(--text)}
+        .user-badge{background:var(--purple);color:#fff;font-size:0.6875rem;padding:2px 8px;border-radius:10px;font-weight:600}
+        .user-badge.pending{background:var(--orange)}
+        .user-meta{font-size:0.75rem;color:var(--text-muted)}
+        .user-actions{display:flex;gap:0.375rem;flex-wrap:wrap}
+        .user-actions button{padding:0.375rem 0.75rem;font-size:0.75rem;font-weight:600;border-radius:6px;width:auto;margin:0;border:1px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer}
+        .user-actions button.danger{background:var(--red-bg);color:var(--red);border-color:transparent}
+        .user-actions button.danger:hover{background:var(--red);color:#fff}
+        .user-actions button.primary{background:var(--blue);color:#fff;border-color:transparent}
+        .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:0.625rem 1.25rem;border-radius:8px;box-shadow:var(--shadow-lg);z-index:1000;opacity:0;transition:opacity .2s;font-size:0.875rem}
+        .toast.show{opacity:1}
+        .toast.err{background:var(--red);color:#fff}
+        .modal{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:100;padding:1rem}
+        .modal.open{display:flex}
+        .modal-card{background:var(--surface);border-radius:12px;padding:1.5rem;max-width:480px;width:100%;box-shadow:var(--shadow-lg)}
+        .modal-card h3{margin-bottom:1rem}
+        .invite-box{background:var(--surface-2);border:1px dashed var(--border);border-radius:8px;padding:0.75rem;font-size:0.8125rem;word-break:break-all;font-family:monospace;color:var(--text);margin-bottom:0.75rem}
+        .modal-actions{display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap}
+        .modal-actions button{width:auto;padding:0.5rem 1rem;font-size:0.875rem;margin:0}
+        .modal-actions .cancel{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+        .modal-actions .primary{background:var(--blue);color:#fff}
+    </style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/" style="text-decoration:none;color:inherit;font-weight:700;font-size:1.125rem;">← Vexbob</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn" title="Design umschalten">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main>
+    <h1 style="margin-bottom:1.5rem">User-Verwaltung</h1>
+
+    <div class="card">
+        <h3>Neuen Account einladen</h3>
+        <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem">Du erstellst den Account, der User bekommt einen Einladungs-Link und legt sein Passwort selbst fest.</p>
+        <div class="form-row">
+            <div>
+                <label>Benutzername</label>
+                <input id="newUsername" placeholder="z.B. Anna" autocomplete="off">
+            </div>
+            <button onclick="createUser()">Einladung erstellen</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Bestehende Accounts</h3>
+        <div id="userList"><div class="muted">Lade…</div></div>
+    </div>
+</main>
+
+<div class="modal" id="inviteModal">
+    <div class="modal-card">
+        <h3>🎉 Einladungs-Link</h3>
+        <p style="margin-bottom:0.75rem;font-size:0.875rem;color:var(--text-muted)">Schicke diesen Link an <strong id="inviteUser">–</strong>. Der Link ist einmalig und gilt <strong id="inviteExp">–</strong>.</p>
+        <div class="invite-box" id="inviteLink">–</div>
+        <div class="modal-actions">
+            <button class="cancel" onclick="closeInviteModal()">Schließen</button>
+            <button class="primary" onclick="copyInvite()">📋 Kopieren</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="pwModal">
+    <div class="modal-card">
+        <h3>Passwort zurücksetzen</h3>
+        <p style="margin-bottom:0.75rem;font-size:0.875rem;color:var(--text-muted)">Für <strong id="pwModalUser">–</strong>. Nutze das nur, wenn der User sein Passwort verloren hat.</p>
+        <label>Neues Passwort (mind. 6 Zeichen)</label>
+        <input id="pwModalInput" type="password" autocomplete="new-password">
+        <div class="modal-actions">
+            <button class="cancel" onclick="closePwModal()">Abbrechen</button>
+            <button class="primary" onclick="savePwReset()">Speichern</button>
+        </div>
+    </div>
+</div>
+
+<div class="version-tag"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+let users = [];
+let pwTargetId = null;
+let toastTimer = null;
+
+function showToast(m, err) {
+    const t = document.getElementById('toast');
+    t.textContent = m;
+    t.classList.toggle('err', !!err);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function fmtDate(d) {
+    if (!d) return '';
+    try { return new Date(d).toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit',year:'numeric'}); }
+    catch(e) { return d; }
+}
+
+function inviteUrl(token) {
+    return `${location.origin}/private/activate.html?t=${token}`;
+}
+
+async function loadUsers() {
+    try {
+        users = await apiCall('/api/admin/users') || [];
+        renderUsers();
+    } catch(e) {
+        showToast(e.message || 'Fehler beim Laden', true);
+        document.getElementById('userList').innerHTML = '<div class="muted">Laden fehlgeschlagen.</div>';
+    }
+}
+
+function renderUsers() {
+    const box = document.getElementById('userList');
+    if (!users.length) { box.innerHTML = '<div class="muted">Keine Accounts.</div>'; return; }
+    box.innerHTML = users.map(u => {
+        const badge = u.is_admin ? '<span class="user-badge">ADMIN</span>' :
+                      (!u.activated ? '<span class="user-badge pending">⏳ NOCH NICHT AKTIVIERT</span>' : '');
+        let actions = '';
+        if (u.is_admin) {
+            actions = `<button onclick="openPwModal(${u.id},'${esc(u.username)}')">Passwort</button>`;
+        } else if (!u.activated && u.pending_token) {
+            actions = `<button class="primary" onclick="showInvite('${u.pending_token}','${esc(u.username)}','${u.pending_expires}')">Link anzeigen</button>
+                       <button onclick="regenerateInvite(${u.id},'${esc(u.username)}')">Neuer Link</button>
+                       <button class="danger" onclick="deleteUser(${u.id},'${esc(u.username)}')">Löschen</button>`;
+        } else if (!u.activated) {
+            actions = `<button class="primary" onclick="regenerateInvite(${u.id},'${esc(u.username)}')">Link erzeugen</button>
+                       <button class="danger" onclick="deleteUser(${u.id},'${esc(u.username)}')">Löschen</button>`;
+        } else {
+            actions = `<button onclick="openPwModal(${u.id},'${esc(u.username)}')">Passwort</button>
+                       <button class="danger" onclick="deleteUser(${u.id},'${esc(u.username)}')">Löschen</button>`;
+        }
+        return `<div class="user-row">
+            <span class="user-name">${esc(u.username)}</span>
+            ${badge}
+            <span class="user-meta">seit ${fmtDate(u.created_at)}</span>
+            <span style="flex:1"></span>
+            <div class="user-actions">${actions}</div>
+        </div>`;
+    }).join('');
+}
+
+async function createUser() {
+    const uname = document.getElementById('newUsername').value.trim();
+    if (!uname || uname.length < 2) { showToast('Username zu kurz', true); return; }
+    try {
+        const res = await apiCall('/api/admin/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: uname })
+        });
+        document.getElementById('newUsername').value = '';
+        haptic('success');
+        showInvite(res.invite_token, res.username, res.invite_expires_at);
+        await loadUsers();
+    } catch(e) {
+        haptic('error');
+        showToast(e.message || 'Fehler', true);
+    }
+}
+
+async function regenerateInvite(id, name) {
+    try {
+        const res = await apiCall('/api/admin/users/' + id + '/regenerate-invite', { method: 'POST' });
+        showInvite(res.invite_token, name, res.invite_expires_at);
+        await loadUsers();
+    } catch(e) {
+        showToast(e.message || 'Fehler', true);
+    }
+}
+
+function showInvite(token, name, expiresAt) {
+    document.getElementById('inviteUser').textContent = name;
+    document.getElementById('inviteLink').textContent = inviteUrl(token);
+    const exp = new Date(expiresAt);
+    const days = Math.round((exp - Date.now())/(1000*60*60*24));
+    document.getElementById('inviteExp').textContent = `bis ${exp.toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'})} (${days} Tage)`;
+    document.getElementById('inviteModal').classList.add('open');
+}
+function closeInviteModal() {
+    document.getElementById('inviteModal').classList.remove('open');
+}
+async function copyInvite() {
+    const link = document.getElementById('inviteLink').textContent;
+    try {
+        await navigator.clipboard.writeText(link);
+        haptic('tap');
+        showToast('Link kopiert');
+    } catch(e) {
+        showToast('Kopieren fehlgeschlagen — bitte manuell markieren', true);
+    }
+}
+
+function openPwModal(id, name) {
+    pwTargetId = id;
+    document.getElementById('pwModalUser').textContent = name;
+    document.getElementById('pwModalInput').value = '';
+    document.getElementById('pwModal').classList.add('open');
+    setTimeout(() => document.getElementById('pwModalInput').focus(), 100);
+}
+function closePwModal() {
+    document.getElementById('pwModal').classList.remove('open');
+    pwTargetId = null;
+}
+async function savePwReset() {
+    const pw = document.getElementById('pwModalInput').value;
+    if (!pw || pw.length < 6) { showToast('Mindestens 6 Zeichen', true); return; }
+    try {
+        await apiCall('/api/admin/users/' + pwTargetId + '/password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pw })
+        });
+        closePwModal();
+        haptic('success');
+        showToast('Passwort geändert');
+    } catch(e) {
+        haptic('error');
+        showToast(e.message || 'Fehler', true);
+    }
+}
+
+async function deleteUser(id, name) {
+    if (!confirm(`Account "${name}" wirklich löschen?\n\nALLE Daten dieses Users werden unwiderruflich entfernt.`)) return;
+    try {
+        await apiCall('/api/admin/users/' + id, { method: 'DELETE' });
+        haptic('success');
+        showToast('Gelöscht');
+        await loadUsers();
+    } catch(e) {
+        haptic('error');
+        showToast(e.message || 'Fehler', true);
+    }
+}
+
+document.getElementById('logoutBtn').onclick = () => { clearToken(); location.href = '/private/login.html'; };
+document.getElementById('themeBtn').onclick = toggleTheme;
+document.getElementById('pwModal').addEventListener('click', e => { if (e.target.id === 'pwModal') closePwModal(); });
+document.getElementById('inviteModal').addEventListener('click', e => { if (e.target.id === 'inviteModal') closeInviteModal(); });
+
+(async function boot() {
+    if (!isLoggedIn()) { location.href = '/private/login.html'; return; }
+    try {
+        const me = await fetchMe(true);
+        if (!me.is_admin) {
+            alert('Zugriff verweigert — nur Admin');
+            location.href = '/';
+            return;
+        }
+        document.getElementById('userLabel').textContent = '👤 ' + me.username;
+    } catch(e) { return; }
+    document.body.classList.add('ready');
+    await loadUsers();
+})();
+</script>
+</body>
+</html>
