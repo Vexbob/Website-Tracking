@@ -97,16 +97,20 @@ class SavGoalUpd(BaseModel):
 class AchCreate(BaseModel):
     title: str; reward_amount: float; unit: str
     start_value: float = 0; threshold_increment: float
+    step_amount: Optional[float] = None  # Klick-Schrittweite; default = threshold_increment
     target_value: Optional[float] = None; direction: str = "increase"
 
 class AchUpd(BaseModel):
     current_value: float
     achieved_at: Optional[str] = None
+    note: Optional[str] = None  # optionale Notiz für neu erzeugte Meilenstein-Einträge
 
 class AchEdit(BaseModel):
     title: Optional[str] = None; reward_amount: Optional[float] = None
     unit: Optional[str] = None; start_value: Optional[float] = None
-    threshold_increment: Optional[float] = None; target_value: Optional[float] = None
+    threshold_increment: Optional[float] = None
+    step_amount: Optional[float] = None
+    target_value: Optional[float] = None
     direction: Optional[str] = None
 
 class PGCreate(BaseModel):
@@ -120,6 +124,10 @@ class PGUpd(BaseModel):
 
 class CheckinBody(BaseModel):
     log_date: Optional[str] = None
+    note: Optional[str] = None
+
+class NoteBody(BaseModel):
+    note: Optional[str] = None
 
 class HMCreate(BaseModel):
     metric_type: str; value: float
@@ -345,12 +353,16 @@ async def list_ach(db=Depends(get_db), user=Depends(get_current_user)):
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def create_ach(request: Request, b: AchCreate, db=Depends(get_db), user=Depends(get_current_user)):
     if b.threshold_increment <= 0:
-        raise HTTPException(400, "Schrittweite muss > 0 sein")
+        raise HTTPException(400, "Meilenstein-Schwelle muss > 0 sein")
+    step = float(b.step_amount) if b.step_amount is not None else float(b.threshold_increment)
+    if step <= 0:
+        raise HTTPException(400, "Schrittweite pro Klick muss > 0 sein")
     return ser(await db.fetchrow(
-        "INSERT INTO achievements (user_id,title,reward_amount,unit,current_value,start_value,threshold_increment,target_value,direction) "
-        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
+        "INSERT INTO achievements "
+        "(user_id,title,reward_amount,unit,current_value,start_value,threshold_increment,step_amount,target_value,direction) "
+        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
         user["id"], b.title, b.reward_amount, b.unit, b.start_value, b.start_value,
-        b.threshold_increment, b.target_value, b.direction))
+        b.threshold_increment, step, b.target_value, b.direction))
 
 @app.put("/api/achievements/{aid}")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
@@ -376,29 +388,34 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
         if when > datetime.now(timezone.utc):
             raise HTTPException(400, "achieved_at darf nicht in der Zukunft liegen")
 
+    note_val = (b.note or "").strip() or None
     tm = _milestones_at(sv, nv, inc, dirn)
     if tm > cred:
+        # Notiz nur an den zuletzt erreichten Meilenstein hängen
+        # (falls mehrere in einem Rutsch erreicht werden)
+        last_step = tm
         for step in range(cred + 1, tm + 1):
             milestone_value = sv + step * inc if dirn == "increase" else sv - step * inc
             desc = f"Meilenstein: {a['title']} ({fmt_de_num(milestone_value)} {a['unit']})"
+            step_note = note_val if step == last_step else None
             if when:
                 await db.execute(
-                    "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount,date_achieved) "
-                    "VALUES ($1,$2,$3,$4,$5)",
-                    user["id"], aid, milestone_value, rew, when)
-                await db.execute(
-                    "INSERT INTO savings_transactions (user_id,amount,source_type,source_id,description,created_at) "
+                    "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount,date_achieved,note) "
                     "VALUES ($1,$2,$3,$4,$5,$6)",
-                    user["id"], rew, "achievement", aid, desc, when)
+                    user["id"], aid, milestone_value, rew, when, step_note)
+                await db.execute(
+                    "INSERT INTO savings_transactions (user_id,amount,source_type,source_id,description,created_at,note) "
+                    "VALUES ($1,$2,$3,$4,$5,$6,$7)",
+                    user["id"], rew, "achievement", aid, desc, when, step_note)
             else:
                 await db.execute(
-                    "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount) "
-                    "VALUES ($1,$2,$3,$4)",
-                    user["id"], aid, milestone_value, rew)
-                await db.execute(
-                    "INSERT INTO savings_transactions (user_id,amount,source_type,source_id,description) "
+                    "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount,note) "
                     "VALUES ($1,$2,$3,$4,$5)",
-                    user["id"], rew, "achievement", aid, desc)
+                    user["id"], aid, milestone_value, rew, step_note)
+                await db.execute(
+                    "INSERT INTO savings_transactions (user_id,amount,source_type,source_id,description,note) "
+                    "VALUES ($1,$2,$3,$4,$5,$6)",
+                    user["id"], rew, "achievement", aid, desc, step_note)
         new_cred = tm
     else:
         new_cred = cred
@@ -420,11 +437,13 @@ async def edit_ach(request: Request, aid: int, b: AchEdit, db=Depends(get_db), u
     if not old:
         raise HTTPException(404, "Not found")
     sets = []; vals = []; idx = 1; milestone_affecting = False
-    for field in ["title","reward_amount","unit","start_value","threshold_increment","target_value","direction"]:
+    for field in ["title","reward_amount","unit","start_value","threshold_increment","step_amount","target_value","direction"]:
         val = getattr(b, field)
         if val is not None:
             if field == "threshold_increment" and float(val) <= 0:
-                raise HTTPException(400, "Schrittweite muss > 0 sein")
+                raise HTTPException(400, "Meilenstein-Schwelle muss > 0 sein")
+            if field == "step_amount" and float(val) <= 0:
+                raise HTTPException(400, "Schrittweite pro Klick muss > 0 sein")
             if field in ("start_value","threshold_increment","direction"):
                 milestone_affecting = True
             sets.append(f"{field}=${idx}"); vals.append(val); idx += 1
@@ -663,10 +682,13 @@ async def checkin(request: Request, gid: int, body: Optional[CheckinBody] = None
     wk = week_key_for(d); mk = month_key_for(d)
     pk = period_key(rhythm, d)
     col = "month_key" if rhythm == "monthly" else "week_key"
+    note_val = (body.note or "").strip() if body else None
+    note_val = note_val or None
 
     await db.execute(
-        "INSERT INTO progress_logs (user_id,progress_goal_id,log_date,week_key,month_key) VALUES ($1,$2,$3,$4,$5)",
-        user["id"], gid, d, wk, mk)
+        "INSERT INTO progress_logs (user_id,progress_goal_id,log_date,week_key,month_key,note) "
+        "VALUES ($1,$2,$3,$4,$5,$6)",
+        user["id"], gid, d, wk, mk, note_val)
     cnt = await db.fetchval(
         f"SELECT COUNT(*) FROM progress_logs WHERE progress_goal_id=$1 AND user_id=$2 AND {col}=$3",
         gid, user["id"], pk)
@@ -727,6 +749,43 @@ async def checkout(request: Request, gid: int, db=Depends(get_db), user=Depends(
             "DELETE FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
             user["id"], gid, pk)
     return {"current_count": cnt, "target_count": tgt, "fulfilled": cnt >= tgt}
+
+# ---------- Notizen zu Log-Einträgen ----------
+@app.put("/api/progress-logs/{log_id}/note")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def upd_progress_log_note(request: Request, log_id: int, b: NoteBody, db=Depends(get_db), user=Depends(get_current_user)):
+    owned = await db.fetchval("SELECT 1 FROM progress_logs WHERE id=$1 AND user_id=$2", log_id, user["id"])
+    if not owned:
+        raise HTTPException(404, "Not found")
+    note_val = (b.note or "").strip() or None
+    await db.execute(
+        "UPDATE progress_logs SET note=$1 WHERE id=$2 AND user_id=$3",
+        note_val, log_id, user["id"])
+    return {"status": "ok", "note": note_val or ""}
+
+@app.put("/api/achievement-logs/{log_id}/note")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def upd_achievement_log_note(request: Request, log_id: int, b: NoteBody, db=Depends(get_db), user=Depends(get_current_user)):
+    owned = await db.fetchval("SELECT 1 FROM achievement_logs WHERE id=$1 AND user_id=$2", log_id, user["id"])
+    if not owned:
+        raise HTTPException(404, "Not found")
+    note_val = (b.note or "").strip() or None
+    await db.execute(
+        "UPDATE achievement_logs SET note=$1 WHERE id=$2 AND user_id=$3",
+        note_val, log_id, user["id"])
+    return {"status": "ok", "note": note_val or ""}
+
+@app.put("/api/savings-transactions/{tid}/note")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def upd_savings_tx_note(request: Request, tid: int, b: NoteBody, db=Depends(get_db), user=Depends(get_current_user)):
+    owned = await db.fetchval("SELECT 1 FROM savings_transactions WHERE id=$1 AND user_id=$2", tid, user["id"])
+    if not owned:
+        raise HTTPException(404, "Not found")
+    note_val = (b.note or "").strip() or None
+    await db.execute(
+        "UPDATE savings_transactions SET note=$1 WHERE id=$2 AND user_id=$3",
+        note_val, tid, user["id"])
+    return {"status": "ok", "note": note_val or ""}
 
 @app.delete("/api/progress-logs/{log_id}")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
@@ -876,14 +935,14 @@ async def del_st(request: Request, tid: int, db=Depends(get_db), user=Depends(ge
 
 @app.get("/api/savings-transactions/export")
 async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
-    lines = ["Datum;Typ;Titel;Beschreibung;Periode;Betrag"]
+    lines = ["Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz"]
 
     def _csv_field(s: str) -> str:
         s = (s or "").replace('"', '""').replace(';', ',').replace('\n', ' ').replace('\r', ' ')
         return f'"{s}"'
 
     ci_rows = await db.fetch(
-        """SELECT pl.log_date, pl.week_key, pl.month_key, pl.created_at,
+        """SELECT pl.log_date, pl.week_key, pl.month_key, pl.created_at, pl.note,
                   pg.title, pg.reward_amount, pg.rhythm_type, pg.target_count, pl.progress_goal_id, pl.id
            FROM progress_logs pl JOIN progress_goals pg ON pg.id = pl.progress_goal_id
            WHERE pl.user_id=$1
@@ -901,10 +960,10 @@ async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
         amt = float(r["reward_amount"]) if just_fulfilled else 0.0
         d = r["created_at"].isoformat() if r["created_at"] else ""
         desc = f"{cnt_upto}/{target}"
-        lines.append(f'{d};checkin;{_csv_field(r["title"])};{_csv_field(desc)};{pk or ""};{amt:.2f}')
+        lines.append(f'{d};checkin;{_csv_field(r["title"])};{_csv_field(desc)};{pk or ""};{amt:.2f};{_csv_field(r["note"] or "")}')
 
     ml_rows = await db.fetch(
-        """SELECT al.achieved_value, al.reward_amount, al.date_achieved, a.title, a.unit
+        """SELECT al.achieved_value, al.reward_amount, al.date_achieved, al.note, a.title, a.unit
            FROM achievement_logs al JOIN achievements a ON a.id = al.achievement_id
            WHERE al.user_id=$1
            ORDER BY al.date_achieved""",
@@ -913,10 +972,10 @@ async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
         d = r["date_achieved"].isoformat() if r["date_achieved"] else ""
         unit = r["unit"] or ""
         desc = f"Bei {fmt_de_num(r['achieved_value'])} {unit}".strip()
-        lines.append(f'{d};milestone;{_csv_field(r["title"])};{_csv_field(desc)};;{float(r["reward_amount"]):.2f}')
+        lines.append(f'{d};milestone;{_csv_field(r["title"])};{_csv_field(desc)};;{float(r["reward_amount"]):.2f};{_csv_field(r["note"] or "")}')
 
     tx_rows = await db.fetch(
-        """SELECT created_at, amount, source_type, source_id, description, period_key
+        """SELECT created_at, amount, source_type, source_id, description, period_key, note
            FROM savings_transactions WHERE user_id=$1 ORDER BY created_at""",
         user["id"])
     for r in tx_rows:
@@ -931,7 +990,7 @@ async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
         row_type = "streak_bonus" if is_streak_bonus else st
         desc = r["description"] or ""
         title = "Anfangsbestand" if st == "initial" else (desc[:40] or st)
-        lines.append(f'{d};{row_type};{_csv_field(title)};{_csv_field(desc)};{pk};{float(r["amount"]):.2f}')
+        lines.append(f'{d};{row_type};{_csv_field(title)};{_csv_field(desc)};{pk};{float(r["amount"]):.2f};{_csv_field(r["note"] or "")}')
 
     header = lines[0]
     body = sorted(lines[1:])
@@ -944,7 +1003,7 @@ async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
 async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_current_user)):
     events = []
     ci_rows = await db.fetch(
-        """SELECT pl.id, pl.progress_goal_id, pl.log_date, pl.week_key, pl.month_key, pl.created_at,
+        """SELECT pl.id, pl.progress_goal_id, pl.log_date, pl.week_key, pl.month_key, pl.created_at, pl.note,
                   pg.title, pg.reward_amount, pg.rhythm_type, pg.target_count
            FROM progress_logs pl JOIN progress_goals pg ON pg.id = pl.progress_goal_id
            WHERE pl.user_id=$1
@@ -964,10 +1023,10 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
             "log_date": r["log_date"].isoformat(),
             "title": r["title"], "description": f"{count_at_or_before}/{target} · {pk}",
             "amount": amt, "log_id": r["id"], "source_id": r["progress_goal_id"],
-            "fulfilled": just_fulfilled, "deletable": True})
+            "fulfilled": just_fulfilled, "note": r["note"] or "", "deletable": True})
 
     ml_rows = await db.fetch(
-        """SELECT al.id, al.achievement_id, al.achieved_value, al.reward_amount, al.date_achieved,
+        """SELECT al.id, al.achievement_id, al.achieved_value, al.reward_amount, al.date_achieved, al.note,
                   a.title, a.unit
            FROM achievement_logs al JOIN achievements a ON a.id = al.achievement_id
            WHERE al.user_id=$1
@@ -983,7 +1042,8 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
             "description": f"Erreicht bei {fmt_de_num(val)} {unit}".strip(),
             "achieved_value": val, "unit": unit,
             "amount": float(r["reward_amount"]),
-            "log_id": r["id"], "source_id": r["achievement_id"], "deletable": True
+            "log_id": r["id"], "source_id": r["achievement_id"],
+            "note": r["note"] or "", "deletable": True
         })
 
     for r in await db.fetch(
@@ -991,10 +1051,10 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
         user["id"], limit):
         events.append({"type": "initial", "date": r["created_at"].isoformat(), "title": "Anfangsbestand",
             "description": r["description"] or "", "amount": float(r["amount"]),
-            "log_id": r["id"], "deletable": True})
+            "log_id": r["id"], "note": r["note"] or "", "deletable": True})
 
     sb_rows = await db.fetch(
-        """SELECT st.id, st.amount, st.description, st.created_at, st.source_id, st.period_key, pg.title
+        """SELECT st.id, st.amount, st.description, st.created_at, st.source_id, st.period_key, st.note, pg.title
            FROM savings_transactions st LEFT JOIN progress_goals pg ON pg.id = st.source_id
            WHERE st.user_id=$1 AND st.source_type='progress' AND st.period_key LIKE '%%-streak-%%'
            ORDER BY st.created_at DESC LIMIT $2""",
@@ -1002,7 +1062,8 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
     for r in sb_rows:
         events.append({"type": "streak_bonus", "date": r["created_at"].isoformat(),
             "title": r["title"] or "?", "description": r["description"] or "",
-            "amount": float(r["amount"]), "log_id": r["id"], "source_id": r["source_id"], "deletable": True})
+            "amount": float(r["amount"]), "log_id": r["id"], "source_id": r["source_id"],
+            "note": r["note"] or "", "deletable": True})
 
     events.sort(key=lambda x: x["date"], reverse=True)
     return events[:limit]

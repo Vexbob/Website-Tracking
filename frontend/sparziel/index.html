@@ -406,7 +406,8 @@ body{visibility:hidden}body.ready{visibility:visible}
                 <div><label>Belohnung (€)</label><input id="achReward" type="number" step="0.01" placeholder="5"></div>
                 <div><label>Einheit</label><input id="achUnit" placeholder="m / km / Buch"></div>
                 <div><label>Startwert</label><input id="achStart" type="number" step="0.01" placeholder="0"></div>
-                <div><label>Schrittweite</label><input id="achIncr" type="number" step="0.01" placeholder="250"></div>
+                <div><label>Meilenstein alle</label><input id="achIncr" type="number" step="0.01" placeholder="5" title="Auszahlung nach jeder x-ten Einheit (z.B. alle 5 kg)"></div>
+                <div><label>Klick-Schritt</label><input id="achStep" type="number" step="0.01" placeholder="1" title="Wert, den der grüne +Button hinzufügt (leer = wie Meilenstein-Schwelle)"></div>
                 <div><label>Zielwert (optional)</label><input id="achTarget" type="number" step="0.01" placeholder="leer=offen"></div>
                 <div><label>Richtung</label><select id="achDir"><option value="increase">Steigend</option><option value="decrease">Fallend</option></select></div>
             </div>
@@ -499,14 +500,64 @@ body{visibility:hidden}body.ready{visibility:visible}
         <p class="vex-modal-sub" id="msModalSub">–</p>
         <label>Datum</label>
         <input type="date" id="msDate">
-        <label>Wert (optional — leer = +1 Schrittweite)</label>
+        <label>Wert (optional — leer = +1 Klick-Schritt)</label>
         <input type="number" step="0.01" id="msValue" placeholder="Wert nach Zuwachs">
+        <label>Notiz (optional)</label>
+        <input type="text" id="msNote" placeholder="z.B. Nach dem Sport gewogen">
         <div class="vex-modal-actions">
             <button class="cancel" onclick="closeMilestoneModal()">Abbrechen</button>
             <button class="primary" onclick="submitMilestone()">Hinzufügen</button>
         </div>
     </div>
 </div>
+
+<!-- Note Edit Modal (für Log-Einträge) -->
+<div class="vex-modal" id="noteModal">
+    <div class="vex-modal-card">
+        <h3>📝 Notiz</h3>
+        <p class="vex-modal-sub" id="noteModalSub">–</p>
+        <label>Notiz</label>
+        <textarea id="noteText" rows="4" style="width:100%;box-sizing:border-box;padding:0.5rem;font-family:inherit;font-size:0.95rem;resize:vertical" placeholder="Freie Notiz…"></textarea>
+        <div class="vex-modal-actions">
+            <button class="cancel" onclick="closeNoteModal()">Abbrechen</button>
+            <button class="primary" onclick="submitNote()">Speichern</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.log-note {
+    display: block;
+    margin-top: 0.25rem;
+    padding: 0.375rem 0.5rem;
+    background: rgba(59, 130, 246, 0.08);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--text-2, #666);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+[data-theme="dark"] .log-note {
+    background: rgba(59, 130, 246, 0.14);
+    color: #b8c4d6;
+}
+.log-note-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    font-size: 0.9rem;
+    opacity: 0.55;
+    transition: opacity 0.15s;
+}
+.log-note-btn.has-note { opacity: 1; }
+.log-note-btn:hover { opacity: 1; }
+.log-row-wrap {
+    display: flex;
+    flex-direction: column;
+}
+</style>
 
 <!-- Complete Savings Goal Modal -->
 <div class="vex-modal" id="completeModal">
@@ -562,6 +613,7 @@ let loadErrors={ach:false,pg:false,log:false,hm:false,trophies:false};
 const pendingDeletes = new Map();
 let toastTimer=null;
 let msTargetId=null;
+let noteTarget=null; // {type: 'checkin'|'milestone'|'initial'|'streak_bonus', id: number}
 
 function showToast(m,err){
     const t=document.getElementById('toast');
@@ -720,7 +772,7 @@ function renderAchievements(){
             <div class="ach-next">Nächster Meilenstein: ${nmStr} ${esc(a.unit||'')}</div>
             <div class="ach-bar"><div class="ach-bar-fill" style="width:${p}%;background:linear-gradient(90deg,${colorHex(c)}dd,${colorHex(c)})"></div></div>
             <div class="ach-actions">
-                <button class="ach-btn-plus" data-ach-id="${a.id}" onclick="milestonePlus(${a.id})" title="Kurz tippen: +${fmtNum(a.threshold_increment)} · Lang halten: Datum wählen">+${fmtNum(a.threshold_increment)} ${esc(a.unit||'')}</button>
+                <button class="ach-btn-plus" data-ach-id="${a.id}" onclick="milestonePlus(${a.id})" title="Kurz tippen: +${fmtNum(a.step_amount||a.threshold_increment)} · Lang halten: Datum wählen · Nächster Meilenstein alle ${fmtNum(a.threshold_increment)}">+${fmtNum(a.step_amount||a.threshold_increment)} ${esc(a.unit||'')}</button>
                 <input type="number" step="0.01" class="ach-inline-input" id="achInput_${a.id}" placeholder="Wert" title="Wert setzen">
                 <button class="ach-btn-set" onclick="updateAchievement(${a.id})" title="Wert übernehmen">Setzen</button>
                 <button class="ach-btn-more" onclick="toggleAchExpand(${a.id})" title="Mehr">⋮</button>
@@ -755,10 +807,12 @@ function renderAchievements(){
     });
 }
 function editFormHTML(a){
+    const stepVal = a.step_amount!=null ? a.step_amount : a.threshold_increment;
     return `<label>Titel</label><input id="ef_title_${a.id}" value="${esc(a.title||'')}">
         <div class="grid2"><div><label>Belohnung (€)</label><input id="ef_reward_${a.id}" type="number" step="0.01" value="${a.reward_amount||''}"></div><div><label>Einheit</label><input id="ef_unit_${a.id}" value="${esc(a.unit||'')}"></div></div>
-        <div class="grid2"><div><label>Startwert</label><input id="ef_start_${a.id}" type="number" step="0.01" value="${a.start_value||''}"></div><div><label>Schrittweite</label><input id="ef_incr_${a.id}" type="number" step="0.01" value="${a.threshold_increment||''}"></div></div>
-        <div class="grid2"><div><label>Zielwert</label><input id="ef_target_${a.id}" type="number" step="0.01" value="${a.target_value==null?'':a.target_value}"></div><div><label>Richtung</label><select id="ef_dir_${a.id}"><option value="increase" ${a.direction==='increase'?'selected':''}>Steigend</option><option value="decrease" ${a.direction==='decrease'?'selected':''}>Fallend</option></select></div></div>
+        <div class="grid2"><div><label>Startwert</label><input id="ef_start_${a.id}" type="number" step="0.01" value="${a.start_value||''}"></div><div><label>Meilenstein alle</label><input id="ef_incr_${a.id}" type="number" step="0.01" value="${a.threshold_increment||''}" title="Auszahlung nach jeder x-ten Einheit"></div></div>
+        <div class="grid2"><div><label>Klick-Schritt</label><input id="ef_step_${a.id}" type="number" step="0.01" value="${stepVal||''}" title="Wert, den der grüne +Button hinzufügt"></div><div><label>Zielwert</label><input id="ef_target_${a.id}" type="number" step="0.01" value="${a.target_value==null?'':a.target_value}"></div></div>
+        <div class="grid2"><div><label>Richtung</label><select id="ef_dir_${a.id}"><option value="increase" ${a.direction==='increase'?'selected':''}>Steigend</option><option value="decrease" ${a.direction==='decrease'?'selected':''}>Fallend</option></select></div><div></div></div>
         <div class="save-btns"><button class="save" onclick="saveAchEdit(${a.id})">Speichern</button><button class="cancel" onclick="toggleAchEdit(${a.id})">Abbrechen</button></div>`;
 }
 function toggleAchExpand(id){document.getElementById('achExpand_'+id).classList.toggle('open');}
@@ -766,13 +820,18 @@ function toggleAchEdit(id){document.getElementById('achEdit_'+id).classList.togg
 
 async function saveAchEdit(id){
     const b={title:document.getElementById('ef_title_'+id).value.trim(),reward_amount:parseFloat(document.getElementById('ef_reward_'+id).value),unit:document.getElementById('ef_unit_'+id).value.trim(),start_value:parseFloat(document.getElementById('ef_start_'+id).value),threshold_increment:parseFloat(document.getElementById('ef_incr_'+id).value),direction:document.getElementById('ef_dir_'+id).value};
+    const stepEl=document.getElementById('ef_step_'+id);
+    if(stepEl && stepEl.value!==''){
+        const sv=parseFloat(stepEl.value);
+        if(!isNaN(sv) && sv>0) b.step_amount=sv;
+    }
     const tv=document.getElementById('ef_target_'+id).value;b.target_value=tv===''?null:parseFloat(tv);
     try{await apiCall('/api/achievements/'+id+'/edit',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});haptic('success');showToast('Aktualisiert');await Promise.all([loadAchievements(),loadSparziel()]);}
     catch(e){haptic('error');showToast(e.message||'Bearbeiten fehlgeschlagen',true);}
 }
 async function milestonePlus(id){
     const a=achData.find(x=>x.id==id);if(!a)return;
-    const step=Number(a.threshold_increment||1);
+    const step=Number(a.step_amount||a.threshold_increment||1);
     const nv=Number(a.current_value||0)+(a.direction==='decrease'?-step:step);
     const card=document.getElementById('achCard_'+id);
     if(card){card.classList.remove('pulsing');void card.offsetWidth;card.classList.add('pulsing');}
@@ -802,7 +861,8 @@ function openMilestoneModal(id){
     document.getElementById('msDate').value=todayIso();
     document.getElementById('msDate').max=todayIso();
     document.getElementById('msValue').value='';
-    document.getElementById('msValue').placeholder='Standard: +'+fmtNum(a.threshold_increment)+' '+(a.unit||'');
+    document.getElementById('msValue').placeholder='Standard: +'+fmtNum(a.step_amount||a.threshold_increment)+' '+(a.unit||'');
+    document.getElementById('msNote').value='';
     document.getElementById('milestoneModal').classList.add('open');
 }
 function closeMilestoneModal(){
@@ -819,16 +879,17 @@ async function submitMilestone(){
     if(rawVal!==''){
         nv=Number(rawVal);
     } else {
-        const step=Number(a.threshold_increment||1);
+        const step=Number(a.step_amount||a.threshold_increment||1);
         nv=Number(a.current_value||0)+(a.direction==='decrease'?-step:step);
     }
+    const noteVal=(document.getElementById('msNote').value||'').trim();
     const card=document.getElementById('achCard_'+msTargetId);
     if(card){card.classList.remove('pulsing');void card.offsetWidth;card.classList.add('pulsing');}
     try{
         await apiCall('/api/achievements/'+msTargetId,{
             method:'PUT',
             headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({current_value:nv, achieved_at:dateStr})
+            body:JSON.stringify({current_value:nv, achieved_at:dateStr, note:noteVal||null})
         });
         haptic('success');
         showToast('Meilenstein hinzugefügt');
@@ -842,11 +903,16 @@ async function submitMilestone(){
 
 async function createAchievement(){
     const t=document.getElementById('achTitle').value.trim(),r=parseFloat(document.getElementById('achReward').value),u=document.getElementById('achUnit').value.trim(),s=parseFloat(document.getElementById('achStart').value)||0,inc=parseFloat(document.getElementById('achIncr').value);
+    const stepRaw=document.getElementById('achStep').value;
+    const stepVal=stepRaw===''?null:parseFloat(stepRaw);
     const tv=document.getElementById('achTarget').value,tg=tv===''?null:parseFloat(tv),d=document.getElementById('achDir').value;
-    if(!t||isNaN(r)||!u||isNaN(inc)||inc<=0){showToast('Felder ausfüllen (Schrittweite > 0)',true);haptic('error');return;}
+    if(!t||isNaN(r)||!u||isNaN(inc)||inc<=0){showToast('Felder ausfüllen (Meilenstein-Schwelle > 0)',true);haptic('error');return;}
+    if(stepVal!==null && (isNaN(stepVal)||stepVal<=0)){showToast('Klick-Schritt muss > 0 sein (oder leer lassen)',true);haptic('error');return;}
+    const body={title:t,reward_amount:r,unit:u,start_value:s,threshold_increment:inc,target_value:tg,direction:d};
+    if(stepVal!==null) body.step_amount=stepVal;
     try{
-        await apiCall('/api/achievements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,reward_amount:r,unit:u,start_value:s,threshold_increment:inc,target_value:tg,direction:d})});
-        ['achTitle','achReward','achUnit','achStart','achIncr','achTarget'].forEach(x=>document.getElementById(x).value='');
+        await apiCall('/api/achievements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        ['achTitle','achReward','achUnit','achStart','achIncr','achStep','achTarget'].forEach(x=>document.getElementById(x).value='');
         document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('sel'));
         document.getElementById('achForm').classList.remove('open');
         haptic('success');
@@ -877,9 +943,9 @@ function deleteAchievement(id){
 }
 
 const PRESETS={
-    meilenstein:{achReward:'3',achUnit:'x',achStart:'0',achIncr:'1',achTarget:'',achDir:'increase'},
-    wert:{achReward:'5',achUnit:'',achStart:'0',achIncr:'',achTarget:'',achDir:'increase'},
-    abnehmend:{achReward:'7',achUnit:'',achStart:'',achIncr:'',achTarget:'',achDir:'decrease'}
+    meilenstein:{achReward:'3',achUnit:'x',achStart:'0',achIncr:'1',achStep:'1',achTarget:'',achDir:'increase'},
+    wert:{achReward:'5',achUnit:'',achStart:'0',achIncr:'',achStep:'',achTarget:'',achDir:'increase'},
+    abnehmend:{achReward:'7',achUnit:'kg',achStart:'',achIncr:'5',achStep:'1',achTarget:'',achDir:'decrease'}
 };
 
 async function loadProgressGoals(){
@@ -1110,7 +1176,11 @@ function logRowHtml(r){
     const amtCls=t==='streak_bonus'?'log-amt gold':'log-amt';
     const amtHtml=amt>0?`<span class="${amtCls}">+${fmtEur(amt)}</span>`:'<span class="log-amt zero">—</span>';
     const delBtn=r.deletable?`<button class="log-del" onclick="deleteLogEntry('${t}',${r.log_id})">×</button>`:'<span class="log-del disabled">×</span>';
-    return `<div class="log-row" id="logRow_${t}_${r.log_id}"><span class="log-tag ${tagCls}">${LOG_LABELS[t]||t}</span><span class="log-title">${esc(r.title||'')}</span><span class="log-desc">${esc(r.description||'')}</span>${amtHtml}${delBtn}</div>`;
+    const note=r.note||'';
+    const hasNote=!!note;
+    const noteBtn=`<button class="log-note-btn ${hasNote?'has-note':''}" onclick="openNoteModal('${t}',${r.log_id})" title="${hasNote?'Notiz bearbeiten':'Notiz hinzufügen'}">${hasNote?'📝':'✎'}</button>`;
+    const noteRow=hasNote?`<div class="log-note" onclick="openNoteModal('${t}',${r.log_id})" title="Notiz bearbeiten">${esc(note)}</div>`:'';
+    return `<div class="log-row-wrap" id="logRow_${t}_${r.log_id}"><div class="log-row"><span class="log-tag ${tagCls}">${LOG_LABELS[t]||t}</span><span class="log-title">${esc(r.title||'')}</span><span class="log-desc">${esc(r.description||'')}</span>${amtHtml}${noteBtn}${delBtn}</div>${noteRow}</div>`;
 }
 function renderLogFlat(rows,body){
     const byDay={};
@@ -1360,8 +1430,46 @@ async function submitComplete(){
     }
 }
 
+// --- Notiz-Modal für Log-Einträge ---
+function openNoteModal(type, logId){
+    const row = logRaw.find(x => (x.type||'initial')===type && x.log_id===logId);
+    if(!row){showToast('Eintrag nicht gefunden',true);return;}
+    noteTarget = {type, id: logId};
+    document.getElementById('noteModalSub').textContent =
+        `${LOG_LABELS[type]||type} · ${row.title||''}${row.description?' · '+row.description:''}`;
+    document.getElementById('noteText').value = row.note || '';
+    document.getElementById('noteModal').classList.add('open');
+    setTimeout(()=>{document.getElementById('noteText').focus();}, 50);
+    haptic('tap');
+}
+function closeNoteModal(){
+    document.getElementById('noteModal').classList.remove('open');
+    noteTarget = null;
+}
+async function submitNote(){
+    if(!noteTarget) return;
+    const note = document.getElementById('noteText').value.trim();
+    let url;
+    if(noteTarget.type==='checkin')            url = '/api/progress-logs/'+noteTarget.id+'/note';
+    else if(noteTarget.type==='milestone')     url = '/api/achievement-logs/'+noteTarget.id+'/note';
+    else                                       url = '/api/savings-transactions/'+noteTarget.id+'/note'; // initial, streak_bonus
+    try{
+        await apiCall(url, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({note})});
+        // Lokal aktualisieren, damit Reload nicht nötig
+        const row = logRaw.find(x => (x.type||'initial')===noteTarget.type && x.log_id===noteTarget.id);
+        if(row) row.note = note;
+        haptic('success');
+        showToast(note ? 'Notiz gespeichert' : 'Notiz entfernt');
+        closeNoteModal();
+        renderLog();
+    }catch(e){
+        haptic('error');
+        showToast(e.message || 'Speichern fehlgeschlagen', true);
+    }
+}
+
 // Modal-Backdrop-Click
-['milestoneModal','completeModal'].forEach(id=>{
+['milestoneModal','completeModal','noteModal'].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.addEventListener('click',e=>{if(e.target.id===id)el.classList.remove('open');});
 });
