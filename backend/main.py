@@ -313,14 +313,110 @@ async def invite_activate(request: Request, b: ActivateBody, db=Depends(get_db))
     return {"access_token": create_token(user["username"]), "token_type": "bearer"}
 
 # ---------- Savings Goal ----------
+async def _active_goal_id(db, user_id: int) -> Optional[int]:
+    """Gibt die ID des aktiven Sparziels zurück (oder None)."""
+    return await db.fetchval(
+        "SELECT id FROM savings_goals WHERE user_id=$1 AND is_active=TRUE ORDER BY id DESC LIMIT 1",
+        user_id)
+
 @app.get("/api/savings-goal")
 async def get_sg(db=Depends(get_db), user=Depends(get_current_user)):
     row = await db.fetchrow(
         "SELECT * FROM savings_goals WHERE user_id=$1 AND is_active=TRUE ORDER BY id DESC LIMIT 1",
         user["id"])
-    total = await db.fetchval(
-        "SELECT COALESCE(SUM(amount),0) FROM savings_transactions WHERE user_id=$1", user["id"])
+    if row:
+        total = await db.fetchval(
+            "SELECT COALESCE(SUM(amount),0) FROM savings_transactions "
+            "WHERE user_id=$1 AND savings_goal_id=$2", user["id"], row["id"])
+    else:
+        total = 0
     return {"goal": ser(row) if row else None, "total_saved": float(total)}
+
+@app.get("/api/savings-goals")
+async def list_sg(db=Depends(get_db), user=Depends(get_current_user)):
+    """Alle Sparziele des Users (aktiv + pausiert), inkl. Saldo pro Ziel."""
+    rows = await db.fetch(
+        """SELECT sg.*,
+                  COALESCE((SELECT SUM(amount) FROM savings_transactions
+                            WHERE savings_goal_id = sg.id AND user_id = sg.user_id), 0) AS saved_amount
+             FROM savings_goals sg
+            WHERE sg.user_id = $1
+            ORDER BY sg.is_active DESC, sg.id DESC""",
+        user["id"])
+    out = []
+    for r in rows:
+        d = ser(r)
+        d["saved_amount"] = float(r["saved_amount"] or 0)
+        out.append(d)
+    return out
+
+class SavGoalCreate(BaseModel):
+    name: str
+    target_amount: float
+    activate: bool = True
+
+@app.post("/api/savings-goals")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def create_sg(request: Request, b: SavGoalCreate, db=Depends(get_db), user=Depends(get_current_user)):
+    name = (b.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Name fehlt")
+    if b.target_amount is None or b.target_amount <= 0:
+        raise HTTPException(400, "Zielbetrag muss > 0 sein")
+    async with db.transaction():
+        if b.activate:
+            await db.execute(
+                "UPDATE savings_goals SET is_active=FALSE WHERE user_id=$1 AND is_active=TRUE",
+                user["id"])
+        row = await db.fetchrow(
+            "INSERT INTO savings_goals (user_id, name, target_amount, is_active) "
+            "VALUES ($1, $2, $3, $4) RETURNING *",
+            user["id"], name, float(b.target_amount), bool(b.activate))
+    return ser(row)
+
+@app.post("/api/savings-goals/{gid}/activate")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def activate_sg(request: Request, gid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    owned = await db.fetchval(
+        "SELECT 1 FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+    if not owned:
+        raise HTTPException(404, "Sparziel nicht gefunden")
+    async with db.transaction():
+        await db.execute(
+            "UPDATE savings_goals SET is_active=FALSE WHERE user_id=$1", user["id"])
+        await db.execute(
+            "UPDATE savings_goals SET is_active=TRUE WHERE id=$1 AND user_id=$2",
+            gid, user["id"])
+    logger.info(f"User {user['id']} activated savings_goal {gid}")
+    return ser(await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid))
+
+@app.delete("/api/savings-goals/{gid}")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def del_sg(request: Request, gid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    row = await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+    if not row:
+        raise HTTPException(404, "Sparziel nicht gefunden")
+    other = await db.fetchval(
+        "SELECT COUNT(*) FROM savings_goals WHERE user_id=$1 AND id<>$2", user["id"], gid)
+    if int(other) == 0:
+        raise HTTPException(400, "Das letzte Sparziel kann nicht gelöscht werden")
+    was_active = bool(row["is_active"])
+    removed_sum = float(await db.fetchval(
+        "SELECT COALESCE(SUM(amount),0) FROM savings_transactions "
+        "WHERE user_id=$1 AND savings_goal_id=$2", user["id"], gid) or 0)
+    async with db.transaction():
+        await db.execute(
+            "DELETE FROM savings_transactions WHERE user_id=$1 AND savings_goal_id=$2",
+            user["id"], gid)
+        await db.execute("DELETE FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+        if was_active:
+            # neuestes anderes als aktiv setzen
+            nxt = await db.fetchval(
+                "SELECT id FROM savings_goals WHERE user_id=$1 ORDER BY id DESC LIMIT 1",
+                user["id"])
+            if nxt:
+                await db.execute("UPDATE savings_goals SET is_active=TRUE WHERE id=$1", nxt)
+    return {"status": "deleted", "removed_sum": removed_sum}
 
 @app.put("/api/savings-goal/{gid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
@@ -389,6 +485,7 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
             raise HTTPException(400, "achieved_at darf nicht in der Zukunft liegen")
 
     note_val = (b.note or "").strip() or None
+    sg_id = await _active_goal_id(db, user["id"])
     tm = _milestones_at(sv, nv, inc, dirn)
     if tm > cred:
         # Notiz nur an den zuletzt erreichten Meilenstein hängen
@@ -404,18 +501,20 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
                     "VALUES ($1,$2,$3,$4,$5,$6)",
                     user["id"], aid, milestone_value, rew, when, step_note)
                 await db.execute(
-                    "INSERT INTO savings_transactions (user_id,amount,source_type,source_id,description,created_at,note) "
-                    "VALUES ($1,$2,$3,$4,$5,$6,$7)",
-                    user["id"], rew, "achievement", aid, desc, when, step_note)
+                    "INSERT INTO savings_transactions "
+                    "(user_id,amount,source_type,source_id,description,created_at,note,savings_goal_id) "
+                    "VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+                    user["id"], rew, "achievement", aid, desc, when, step_note, sg_id)
             else:
                 await db.execute(
                     "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount,note) "
                     "VALUES ($1,$2,$3,$4,$5)",
                     user["id"], aid, milestone_value, rew, step_note)
                 await db.execute(
-                    "INSERT INTO savings_transactions (user_id,amount,source_type,source_id,description,note) "
-                    "VALUES ($1,$2,$3,$4,$5,$6)",
-                    user["id"], rew, "achievement", aid, desc, step_note)
+                    "INSERT INTO savings_transactions "
+                    "(user_id,amount,source_type,source_id,description,note,savings_goal_id) "
+                    "VALUES ($1,$2,$3,$4,$5,$6,$7)",
+                    user["id"], rew, "achievement", aid, desc, step_note, sg_id)
         new_cred = tm
     else:
         new_cred = cred
@@ -697,14 +796,16 @@ async def checkin(request: Request, gid: int, body: Optional[CheckinBody] = None
 
     paid = False; bonus_paid = False; streak = 0
     if fulfilled:
+        sg_id = await _active_goal_id(db, user["id"])
         ex = await db.fetchval(
             "SELECT COUNT(*) FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
             user["id"], gid, pk)
         if ex == 0 and float(pg["reward_amount"]) > 0:
             await db.execute(
-                "INSERT INTO savings_transactions (user_id,amount,source_type,source_id,description,period_key) "
-                "VALUES ($1,$2,$3,$4,$5,$6)",
-                user["id"], float(pg["reward_amount"]), "progress", gid, f"{pg['title']} ({pk})", pk)
+                "INSERT INTO savings_transactions "
+                "(user_id,amount,source_type,source_id,description,period_key,savings_goal_id) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7)",
+                user["id"], float(pg["reward_amount"]), "progress", gid, f"{pg['title']} ({pk})", pk, sg_id)
             paid = True
         bonus_amount = float(pg["streak_bonus_amount"] or 0)
         bonus_threshold = int(pg["streak_bonus_threshold"] or 0)
@@ -717,10 +818,11 @@ async def checkin(request: Request, gid: int, body: Optional[CheckinBody] = None
                     user["id"], gid, bonus_pk)
                 if bonus_ex == 0:
                     await db.execute(
-                        "INSERT INTO savings_transactions (user_id,amount,source_type,source_id,description,period_key) "
-                        "VALUES ($1,$2,$3,$4,$5,$6)",
+                        "INSERT INTO savings_transactions "
+                        "(user_id,amount,source_type,source_id,description,period_key,savings_goal_id) "
+                        "VALUES ($1,$2,$3,$4,$5,$6,$7)",
                         user["id"], bonus_amount, "progress", gid,
-                        f"Streak-Bonus {streak}×: {pg['title']}", bonus_pk)
+                        f"Streak-Bonus {streak}×: {pg['title']}", bonus_pk, sg_id)
                     bonus_paid = True
     return {"current_count": cnt, "target_count": tgt, "fulfilled": fulfilled,
             "period_key": pk, "paid_out": paid, "streak_bonus_paid": bonus_paid, "streak": streak}
@@ -1071,9 +1173,14 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
 # ---------- Stats ----------
 @app.get("/api/stats/savings-progress")
 async def st_sp(db=Depends(get_db), user=Depends(get_current_user)):
+    """Kumulierter Saldo des AKTIVEN Sparziels über die Zeit."""
+    sg_id = await _active_goal_id(db, user["id"])
+    if sg_id is None:
+        return []
     rows = await db.fetch(
-        "SELECT created_at, amount FROM savings_transactions WHERE user_id=$1 ORDER BY created_at",
-        user["id"])
+        "SELECT created_at, amount FROM savings_transactions "
+        "WHERE user_id=$1 AND savings_goal_id=$2 ORDER BY created_at",
+        user["id"], sg_id)
     c = 0; out = []
     for r in rows:
         c += float(r["amount"])
@@ -1175,7 +1282,8 @@ async def complete_savings_goal(request: Request, gid: int, b: TrophyCreate, db=
         raise HTTPException(404, "Aktives Sparziel nicht gefunden")
 
     total = float(await db.fetchval(
-        "SELECT COALESCE(SUM(amount),0) FROM savings_transactions WHERE user_id=$1", user["id"]))
+        "SELECT COALESCE(SUM(amount),0) FROM savings_transactions "
+        "WHERE user_id=$1 AND savings_goal_id=$2", user["id"], gid))
     duration_days = None
     if goal["created_at"]:
         duration_days = (datetime.now(timezone.utc) - goal["created_at"]).days
@@ -1191,7 +1299,8 @@ async def complete_savings_goal(request: Request, gid: int, b: TrophyCreate, db=
             "UPDATE savings_goals SET is_active=FALSE WHERE id=$1 AND user_id=$2",
             gid, user["id"])
         await db.execute(
-            "DELETE FROM savings_transactions WHERE user_id=$1", user["id"])
+            "DELETE FROM savings_transactions WHERE user_id=$1 AND savings_goal_id=$2",
+            user["id"], gid)
         await db.execute(
             "INSERT INTO savings_goals (user_id, name, target_amount, is_active) VALUES ($1, 'Neues Sparziel', 100, TRUE)",
             user["id"])

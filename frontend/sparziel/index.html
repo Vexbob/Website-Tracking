@@ -91,15 +91,16 @@ body{visibility:hidden}body.ready{visibility:visible}
 .ach-btn-more{grid-row:1;grid-column:2;background:transparent;color:var(--text-faint);padding:0.4375rem 0.5rem;white-space:nowrap}
 .ach-btn-more:hover{color:var(--text);background:var(--surface-2)}
 /* Zeile 2: [Wert] [Setzen] */
-.ach-inline-input{
+.ach-actions .ach-inline-input{
     grid-row:2;grid-column:1;
     min-width:0;padding:0.4375rem 0.5rem;font-size:0.8125rem;
-    border:1.5px solid var(--green);background:var(--surface);
-    color:var(--text);border-radius:6px;font-family:inherit;
+    border:1.5px solid #22c55e !important;background:var(--surface);
+    color:var(--text);border-radius:6px !important;font-family:inherit;
     -moz-appearance:textfield;
     transition:border-color .15s,box-shadow .15s;
+    box-shadow:none;
 }
-.ach-inline-input:focus{outline:none;border-color:var(--green-dark);box-shadow:0 0 0 2px rgba(34,197,94,0.2)}
+.ach-actions .ach-inline-input:focus{outline:none;border-color:#16a34a !important;box-shadow:0 0 0 2px rgba(34,197,94,0.25) !important}
 .ach-inline-input::-webkit-outer-spin-button,
 .ach-inline-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .ach-btn-set{grid-row:2;grid-column:2;background:var(--text)!important;color:var(--surface)!important;padding:0.4375rem 0.625rem!important;white-space:nowrap}
@@ -486,7 +487,21 @@ body{visibility:hidden}body.ready{visibility:visible}
     </div>
 
     <div id="tab-ideen" style="display:none">
-        <div class="sh"><h2>Potentielle Sparziele</h2><button class="sh-add" onclick="toggleForm('potForm')">+</button></div>
+        <div class="sh"><h2>Meine Sparziele</h2><button class="sh-add" onclick="toggleForm('sgForm')">+ Neues Sparziel</button></div>
+        <div id="sgForm" class="iform">
+            <div class="if-grid">
+                <div><label>Name</label><input id="sgNewName" placeholder="z.B. Neues Fahrrad"></div>
+                <div><label>Zielbetrag (€)</label><input id="sgNewTarget" type="number" step="0.01" placeholder="500"></div>
+            </div>
+            <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem;font-size:0.8125rem;color:var(--text-muted)">
+                <input type="checkbox" id="sgNewActivate" checked style="width:auto;margin:0">
+                Sofort aktivieren (bisheriges Ziel wird pausiert &amp; Kontostand gespeichert)
+            </label>
+            <button class="if-btn" onclick="createSavingsGoal()">Erstellen</button>
+        </div>
+        <div id="sgList" style="display:grid;grid-template-columns:1fr;gap:0.625rem;margin-bottom:1.5rem"></div>
+
+        <div class="sh"><h2>Potentielle Sparziele (Ideen)</h2><button class="sh-add" onclick="toggleForm('potForm')">+</button></div>
         <div id="potForm" class="iform">
             <div class="if-grid">
                 <div><label>Name</label><input id="potName" placeholder="z.B. Fahrrad"></div>
@@ -659,7 +674,7 @@ function activateTab(t){
     if(t==='log') loadLog();
     if(t==='heatmap') loadHeatmap();
     if(t==='trophies') loadTrophies();
-    if(t==='ideen'){loadPotentialGoals();loadFutureIdeas();}
+    if(t==='ideen'){loadSavingsGoals();loadPotentialGoals();loadFutureIdeas();}
 }
 function toggleForm(id){document.getElementById(id).classList.toggle('open');}
 function toggleHeroEdit(){
@@ -1090,9 +1105,65 @@ function deleteProgress(id){
     );
 }
 
-async function loadPotentialGoals(){
-    try{const d=await apiCall('/api/potential-goals')||[];document.getElementById('potList').innerHTML=d.length?d.map(p=>`<div class="li" id="potLi_${p.id}"><span>${esc(p.name)}${p.estimated_price?' — <strong>'+fmtEur(p.estimated_price)+'</strong>':''}</span><button class="li-del" onclick="deletePotential(${p.id})">×</button></div>`).join(''):'<div class="muted" style="padding:0.5rem;font-size:0.8125rem">Noch keine Einträge.</div>';}catch(e){}
+async function loadSavingsGoals(){
+    try{
+        const list=await apiCall('/api/savings-goals')||[];
+        const box=document.getElementById('sgList');
+        if(!box)return;
+        if(!list.length){box.innerHTML='<div class="muted" style="padding:0.5rem;font-size:0.8125rem">Noch keine Sparziele.</div>';return;}
+        box.innerHTML=list.map(g=>{
+            const saved=Number(g.saved_amount||0);
+            const target=Number(g.target_amount||0);
+            const p=target>0?Math.min(100,(saved/target)*100):0;
+            const active=!!g.is_active;
+            return `<div class="ach-card" style="${active?'border-color:var(--green);background:var(--green-bg)':''}">
+                <div class="ach-head">
+                    <div class="ach-title">${active?'⭐ ':''}${esc(g.name)}</div>
+                    <div class="ach-reward-pill">${active?'Aktiv':'Pausiert'}</div>
+                </div>
+                <div class="ach-value">${fmtEur(saved)} <small>/ ${fmtEur(target)}</small></div>
+                <div class="ach-bar"><div class="ach-bar-fill" style="width:${p}%;background:linear-gradient(90deg,#16a34a,#22c55e)"></div></div>
+                <div style="display:flex;gap:6px;margin-top:0.375rem;flex-wrap:wrap">
+                    ${active?'':`<button onclick="activateSavingsGoal(${g.id})" style="flex:1;padding:0.4375rem;font-size:0.75rem;background:var(--green);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;margin:0">Aktivieren</button>`}
+                    <button onclick="deleteSavingsGoal(${g.id},'${esc(g.name).replace(/'/g,"\\'")}')" style="padding:0.4375rem 0.75rem;font-size:0.75rem;background:var(--red-bg);color:var(--red);border:none;border-radius:6px;font-weight:600;cursor:pointer;margin:0" ${active&&list.length===1?'disabled':''}>Löschen</button>
+                </div>
+            </div>`;
+        }).join('');
+    }catch(e){console.error(e);}
 }
+async function createSavingsGoal(){
+    const name=document.getElementById('sgNewName').value.trim();
+    const target=parseFloat(document.getElementById('sgNewTarget').value);
+    const activate=document.getElementById('sgNewActivate').checked;
+    if(!name||isNaN(target)||target<=0){showToast('Felder ausfüllen',true);haptic('error');return;}
+    try{
+        await apiCall('/api/savings-goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,target_amount:target,activate})});
+        document.getElementById('sgNewName').value='';document.getElementById('sgNewTarget').value='';
+        document.getElementById('sgForm').classList.remove('open');
+        haptic('success');showToast(activate?'Sparziel aktiviert':'Sparziel erstellt');
+        await Promise.all([loadSavingsGoals(),loadSparziel(),loadLog?.()]);
+    }catch(e){haptic('error');showToast(e.message||'Fehler',true);}
+}
+async function activateSavingsGoal(id){
+    try{
+        await apiCall('/api/savings-goals/'+id+'/activate',{method:'POST'});
+        haptic('success');showToast('Aktiviert – Kontostand des vorherigen Ziels bleibt gespeichert');
+        await Promise.all([loadSavingsGoals(),loadSparziel(),loadAchievements(),loadProgressGoals()]);
+    }catch(e){haptic('error');showToast(e.message||'Fehler',true);}
+}
+async function deleteSavingsGoal(id,name){
+    if(!confirm(`Sparziel "${name}" wirklich löschen? Alle zugehörigen Sparbeiträge werden entfernt.`))return;
+    try{
+        const r=await apiCall('/api/savings-goals/'+id,{method:'DELETE'});
+        haptic('success');
+        showToast('Gelöscht'+(r&&r.removed_sum?` (${fmtEur(r.removed_sum)} entfernt)`:''));
+        await Promise.all([loadSavingsGoals(),loadSparziel()]);
+    }catch(e){haptic('error');showToast(e.message||'Löschen fehlgeschlagen',true);}
+}
+async function loadPotentialGoals(){
+    try{const d=await apiCall('/api/potential-goals')||[];document.getElementById('potList').innerHTML=d.length?d.map(p=>`<div class="li" id="potLi_${p.id}"><span>${esc(p.name)}${p.estimated_price?' — <strong>'+fmtEur(p.estimated_price)+'</strong>':''}</span><button class="li-del" onclick="deletePotential(${p.id})" title="Löschen">×</button></div>`).join(''):'<div class="muted" style="padding:0.5rem;font-size:0.8125rem">Noch keine Einträge.</div>';}catch(e){}
+}
+
 async function createPotential(){
     const n=document.getElementById('potName').value.trim(),pv=document.getElementById('potPrice').value,pr=pv===''?null:parseFloat(pv);
     if(!n){showToast('Name fehlt',true);haptic('error');return;}
