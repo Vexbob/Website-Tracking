@@ -94,10 +94,12 @@ body{visibility:hidden}body.ready{visibility:visible}
 .ach-inline-input{
     grid-row:2;grid-column:1;
     min-width:0;padding:0.4375rem 0.5rem;font-size:0.8125rem;
-    border:1px solid var(--border-strong);background:var(--surface);
+    border:1.5px solid var(--green);background:var(--surface);
     color:var(--text);border-radius:6px;font-family:inherit;
     -moz-appearance:textfield;
+    transition:border-color .15s,box-shadow .15s;
 }
+.ach-inline-input:focus{outline:none;border-color:var(--green-dark);box-shadow:0 0 0 2px rgba(34,197,94,0.2)}
 .ach-inline-input::-webkit-outer-spin-button,
 .ach-inline-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .ach-btn-set{grid-row:2;grid-column:2;background:var(--text)!important;color:var(--surface)!important;padding:0.4375rem 0.625rem!important;white-space:nowrap}
@@ -223,8 +225,12 @@ body{visibility:hidden}body.ready{visibility:visible}
 :root[data-theme="dark"] .log-tag.checkin.fulfilled{background:rgba(34,197,94,0.15);color:#4ade80}
 .log-tag.streak_bonus{background:linear-gradient(135deg,#fde047,#eab308);color:#78350f;font-weight:700}
 .log-title{font-weight:600;color:var(--text);word-break:break-word}
-.log-desc{flex:1;min-width:0;color:var(--text-muted);font-size:0.75rem;word-break:break-word}
-.log-amt{font-weight:700;color:var(--green-dark);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:64px;text-align:right}
+.log-desc{color:var(--text-muted);font-size:0.75rem;word-break:break-word;white-space:nowrap}
+.log-note-inline{flex:1;min-width:0;text-align:center;color:var(--blue-dark);font-style:italic;font-size:0.8125rem;padding:0 0.5rem;word-break:break-word;cursor:pointer}
+:root[data-theme="dark"] .log-note-inline{color:#93c5fd}
+.log-note-inline::before{content:'„'}
+.log-note-inline::after{content:'"'}
+.log-amt{font-weight:700;color:var(--green-dark);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:64px;text-align:right;margin-left:auto}
 .log-amt.zero{color:var(--text-fainter);font-weight:500}
 .log-amt.gold{color:var(--gold-dark)}
 :root[data-theme="dark"] .log-amt.gold{color:#fde047}
@@ -1152,10 +1158,13 @@ function logRowHtml(r){
     const amtHtml=amt>0?`<span class="${amtCls}">+${fmtEur(amt)}</span>`:'<span class="log-amt zero">—</span>';
     const note=r.note||'';
     const hasNote=!!note;
+    const noteInline = hasNote
+        ? `<span class="log-note-inline" onclick="openNoteModal('${t}',${r.log_id})" title="Notiz bearbeiten">${esc(note)}</span>`
+        : '';
     const noteTitle = hasNote ? 'Notiz: '+note : 'Notiz hinzufügen';
     const noteBtn=`<button class="log-note-btn ${hasNote?'has-note':''}" onclick="openNoteModal('${t}',${r.log_id})" title="${esc(noteTitle)}">✎</button>`;
     const delBtn=r.deletable?`<button class="log-del" onclick="deleteLogEntry('${t}',${r.log_id})">×</button>`:'<span class="log-del disabled">×</span>';
-    return `<div class="log-row ${hasNote?'has-note':''}" id="logRow_${t}_${r.log_id}" ${hasNote?`title="Notiz: ${esc(note)}"`:''}><span class="log-tag ${tagCls}">${LOG_LABELS[t]||t}</span><span class="log-title">${esc(r.title||'')}</span><span class="log-desc">${esc(r.description||'')}</span>${amtHtml}${noteBtn}${delBtn}</div>`;
+    return `<div class="log-row ${hasNote?'has-note':''}" id="logRow_${t}_${r.log_id}"><span class="log-tag ${tagCls}">${LOG_LABELS[t]||t}</span><span class="log-title">${esc(r.title||'')}</span><span class="log-desc">${esc(r.description||'')}</span>${noteInline}${amtHtml}${noteBtn}${delBtn}</div>`;
 }
 function renderLogFlat(rows,body){
     const byDay={};
