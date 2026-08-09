@@ -152,19 +152,10 @@ Website/
 
 ---
 
-## 🗺️ Roadmap
 
-- [ ] Push-Notifications für fällige Wochenziele
-- [ ] Import aus CSV / anderen Sparziel-Trackern
-- [ ] Sharing von Rezepten & Sparzielen (read-only Links)
-- [ ] Mehrsprachigkeit (aktuell nur Deutsch)
-
----
 
 ## 📝 Lizenz
 
 Persönliches Projekt — bei Interesse an einer Verwendung bitte im Repo Kontakt aufnehmen.
 
----
 
-*Made with ❤️ und viel Kaffee.*

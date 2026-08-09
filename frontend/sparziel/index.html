@@ -300,6 +300,15 @@ body{visibility:hidden}body.ready{visibility:visible}
 .hm-stat .val{font-size:1.25rem;font-weight:700;margin-top:2px;color:var(--text)}
 .hm-tooltip{position:fixed;background:var(--text);color:var(--surface);padding:0.4rem 0.625rem;border-radius:6px;font-size:0.75rem;pointer-events:none;opacity:0;transition:opacity .1s;z-index:150;white-space:nowrap;box-shadow:var(--shadow-lg)}
 .hm-tooltip.show{opacity:1}
+.hm-metric-chips{display:flex;flex-wrap:wrap;gap:0.375rem;margin-bottom:0.75rem}
+.hm-chip{padding:0.375rem 0.75rem;font-size:0.75rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border)!important;border-radius:16px;font-weight:600;cursor:pointer;width:auto;margin:0;transition:background .15s,color .15s,border-color .15s}
+.hm-chip:hover{color:var(--text)}
+.hm-chip.active{background:var(--green);color:#fff;border-color:var(--green)!important}
+:root[data-theme="dark"] .hm-chip.active{background:#22c55e;border-color:#22c55e!important}
+
+/* --- Konfetti-Canvas --- */
+#confettiCanvas{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:5000;display:none}
+#confettiCanvas.show{display:block}
 
 /* --- Trophäen --- */
 .trophy-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.75rem;margin-bottom:1.25rem}
@@ -462,6 +471,12 @@ body{visibility:hidden}body.ready{visibility:visible}
                 <option value="365" selected>1 Jahr</option>
             </select>
         </div>
+        <div class="hm-metric-chips" id="hmMetricChips">
+            <button class="hm-chip active" data-metric="all">Alle</button>
+            <button class="hm-chip" data-metric="checkins">Check-ins</button>
+            <button class="hm-chip" data-metric="milestones">Meilensteine</button>
+            <button class="hm-chip" data-metric="amount">€ Zuwachs</button>
+        </div>
         <div class="hm-legend">
             <span>Weniger</span>
             <div class="hm-legend-cells">
@@ -600,6 +615,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 <div class="hm-tooltip" id="hmTooltip"></div>
 <div class="version-tag"></div>
 <div id="toast" class="toast"></div>
+<canvas id="confettiCanvas" aria-hidden="true"></canvas>
 
 <script>
 let chartSavings=null, chartData=[], glGoalId=null, glTarget=0, glTotal=0;
@@ -610,6 +626,114 @@ const pendingDeletes = new Map();
 let toastTimer=null;
 let msTargetId=null;
 let noteTarget=null; // {type: 'checkin'|'milestone'|'initial'|'streak_bonus', id: number}
+
+// --- Zahl-Animation & Konfetti-State ---
+let hmMetric = localStorage.getItem('vex_hm_metric') || 'all';
+let prevGlTotal = null;   // vorheriger Sparbetrag (für Delta-Animation)
+let prevGlPct = null;     // vorheriger Prozentwert
+let prevWasComplete = false; // bereits >= 100 % erreicht?
+let confettiRaf = null;   // aktuelle rAF-ID für Konfetti (Cleanup)
+
+// --- Zahl-Count-Up-Animation ---
+// Animiert eine Zahl von `from` nach `to` über `duration` ms.
+// `render(v)` erhält den Zwischenwert und schreibt ihn ins DOM.
+// Läuft nur bei tatsächlichem Delta; respektiert prefers-reduced-motion.
+function animateNumber(from, to, duration, render){
+    if(from==null || !isFinite(from) || from===to){ render(to); return; }
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(reduce || duration<=0){ render(to); return; }
+    const start = performance.now();
+    const delta = to - from;
+    function step(now){
+        const t = Math.min(1, (now - start) / duration);
+        // easeOutCubic
+        const e = 1 - Math.pow(1 - t, 3);
+        render(from + delta * e);
+        if(t < 1) requestAnimationFrame(step);
+        else render(to);
+    }
+    requestAnimationFrame(step);
+}
+
+// --- Konfetti (Canvas, keine externe Lib) ---
+function fireConfetti(opts){
+    opts = opts || {};
+    const canvas = document.getElementById('confettiCanvas');
+    if(!canvas) return;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(reduce) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = window.innerWidth, H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    canvas.classList.add('show');
+
+    const colors = ['#22c55e','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#eab308','#ef4444'];
+    const count = opts.count || 180;
+    const duration = opts.duration || 2600;
+    const originX = opts.originX!=null ? opts.originX : W/2;
+    const originY = opts.originY!=null ? opts.originY : H*0.35;
+    const spread = opts.spread || Math.PI; // Streuwinkel (nach oben)
+    const particles = [];
+    for(let i=0;i<count;i++){
+        const angle = -Math.PI/2 + (Math.random()-0.5)*spread;
+        const speed = 6 + Math.random()*9;
+        particles.push({
+            x: originX,
+            y: originY,
+            vx: Math.cos(angle)*speed + (Math.random()-0.5)*2,
+            vy: Math.sin(angle)*speed - Math.random()*2,
+            g: 0.18 + Math.random()*0.12,
+            drag: 0.995,
+            size: 5 + Math.random()*5,
+            rot: Math.random()*Math.PI*2,
+            vr: (Math.random()-0.5)*0.35,
+            color: colors[(Math.random()*colors.length)|0],
+            shape: Math.random()<0.5 ? 'rect' : 'circle',
+            life: 1
+        });
+    }
+    const start = performance.now();
+    if(confettiRaf) cancelAnimationFrame(confettiRaf);
+    function frame(now){
+        const elapsed = now - start;
+        ctx.clearRect(0,0,W,H);
+        let alive = 0;
+        for(const p of particles){
+            p.vx *= p.drag;
+            p.vy = p.vy * p.drag + p.g;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.rot += p.vr;
+            p.life = Math.max(0, 1 - elapsed/duration);
+            if(p.life<=0 || p.y > H+40) continue;
+            alive++;
+            ctx.save();
+            ctx.globalAlpha = p.life;
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot);
+            ctx.fillStyle = p.color;
+            if(p.shape==='rect'){
+                ctx.fillRect(-p.size/2, -p.size/3, p.size, p.size*0.6);
+            } else {
+                ctx.beginPath();
+                ctx.arc(0,0,p.size/2,0,Math.PI*2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+        if(alive>0 && elapsed<duration+400){
+            confettiRaf = requestAnimationFrame(frame);
+        } else {
+            confettiRaf = null;
+            ctx.clearRect(0,0,W,H);
+            canvas.classList.remove('show');
+        }
+    }
+    confettiRaf = requestAnimationFrame(frame);
+}
 
 function showToast(m,err){
     const t=document.getElementById('toast');
@@ -690,16 +814,53 @@ async function loadSparziel(){
     try{
         const d=await apiCall('/api/savings-goal');
         const g=d.goal||{};
-        glGoalId=g.id;glTarget=Number(g.target_amount||0);glTotal=Number(d.total_saved||0);
-        const p=pct(glTotal,glTarget);
-        document.getElementById('goalName').textContent=g.name||'Sparziel';
-        document.getElementById('stTotal').textContent=fmtEur(glTotal);
-        document.getElementById('stTarget').textContent=fmtEur(glTarget);
-        document.getElementById('stMissing').textContent=fmtEur(Math.max(0,glTarget-glTotal));
+        const newGoalId=g.id;
+        const newTarget=Number(g.target_amount||0);
+        const newTotal=Number(d.total_saved||0);
+        const newPct=pct(newTotal,newTarget);
         const circ=2*Math.PI*42;
-        document.getElementById('radialFill').setAttribute('stroke-dasharray',circ);
-        document.getElementById('radialFill').setAttribute('stroke-dashoffset',circ*(1-p/100));
-        document.getElementById('radialPct').textContent=fmtNum(p,1)+' %';
+
+        // Bei Ziel-Wechsel (anderes Sparziel aktiviert): keine Animation, hart setzen
+        const goalChanged = (glGoalId !== null && newGoalId !== glGoalId);
+        const isInitialLoad = (prevGlTotal == null);
+        const fromTotal = goalChanged ? newTotal : (prevGlTotal!=null ? prevGlTotal : newTotal);
+        const fromPct   = goalChanged ? newPct   : (prevGlPct!=null   ? prevGlPct   : newPct);
+
+        glGoalId=newGoalId; glTarget=newTarget; glTotal=newTotal;
+
+        document.getElementById('goalName').textContent=g.name||'Sparziel';
+        document.getElementById('stTarget').textContent=fmtEur(glTarget);
+
+        // stTotal (€) count-up
+        const elTotal = document.getElementById('stTotal');
+        animateNumber(fromTotal, newTotal, 700, v => { elTotal.textContent = fmtEur(v); });
+
+        // stMissing (€) count-up
+        const elMissing = document.getElementById('stMissing');
+        const fromMissing = Math.max(0, glTarget - fromTotal);
+        const newMissing  = Math.max(0, glTarget - newTotal);
+        animateNumber(fromMissing, newMissing, 700, v => { elMissing.textContent = fmtEur(v); });
+
+        // Radial: dashoffset & Prozent-Zahl animieren
+        const radial = document.getElementById('radialFill');
+        radial.setAttribute('stroke-dasharray', circ);
+        const elPct = document.getElementById('radialPct');
+        animateNumber(fromPct, newPct, 800, v => {
+            radial.setAttribute('stroke-dashoffset', circ * (1 - v/100));
+            elPct.textContent = fmtNum(v, 1) + ' %';
+        });
+
+        // Merken für nächste Aktualisierung
+        prevGlTotal = newTotal;
+        prevGlPct   = newPct;
+
+        // Konfetti beim erstmaligen Erreichen von 100 % (nicht bei Initial-Load / Ziel-Wechsel)
+        const isComplete = newTarget > 0 && newTotal >= newTarget;
+        if(isComplete && !prevWasComplete && !goalChanged && !isInitialLoad){
+            setTimeout(()=>fireConfetti({count:220, duration:3000}), 250);
+        }
+        prevWasComplete = isComplete;
+
         chartData=await apiCall('/api/stats/savings-progress')||[];
         renderSparzielChart();
     }catch(e){showToast('Sparziel laden fehlgeschlagen',true);console.error(e);}
@@ -1344,18 +1505,42 @@ async function loadHeatmap(){
         document.getElementById('hmGrid').innerHTML='<div class="muted" style="padding:1rem">Laden fehlgeschlagen.</div>';
     }
 }
+// Bestimmt den Level (0..4) für einen Tag anhand der aktiven Metrik.
+// Bei "all" wird das vom Server gelieferte level verwendet.
+// Bei den anderen Metriken werden Schwellen quantil-basiert aus den positiven Werten abgeleitet.
+function computeMetricLevels(metric){
+    if(metric==='all') return heatmapData.map(d=>d.level);
+    const getVal = d => metric==='amount' ? Number(d.amount||0)
+                     : metric==='checkins' ? Number(d.checkins||0)
+                     : Number(d.milestones||0);
+    const positives = heatmapData.map(getVal).filter(v => v>0).sort((a,b)=>a-b);
+    if(!positives.length) return heatmapData.map(()=>0);
+    // Quantile 25/50/75/95 -> Level 1..4
+    const q = p => positives[Math.min(positives.length-1, Math.floor(positives.length*p))];
+    const q1=q(0.25), q2=q(0.5), q3=q(0.75), q4=q(0.95);
+    return heatmapData.map(d=>{
+        const v=getVal(d);
+        if(v<=0) return 0;
+        if(v<=q1) return 1;
+        if(v<=q2) return 2;
+        if(v<=q3) return 3;
+        return v<=q4 ? 4 : 4;
+    });
+}
+
 function renderHeatmap(){
     const grid=document.getElementById('hmGrid');
     if(!heatmapData.length){grid.innerHTML='';document.getElementById('hmStats').innerHTML='';return;}
+    const levels = computeMetricLevels(hmMetric);
     const first=new Date(heatmapData[0].date);
     const padDays=(first.getDay()||7)-1;
     const cells=[];
     for(let i=0;i<padDays;i++)cells.push(`<div class="hm-day l0" style="visibility:hidden"></div>`);
-    heatmapData.forEach(d=>{
+    heatmapData.forEach((d,idx)=>{
         const parts=d.date.split('-');
         const dateFmt=`${parts[2]}.${parts[1]}.${parts[0]}`;
         const tip=`${dateFmt} · ${d.checkins} Check-ins · ${d.milestones} Meilensteine · ${fmtEur(d.amount)}`;
-        cells.push(`<div class="hm-day l${d.level}" data-tip="${esc(tip)}" data-date="${d.date}"></div>`);
+        cells.push(`<div class="hm-day l${levels[idx]}" data-tip="${esc(tip)}" data-date="${d.date}"></div>`);
     });
     grid.innerHTML=cells.join('');
 
@@ -1477,6 +1662,13 @@ async function submitComplete(){
         showToast('🏆 Trophäe verdient!');
         closeCompleteModal();
         document.getElementById('heroEdit').classList.remove('open');
+        // Nach Abschluss: neues leeres Sparziel startet bei 0 → State resetten,
+        // damit Radial nicht von "voll" auf 0 runter-animiert und Konfetti sauber neu triggern kann.
+        prevGlTotal = null; prevGlPct = null; prevWasComplete = false;
+        // Konfetti-Feuerwerk zur Feier des Abschlusses
+        fireConfetti({count:260, duration:3200});
+        setTimeout(()=>fireConfetti({count:140, duration:2400, originX: window.innerWidth*0.25, spread: Math.PI*0.9}), 300);
+        setTimeout(()=>fireConfetti({count:140, duration:2400, originX: window.innerWidth*0.75, spread: Math.PI*0.9}), 600);
         await Promise.all([loadSparziel(),loadTrophies()]);
         activateTab('trophies');
     }catch(e){
@@ -1540,6 +1732,20 @@ document.querySelectorAll('.log-view-toggle button').forEach(b=>b.addEventListen
     b.classList.add('active');logView=b.dataset.view;renderLog();
 }));
 document.getElementById('hmRange').addEventListener('change',loadHeatmap);
+// Heatmap-Metrik-Toggle (Alle / Check-ins / Meilensteine / €)
+(function(){
+    const chips = document.querySelectorAll('#hmMetricChips .hm-chip');
+    // gespeicherte Auswahl beim Boot in UI übernehmen
+    chips.forEach(c => c.classList.toggle('active', c.dataset.metric === hmMetric));
+    chips.forEach(c => c.addEventListener('click', () => {
+        chips.forEach(x => x.classList.remove('active'));
+        c.classList.add('active');
+        hmMetric = c.dataset.metric;
+        try { localStorage.setItem('vex_hm_metric', hmMetric); } catch(_){}
+        haptic('tap');
+        renderHeatmap();
+    }));
+})();
 
 let sortableAch=null, sortablePg=null;
 function initSortables(){
