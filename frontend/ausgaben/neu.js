@@ -70,7 +70,14 @@ async function handleFile(file) {
         const resp = await AUSGABEN_API.uploadReceipt(compressed, true);
         uploadedReceipt = resp.receipt;
         renderOcrEditForm(resp.ocr);
-        showToast('Bild gespeichert' + (resp.ocr.available ? ' – Werte prüfen' : ''), 'success');
+        // Diagnose-Text
+        const ocr = resp.ocr || {};
+        let msg = 'Bild gespeichert';
+        if (!ocr.provider_available) msg += ' – ⚠️ OCR nicht konfiguriert';
+        else if (!ocr.available) msg += ' – ⚠️ OCR lieferte leeren Text';
+        else if (!ocr.parsed || !ocr.parsed.total_amount) msg += ' – OCR ok, Parser fand keine Summe (bitte prüfen)';
+        else msg += ' – Werte prüfen';
+        showToast(msg, ocr.available && ocr.parsed && ocr.parsed.total_amount ? 'success' : 'error', 4000);
     } catch(e) {
         showToast('Fehler: ' + e.message, 'error');
         resetUploadDrop();
@@ -99,12 +106,34 @@ async function renderOcrEditForm(ocr) {
     try { uploadedImgUrl = await fetchImageAsBlobUrl(AUSGABEN_API.receiptThumbUrl(uploadedReceipt.id)); } catch(e) {}
     const storeOpts = '<option value="">– Kein Laden –</option>' +
         stores.map(s => `<option value="${s.id}"${matchedStore==s.id?' selected':''}>${s.icon || ''} ${escapeHtml(s.name)}</option>`).join('');
+    // Diagnose-Zeile für OCR
+    let diagBadges = '';
+    if (!ocr.provider_available) diagBadges = '<span class="badge warn">⚠️ OCR-Provider nicht konfiguriert</span> ';
+    else if (!ocr.available) diagBadges = `<span class="badge warn">⚠️ OCR (${ocr.provider}) lieferte leeren Text</span> `;
+    else diagBadges = `<span class="badge ok">OCR: ${ocr.provider} · ${ocr.text_length || 0} Zeichen</span> `;
+    if (ocr.error) diagBadges += `<span class="badge warn" title="${escapeAttr(ocr.error)}">Fehler</span> `;
+
+    const rawSection = ocr.raw_text ? `
+        <details style="margin-bottom:0.75rem">
+            <summary style="cursor:pointer;font-size:0.75rem;color:var(--text-muted)">🔍 OCR-Rohtext anzeigen (${ocr.text_length} Zeichen)</summary>
+            <pre style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:0.5rem;margin-top:0.375rem;font-size:0.6875rem;white-space:pre-wrap;max-height:220px;overflow:auto">${escapeHtml(ocr.raw_text)}</pre>
+        </details>` : '';
+
     card.innerHTML = `
         ${uploadedImgUrl ? `<img src="${uploadedImgUrl}" class="preview-img">` : ''}
         <div style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem">
-            ${ocr.available ? `<span class="badge ok">OCR: ${ocr.provider}</span>` : '<span class="badge warn">OCR nicht verfügbar</span>'}
+            ${diagBadges}
             ${parsed.store_hint ? '· Erkannt: <strong>' + escapeHtml(parsed.store_hint) + '</strong>' : ''}
         </div>
+        ${rawSection}
+        <div style="margin-bottom:0.5rem"><label>Typ</label>
+        <select id="oType">
+            <option value="receipt" selected>🧾 Kassenbon</option>
+            <option value="online_order">📦 Online-Bestellung</option>
+            <option value="restaurant">🍽️ Restaurant</option>
+            <option value="subscription">🔁 Abo</option>
+            <option value="other">📌 Sonstiges</option>
+        </select></div>
         <div class="form-row">
             <div><label>Datum</label><input type="date" id="oDate" value="${parsed.purchase_date || todayISO()}"></div>
             <div><label>Laden</label><select id="oStore">${storeOpts}</select></div>
@@ -147,13 +176,19 @@ function addItemRow(containerId, item) {
     const c = document.getElementById(containerId);
     const row = document.createElement('div');
     row.className = 'item-row';
+    if (item && item.is_reduced) row.dataset.isReduced = '1';
+    if (item && item.original_price != null) row.dataset.originalPrice = item.original_price;
     const catOpts = '<option value="">– Kategorie –</option>' +
         categories.map(cat => `<option value="${cat.id}"${item && item.category_id==cat.id?' selected':''}>${cat.icon || ''} ${escapeHtml(cat.name)}</option>`).join('');
+    const reducedBadge = item && item.is_reduced
+        ? `<span class="badge" style="background:#dcfce7;color:#166534;font-size:0.625rem;padding:1px 4px" title="${item.original_price ? 'Vorher: ' + item.original_price + ' €' : 'Reduziert'}">RED</span>`
+        : '';
     row.innerHTML = `
         <input type="text" class="d-desc" placeholder="Beschreibung" value="${item?escapeAttr(item.description||''):''}">
         <input type="number" step="0.01" class="d-price" placeholder="Preis" value="${item?item.total_price||'':''}">
         <select class="d-cat">${catOpts}</select>
         <button class="del" title="Entfernen">✕</button>
+        ${reducedBadge}
     `;
     c.appendChild(row);
     row.querySelector('.del').onclick = () => row.remove();
@@ -180,7 +215,11 @@ function collectItems(containerId) {
         const price = parseFloat(r.querySelector('.d-price').value);
         if (!desc || isNaN(price)) return;
         const cat = r.querySelector('.d-cat').value;
-        items.push({ description: desc, total_price: price, category_id: cat ? +cat : null });
+        const it = { description: desc, total_price: price, category_id: cat ? +cat : null };
+        // Reduziert-Info aus data-Attributen übernehmen (nur bei OCR-Vorbelegung)
+        if (r.dataset.isReduced === '1') it.is_reduced = true;
+        if (r.dataset.originalPrice) it.original_price = parseFloat(r.dataset.originalPrice);
+        items.push(it);
     });
     return items;
 }
@@ -198,6 +237,7 @@ async function saveOcrExpense() {
             vat_amount:   +document.getElementById('oVat').value || null,
             payment_method: document.getElementById('oPayment').value || null,
             is_recurring:   document.getElementById('oRecurring').checked,
+            expense_type:   document.getElementById('oType').value || 'receipt',
             note: document.getElementById('oNote').value || null,
             items,
         };
@@ -226,6 +266,7 @@ function setupQuickForm() {
                 total_amount: +document.getElementById('qTotal').value || 0,
                 payment_method: document.getElementById('qPayment').value || null,
                 is_recurring:   document.getElementById('qRecurring').checked,
+                expense_type:   document.getElementById('qType').value || 'receipt',
                 note: document.getElementById('qNote').value || null,
             };
             if (!body.purchase_date || body.total_amount <= 0) {
@@ -254,6 +295,7 @@ function setupManualForm() {
                 vat_amount:   +document.getElementById('mVat').value || null,
                 payment_method: document.getElementById('mPayment').value || null,
                 is_recurring:   document.getElementById('mRecurring').checked,
+                expense_type:   document.getElementById('mType').value || 'receipt',
                 note: document.getElementById('mNote').value || null,
                 items,
             };

@@ -1421,6 +1421,8 @@ class ExpenseItemIn(BaseModel):
     unit_price: Optional[float] = None
     total_price: float
     category_id: Optional[int] = None
+    original_price: Optional[float] = None
+    is_reduced: Optional[bool] = False
 
 class ExpenseCreate(BaseModel):
     store_id: Optional[int] = None
@@ -1432,6 +1434,7 @@ class ExpenseCreate(BaseModel):
     is_recurring: Optional[bool] = False
     recurring_pattern: Optional[str] = None
     note: Optional[str] = None
+    expense_type: Optional[str] = "receipt"  # receipt|online_order|restaurant|subscription|other
     items: Optional[list[ExpenseItemIn]] = None
 
 class ExpenseUpd(BaseModel):
@@ -1443,6 +1446,7 @@ class ExpenseUpd(BaseModel):
     is_recurring: Optional[bool] = None
     recurring_pattern: Optional[str] = None
     note: Optional[str] = None
+    expense_type: Optional[str] = None
 
 # ---------- Stores ----------
 @app.get("/api/stores")
@@ -1601,6 +1605,7 @@ async def list_expenses(
     date_to: Optional[str] = Query(None, alias="to"),
     store_id: Optional[int] = None,
     category_id: Optional[int] = None,
+    expense_type: Optional[str] = None,
     limit: int = 200,
 ):
     conds = ["e.user_id=$1"]
@@ -1614,6 +1619,9 @@ async def list_expenses(
     if store_id:
         params.append(store_id)
         conds.append(f"e.store_id=${len(params)}")
+    if expense_type:
+        params.append(expense_type)
+        conds.append(f"e.expense_type=${len(params)}")
     if category_id:
         params.append(category_id)
         conds.append(
@@ -1667,15 +1675,19 @@ async def create_expense(request: Request, b: ExpenseCreate,
         if not ok:
             raise HTTPException(400, "Bild unbekannt")
 
+    exp_type = (b.expense_type or "receipt").strip()
+    if exp_type not in ("receipt", "online_order", "restaurant", "subscription", "other"):
+        exp_type = "receipt"
+
     async with db.transaction():
         row = await db.fetchrow(
             """INSERT INTO expenses
                (user_id, receipt_image_id, store_id, purchase_date, total_amount,
-                vat_amount, payment_method, is_recurring, recurring_pattern, note)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *""",
+                vat_amount, payment_method, is_recurring, recurring_pattern, note, expense_type)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *""",
             user["id"], b.receipt_image_id, b.store_id, d, b.total_amount,
             b.vat_amount, b.payment_method, bool(b.is_recurring),
-            b.recurring_pattern, b.note)
+            b.recurring_pattern, b.note, exp_type)
         eid = row["id"]
         if b.items:
             for idx, it in enumerate(b.items):
@@ -1683,7 +1695,6 @@ async def create_expense(request: Request, b: ExpenseCreate,
                 if cat_id is None:
                     cat_id = await suggest_category(db, user["id"], it.description, b.store_id)
                 if cat_id:
-                    # Ownership Kategorie
                     ok = await db.fetchval(
                         "SELECT 1 FROM expense_categories WHERE id=$1 AND user_id=$2",
                         cat_id, user["id"])
@@ -1692,12 +1703,12 @@ async def create_expense(request: Request, b: ExpenseCreate,
                 await db.execute(
                     """INSERT INTO expense_items
                        (user_id, expense_id, description, quantity, unit_price,
-                        total_price, category_id, sort_order)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)""",
+                        total_price, category_id, sort_order, original_price, is_reduced)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)""",
                     user["id"], eid, it.description.strip(),
-                    it.quantity or 1, it.unit_price, it.total_price, cat_id, idx)
+                    it.quantity or 1, it.unit_price, it.total_price, cat_id, idx,
+                    it.original_price, bool(it.is_reduced))
                 if cat_id and it.category_id is not None:
-                    # User hat explizit Kategorie zugewiesen -> Regel lernen
                     await learn_rule(db, user["id"], it.description, cat_id, b.store_id)
     return await get_expense(eid, db=db, user=user)
 
@@ -1720,6 +1731,8 @@ async def update_expense(request: Request, eid: int, b: ExpenseUpd,
     if b.is_recurring is not None: add("is_recurring", bool(b.is_recurring))
     if b.recurring_pattern is not None: add("recurring_pattern", b.recurring_pattern)
     if b.note is not None: add("note", b.note)
+    if b.expense_type is not None and b.expense_type in ("receipt","online_order","restaurant","subscription","other"):
+        add("expense_type", b.expense_type)
     if not fields:
         return await get_expense(eid, db=db, user=user)
     vals.extend([eid, user["id"]])
@@ -1755,10 +1768,11 @@ async def add_item(request: Request, eid: int, b: ExpenseItemIn,
             cat_id = None
     row = await db.fetchrow(
         """INSERT INTO expense_items
-           (user_id, expense_id, description, quantity, unit_price, total_price, category_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *""",
+           (user_id, expense_id, description, quantity, unit_price, total_price, category_id,
+            original_price, is_reduced)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *""",
         user["id"], eid, b.description.strip(), b.quantity or 1,
-        b.unit_price, b.total_price, cat_id)
+        b.unit_price, b.total_price, cat_id, b.original_price, bool(b.is_reduced))
     if cat_id and b.category_id is not None:
         await learn_rule(db, user["id"], b.description, cat_id, exp["store_id"])
     return _ser_exp(row)
@@ -1780,10 +1794,11 @@ async def update_item(request: Request, iid: int, b: ExpenseItemIn,
             raise HTTPException(400, "Kategorie unbekannt")
     await db.execute(
         """UPDATE expense_items
-           SET description=$1, quantity=$2, unit_price=$3, total_price=$4, category_id=$5
-           WHERE id=$6 AND user_id=$7""",
+           SET description=$1, quantity=$2, unit_price=$3, total_price=$4, category_id=$5,
+               original_price=$6, is_reduced=$7
+           WHERE id=$8 AND user_id=$9""",
         b.description.strip(), b.quantity or 1, b.unit_price, b.total_price,
-        cat_id, iid, user["id"])
+        cat_id, b.original_price, bool(b.is_reduced), iid, user["id"])
     # Regel lernen wenn Kategorie manuell gesetzt wurde
     if cat_id and cat_id != existing["category_id"]:
         await learn_rule(db, user["id"], b.description, cat_id, existing["store_id"])
@@ -1826,14 +1841,20 @@ async def upload_receipt(request: Request,
 
     ocr_text = ""
     ocr_name = None
+    ocr_error = None
+    ocr_provider_available = False
     if run_ocr:
         provider = get_ocr_provider()
+        ocr_provider_available = provider.available
+        ocr_name = provider.name
         if provider.available:
             try:
                 ocr_text = provider.extract_text(main_bytes) or ""
-                ocr_name = provider.name
             except Exception as e:
                 logger.exception(f"OCR failed: {e}")
+                ocr_error = str(e)
+        else:
+            ocr_error = "Provider nicht konfiguriert (GOOGLE_APPLICATION_CREDENTIALS_JSON fehlt?)"
 
     row = await db.fetchrow(
         """INSERT INTO receipt_images
@@ -1852,8 +1873,11 @@ async def upload_receipt(request: Request,
         "receipt": _ser_exp(row),
         "ocr": {
             "provider": ocr_name,
+            "provider_available": ocr_provider_available,
             "available": bool(ocr_text),
+            "error": ocr_error,
             "raw_text": ocr_text,
+            "text_length": len(ocr_text),
             "parsed": parsed,
         },
     }
@@ -2040,17 +2064,96 @@ async def expenses_heatmap(db=Depends(get_db), user=Depends(get_current_user)):
 @app.get("/api/expenses/price-history")
 async def price_history(q: str = Query(..., min_length=2),
                          db=Depends(get_db), user=Depends(get_current_user)):
+    """Preisverlauf mit echtem Vergleich:
+    - alle Käufe passend zum Suchbegriff
+    - Summary: Ø-Preis, günstigster/teuerster Laden, Diff in € und %
+    - je Kauf: Diff zum Ø-Preis (billiger/teurer)
+    Berechnet mit Einzelpreis (total_price/quantity), damit Mengen vergleichbar werden.
+    """
     rows = await db.fetch(
-        """SELECT ei.description, ei.total_price, ei.quantity, ei.unit_price,
-                  e.purchase_date, s.name AS store_name, s.color AS store_color
+        """SELECT ei.id, ei.description, ei.total_price, ei.quantity, ei.unit_price,
+                  ei.original_price, ei.is_reduced,
+                  e.purchase_date, e.store_id,
+                  s.name AS store_name, s.color AS store_color, s.icon AS store_icon
            FROM expense_items ei
            JOIN expenses e ON e.id=ei.expense_id
            LEFT JOIN stores s ON s.id=e.store_id
            WHERE ei.user_id=$1 AND LOWER(ei.description) LIKE '%' || LOWER($2) || '%'
            ORDER BY e.purchase_date DESC
-           LIMIT 200""",
+           LIMIT 500""",
         user["id"], q)
-    return [_ser_exp(r) for r in rows]
+    if not rows:
+        return {
+            "count": 0, "items": [], "by_store": [],
+            "avg_unit_price": None, "cheapest": None, "most_expensive": None,
+            "max_diff_pct": 0,
+        }
+
+    def unit_price(r):
+        qty = float(r["quantity"] or 1) or 1
+        return float(r["total_price"]) / qty
+
+    items = []
+    for r in rows:
+        up = unit_price(r)
+        items.append({
+            "id": r["id"],
+            "description": r["description"],
+            "total_price": float(r["total_price"]),
+            "quantity": float(r["quantity"] or 1),
+            "unit_price_calc": round(up, 4),
+            "original_price": float(r["original_price"]) if r["original_price"] is not None else None,
+            "is_reduced": bool(r["is_reduced"]),
+            "purchase_date": r["purchase_date"].isoformat() if r["purchase_date"] else None,
+            "store_id": r["store_id"],
+            "store_name": r["store_name"] or "Ohne Laden",
+            "store_color": r["store_color"] or "#9ca3af",
+            "store_icon": r["store_icon"] or "🏪",
+        })
+
+    all_up = [i["unit_price_calc"] for i in items]
+    avg = sum(all_up) / len(all_up)
+
+    # Diff pro Item zum Durchschnitt
+    for i in items:
+        diff = i["unit_price_calc"] - avg
+        i["diff_to_avg"] = round(diff, 2)
+        i["diff_pct"] = round((diff / avg) * 100.0, 1) if avg > 0 else 0.0
+
+    # Pro Store aggregieren
+    from collections import defaultdict
+    store_group = defaultdict(list)
+    for i in items:
+        store_group[(i["store_id"], i["store_name"], i["store_color"], i["store_icon"])].append(i)
+    by_store = []
+    for (sid, sname, scolor, sicon), group in store_group.items():
+        ups = [g["unit_price_calc"] for g in group]
+        by_store.append({
+            "store_id": sid, "store_name": sname,
+            "store_color": scolor, "store_icon": sicon,
+            "avg_unit_price": round(sum(ups) / len(ups), 4),
+            "min_unit_price": round(min(ups), 4),
+            "max_unit_price": round(max(ups), 4),
+            "count": len(group),
+            "diff_to_avg_pct": round(((sum(ups)/len(ups)) - avg) / avg * 100.0, 1) if avg > 0 else 0.0,
+        })
+    by_store.sort(key=lambda x: x["avg_unit_price"])
+
+    cheapest = by_store[0] if by_store else None
+    most_expensive = by_store[-1] if by_store else None
+    max_diff_pct = round(
+        (most_expensive["avg_unit_price"] - cheapest["avg_unit_price"]) / cheapest["avg_unit_price"] * 100.0, 1
+    ) if cheapest and cheapest["avg_unit_price"] > 0 and cheapest is not most_expensive else 0.0
+
+    return {
+        "count": len(items),
+        "items": items,
+        "by_store": by_store,
+        "avg_unit_price": round(avg, 4),
+        "cheapest": cheapest,
+        "most_expensive": most_expensive,
+        "max_diff_pct": max_diff_pct,
+    }
 
 @app.get("/api/expenses/recurring/suggestions")
 async def recurring_suggestions(db=Depends(get_db), user=Depends(get_current_user)):

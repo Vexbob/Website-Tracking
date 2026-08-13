@@ -72,6 +72,14 @@ body{visibility:hidden}body.ready{visibility:visible}
     <div class="card">
         <div class="filter-bar">
             <h3 style="margin:0 auto 0 0;font-size:1rem">Letzte Ausgaben</h3>
+            <select id="filterType">
+                <option value="">Alle Typen</option>
+                <option value="receipt">🧾 Kassenbon</option>
+                <option value="online_order">📦 Online</option>
+                <option value="restaurant">🍽️ Restaurant</option>
+                <option value="subscription">🔁 Abo</option>
+                <option value="other">📌 Sonstiges</option>
+            </select>
             <select id="filterStore"><option value="">Alle Läden</option></select>
             <select id="filterCategory"><option value="">Alle Kategorien</option></select>
             <input type="date" id="filterFrom" title="Von">

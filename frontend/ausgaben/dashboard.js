@@ -36,8 +36,12 @@ async function loadKpis() {
     } catch(e) { console.error(e); }
 }
 
+const TYPE_ICONS = { receipt:'🧾', online_order:'📦', restaurant:'🍽️', subscription:'🔁', other:'📌' };
+const TYPE_LABELS = { receipt:'Kassenbon', online_order:'Online', restaurant:'Restaurant', subscription:'Abo', other:'Sonstiges' };
+
 async function loadExpenses() {
     const params = {
+        expense_type: document.getElementById('filterType').value || undefined,
         store_id:    document.getElementById('filterStore').value || undefined,
         category_id: document.getElementById('filterCategory').value || undefined,
         from:        document.getElementById('filterFrom').value || undefined,
@@ -55,11 +59,13 @@ async function loadExpenses() {
         list.innerHTML = rows.map(r => {
             const initial = (r.store_name || '€').slice(0,1).toUpperCase();
             const color = r.store_color || '#6b7280';
+            const typeIcon = TYPE_ICONS[r.expense_type] || '🧾';
+            const typeLabel = TYPE_LABELS[r.expense_type] || 'Kassenbon';
             return `<a href="/ausgaben/bon.html?id=${r.id}" class="exp-row">
                 <div class="exp-store" style="background:${color}">${r.store_icon || initial}</div>
                 <div class="exp-info">
-                    <div class="exp-name">${escapeHtml(r.store_name || 'Ohne Laden')}${r.is_recurring?' 🔁':''}</div>
-                    <div class="exp-meta">${fmtDate(r.purchase_date)} · ${r.item_count||0} Position${r.item_count===1?'':'en'}</div>
+                    <div class="exp-name">${typeIcon} ${escapeHtml(r.store_name || typeLabel)}${r.is_recurring?' 🔁':''}</div>
+                    <div class="exp-meta">${fmtDate(r.purchase_date)} · ${r.item_count||0} Position${r.item_count===1?'':'en'}${r.expense_type && r.expense_type !== 'receipt' ? ' · ' + typeLabel : ''}</div>
                 </div>
                 <div class="exp-amount">${fmtEur(r.total_amount)}</div>
             </a>`;
@@ -85,7 +91,7 @@ function escapeHtml(s) {
 
 document.getElementById('filterApply').onclick = loadExpenses;
 document.getElementById('filterReset').onclick = () => {
-    ['filterStore','filterCategory','filterFrom','filterTo'].forEach(id => document.getElementById(id).value = '');
+    ['filterType','filterStore','filterCategory','filterFrom','filterTo'].forEach(id => document.getElementById(id).value = '');
     loadExpenses();
 };
 

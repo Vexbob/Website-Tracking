@@ -30,6 +30,9 @@ async function render() {
     const paymentVal = e.payment_method || '';
     const pmts = [['','–'],['cash','Bar'],['card','EC/Karte'],['credit','Kreditkarte'],['paypal','PayPal'],['other','Sonstiges']];
     const paymentOpts = pmts.map(([v,l]) => `<option value="${v}"${v===paymentVal?' selected':''}>${l}</option>`).join('');
+    const typeVal = e.expense_type || 'receipt';
+    const types = [['receipt','🧾 Kassenbon'],['online_order','📦 Online-Bestellung'],['restaurant','🍽️ Restaurant'],['subscription','🔁 Abo'],['other','📌 Sonstiges']];
+    const typeOpts = types.map(([v,l]) => `<option value="${v}"${v===typeVal?' selected':''}>${l}</option>`).join('');
 
     let imgHtml = '';
     if (e.receipt_image_id) {
@@ -47,6 +50,7 @@ async function render() {
                 <div><strong>${escapeHtml(e.store_name || 'Ohne Laden')}</strong><div style="font-size:0.75rem;color:var(--text-muted)">${fmtDate(e.purchase_date)}</div></div>
                 <div class="total-val">${fmtEur(e.total_amount)}</div>
             </div>
+            <div style="margin-bottom:0.5rem"><label>Typ</label><select id="eType">${typeOpts}</select></div>
             <div class="form-row">
                 <div><label>Datum</label><input type="date" id="eDate" value="${e.purchase_date || ''}"></div>
                 <div><label>Laden</label><select id="eStore">${storeOpts}</select></div>
@@ -95,11 +99,15 @@ function renderItemRow(item) {
     row.dataset.id = item.id || '';
     const catOpts = '<option value="">– Kategorie –</option>' +
         categories.map(cat => `<option value="${cat.id}"${item.category_id==cat.id?' selected':''}>${cat.icon || ''} ${escapeHtml(cat.name)}</option>`).join('');
+    const reducedBadge = item.is_reduced
+        ? `<span class="badge" style="background:#dcfce7;color:#166534;font-size:0.625rem;padding:1px 4px" title="${item.original_price ? 'Vorher: ' + item.original_price + ' €' : 'Reduziert'}">RED</span>`
+        : '';
     row.innerHTML = `
         <input type="text" class="d-desc" value="${escapeAttr(item.description||'')}" placeholder="Beschreibung">
         <input type="number" step="0.01" class="d-price" value="${item.total_price || ''}" placeholder="Preis">
         <select class="d-cat">${catOpts}</select>
         <button class="del" title="Entfernen">✕</button>
+        ${reducedBadge}
     `;
     c.appendChild(row);
     const save = async () => {
@@ -144,6 +152,7 @@ async function saveExpense() {
             vat_amount: +document.getElementById('eVat').value || null,
             payment_method: document.getElementById('ePayment').value || null,
             is_recurring: document.getElementById('eRecurring').checked,
+            expense_type: document.getElementById('eType').value || 'receipt',
             note: document.getElementById('eNote').value || null,
         };
         currentExpense = await AUSGABEN_API.updateExpense(currentExpense.id, body);

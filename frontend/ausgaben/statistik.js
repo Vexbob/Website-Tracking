@@ -98,15 +98,65 @@ async function doSearch() {
     if (q.length < 2) { wrap.innerHTML = '<div class="muted">Mindestens 2 Zeichen</div>'; return; }
     wrap.innerHTML = '<div class="muted">Suche …</div>';
     try {
-        const rows = await AUSGABEN_API.priceHistory(q);
-        if (!rows.length) { wrap.innerHTML = '<div class="muted">Keine Treffer</div>'; return; }
-        wrap.innerHTML = rows.map(r => `
-            <div class="ph-item">
-                <div><div class="ph-name">${escHtml(r.description)}</div><div class="ph-meta">${escHtml(r.store_name || 'Ohne Laden')} · ${fmtDate(r.purchase_date)}</div></div>
-                <div class="ph-meta">${r.quantity && r.quantity > 1 ? r.quantity + 'x' : ''}</div>
-                <div class="ph-price">${fmtEur(r.total_price)}</div>
-            </div>
-        `).join('');
+        const data = await AUSGABEN_API.priceHistory(q);
+        if (!data.count) { wrap.innerHTML = '<div class="muted">Keine Treffer für "' + escHtml(q) + '"</div>'; return; }
+
+        // Summary
+        let summaryHtml = '';
+        if (data.cheapest && data.most_expensive && data.cheapest.store_name !== data.most_expensive.store_name) {
+            summaryHtml = `
+                <div class="ph-summary">
+                    <div class="ph-summary-title">💡 Vergleich (${data.count} Käufe · Ø ${fmtEur(data.avg_unit_price)} pro Einheit)</div>
+                    <div class="ph-summary-grid">
+                        <div class="ph-summary-card cheap">
+                            <div class="ph-summary-lbl">Günstigster Laden</div>
+                            <div class="ph-summary-store" style="color:${data.cheapest.store_color}">${data.cheapest.store_icon} ${escHtml(data.cheapest.store_name)}</div>
+                            <div class="ph-summary-val">${fmtEur(data.cheapest.avg_unit_price)}<span class="ph-summary-sub">Ø / Einheit</span></div>
+                        </div>
+                        <div class="ph-summary-card expensive">
+                            <div class="ph-summary-lbl">Teuerster Laden</div>
+                            <div class="ph-summary-store" style="color:${data.most_expensive.store_color}">${data.most_expensive.store_icon} ${escHtml(data.most_expensive.store_name)}</div>
+                            <div class="ph-summary-val">${fmtEur(data.most_expensive.avg_unit_price)}<span class="ph-summary-sub">+${data.max_diff_pct}%</span></div>
+                        </div>
+                    </div>
+                </div>`;
+        } else if (data.avg_unit_price != null) {
+            summaryHtml = `<div class="ph-summary"><div class="ph-summary-title">${data.count} Käufe · Ø ${fmtEur(data.avg_unit_price)} pro Einheit</div></div>`;
+        }
+
+        // Pro Store
+        let byStoreHtml = '';
+        if (data.by_store.length > 1) {
+            byStoreHtml = '<h4 style="margin:0.75rem 0 0.375rem;font-size:0.8125rem;color:var(--text-muted)">Nach Laden</h4>';
+            byStoreHtml += data.by_store.map(s => {
+                const pct = s.diff_to_avg_pct;
+                const cls = pct < -1 ? 'cheap' : pct > 1 ? 'expensive' : '';
+                const arrow = pct < -1 ? '▼' : pct > 1 ? '▲' : '—';
+                return `<div class="ph-store-row">
+                    <div class="ph-store-name" style="color:${s.store_color}">${s.store_icon} ${escHtml(s.store_name)}</div>
+                    <div class="ph-store-count">${s.count}×</div>
+                    <div class="ph-store-price ${cls}">${fmtEur(s.avg_unit_price)} <small>${arrow} ${pct > 0 ? '+' : ''}${pct}%</small></div>
+                </div>`;
+            }).join('');
+        }
+
+        // Einzelkäufe
+        const itemsHtml = '<h4 style="margin:0.75rem 0 0.375rem;font-size:0.8125rem;color:var(--text-muted)">Alle Käufe</h4>' +
+            data.items.map(r => {
+                const pct = r.diff_pct || 0;
+                const cls = pct < -5 ? 'cheap' : pct > 5 ? 'expensive' : '';
+                const diffLabel = Math.abs(pct) < 1 ? '' : (pct < 0 ? `${pct}%` : `+${pct}%`);
+                const reduced = r.is_reduced ? '<span class="ph-badge">REDUZIERT</span>' : '';
+                const origPrice = r.original_price ? ` <s style="color:var(--text-fainter)">${fmtEur(r.original_price)}</s>` : '';
+                return `<div class="ph-item ${cls}">
+                    <div><div class="ph-name">${escHtml(r.description)} ${reduced}</div>
+                         <div class="ph-meta"><span style="color:${r.store_color}">${r.store_icon} ${escHtml(r.store_name)}</span> · ${fmtDate(r.purchase_date)}${r.quantity > 1 ? ' · '+r.quantity+'x' : ''}</div></div>
+                    <div class="ph-diff ${cls}">${diffLabel}</div>
+                    <div class="ph-price">${fmtEur(r.total_price)}${origPrice}</div>
+                </div>`;
+            }).join('');
+
+        wrap.innerHTML = summaryHtml + byStoreHtml + itemsHtml;
     } catch(e) { wrap.innerHTML = '<div class="muted">Fehler: ' + e.message + '</div>'; }
 }
 

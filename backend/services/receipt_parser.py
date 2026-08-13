@@ -29,7 +29,9 @@ _DATE_PATTERNS = [
 _TOTAL_KEYWORDS = ["SUMME", "GESAMT", "GESAMTBETRAG", "GESAMTSUMME",
                    "ZU ZAHLEN", "ZAHLBETRAG", "BETRAG", "TOTAL", "ENDSUMME"]
 _VAT_KEYWORDS = ["MWST", "MEHRWERTSTEUER", "UST", "STEUER"]
-_PRICE_RE = re.compile(r"(-?\d+[,.]\d{2})\s*(?:EUR|€|[A-Z])?\s*$")
+_PRICE_RE = re.compile(r"(-?\d+[,.]\d{2})\s*(?:EUR|€|[A-Z*]{1,3})?\s*$")
+# Preis irgendwo in der Zeile (nicht nur am Ende) — fürs Total-Suchen
+_PRICE_ANY_RE = re.compile(r"(-?\d+[,.]\d{2})")
 _SKIP_LINE_RE = re.compile(
     r"^\s*(datum|uhrzeit|zeit|beleg|bon|kasse|bediener|kunde|karte|"
     r"mwst|ust|zwischen|summe|gesamt|zu zahlen|zahlbetrag|betrag|"
@@ -91,25 +93,40 @@ def _find_total(lines):
         if any(v in line_upper for v in _VAT_KEYWORDS):
             continue
         for kw in _TOTAL_KEYWORDS:
-            if kw in line_upper:
-                m = _PRICE_RE.search(line)
-                if m:
-                    val = _parse_amount(m.group(1))
-                    if val and val > 0:
-                        priority = 3 if kw in ("SUMME", "GESAMT", "ZU ZAHLEN") else 2
-                        candidates.append((priority, val))
-                # Nächste Zeile nur, wenn diese wirklich NUR das Keyword war
-                elif i + 1 < len(lines) and len(line.strip()) < 15:
-                    nxt = lines[i + 1]
-                    if not any(v in nxt.upper() for v in _VAT_KEYWORDS):
-                        m2 = _PRICE_RE.search(nxt)
-                        if m2:
-                            val = _parse_amount(m2.group(1))
-                            if val and val > 0:
-                                candidates.append((2, val))
+            if kw not in line_upper:
+                continue
+            # Alle Preise in dieser Zeile finden, den letzten/größten nehmen
+            all_prices = _PRICE_ANY_RE.findall(line)
+            vals = [_parse_amount(p) for p in all_prices]
+            vals = [v for v in vals if v and v > 0]
+            if vals:
+                # Bei "SUMME EUR 12,34" ist der letzte Preis der richtige
+                val = vals[-1]
+                priority = 3 if kw in ("SUMME", "GESAMT", "ZU ZAHLEN", "ENDSUMME") else 2
+                candidates.append((priority, val))
+            elif i + 1 < len(lines) and len(line.strip()) < 20:
+                # Preis auf der nächsten Zeile suchen
+                nxt = lines[i + 1]
+                if not any(v in nxt.upper() for v in _VAT_KEYWORDS):
+                    nxt_prices = _PRICE_ANY_RE.findall(nxt)
+                    nxt_vals = [_parse_amount(p) for p in nxt_prices]
+                    nxt_vals = [v for v in nxt_vals if v and v > 0]
+                    if nxt_vals:
+                        candidates.append((2, nxt_vals[-1]))
     if candidates:
         candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
         return candidates[0][1]
+    # Fallback: größter Preis auf dem Bon (oft ist die Summe der größte Wert)
+    all_amounts = []
+    for line in lines:
+        if any(v in line.upper() for v in _VAT_KEYWORDS):
+            continue
+        for p in _PRICE_ANY_RE.findall(line):
+            v = _parse_amount(p)
+            if v and v > 0:
+                all_amounts.append(v)
+    if all_amounts:
+        return max(all_amounts)
     return None
 
 
@@ -123,6 +140,8 @@ def _find_vat(lines):
                     return val
     return None
 
+
+_REDUZIERT_MARKERS = ("RABATT", "REDUZ", "AKTION", "SONDERANGEBOT", "-%", "PREISNACHLASS")
 
 def _extract_items(lines, total):
     items = []
@@ -139,12 +158,27 @@ def _extract_items(lines, total):
         if price is None:
             continue
         desc = line[:m.start()].strip()
-        desc = re.sub(r"\s+[A-Z]\s*$", "", desc)
+        desc = re.sub(r"\s+[A-Z*]{1,3}\s*$", "", desc)
         desc = desc.rstrip(" \t.-,")
         if not desc or len(desc) < 2:
             continue
         if total is not None and abs(price - total) < 0.01:
             continue
+
+        # Reduziert-Erkennung
+        line_upper = line.upper()
+        is_reduced = any(mk in line_upper for mk in _REDUZIERT_MARKERS) or price < 0
+        # Negative Preise (Rabatt-Zeilen) auf letzten Item als Rabatt anwenden
+        if price < 0 and items:
+            last = items[-1]
+            original = last["total_price"]
+            new_price = round(original + price, 2)
+            if new_price > 0:
+                last["original_price"] = original
+                last["total_price"] = new_price
+                last["is_reduced"] = True
+            continue
+
         qty = 1.0
         unit_price = None
         qm = re.match(r"^(\d+)\s*[xX*]\s*(\d+[,.]\d{2})\s+(.+)$", desc)
@@ -157,6 +191,8 @@ def _extract_items(lines, total):
             "quantity": qty,
             "unit_price": unit_price,
             "total_price": price,
+            "is_reduced": is_reduced,
+            "original_price": None,
         })
     return items
 

@@ -84,9 +84,17 @@ label{margin-bottom:0.25rem}
 <div id="quickPanel" class="tab-panel">
 <div class="card">
 <h3>Schnelleingabe (nur Kopfdaten)</h3>
+<div style="margin-bottom:0.5rem"><label>Typ</label>
+<select id="qType">
+<option value="receipt">🧾 Kassenbon</option>
+<option value="online_order">📦 Online-Bestellung</option>
+<option value="restaurant">🍽️ Restaurant</option>
+<option value="subscription">🔁 Abo</option>
+<option value="other">📌 Sonstiges</option>
+</select></div>
 <div class="form-row">
 <div><label>Datum</label><input type="date" id="qDate"></div>
-<div><label>Laden</label><select id="qStore"><option value="">– Kein Laden –</option></select></div>
+<div><label>Laden / Anbieter</label><select id="qStore"><option value="">– Kein Laden –</option></select></div>
 </div>
 <div class="form-row">
 <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="qTotal" placeholder="12,34"></div>
@@ -105,9 +113,17 @@ label{margin-bottom:0.25rem}
 <div id="manualPanel" class="tab-panel">
 <div class="card">
 <h3>Manuell mit Positionen</h3>
+<div style="margin-bottom:0.5rem"><label>Typ</label>
+<select id="mType">
+<option value="receipt">🧾 Kassenbon</option>
+<option value="online_order">📦 Online-Bestellung</option>
+<option value="restaurant">🍽️ Restaurant</option>
+<option value="subscription">🔁 Abo</option>
+<option value="other">📌 Sonstiges</option>
+</select></div>
 <div class="form-row">
 <div><label>Datum</label><input type="date" id="mDate"></div>
-<div><label>Laden</label><select id="mStore"><option value="">– Kein Laden –</option></select></div>
+<div><label>Laden / Anbieter</label><select id="mStore"><option value="">– Kein Laden –</option></select></div>
 </div>
 <div class="form-row">
 <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="mTotal"></div>
