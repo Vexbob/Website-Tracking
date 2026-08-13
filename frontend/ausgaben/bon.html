@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Bon — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/ausgaben/ausgaben.js"></script>
+<style>
+body{visibility:hidden}body.ready{visibility:visible}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem}
+@media(max-width:500px){.form-row{grid-template-columns:1fr}}
+.item-list{display:flex;flex-direction:column;gap:0.375rem;margin-top:0.5rem}
+.item-row{display:grid;grid-template-columns:1fr 80px 130px 30px;gap:0.375rem;align-items:center;padding:0.4375rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px}
+.item-row input,.item-row select{margin:0;padding:0.375rem 0.5rem;font-size:0.8125rem}
+.item-row .del{background:transparent;color:var(--red);border:none;font-size:1rem;width:auto;padding:0;margin:0;cursor:pointer}
+@media(max-width:500px){.item-row{grid-template-columns:1fr 60px 30px}}
+.actions{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem}
+.actions button{width:auto;padding:0.5rem 1rem;font-size:0.875rem;margin:0}
+.actions button.primary{background:var(--teal);color:#fff}
+.actions button.danger{background:var(--red);color:#fff}
+.actions button.secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+.preview-img{max-width:100%;max-height:400px;border-radius:8px;border:1px solid var(--border);display:block;margin:0 auto}
+.total-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.75rem}
+.total-val{font-size:1.75rem;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
+.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.ausg-toast-success{background:var(--green-dark)}
+.ausg-toast-error{background:var(--red-dark)}
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/ausgaben/" class="nav-title">← Bon</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main>
+    <div id="content"></div>
+</main>
+<div class="version-tag"></div>
+<script src="/ausgaben/bon.js"></script>
+</body>
+</html>

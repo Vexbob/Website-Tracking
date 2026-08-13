@@ -21,7 +21,19 @@ TABLES_ORDERED = [
     "potential_goals",
     "future_ideas",
     "completed_goals",
+    # Ausgaben-Modul (Paket 9)
+    "stores",
+    "expense_categories",
+    "category_rules",
+    "receipt_images",
+    "expenses",
+    "expense_items",
 ]
+
+# Tabellen mit binären BYTEA-Feldern, die im Backup base64-serialisiert werden
+BYTEA_COLUMNS = {
+    "receipt_images": ["image_data", "thumbnail_data"],
+}
 
 # Tabellen, die eine user_id haben (users selber nicht)
 USER_SCOPED_TABLES = {t for t in TABLES_ORDERED if t != "users"}
@@ -39,8 +51,12 @@ def _ser_value(v):
         pass
     return v
 
-def _ser_row(row):
-    return {k: _ser_value(v) for k, v in dict(row).items()}
+def _ser_row(row, table: str = None):
+    d = dict(row)
+    # BYTEA-Blobs (Bilder) aus Snapshots ausschließen — bläht Backups massiv auf.
+    # Metadaten (filename, size, ...) bleiben erhalten, damit die Zeilen konsistent restored werden.
+    skip = set(BYTEA_COLUMNS.get(table, []))
+    return {k: (None if k in skip else _ser_value(v)) for k, v in d.items()}
 
 async def _table_exists(conn: asyncpg.Connection, table: str) -> bool:
     return bool(await conn.fetchval(
@@ -70,7 +86,7 @@ async def create_snapshot(conn: asyncpg.Connection, trigger_type: str = "manual"
                 rows = await conn.fetch("SELECT * FROM users WHERE id=$1", user_id)
             else:
                 rows = await conn.fetch(f"SELECT * FROM {t}")
-            data[t] = [_ser_row(r) for r in rows]
+            data[t] = [_ser_row(r, table=t) for r in rows]
         except Exception as e:
             logger.warning(f"Snapshot: konnte Tabelle {t} nicht lesen: {e}")
             data[t] = []

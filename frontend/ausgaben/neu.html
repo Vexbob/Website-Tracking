@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Neuer Bon — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/ausgaben/ausgaben.js"></script>
+<style>
+body{visibility:hidden}body.ready{visibility:visible}
+.tabs{display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid var(--border);overflow-x:auto}
+.tab-btn{background:transparent;border:none;padding:0.75rem 1.25rem;font-size:0.9375rem;font-weight:600;cursor:pointer;color:var(--text-faint);border-bottom:3px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s;white-space:nowrap;width:auto;border-radius:0}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--accent)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;box-shadow:var(--shadow-sm)}
+.card h3{font-size:1rem;margin-bottom:0.75rem;font-weight:600}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem}
+@media(max-width:500px){.form-row{grid-template-columns:1fr}}
+label{margin-bottom:0.25rem}
+.item-list{display:flex;flex-direction:column;gap:0.375rem;margin-top:0.5rem}
+.item-row{display:grid;grid-template-columns:1fr 80px 130px 30px;gap:0.375rem;align-items:center;padding:0.4375rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px}
+.item-row input,.item-row select{margin:0;padding:0.375rem 0.5rem;font-size:0.8125rem}
+.item-row .del{background:transparent;color:var(--red);border:none;font-size:1rem;width:auto;padding:0;margin:0;cursor:pointer}
+@media(max-width:500px){.item-row{grid-template-columns:1fr 60px 30px}}
+.upload-drop{border:2px dashed var(--border-strong);border-radius:12px;padding:2rem 1rem;text-align:center;background:var(--surface-2);cursor:pointer;transition:border-color .15s,background .15s}
+.upload-drop:hover,.upload-drop.dragover{border-color:var(--teal);background:var(--surface)}
+.upload-drop .icon{font-size:2.5rem;margin-bottom:0.5rem}
+.upload-drop.working{opacity:0.7;cursor:wait}
+.preview-img{max-width:100%;max-height:280px;border-radius:8px;margin-bottom:0.75rem;border:1px solid var(--border)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.6875rem;font-weight:600;letter-spacing:0.3px;text-transform:uppercase}
+.badge.ok{background:var(--green-bg);color:var(--green-dark)}
+.badge.warn{background:#fef3c7;color:#92400e}
+:root[data-theme="dark"] .badge.warn{background:#78350f;color:#fbbf24}
+.actions{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem}
+.actions button{width:auto;padding:0.5rem 1rem;font-size:0.875rem;margin:0}
+.actions button.primary{background:var(--teal);color:#fff}
+.actions button.secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+.dupe-warn{background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:0.75rem;font-size:0.875rem;color:#92400e;margin-top:0.75rem}
+:root[data-theme="dark"] .dupe-warn{background:#78350f;color:#fbbf24;border-color:#92400e}
+.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
+.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.ausg-toast-success{background:var(--green-dark)}
+.ausg-toast-error{background:var(--red-dark)}
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/ausgaben/" class="nav-title">← Neuer Bon</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main>
+<div class="tabs">
+<button class="tab-btn active" data-tab="ocr">📸 Foto / OCR</button>
+<button class="tab-btn" data-tab="quick">⚡ Schnelleingabe</button>
+<button class="tab-btn" data-tab="manual">✍️ Manuell</button>
+</div>
+
+<div id="ocrPanel" class="tab-panel active">
+<div class="card" id="uploadCard">
+<h3>Kassenbon fotografieren oder hochladen</h3>
+<div id="uploadDrop" class="upload-drop">
+<div class="icon">📸</div>
+<div style="font-weight:600;margin-bottom:0.25rem">Bild wählen</div>
+<div style="font-size:0.8125rem;color:var(--text-muted)">Kamera nutzen oder Datei ziehen · JPG/PNG · max 8 MB</div>
+<input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none">
+</div>
+<p id="ocrStatus" style="margin-top:0.75rem;font-size:0.8125rem;color:var(--text-muted)"></p>
+</div>
+<div id="ocrEditCard" class="card" style="display:none;margin-top:1rem"></div>
+</div>
+
+<div id="quickPanel" class="tab-panel">
+<div class="card">
+<h3>Schnelleingabe (nur Kopfdaten)</h3>
+<div class="form-row">
+<div><label>Datum</label><input type="date" id="qDate"></div>
+<div><label>Laden</label><select id="qStore"><option value="">– Kein Laden –</option></select></div>
+</div>
+<div class="form-row">
+<div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="qTotal" placeholder="12,34"></div>
+<div><label>Zahlungsart</label><select id="qPayment"><option value="">–</option><option value="cash">Bar</option><option value="card">EC/Karte</option><option value="credit">Kreditkarte</option><option value="paypal">PayPal</option><option value="other">Sonstiges</option></select></div>
+</div>
+<label style="margin-top:0.5rem"><input type="checkbox" id="qRecurring"> Wiederkehrende Ausgabe (z.B. Abo/Miete)</label>
+<div style="margin-top:0.5rem"><label>Notiz</label><textarea id="qNote" placeholder="optional"></textarea></div>
+<div id="qDupeWarn"></div>
+<div class="actions">
+<button id="qSave" class="primary">Speichern</button>
+<a href="/ausgaben/" class="nav-btn" style="align-self:center">Abbrechen</a>
+</div>
+</div>
+</div>
+
+<div id="manualPanel" class="tab-panel">
+<div class="card">
+<h3>Manuell mit Positionen</h3>
+<div class="form-row">
+<div><label>Datum</label><input type="date" id="mDate"></div>
+<div><label>Laden</label><select id="mStore"><option value="">– Kein Laden –</option></select></div>
+</div>
+<div class="form-row">
+<div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="mTotal"></div>
+<div><label>MwSt (€)</label><input type="number" step="0.01" id="mVat"></div>
+</div>
+<div class="form-row">
+<div><label>Zahlungsart</label><select id="mPayment"><option value="">–</option><option value="cash">Bar</option><option value="card">EC/Karte</option><option value="credit">Kreditkarte</option><option value="paypal">PayPal</option><option value="other">Sonstiges</option></select></div>
+<div style="align-self:end"><label><input type="checkbox" id="mRecurring"> Wiederkehrend</label></div>
+</div>
+<h3 style="margin-top:1rem">Positionen</h3>
+<div id="mItems" class="item-list"></div>
+<button id="mAddItem" style="margin-top:0.5rem;width:auto;padding:0.375rem 0.75rem;font-size:0.8125rem;background:var(--surface-2);color:var(--text);border:1px solid var(--border)">+ Position</button>
+<div style="margin-top:0.75rem"><label>Notiz</label><textarea id="mNote"></textarea></div>
+<div class="actions">
+<button id="mSave" class="primary">Speichern</button>
+<a href="/ausgaben/" class="nav-btn" style="align-self:center">Abbrechen</a>
+</div>
+</div>
+</div>
+</main>
+<div class="version-tag"></div>
+<script src="/ausgaben/neu.js"></script>
+</body>
+</html>

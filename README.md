@@ -26,6 +26,21 @@ Persönliche Rezepte mit Zutaten, Schritten und Kategorien.
 ### 📸 Fotos
 Privates Fotoalbum mit Upload und Galerie-Ansicht.
 
+### 💶 Ausgaben-Tracker (neu in v1.7.0)
+- **Kassenbon-OCR** via Google Cloud Vision (deutscher Receipt-Parser: Markt/Datum/Betrag/MwSt./Positionen)
+- **Editierbare OCR-Ergebnisse** – nach der Erkennung Werte in einem Formular anpassen bevor gespeichert wird
+- **Bildspeicher** mit Thumbnails, Bild-Preview auf der Bon-Detailseite, jederzeit löschbar
+- **Läden + Kategorien** verwalten (Farbe/Icon), Ausgaben pro Laden / pro Kategorie auswerten
+- **Auto-Kategorisierung** mit mitlernenden Regeln (Keyword → Kategorie, Bestätigungs-Counter)
+- **Schnelleingabe-Modus** – nur Betrag + Laden + Datum ohne Positionen
+- **Manuelle Eingabe** mit beliebig vielen Positionen und Split-Kategorien pro Bon
+- **Wiederkehrende Ausgaben** – automatische Vorschlagsliste anhand von Buchungshistorie
+- **Duplikat-Warnung** vor dem Speichern (gleicher Tag + Laden + ähnlicher Betrag)
+- **Client-Bildkompression** (Canvas API, max. 1600 px, ~85 % JPEG-Qualität)
+- **PWA-Kamera-Direktaufnahme** via `capture="environment"` auf Smartphones
+- **Statistik**: Monatstrend, Doughnut nach Kategorie/Laden, 365-Tage-Heatmap, Preisverlauf-Suche
+- **Export** als CSV (Semikolon-getrennt, deutsche Zahlenformatierung) und JSON (inkl. Items)
+
 ### 👤 User- & Admin-System
 - Login mit JWT
 - Admin-Bereich mit **Invite-Tokens** (User-Erstellung ohne Passwort-Vergabe durch Admin)
@@ -77,6 +92,12 @@ pip install -r requirements.txt
 export DATABASE_URL="postgresql://user:pass@localhost:5432/vexbob"
 export JWT_SECRET="wähle-einen-langen-zufälligen-string"
 export CORS_ORIGINS="http://localhost:5500,http://127.0.0.1:5500"
+
+# Optional: Google Cloud Vision OCR für Kassenbons (Ausgaben-Modul)
+export OCR_PROVIDER="google"
+export GOOGLE_APPLICATION_CREDENTIALS_JSON='{"type":"service_account", ...}'
+# Alternative: Pfad zur Datei
+# export GOOGLE_APPLICATION_CREDENTIALS="/pfad/zur/gcp-vision.json"
 ```
 
 ### 3. Backend starten

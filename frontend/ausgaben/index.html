@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Ausgaben — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/ausgaben/ausgaben.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{visibility:hidden}body.ready{visibility:visible}
+.subnav{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.subnav a{padding:0.4375rem 0.875rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:0.8125rem;color:var(--text-muted);font-weight:500;text-decoration:none;transition:all .15s}
+.subnav a:hover{color:var(--text);border-color:var(--border-strong);text-decoration:none}
+.subnav a.primary{background:var(--text);color:var(--surface);border-color:var(--text)}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.75rem;margin-bottom:1.5rem}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0.875rem;box-shadow:var(--shadow-sm)}
+.kpi .lbl{font-size:0.6875rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
+.kpi .val{font-size:1.375rem;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi .sub{font-size:0.75rem;color:var(--text-muted);margin-top:2px}
+.kpi.accent .val{color:var(--teal-dark)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.card h3{font-size:1rem;margin-bottom:0.75rem;font-weight:600}
+.exp-list{display:flex;flex-direction:column;gap:0.5rem}
+.exp-row{display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:border-color .15s,transform .15s;text-decoration:none;color:var(--text)}
+.exp-row:hover{border-color:var(--border-strong);transform:translateX(2px);text-decoration:none}
+.exp-store{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;flex-shrink:0;font-size:1rem}
+.exp-info{flex:1;min-width:0}
+.exp-name{font-weight:600;font-size:0.9375rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exp-meta{font-size:0.75rem;color:var(--text-muted);margin-top:2px}
+.exp-amount{font-weight:700;font-size:1rem;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.filter-bar{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:1rem}
+.filter-bar select,.filter-bar input{padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;width:auto;min-width:130px}
+.filter-bar button{padding:0.4375rem 0.75rem;font-size:0.8125rem;width:auto;margin:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+.filter-bar button.primary{background:var(--teal);color:#fff;border-color:var(--teal)}
+.empty{text-align:center;padding:2rem 1rem;color:var(--text-faint)}
+.empty-icon{font-size:2.5rem;margin-bottom:0.5rem;opacity:0.5}
+.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none;max-width:90vw}
+.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.ausg-toast-success{background:var(--green-dark)}
+.ausg-toast-error{background:var(--red-dark)}
+.rec-item{display:flex;align-items:center;gap:0.5rem;padding:0.5rem;background:var(--surface-2);border-radius:8px;font-size:0.8125rem;margin-bottom:0.375rem}
+.rec-item .dot{width:6px;height:6px;border-radius:50%;background:var(--orange);flex-shrink:0}
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/" class="nav-title">← Ausgaben</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn" title="Design umschalten">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main class="wide">
+    <div class="subnav">
+        <a href="/ausgaben/neu.html" class="primary">+ Neuer Bon</a>
+        <a href="/ausgaben/statistik.html">📊 Statistik</a>
+        <a href="/ausgaben/laeden.html">🏪 Läden</a>
+        <a href="/ausgaben/kategorien.html">🏷️ Kategorien</a>
+        <a href="#" id="exportCsvLink">⬇ CSV</a>
+        <a href="#" id="exportJsonLink">⬇ JSON</a>
+    </div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div class="card">
+        <div class="filter-bar">
+            <h3 style="margin:0 auto 0 0;font-size:1rem">Letzte Ausgaben</h3>
+            <select id="filterStore"><option value="">Alle Läden</option></select>
+            <select id="filterCategory"><option value="">Alle Kategorien</option></select>
+            <input type="date" id="filterFrom" title="Von">
+            <input type="date" id="filterTo" title="Bis">
+            <button id="filterApply" class="primary">Filter</button>
+            <button id="filterReset">✕</button>
+        </div>
+        <div id="expList" class="exp-list"></div>
+    </div>
+    <div class="card" id="recurringCard" style="display:none">
+        <h3>🔁 Wiederkehrende Ausgaben (erkannt)</h3>
+        <div id="recurringList"></div>
+    </div>
+</main>
+<div class="version-tag"></div>
+<script src="/ausgaben/dashboard.js"></script>
+</body>
+</html>

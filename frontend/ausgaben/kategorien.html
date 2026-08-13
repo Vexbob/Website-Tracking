@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Kategorien — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/ausgaben/ausgaben.js"></script>
+<style>
+body{visibility:hidden}body.ready{visibility:visible}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.entity-list{display:flex;flex-direction:column;gap:0.5rem;margin-top:0.75rem}
+.entity-row{display:flex;align-items:center;gap:0.5rem;padding:0.5rem;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap}
+.entity-badge{width:34px;height:34px;border-radius:9px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.entity-row input.name{flex:1;min-width:120px;margin:0;padding:0.375rem 0.5rem;font-size:0.875rem}
+.entity-row input.color{width:36px;height:32px;padding:0;margin:0;cursor:pointer;border:1px solid var(--border);border-radius:6px}
+.entity-row input.icon{width:56px;text-align:center;margin:0;padding:0.375rem 0.5rem;font-size:0.95rem}
+.entity-row button.save{width:auto;padding:0.375rem 0.75rem;font-size:0.75rem;margin:0;background:var(--teal);color:#fff}
+.entity-row button.del{width:auto;padding:0.375rem 0.5rem;font-size:0.875rem;margin:0;background:transparent;color:var(--red);border:none;cursor:pointer}
+.add-form{display:grid;grid-template-columns:1fr 60px 60px auto;gap:0.5rem;align-items:center}
+@media(max-width:500px){.add-form{grid-template-columns:1fr 60px 60px;gap:0.375rem}.add-form button{grid-column:1/-1;margin-top:0.25rem}}
+.add-form input,.add-form button{margin:0;padding:0.5rem 0.625rem;font-size:0.875rem}
+.add-form input.color{padding:0;height:36px}
+.add-form button.primary{background:var(--teal);color:#fff;width:auto;padding:0.5rem 1rem}
+.rule-row{display:flex;align-items:center;gap:0.5rem;padding:0.4375rem 0.625rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:0.8125rem;margin-bottom:0.375rem}
+.rule-kw{background:var(--surface);padding:2px 8px;border-radius:5px;font-weight:600;font-family:monospace;font-size:0.75rem}
+.rule-arrow{color:var(--text-faint)}
+.rule-cat{flex:1;font-weight:600}
+.rule-hits{font-size:0.6875rem;color:var(--text-faint)}
+.rule-row button{width:auto;padding:2px 6px;font-size:0.75rem;background:transparent;color:var(--red);border:none;margin:0;cursor:pointer}
+.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
+.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.ausg-toast-success{background:var(--green-dark)}
+.ausg-toast-error{background:var(--red-dark)}
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/ausgaben/" class="nav-title">← Kategorien</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main>
+    <div class="card">
+        <h3 style="margin-bottom:0.75rem">Neue Kategorie</h3>
+        <div class="add-form">
+            <input type="text" id="newName" placeholder="Elektronik, Bücher …">
+            <input type="text" id="newIcon" placeholder="📚" maxlength="3">
+            <input type="color" id="newColor" value="#3b82f6" class="color">
+            <button id="newBtn" class="primary">Hinzufügen</button>
+        </div>
+    </div>
+    <div class="card">
+        <h3>Meine Kategorien</h3>
+        <div id="list" class="entity-list"></div>
+    </div>
+    <div class="card">
+        <h3>🧠 Auto-Zuordnungs-Regeln</h3>
+        <p class="muted" style="font-size:0.8125rem;margin-bottom:0.75rem">Regeln werden automatisch gelernt, wenn du Positionen Kategorien zuweist. Je öfter, desto zuverlässiger die Vorhersage.</p>
+        <div id="rules"></div>
+    </div>
+</main>
+<div class="version-tag"></div>
+<script src="/ausgaben/kategorien.js"></script>
+</body>
+</html>

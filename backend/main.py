@@ -3,9 +3,9 @@ import logging
 import asyncio
 from datetime import date, timedelta, datetime, timezone
 from typing import Optional
-from fastapi import FastAPI, Depends, HTTPException, Request, status
+from fastapi import FastAPI, Depends, HTTPException, Request, status, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -1356,3 +1356,787 @@ async def get_snapshot(sid: int, db=Depends(get_db), user=Depends(get_current_us
 async def del_snapshot(request: Request, sid: int, db=Depends(get_db), user=Depends(get_current_user)):
     await db.execute("DELETE FROM backup_snapshots WHERE id=$1 AND user_id=$2", sid, user["id"])
     return {"status": "deleted"}
+
+
+# ==========================================================================
+# Ausgaben-Modul (Paket 9)
+# ==========================================================================
+from services.expenses import suggest_category, learn_rule, process_image
+from services.ocr import get_ocr_provider
+from services.receipt_parser import parse_receipt
+
+def _num(v):
+    """asyncpg NUMERIC/Decimal -> float, sonst durchreichen."""
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return v
+
+def _ser_exp(row):
+    d = dict(row)
+    for k, v in d.items():
+        if hasattr(v, "isoformat"):
+            d[k] = v.isoformat()
+        else:
+            try:
+                from decimal import Decimal
+                if isinstance(v, Decimal):
+                    d[k] = float(v)
+            except Exception:
+                pass
+    return d
+
+
+# ---------- Models: Ausgaben ----------
+class StoreCreate(BaseModel):
+    name: str
+    color: Optional[str] = "#6b7280"
+    icon: Optional[str] = None
+
+class StoreUpd(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+class CatCreate(BaseModel):
+    name: str
+    color: Optional[str] = "#3b82f6"
+    icon: Optional[str] = None
+
+class CatUpd(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+class RuleCreate(BaseModel):
+    keyword: str
+    category_id: int
+    store_id: Optional[int] = None
+
+class ExpenseItemIn(BaseModel):
+    description: str
+    quantity: Optional[float] = 1
+    unit_price: Optional[float] = None
+    total_price: float
+    category_id: Optional[int] = None
+
+class ExpenseCreate(BaseModel):
+    store_id: Optional[int] = None
+    receipt_image_id: Optional[int] = None
+    purchase_date: str
+    total_amount: float
+    vat_amount: Optional[float] = None
+    payment_method: Optional[str] = None
+    is_recurring: Optional[bool] = False
+    recurring_pattern: Optional[str] = None
+    note: Optional[str] = None
+    items: Optional[list[ExpenseItemIn]] = None
+
+class ExpenseUpd(BaseModel):
+    store_id: Optional[int] = None
+    purchase_date: Optional[str] = None
+    total_amount: Optional[float] = None
+    vat_amount: Optional[float] = None
+    payment_method: Optional[str] = None
+    is_recurring: Optional[bool] = None
+    recurring_pattern: Optional[str] = None
+    note: Optional[str] = None
+
+# ---------- Stores ----------
+@app.get("/api/stores")
+async def list_stores(db=Depends(get_db), user=Depends(get_current_user)):
+    rows = await db.fetch(
+        "SELECT * FROM stores WHERE user_id=$1 ORDER BY sort_order NULLS LAST, LOWER(name)",
+        user["id"])
+    return [_ser_exp(r) for r in rows]
+
+@app.post("/api/stores")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def create_store(request: Request, b: StoreCreate, db=Depends(get_db), user=Depends(get_current_user)):
+    name = (b.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Name erforderlich")
+    try:
+        row = await db.fetchrow(
+            "INSERT INTO stores (user_id,name,color,icon) VALUES ($1,$2,$3,$4) RETURNING *",
+            user["id"], name, b.color or "#6b7280", b.icon)
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(400, "Laden existiert bereits")
+    return _ser_exp(row)
+
+@app.put("/api/stores/{sid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def update_store(request: Request, sid: int, b: StoreUpd, db=Depends(get_db), user=Depends(get_current_user)):
+    existing = await db.fetchrow("SELECT id FROM stores WHERE id=$1 AND user_id=$2", sid, user["id"])
+    if not existing:
+        raise HTTPException(404, "Nicht gefunden")
+    fields, vals = [], []
+    if b.name is not None:
+        fields.append(f"name=${len(vals)+1}"); vals.append(b.name.strip())
+    if b.color is not None:
+        fields.append(f"color=${len(vals)+1}"); vals.append(b.color)
+    if b.icon is not None:
+        fields.append(f"icon=${len(vals)+1}"); vals.append(b.icon)
+    if not fields:
+        return _ser_exp(await db.fetchrow("SELECT * FROM stores WHERE id=$1", sid))
+    vals.extend([sid, user["id"]])
+    await db.execute(f"UPDATE stores SET {','.join(fields)} WHERE id=${len(vals)-1} AND user_id=${len(vals)}", *vals)
+    return _ser_exp(await db.fetchrow("SELECT * FROM stores WHERE id=$1", sid))
+
+@app.delete("/api/stores/{sid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def delete_store(request: Request, sid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    r = await db.execute("DELETE FROM stores WHERE id=$1 AND user_id=$2", sid, user["id"])
+    if r == "DELETE 0":
+        raise HTTPException(404, "Nicht gefunden")
+    return {"status": "deleted"}
+
+
+# ---------- Kategorien ----------
+@app.get("/api/expense-categories")
+async def list_categories(db=Depends(get_db), user=Depends(get_current_user)):
+    rows = await db.fetch(
+        "SELECT * FROM expense_categories WHERE user_id=$1 ORDER BY sort_order NULLS LAST, LOWER(name)",
+        user["id"])
+    return [_ser_exp(r) for r in rows]
+
+@app.post("/api/expense-categories")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def create_category(request: Request, b: CatCreate, db=Depends(get_db), user=Depends(get_current_user)):
+    name = (b.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Name erforderlich")
+    try:
+        row = await db.fetchrow(
+            "INSERT INTO expense_categories (user_id,name,color,icon) VALUES ($1,$2,$3,$4) RETURNING *",
+            user["id"], name, b.color or "#3b82f6", b.icon)
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(400, "Kategorie existiert bereits")
+    return _ser_exp(row)
+
+@app.put("/api/expense-categories/{cid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def update_category(request: Request, cid: int, b: CatUpd, db=Depends(get_db), user=Depends(get_current_user)):
+    existing = await db.fetchrow("SELECT id FROM expense_categories WHERE id=$1 AND user_id=$2", cid, user["id"])
+    if not existing:
+        raise HTTPException(404, "Nicht gefunden")
+    fields, vals = [], []
+    if b.name is not None:
+        fields.append(f"name=${len(vals)+1}"); vals.append(b.name.strip())
+    if b.color is not None:
+        fields.append(f"color=${len(vals)+1}"); vals.append(b.color)
+    if b.icon is not None:
+        fields.append(f"icon=${len(vals)+1}"); vals.append(b.icon)
+    if not fields:
+        return _ser_exp(await db.fetchrow("SELECT * FROM expense_categories WHERE id=$1", cid))
+    vals.extend([cid, user["id"]])
+    await db.execute(f"UPDATE expense_categories SET {','.join(fields)} WHERE id=${len(vals)-1} AND user_id=${len(vals)}", *vals)
+    return _ser_exp(await db.fetchrow("SELECT * FROM expense_categories WHERE id=$1", cid))
+
+@app.delete("/api/expense-categories/{cid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def delete_category(request: Request, cid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    r = await db.execute("DELETE FROM expense_categories WHERE id=$1 AND user_id=$2", cid, user["id"])
+    if r == "DELETE 0":
+        raise HTTPException(404, "Nicht gefunden")
+    return {"status": "deleted"}
+
+
+# ---------- Category Rules (mitlernend) ----------
+@app.get("/api/category-rules")
+async def list_rules(db=Depends(get_db), user=Depends(get_current_user)):
+    rows = await db.fetch(
+        "SELECT * FROM category_rules WHERE user_id=$1 ORDER BY hit_count DESC, keyword",
+        user["id"])
+    return [_ser_exp(r) for r in rows]
+
+@app.post("/api/category-rules")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def create_rule(request: Request, b: RuleCreate, db=Depends(get_db), user=Depends(get_current_user)):
+    kw = (b.keyword or "").strip()
+    if not kw:
+        raise HTTPException(400, "Keyword erforderlich")
+    cat = await db.fetchval("SELECT id FROM expense_categories WHERE id=$1 AND user_id=$2",
+                             b.category_id, user["id"])
+    if not cat:
+        raise HTTPException(400, "Kategorie unbekannt")
+    row = await db.fetchrow(
+        "INSERT INTO category_rules (user_id,keyword,category_id,store_id,hit_count) "
+        "VALUES ($1,$2,$3,$4,1) RETURNING *",
+        user["id"], kw, b.category_id, b.store_id)
+    return _ser_exp(row)
+
+@app.delete("/api/category-rules/{rid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def delete_rule(request: Request, rid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    r = await db.execute("DELETE FROM category_rules WHERE id=$1 AND user_id=$2", rid, user["id"])
+    if r == "DELETE 0":
+        raise HTTPException(404, "Nicht gefunden")
+    return {"status": "deleted"}
+
+@app.post("/api/category-rules/suggest")
+async def suggest_rule(body: dict, db=Depends(get_db), user=Depends(get_current_user)):
+    """Body: {description: str, store_id?: int} -> {category_id: int|null}"""
+    desc = (body.get("description") or "").strip()
+    store_id = body.get("store_id")
+    cid = await suggest_category(db, user["id"], desc, store_id)
+    return {"category_id": cid}
+
+
+# ---------- Expenses ----------
+def _parse_iso_date(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s).date()
+    except ValueError:
+        raise HTTPException(400, "Datum muss ISO-Format YYYY-MM-DD sein")
+
+@app.get("/api/expenses")
+async def list_expenses(
+    db=Depends(get_db), user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    store_id: Optional[int] = None,
+    category_id: Optional[int] = None,
+    limit: int = 200,
+):
+    conds = ["e.user_id=$1"]
+    params = [user["id"]]
+    if date_from:
+        params.append(_parse_iso_date(date_from))
+        conds.append(f"e.purchase_date >= ${len(params)}")
+    if date_to:
+        params.append(_parse_iso_date(date_to))
+        conds.append(f"e.purchase_date <= ${len(params)}")
+    if store_id:
+        params.append(store_id)
+        conds.append(f"e.store_id=${len(params)}")
+    if category_id:
+        params.append(category_id)
+        conds.append(
+            f"EXISTS (SELECT 1 FROM expense_items ei WHERE ei.expense_id=e.id AND ei.category_id=${len(params)})")
+    params.append(max(1, min(limit, 500)))
+    rows = await db.fetch(
+        f"""SELECT e.*, s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
+                   (SELECT COUNT(*) FROM expense_items ei WHERE ei.expense_id=e.id) AS item_count
+           FROM expenses e
+           LEFT JOIN stores s ON s.id=e.store_id
+           WHERE {' AND '.join(conds)}
+           ORDER BY e.purchase_date DESC, e.id DESC
+           LIMIT ${len(params)}""",
+        *params)
+    return [_ser_exp(r) for r in rows]
+
+@app.get("/api/expenses/{eid}")
+async def get_expense(eid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    row = await db.fetchrow(
+        """SELECT e.*, s.name AS store_name, s.color AS store_color, s.icon AS store_icon
+           FROM expenses e LEFT JOIN stores s ON s.id=e.store_id
+           WHERE e.id=$1 AND e.user_id=$2""", eid, user["id"])
+    if not row:
+        raise HTTPException(404, "Nicht gefunden")
+    items = await db.fetch(
+        """SELECT ei.*, c.name AS category_name, c.color AS category_color, c.icon AS category_icon
+           FROM expense_items ei
+           LEFT JOIN expense_categories c ON c.id=ei.category_id
+           WHERE ei.expense_id=$1 ORDER BY sort_order NULLS LAST, ei.id""", eid)
+    result = _ser_exp(row)
+    result["items"] = [_ser_exp(i) for i in items]
+    return result
+
+@app.post("/api/expenses")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def create_expense(request: Request, b: ExpenseCreate,
+                          db=Depends(get_db), user=Depends(get_current_user)):
+    d = _parse_iso_date(b.purchase_date)
+    if d is None:
+        raise HTTPException(400, "purchase_date erforderlich")
+    if b.total_amount is None or b.total_amount < 0:
+        raise HTTPException(400, "total_amount ungültig")
+    # Ownership checks
+    if b.store_id:
+        ok = await db.fetchval("SELECT 1 FROM stores WHERE id=$1 AND user_id=$2", b.store_id, user["id"])
+        if not ok:
+            raise HTTPException(400, "Laden unbekannt")
+    if b.receipt_image_id:
+        ok = await db.fetchval("SELECT 1 FROM receipt_images WHERE id=$1 AND user_id=$2",
+                                b.receipt_image_id, user["id"])
+        if not ok:
+            raise HTTPException(400, "Bild unbekannt")
+
+    async with db.transaction():
+        row = await db.fetchrow(
+            """INSERT INTO expenses
+               (user_id, receipt_image_id, store_id, purchase_date, total_amount,
+                vat_amount, payment_method, is_recurring, recurring_pattern, note)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *""",
+            user["id"], b.receipt_image_id, b.store_id, d, b.total_amount,
+            b.vat_amount, b.payment_method, bool(b.is_recurring),
+            b.recurring_pattern, b.note)
+        eid = row["id"]
+        if b.items:
+            for idx, it in enumerate(b.items):
+                cat_id = it.category_id
+                if cat_id is None:
+                    cat_id = await suggest_category(db, user["id"], it.description, b.store_id)
+                if cat_id:
+                    # Ownership Kategorie
+                    ok = await db.fetchval(
+                        "SELECT 1 FROM expense_categories WHERE id=$1 AND user_id=$2",
+                        cat_id, user["id"])
+                    if not ok:
+                        cat_id = None
+                await db.execute(
+                    """INSERT INTO expense_items
+                       (user_id, expense_id, description, quantity, unit_price,
+                        total_price, category_id, sort_order)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)""",
+                    user["id"], eid, it.description.strip(),
+                    it.quantity or 1, it.unit_price, it.total_price, cat_id, idx)
+                if cat_id and it.category_id is not None:
+                    # User hat explizit Kategorie zugewiesen -> Regel lernen
+                    await learn_rule(db, user["id"], it.description, cat_id, b.store_id)
+    return await get_expense(eid, db=db, user=user)
+
+
+@app.put("/api/expenses/{eid}")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def update_expense(request: Request, eid: int, b: ExpenseUpd,
+                          db=Depends(get_db), user=Depends(get_current_user)):
+    existing = await db.fetchrow("SELECT id FROM expenses WHERE id=$1 AND user_id=$2", eid, user["id"])
+    if not existing:
+        raise HTTPException(404, "Nicht gefunden")
+    fields, vals = [], []
+    def add(col, v):
+        vals.append(v); fields.append(f"{col}=${len(vals)}")
+    if b.store_id is not None: add("store_id", b.store_id or None)
+    if b.purchase_date is not None: add("purchase_date", _parse_iso_date(b.purchase_date))
+    if b.total_amount is not None: add("total_amount", b.total_amount)
+    if b.vat_amount is not None: add("vat_amount", b.vat_amount)
+    if b.payment_method is not None: add("payment_method", b.payment_method)
+    if b.is_recurring is not None: add("is_recurring", bool(b.is_recurring))
+    if b.recurring_pattern is not None: add("recurring_pattern", b.recurring_pattern)
+    if b.note is not None: add("note", b.note)
+    if not fields:
+        return await get_expense(eid, db=db, user=user)
+    vals.extend([eid, user["id"]])
+    await db.execute(
+        f"UPDATE expenses SET {','.join(fields)} WHERE id=${len(vals)-1} AND user_id=${len(vals)}",
+        *vals)
+    return await get_expense(eid, db=db, user=user)
+
+@app.delete("/api/expenses/{eid}")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def delete_expense(request: Request, eid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    r = await db.execute("DELETE FROM expenses WHERE id=$1 AND user_id=$2", eid, user["id"])
+    if r == "DELETE 0":
+        raise HTTPException(404, "Nicht gefunden")
+    return {"status": "deleted"}
+
+
+# ---------- Expense Items ----------
+@app.post("/api/expenses/{eid}/items")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def add_item(request: Request, eid: int, b: ExpenseItemIn,
+                    db=Depends(get_db), user=Depends(get_current_user)):
+    exp = await db.fetchrow("SELECT id, store_id FROM expenses WHERE id=$1 AND user_id=$2", eid, user["id"])
+    if not exp:
+        raise HTTPException(404, "Ausgabe nicht gefunden")
+    cat_id = b.category_id
+    if cat_id is None:
+        cat_id = await suggest_category(db, user["id"], b.description, exp["store_id"])
+    if cat_id:
+        ok = await db.fetchval("SELECT 1 FROM expense_categories WHERE id=$1 AND user_id=$2",
+                                cat_id, user["id"])
+        if not ok:
+            cat_id = None
+    row = await db.fetchrow(
+        """INSERT INTO expense_items
+           (user_id, expense_id, description, quantity, unit_price, total_price, category_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *""",
+        user["id"], eid, b.description.strip(), b.quantity or 1,
+        b.unit_price, b.total_price, cat_id)
+    if cat_id and b.category_id is not None:
+        await learn_rule(db, user["id"], b.description, cat_id, exp["store_id"])
+    return _ser_exp(row)
+
+@app.put("/api/expense-items/{iid}")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def update_item(request: Request, iid: int, b: ExpenseItemIn,
+                       db=Depends(get_db), user=Depends(get_current_user)):
+    existing = await db.fetchrow(
+        "SELECT ei.*, e.store_id FROM expense_items ei JOIN expenses e ON e.id=ei.expense_id "
+        "WHERE ei.id=$1 AND ei.user_id=$2", iid, user["id"])
+    if not existing:
+        raise HTTPException(404, "Nicht gefunden")
+    cat_id = b.category_id
+    if cat_id:
+        ok = await db.fetchval("SELECT 1 FROM expense_categories WHERE id=$1 AND user_id=$2",
+                                cat_id, user["id"])
+        if not ok:
+            raise HTTPException(400, "Kategorie unbekannt")
+    await db.execute(
+        """UPDATE expense_items
+           SET description=$1, quantity=$2, unit_price=$3, total_price=$4, category_id=$5
+           WHERE id=$6 AND user_id=$7""",
+        b.description.strip(), b.quantity or 1, b.unit_price, b.total_price,
+        cat_id, iid, user["id"])
+    # Regel lernen wenn Kategorie manuell gesetzt wurde
+    if cat_id and cat_id != existing["category_id"]:
+        await learn_rule(db, user["id"], b.description, cat_id, existing["store_id"])
+    return _ser_exp(await db.fetchrow("SELECT * FROM expense_items WHERE id=$1", iid))
+
+@app.delete("/api/expense-items/{iid}")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def delete_item(request: Request, iid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    r = await db.execute("DELETE FROM expense_items WHERE id=$1 AND user_id=$2", iid, user["id"])
+    if r == "DELETE 0":
+        raise HTTPException(404, "Nicht gefunden")
+    return {"status": "deleted"}
+
+
+# ---------- Receipts (Bilder + OCR) ----------
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8 MB Rohupload (wird danach komprimiert)
+
+@app.get("/api/receipts")
+async def list_receipts(db=Depends(get_db), user=Depends(get_current_user), limit: int = 100):
+    rows = await db.fetch(
+        """SELECT id, filename, mime_type, size_bytes, uploaded_at,
+                  (SELECT id FROM expenses e WHERE e.receipt_image_id=r.id LIMIT 1) AS expense_id
+           FROM receipt_images r
+           WHERE user_id=$1 ORDER BY uploaded_at DESC LIMIT $2""",
+        user["id"], max(1, min(limit, 500)))
+    return [_ser_exp(r) for r in rows]
+
+@app.post("/api/receipts/upload")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def upload_receipt(request: Request,
+                          file: UploadFile = File(...),
+                          run_ocr: bool = Form(True),
+                          db=Depends(get_db), user=Depends(get_current_user)):
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "Leere Datei")
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(400, f"Datei zu groß (max {MAX_UPLOAD_BYTES // 1024 // 1024} MB)")
+    main_bytes, thumb_bytes, mime, size = process_image(raw)
+
+    ocr_text = ""
+    ocr_name = None
+    if run_ocr:
+        provider = get_ocr_provider()
+        if provider.available:
+            try:
+                ocr_text = provider.extract_text(main_bytes) or ""
+                ocr_name = provider.name
+            except Exception as e:
+                logger.exception(f"OCR failed: {e}")
+
+    row = await db.fetchrow(
+        """INSERT INTO receipt_images
+           (user_id, filename, mime_type, size_bytes, image_data, thumbnail_data,
+            ocr_provider, ocr_raw_text)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, filename, mime_type, size_bytes, uploaded_at""",
+        user["id"], file.filename or "receipt.jpg", mime, size,
+        main_bytes, thumb_bytes, ocr_name, ocr_text)
+
+    # Bekannte Läden des Users für Store-Match
+    user_stores_rows = await db.fetch("SELECT name FROM stores WHERE user_id=$1", user["id"])
+    user_stores = [r["name"] for r in user_stores_rows]
+    parsed = parse_receipt(ocr_text, user_stores=user_stores)
+
+    return {
+        "receipt": _ser_exp(row),
+        "ocr": {
+            "provider": ocr_name,
+            "available": bool(ocr_text),
+            "raw_text": ocr_text,
+            "parsed": parsed,
+        },
+    }
+
+@app.get("/api/receipts/{rid}/image")
+async def get_receipt_image(rid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    row = await db.fetchrow(
+        "SELECT image_data, mime_type FROM receipt_images WHERE id=$1 AND user_id=$2",
+        rid, user["id"])
+    if not row or not row["image_data"]:
+        raise HTTPException(404, "Bild nicht gefunden")
+    return Response(content=bytes(row["image_data"]), media_type=row["mime_type"] or "image/jpeg")
+
+@app.get("/api/receipts/{rid}/thumb")
+async def get_receipt_thumb(rid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    row = await db.fetchrow(
+        "SELECT thumbnail_data, image_data, mime_type FROM receipt_images WHERE id=$1 AND user_id=$2",
+        rid, user["id"])
+    if not row:
+        raise HTTPException(404, "Bild nicht gefunden")
+    data = row["thumbnail_data"] or row["image_data"]
+    if not data:
+        raise HTTPException(404, "Bild-Daten fehlen")
+    return Response(content=bytes(data), media_type="image/jpeg")
+
+@app.delete("/api/receipts/{rid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def delete_receipt(request: Request, rid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    r = await db.execute("DELETE FROM receipt_images WHERE id=$1 AND user_id=$2", rid, user["id"])
+    if r == "DELETE 0":
+        raise HTTPException(404, "Nicht gefunden")
+    return {"status": "deleted"}
+
+@app.get("/api/receipts/{rid}/ocr")
+async def get_receipt_ocr(rid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    row = await db.fetchrow(
+        "SELECT ocr_raw_text, ocr_provider FROM receipt_images WHERE id=$1 AND user_id=$2",
+        rid, user["id"])
+    if not row:
+        raise HTTPException(404, "Nicht gefunden")
+    user_stores = [r["name"] for r in await db.fetch("SELECT name FROM stores WHERE user_id=$1", user["id"])]
+    return {
+        "provider": row["ocr_provider"],
+        "raw_text": row["ocr_raw_text"] or "",
+        "parsed": parse_receipt(row["ocr_raw_text"] or "", user_stores=user_stores),
+    }
+
+
+# ---------- Statistik / Analyse ----------
+@app.get("/api/expenses/stats/summary")
+async def stats_summary(db=Depends(get_db), user=Depends(get_current_user)):
+    """Kompaktes Dashboard-KPI-Set."""
+    today = date.today()
+    month_start = today.replace(day=1)
+    prev_month_end = month_start - timedelta(days=1)
+    prev_month_start = prev_month_end.replace(day=1)
+    week_start = today - timedelta(days=today.weekday())
+    year_start = today.replace(month=1, day=1)
+
+    async def sum_between(a, b):
+        v = await db.fetchval(
+            "SELECT COALESCE(SUM(total_amount),0) FROM expenses "
+            "WHERE user_id=$1 AND purchase_date BETWEEN $2 AND $3",
+            user["id"], a, b)
+        return float(v or 0)
+
+    total_all = await db.fetchval(
+        "SELECT COALESCE(SUM(total_amount),0) FROM expenses WHERE user_id=$1", user["id"])
+    count_all = await db.fetchval(
+        "SELECT COUNT(*) FROM expenses WHERE user_id=$1", user["id"])
+    return {
+        "today":       await sum_between(today, today),
+        "this_week":   await sum_between(week_start, today),
+        "this_month":  await sum_between(month_start, today),
+        "prev_month":  await sum_between(prev_month_start, prev_month_end),
+        "this_year":   await sum_between(year_start, today),
+        "total":       float(total_all or 0),
+        "count":       int(count_all or 0),
+    }
+
+@app.get("/api/expenses/stats/by-category")
+async def stats_by_category(db=Depends(get_db), user=Depends(get_current_user),
+                              date_from: Optional[str] = Query(None, alias="from"),
+                              date_to: Optional[str] = Query(None, alias="to")):
+    conds = ["ei.user_id=$1"]
+    params = [user["id"]]
+    if date_from:
+        params.append(_parse_iso_date(date_from))
+        conds.append(f"e.purchase_date >= ${len(params)}")
+    if date_to:
+        params.append(_parse_iso_date(date_to))
+        conds.append(f"e.purchase_date <= ${len(params)}")
+    rows = await db.fetch(
+        f"""SELECT COALESCE(c.id, 0) AS category_id,
+                   COALESCE(c.name, 'Unkategorisiert') AS name,
+                   COALESCE(c.color, '#9ca3af') AS color,
+                   COALESCE(c.icon, '❓') AS icon,
+                   SUM(ei.total_price) AS total,
+                   COUNT(*) AS item_count
+            FROM expense_items ei
+            JOIN expenses e ON e.id=ei.expense_id
+            LEFT JOIN expense_categories c ON c.id=ei.category_id
+            WHERE {' AND '.join(conds)}
+            GROUP BY c.id, c.name, c.color, c.icon
+            ORDER BY total DESC""",
+        *params)
+    return [_ser_exp(r) for r in rows]
+
+@app.get("/api/expenses/stats/by-store")
+async def stats_by_store(db=Depends(get_db), user=Depends(get_current_user),
+                          date_from: Optional[str] = Query(None, alias="from"),
+                          date_to: Optional[str] = Query(None, alias="to")):
+    conds = ["e.user_id=$1"]
+    params = [user["id"]]
+    if date_from:
+        params.append(_parse_iso_date(date_from))
+        conds.append(f"e.purchase_date >= ${len(params)}")
+    if date_to:
+        params.append(_parse_iso_date(date_to))
+        conds.append(f"e.purchase_date <= ${len(params)}")
+    rows = await db.fetch(
+        f"""SELECT COALESCE(s.id, 0) AS store_id,
+                   COALESCE(s.name, 'Ohne Laden') AS name,
+                   COALESCE(s.color, '#9ca3af') AS color,
+                   COALESCE(s.icon, '🏪') AS icon,
+                   SUM(e.total_amount) AS total,
+                   COUNT(*) AS visit_count
+            FROM expenses e
+            LEFT JOIN stores s ON s.id=e.store_id
+            WHERE {' AND '.join(conds)}
+            GROUP BY s.id, s.name, s.color, s.icon
+            ORDER BY total DESC""",
+        *params)
+    return [_ser_exp(r) for r in rows]
+
+
+@app.get("/api/expenses/stats/monthly")
+async def stats_monthly(db=Depends(get_db), user=Depends(get_current_user), months: int = 12):
+    months = max(1, min(months, 60))
+    since = date.today().replace(day=1)
+    y, m = since.year, since.month
+    for _ in range(months - 1):
+        m -= 1
+        if m == 0:
+            m = 12; y -= 1
+    since = date(y, m, 1)
+    rows = await db.fetch(
+        """SELECT TO_CHAR(purchase_date, 'YYYY-MM') AS month,
+                  SUM(total_amount) AS total, COUNT(*) AS count
+           FROM expenses WHERE user_id=$1 AND purchase_date >= $2
+           GROUP BY month ORDER BY month""",
+        user["id"], since)
+    return [{"month": r["month"], "total": float(r["total"] or 0),
+             "count": int(r["count"])} for r in rows]
+
+@app.get("/api/expenses/heatmap")
+async def expenses_heatmap(db=Depends(get_db), user=Depends(get_current_user)):
+    since = date.today() - timedelta(days=365)
+    rows = await db.fetch(
+        """SELECT purchase_date AS d, SUM(total_amount) AS s, COUNT(*) AS c
+           FROM expenses WHERE user_id=$1 AND purchase_date >= $2
+           GROUP BY purchase_date""",
+        user["id"], since)
+    by_day = {r["d"].isoformat(): (float(r["s"] or 0), int(r["c"])) for r in rows}
+    max_amount = max((v[0] for v in by_day.values()), default=0.0)
+    out = []
+    cur = since
+    end = date.today()
+    while cur <= end:
+        key = cur.isoformat()
+        amount, count = by_day.get(key, (0.0, 0))
+        if amount <= 0 or max_amount <= 0:
+            level = 0
+        else:
+            ratio = amount / max_amount
+            if ratio < 0.25: level = 1
+            elif ratio < 0.5: level = 2
+            elif ratio < 0.75: level = 3
+            else: level = 4
+        out.append({"date": key, "amount": round(amount, 2), "count": count, "level": level})
+        cur += timedelta(days=1)
+    return out
+
+@app.get("/api/expenses/price-history")
+async def price_history(q: str = Query(..., min_length=2),
+                         db=Depends(get_db), user=Depends(get_current_user)):
+    rows = await db.fetch(
+        """SELECT ei.description, ei.total_price, ei.quantity, ei.unit_price,
+                  e.purchase_date, s.name AS store_name, s.color AS store_color
+           FROM expense_items ei
+           JOIN expenses e ON e.id=ei.expense_id
+           LEFT JOIN stores s ON s.id=e.store_id
+           WHERE ei.user_id=$1 AND LOWER(ei.description) LIKE '%' || LOWER($2) || '%'
+           ORDER BY e.purchase_date DESC
+           LIMIT 200""",
+        user["id"], q)
+    return [_ser_exp(r) for r in rows]
+
+@app.get("/api/expenses/recurring/suggestions")
+async def recurring_suggestions(db=Depends(get_db), user=Depends(get_current_user)):
+    rows = await db.fetch(
+        """SELECT store_id, s.name AS store_name,
+                  ROUND(total_amount::numeric, 0) AS approx_amount,
+                  COUNT(DISTINCT DATE_TRUNC('month', purchase_date)) AS months,
+                  AVG(total_amount) AS avg_amount,
+                  MAX(purchase_date) AS last_date
+           FROM expenses e
+           LEFT JOIN stores s ON s.id=e.store_id
+           WHERE e.user_id=$1 AND e.is_recurring=FALSE AND store_id IS NOT NULL
+           GROUP BY store_id, s.name, approx_amount
+           HAVING COUNT(DISTINCT DATE_TRUNC('month', purchase_date)) >= 3
+           ORDER BY months DESC, last_date DESC
+           LIMIT 20""",
+        user["id"])
+    return [_ser_exp(r) for r in rows]
+
+@app.get("/api/expenses/duplicates/check")
+async def check_duplicate(
+    date: str, total: float, store_id: Optional[int] = None,
+    db=Depends(get_db), user=Depends(get_current_user)):
+    d = _parse_iso_date(date)
+    conds = ["user_id=$1", "purchase_date=$2", "ABS(total_amount - $3) < 1.0"]
+    params = [user["id"], d, total]
+    if store_id:
+        params.append(store_id)
+        conds.append(f"store_id=${len(params)}")
+    rows = await db.fetch(
+        f"SELECT id, purchase_date, total_amount, store_id FROM expenses "
+        f"WHERE {' AND '.join(conds)} LIMIT 5", *params)
+    return [_ser_exp(r) for r in rows]
+
+
+# ---------- Export ----------
+@app.get("/api/expenses/export")
+async def export_expenses(format: str = "csv",
+                           db=Depends(get_db), user=Depends(get_current_user)):
+    """format=csv|json. CSV enthält Ausgaben-Kopf, JSON enthält alles inkl. Items."""
+    rows = await db.fetch(
+        """SELECT e.*, s.name AS store_name FROM expenses e
+           LEFT JOIN stores s ON s.id=e.store_id
+           WHERE e.user_id=$1 ORDER BY e.purchase_date DESC, e.id DESC""",
+        user["id"])
+    if format.lower() == "json":
+        items_by_exp = {}
+        item_rows = await db.fetch(
+            """SELECT ei.*, c.name AS category_name FROM expense_items ei
+               LEFT JOIN expense_categories c ON c.id=ei.category_id
+               WHERE ei.user_id=$1 ORDER BY ei.expense_id, ei.sort_order""",
+            user["id"])
+        for it in item_rows:
+            items_by_exp.setdefault(it["expense_id"], []).append(_ser_exp(it))
+        result = []
+        for r in rows:
+            d = _ser_exp(r)
+            d["items"] = items_by_exp.get(r["id"], [])
+            result.append(d)
+        import json as _json
+        content = _json.dumps({"exported_at": datetime.now(timezone.utc).isoformat(),
+                                "expenses": result}, ensure_ascii=False, indent=2)
+        return Response(content=content, media_type="application/json",
+                        headers={"Content-Disposition": 'attachment; filename="expenses.json"'})
+    # CSV
+    import csv
+    import io as _io
+    buf = _io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["Datum", "Laden", "Betrag", "MwSt", "Zahlung", "Wiederkehrend", "Notiz"])
+    for r in rows:
+        w.writerow([
+            r["purchase_date"].isoformat() if r["purchase_date"] else "",
+            r["store_name"] or "",
+            f"{float(r['total_amount']):.2f}".replace(".", ",") if r["total_amount"] is not None else "",
+            f"{float(r['vat_amount']):.2f}".replace(".", ",") if r["vat_amount"] is not None else "",
+            r["payment_method"] or "",
+            "ja" if r["is_recurring"] else "nein",
+            (r["note"] or "").replace("\n", " "),
+        ])
+    return Response(content=buf.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="expenses.csv"'})
+
+@app.get("/api/expenses/ocr/status")
+async def ocr_status(user=Depends(get_current_user)):
+    """Zeigt an, ob OCR im Backend verfügbar ist."""
+    p = get_ocr_provider()
+    return {"provider": p.name, "available": p.available}
+

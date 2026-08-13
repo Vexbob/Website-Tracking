@@ -15,14 +15,33 @@ async def get_db():
 
 
 async def _seed_empty_user(conn, user_id: int):
-    """Neue Accounts starten mit leerem Sparziel als Grundstruktur."""
+    """Neue Accounts starten mit leerem Sparziel + Basis-Kategorien für Ausgaben."""
     has_any = await conn.fetchval(
         "SELECT 1 FROM savings_goals WHERE user_id=$1 LIMIT 1", user_id)
-    if has_any:
-        return
-    await conn.execute(
-        "INSERT INTO savings_goals (user_id,name,target_amount,is_active) VALUES ($1,'Mein Sparziel',100,TRUE)",
-        user_id)
+    if not has_any:
+        await conn.execute(
+            "INSERT INTO savings_goals (user_id,name,target_amount,is_active) VALUES ($1,'Mein Sparziel',100,TRUE)",
+            user_id)
+    # Default-Kategorien für Ausgaben (idempotent per uniq-Index)
+    has_cats = await conn.fetchval(
+        "SELECT 1 FROM expense_categories WHERE user_id=$1 LIMIT 1", user_id)
+    if not has_cats:
+        defaults = [
+            ("Lebensmittel", "#22c55e", "🍎", 10),
+            ("Drogerie",     "#ec4899", "🧴", 20),
+            ("Restaurant",   "#f59e0b", "🍽️", 30),
+            ("Technik",      "#3b82f6", "💻", 40),
+            ("Kleidung",     "#8b5cf6", "👕", 50),
+            ("Transport",    "#14b8a6", "🚗", 60),
+            ("Wohnen",       "#ef4444", "🏠", 70),
+            ("Freizeit",     "#eab308", "🎉", 80),
+            ("Sonstiges",    "#6b7280", "📦", 999),
+        ]
+        for name, color, icon, order in defaults:
+            await conn.execute(
+                "INSERT INTO expense_categories (user_id,name,color,icon,sort_order) "
+                "VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING",
+                user_id, name, color, icon, order)
 
 
 async def init_db():

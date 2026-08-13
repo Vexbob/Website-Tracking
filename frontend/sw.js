@@ -1,7 +1,14 @@
 importScripts('/js/version.js');
 const CACHE = 'vexbob-' + APP_VERSION;
 const SHELL = ['/', '/index.html', '/css/style.css', '/js/version.js', '/js/api.js', '/icon.svg', '/manifest.webmanifest',
-               '/private/login.html', '/private/activate.html'];
+               '/private/login.html', '/private/activate.html',
+               '/ausgaben/', '/ausgaben/index.html',
+               '/ausgaben/neu.html', '/ausgaben/bon.html',
+               '/ausgaben/laeden.html', '/ausgaben/kategorien.html',
+               '/ausgaben/statistik.html',
+               '/ausgaben/ausgaben.js', '/ausgaben/dashboard.js', '/ausgaben/neu.js',
+               '/ausgaben/bon.js', '/ausgaben/laeden.js', '/ausgaben/kategorien.js',
+               '/ausgaben/statistik.js'];
 
                
 self.addEventListener('install', e => {
