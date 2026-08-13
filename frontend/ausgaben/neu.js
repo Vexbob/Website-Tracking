@@ -72,12 +72,19 @@ async function handleFile(file) {
         renderOcrEditForm(resp.ocr);
         // Diagnose-Text
         const ocr = resp.ocr || {};
-        let msg = 'Bild gespeichert';
-        if (!ocr.provider_available) msg += ' – ⚠️ OCR nicht konfiguriert';
-        else if (!ocr.available) msg += ' – ⚠️ OCR lieferte leeren Text';
-        else if (!ocr.parsed || !ocr.parsed.total_amount) msg += ' – OCR ok, Parser fand keine Summe (bitte prüfen)';
-        else msg += ' – Werte prüfen';
-        showToast(msg, ocr.available && ocr.parsed && ocr.parsed.total_amount ? 'success' : 'error', 4000);
+        const p = ocr.parsed || {};
+        let msg = '✓ Bild gespeichert';
+        if (!ocr.provider_available) msg = '⚠️ Bild gespeichert – OCR nicht konfiguriert';
+        else if (!ocr.available) msg = '⚠️ Bild gespeichert – OCR lieferte leeren Text';
+        else {
+            const found = [];
+            if (p.store_hint) found.push('Laden');
+            if (p.purchase_date) found.push('Datum');
+            if (p.total_amount) found.push('Summe');
+            if (p.payment_method) found.push('Zahlung');
+            msg = '✓ OCR: ' + (found.length ? found.join(' + ') + ' erkannt' : 'kein Feld erkannt');
+        }
+        showToast(msg, ocr.available && p.total_amount ? 'success' : 'error', 4000);
     } catch(e) {
         showToast('Fehler: ' + e.message, 'error');
         resetUploadDrop();
@@ -106,6 +113,12 @@ async function renderOcrEditForm(ocr) {
     try { uploadedImgUrl = await fetchImageAsBlobUrl(AUSGABEN_API.receiptThumbUrl(uploadedReceipt.id)); } catch(e) {}
     const storeOpts = '<option value="">– Kein Laden –</option>' +
         stores.map(s => `<option value="${s.id}"${matchedStore==s.id?' selected':''}>${s.icon || ''} ${escapeHtml(s.name)}</option>`).join('');
+
+    // Payment-Vorauswahl aus OCR
+    const pmethodVal = parsed.payment_method || '';
+    const pmts = [['','–'],['cash','Bar'],['card','EC/Karte'],['credit','Kreditkarte'],['paypal','PayPal'],['other','Sonstiges']];
+    const paymentOpts = pmts.map(([v,l]) => `<option value="${v}"${v===pmethodVal?' selected':''}>${l}</option>`).join('');
+
     // Diagnose-Zeile für OCR
     let diagBadges = '';
     if (!ocr.provider_available) diagBadges = '<span class="badge warn">⚠️ OCR-Provider nicht konfiguriert</span> ';
@@ -143,12 +156,19 @@ async function renderOcrEditForm(ocr) {
             <div><label>MwSt (€)</label><input type="number" step="0.01" id="oVat" value="${parsed.vat_amount || ''}"></div>
         </div>
         <div class="form-row">
-            <div><label>Zahlungsart</label><select id="oPayment"><option value="">–</option><option value="cash">Bar</option><option value="card">EC/Karte</option><option value="credit">Kreditkarte</option><option value="paypal">PayPal</option><option value="other">Sonstiges</option></select></div>
+            <div><label>Zahlungsart</label><select id="oPayment">${paymentOpts}</select></div>
             <div style="align-self:end"><label><input type="checkbox" id="oRecurring"> Wiederkehrend</label></div>
         </div>
-        <h3 style="margin-top:1rem">Positionen (${(parsed.items||[]).length} erkannt)</h3>
-        <div id="oItems" class="item-list"></div>
-        <button id="oAddItem" style="margin-top:0.5rem;width:auto;padding:0.375rem 0.75rem;font-size:0.8125rem;background:var(--surface-2);color:var(--text);border:1px solid var(--border)">+ Position</button>
+        <div style="margin-top:1rem;padding:0.625rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
+            <label style="display:flex;align-items:center;gap:0.5rem;margin:0;cursor:pointer;font-size:0.875rem">
+                <input type="checkbox" id="oIncludeItems" style="width:auto;margin:0">
+                <span>Einzelpositionen speichern (${(parsed.items||[]).length} erkannt) — für Preisverlauf & Detail-Statistik</span>
+            </label>
+        </div>
+        <div id="oItemsWrap" style="display:none;margin-top:0.75rem">
+            <div id="oItems" class="item-list"></div>
+            <button id="oAddItem" style="margin-top:0.5rem;width:auto;padding:0.375rem 0.75rem;font-size:0.8125rem;background:var(--surface-2);color:var(--text);border:1px solid var(--border)">+ Position</button>
+        </div>
         <div style="margin-top:0.75rem"><label>Notiz</label><textarea id="oNote"></textarea></div>
         <div id="oDupeWarn"></div>
         <div class="actions">
@@ -160,7 +180,11 @@ async function renderOcrEditForm(ocr) {
     const items = parsed.items || [];
     if (items.length === 0) addOcrItemRow();
     else items.forEach(it => addOcrItemRow(it));
-    document.getElementById('oAddItem').onclick = () => addOcrItemRow();
+    // Toggle für Positionen: aus = Positionen werden beim Speichern NICHT geschickt
+    const includeCb = document.getElementById('oIncludeItems');
+    const itemsWrap = document.getElementById('oItemsWrap');
+    includeCb.onchange = () => { itemsWrap.style.display = includeCb.checked ? '' : 'none'; };
+    document.getElementById('oAddItem').onclick = () => { addOcrItemRow(); includeCb.checked = true; itemsWrap.style.display = ''; };
     document.getElementById('oSave').onclick = saveOcrExpense;
     document.getElementById('oDiscard').onclick = discardReceipt;
     document.getElementById('oTotal').oninput =
@@ -228,7 +252,8 @@ function collectItems(containerId) {
 async function saveOcrExpense() {
     const btn = document.getElementById('oSave'); btn.disabled = true;
     try {
-        const items = collectItems('oItems');
+        const includeItems = document.getElementById('oIncludeItems')?.checked;
+        const items = includeItems ? collectItems('oItems') : [];
         const body = {
             store_id:  +document.getElementById('oStore').value || null,
             receipt_image_id: uploadedReceipt.id,
