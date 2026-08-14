@@ -90,7 +90,8 @@ EXTRAKTIONSREGELN:
    - quantity_unit: "kg", "g", "L", "ml", "Stk", "Pack", "Btl", null
    - unit_price: Einzelpreis als float (falls erkennbar, sonst null). Falls quantity > 1 und total_price gegeben: unit_price = total_price / quantity.
    - total_price: Gesamtpreis des Artikels als float. Falls nur Einzelpreis × Menge: berechnen.
-   - category_id: ID aus der User-Kategorienliste (int). "Sonstiges" → null.
+   - category_id: ID aus der User-Kategorienliste (int). Passe genau, wenn eine passende Kategorie existiert. Sonst null.
+   - category_name: WENN category_id null ist, gib hier einen kurzen, sinnvollen Kategorienamen im Deutschen an (z.B. "Lebensmittel", "Getränke", "Süßwaren", "Drogerie", "Haushalt", "Kraftstoff", "Restaurant"). Erste Buchstabe groß, Singular oder Plural nach üblichem Sprachgebrauch. Bei sehr generischen Sachen: "Sonstiges". Wenn category_id gesetzt: category_name = null.
 
 SCHWIERIGE FÄLLE:
 - Mehrere gleiche Artikel (2× Milch): als separate Items, NICHT zusammenfassen
@@ -128,7 +129,8 @@ JSON-FORMAT (exakt diese Struktur):
       "quantity_unit": "kg",
       "unit_price": 1.66,
       "total_price": 3.32,
-      "category_id": 10
+      "category_id": 10,
+      "category_name": null
     }}
   ]
 }}"""
@@ -230,6 +232,14 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
         if cat_id is not None and cat_id not in valid_cat_ids:
             cat_id = None  # halluzinierte ID verwerfen
 
+        cat_name = _str_or_none(it.get("category_name"))
+        # Wenn cat_id bereits gesetzt: Name nicht mehr nötig (Frontend nutzt ID).
+        if cat_id is not None:
+            cat_name = None
+        # "Sonstiges" ist implizit -> Frontend soll dafür nichts neu anlegen.
+        if cat_name and cat_name.strip().lower() in ("sonstiges", "sonstige", "n/a", "unbekannt"):
+            cat_name = None
+
         is_reduced = False
         if total_price < 0 or desc.lower().startswith(("rabatt", "ermäßigung", "reduziert")):
             is_reduced = True
@@ -241,6 +251,7 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
             "unit_price": unit_price,
             "total_price": total_price,
             "category_id": cat_id,
+            "category_name": cat_name,
             "is_reduced": is_reduced,
             "original_price": None,
         })
@@ -255,6 +266,7 @@ def _fallback_regex(ocr_text: str, stores: list) -> dict:
     parsed.setdefault("currency", None)
     for it in parsed.get("items") or []:
         it.setdefault("category_id", None)
+        it.setdefault("category_name", None)
         it.setdefault("quantity_unit", None)
     return parsed
 

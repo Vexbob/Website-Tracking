@@ -63,51 +63,21 @@ label{margin-bottom:0.25rem}
 <main>
 <div class="tabs">
 <button class="tab-btn active" data-tab="ocr">📸 Foto / OCR</button>
-<button class="tab-btn" data-tab="quick">⚡ Schnelleingabe</button>
 <button class="tab-btn" data-tab="manual">✍️ Manuell</button>
 </div>
 
 <div id="ocrPanel" class="tab-panel active">
 <div class="card" id="uploadCard">
-<h3>Kassenbon fotografieren oder hochladen</h3>
+<h3>Kassenbon fotografieren, hochladen oder einfügen</h3>
 <div id="uploadDrop" class="upload-drop">
 <div class="icon">📸</div>
 <div style="font-weight:600;margin-bottom:0.25rem">Bild wählen</div>
-<div style="font-size:0.8125rem;color:var(--text-muted)">Kamera nutzen oder Datei ziehen · JPG/PNG · max 8 MB</div>
+<div style="font-size:0.8125rem;color:var(--text-muted)">Kamera · Datei ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> aus Zwischenablage · JPG/PNG · max 8 MB</div>
 <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none">
 </div>
 <p id="ocrStatus" style="margin-top:0.75rem;font-size:0.8125rem;color:var(--text-muted)"></p>
 </div>
 <div id="ocrEditCard" class="card" style="display:none;margin-top:1rem"></div>
-</div>
-
-<div id="quickPanel" class="tab-panel">
-<div class="card">
-<h3>Schnelleingabe (nur Kopfdaten)</h3>
-<div style="margin-bottom:0.5rem"><label>Typ</label>
-<select id="qType">
-<option value="receipt">🧾 Kassenbon</option>
-<option value="online_order">📦 Online-Bestellung</option>
-<option value="restaurant">🍽️ Restaurant</option>
-<option value="subscription">🔁 Abo</option>
-<option value="other">📌 Sonstiges</option>
-</select></div>
-<div class="form-row">
-<div><label>Datum</label><input type="date" id="qDate"></div>
-<div><label>Laden / Anbieter</label><select id="qStore"><option value="">– Kein Laden –</option></select></div>
-</div>
-<div class="form-row">
-<div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="qTotal" placeholder="12,34"></div>
-<div><label>Zahlungsart</label><select id="qPayment"><option value="">–</option><option value="cash">Bar</option><option value="card">EC/Karte</option><option value="credit">Kreditkarte</option><option value="paypal">PayPal</option><option value="other">Sonstiges</option></select></div>
-</div>
-<label style="margin-top:0.5rem"><input type="checkbox" id="qRecurring"> Wiederkehrende Ausgabe (z.B. Abo/Miete)</label>
-<div style="margin-top:0.5rem"><label>Notiz</label><textarea id="qNote" placeholder="optional"></textarea></div>
-<div id="qDupeWarn"></div>
-<div class="actions">
-<button id="qSave" class="primary">Speichern</button>
-<a href="/ausgaben/" class="nav-btn" style="align-self:center">Abbrechen</a>
-</div>
-</div>
 </div>
 
 <div id="manualPanel" class="tab-panel">
@@ -127,12 +97,9 @@ label{margin-bottom:0.25rem}
 </div>
 <div class="form-row">
 <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="mTotal"></div>
-<div><label>MwSt (€)</label><input type="number" step="0.01" id="mVat"></div>
-</div>
-<div class="form-row">
 <div><label>Zahlungsart</label><select id="mPayment"><option value="">–</option><option value="cash">Bar</option><option value="card">EC/Karte</option><option value="credit">Kreditkarte</option><option value="paypal">PayPal</option><option value="other">Sonstiges</option></select></div>
-<div style="align-self:end"><label><input type="checkbox" id="mRecurring"> Wiederkehrend</label></div>
 </div>
+<label style="margin-top:0.25rem"><input type="checkbox" id="mRecurring"> Wiederkehrend</label>
 <h3 style="margin-top:1rem">Positionen</h3>
 <div id="mItems" class="item-list"></div>
 <button id="mAddItem" style="margin-top:0.5rem;width:auto;padding:0.375rem 0.75rem;font-size:0.8125rem;background:var(--surface-2);color:var(--text);border:1px solid var(--border)">+ Position</button>

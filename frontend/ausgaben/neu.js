@@ -8,11 +8,10 @@ async function init() {
         [stores, categories] = await Promise.all([AUSGABEN_API.stores(), AUSGABEN_API.categories()]);
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
     fillStoreSelects();
-    document.getElementById('qDate').value = todayISO();
     document.getElementById('mDate').value = todayISO();
     setupTabs();
     setupOcrUpload();
-    setupQuickForm();
+    setupClipboardPaste();
     setupManualForm();
     addManualItemRow();
     try {
@@ -27,9 +26,12 @@ async function init() {
 
 function fillStoreSelects() {
     const html = stores.map(s => `<option value="${s.id}">${s.icon || ''} ${escapeHtml(s.name)}</option>`).join('');
-    ['qStore','mStore'].forEach(id => {
+    ['mStore'].forEach(id => {
         const sel = document.getElementById(id);
+        if (!sel) return;
+        const prev = sel.value;
         sel.innerHTML = '<option value="">– Kein Laden –</option>' + html;
+        if (prev) sel.value = prev;
     });
 }
 
@@ -57,6 +59,32 @@ function setupOcrUpload() {
         if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
     };
     input.onchange = () => { if (input.files.length) handleFile(input.files[0]); };
+}
+
+// Bild aus Zwischenablage per Strg+V einfügen (z.B. Screenshot oder kopiertes Bild).
+function setupClipboardPaste() {
+    window.addEventListener('paste', (e) => {
+        // Nur wenn OCR-Tab aktiv und kein Text-Input fokussiert ist
+        const ocrTabActive = document.getElementById('ocrPanel')?.classList.contains('active');
+        if (!ocrTabActive) return;
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const it of items) {
+            if (it.kind === 'file' && it.type.startsWith('image/')) {
+                const blob = it.getAsFile();
+                if (blob) {
+                    e.preventDefault();
+                    // Blob als File verpacken, damit handleFile file.name/type nutzen kann
+                    const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+                    const file = new File([blob], `clipboard-${Date.now()}.${ext}`, { type: blob.type });
+                    handleFile(file);
+                    return;
+                }
+            }
+        }
+    });
 }
 
 async function handleFile(file) {
@@ -101,6 +129,67 @@ function resetUploadDrop() {
 function escapeHtml(s) { if (!s) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
 
+// Legt fehlende Kategorien an, die die AI per category_name vorgeschlagen hat,
+// und trägt bei den Items category_id nach. Idempotent: existierende (case-insensitive)
+// Kategorien werden wiederverwendet, ohne dass ein API-Call nötig ist.
+async function ensureCategoriesFromParsed(parsed) {
+    const items = parsed?.items || [];
+    if (!items.length) return;
+
+    // Lookup: name-lowercased -> id
+    const byName = new Map(categories.map(c => [(c.name || '').toLowerCase(), c.id]));
+
+    // Vor 1. Durchlauf: existierende Kategorien direkt auflösen und queued-Set bilden
+    const toCreate = new Set(); // Namen (Original-Casing)
+    for (const it of items) {
+        if (it.category_id) continue;
+        const name = (it.category_name || '').trim();
+        if (!name) continue;
+        const hit = byName.get(name.toLowerCase());
+        if (hit) {
+            it.category_id = hit;
+        } else {
+            toCreate.add(name);
+        }
+    }
+    if (!toCreate.size) return;
+
+    // Fehlende Kategorien anlegen (sequenziell, damit UniqueViolation deterministisch abgefangen wird)
+    let createdCount = 0;
+    for (const name of toCreate) {
+        try {
+            const created = await AUSGABEN_API.createCategory({ name });
+            categories.push(created);
+            byName.set(name.toLowerCase(), created.id);
+            createdCount++;
+        } catch (e) {
+            // Vielleicht Race: nochmals frisch laden und Lookup versuchen
+            try {
+                const fresh = await AUSGABEN_API.categories();
+                categories.length = 0;
+                categories.push(...fresh);
+                for (const c of fresh) byName.set((c.name || '').toLowerCase(), c.id);
+            } catch (_) {}
+            console.warn('Auto-Kategorie-Anlage:', name, e.message);
+        }
+    }
+    // sort by name for stable Dropdown
+    categories.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    // 2. Durchlauf: Items final zuweisen
+    for (const it of items) {
+        if (it.category_id) continue;
+        const name = (it.category_name || '').trim().toLowerCase();
+        if (!name) continue;
+        const hit = byName.get(name);
+        if (hit) it.category_id = hit;
+    }
+
+    if (createdCount > 0) {
+        showToast(`${createdCount} neue Kategorie${createdCount === 1 ? '' : 'n'} angelegt`, 'success', 2500);
+    }
+}
+
 async function renderOcrEditForm(ocr) {
     const card = document.getElementById('ocrEditCard');
     const parsed = ocr.parsed || {};
@@ -124,6 +213,11 @@ async function renderOcrEditForm(ocr) {
             }
         }
     }
+
+    // Fehlende Kategorien aus AI-Vorschlägen (category_name) automatisch anlegen
+    // und den Items die neue category_id nachtragen. So sind die Dropdowns direkt vorbelegt.
+    await ensureCategoriesFromParsed(parsed);
+
     if (uploadedImgUrl) URL.revokeObjectURL(uploadedImgUrl);
     try { uploadedImgUrl = await fetchImageAsBlobUrl(AUSGABEN_API.receiptThumbUrl(uploadedReceipt.id)); } catch(e) {}
     const storeOpts = '<option value="">– Kein Laden –</option>' +
@@ -168,12 +262,9 @@ async function renderOcrEditForm(ocr) {
         </div>
         <div class="form-row">
             <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="oTotal" value="${parsed.total_amount || ''}"></div>
-            <div><label>MwSt (€)</label><input type="number" step="0.01" id="oVat" value="${parsed.vat_amount || ''}"></div>
-        </div>
-        <div class="form-row">
             <div><label>Zahlungsart</label><select id="oPayment">${paymentOpts}</select></div>
-            <div style="align-self:end"><label><input type="checkbox" id="oRecurring"> Wiederkehrend</label></div>
         </div>
+        <label style="margin-top:0.25rem"><input type="checkbox" id="oRecurring"> Wiederkehrend</label>
         <div style="margin-top:1rem;padding:0.625rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
             <label style="display:flex;align-items:center;gap:0.5rem;margin:0;cursor:pointer;font-size:0.875rem">
                 <input type="checkbox" id="oIncludeItems" checked style="width:auto;margin:0">
@@ -274,7 +365,6 @@ async function saveOcrExpense() {
             receipt_image_id: uploadedReceipt.id,
             purchase_date: document.getElementById('oDate').value,
             total_amount: +document.getElementById('oTotal').value || 0,
-            vat_amount:   +document.getElementById('oVat').value || null,
             payment_method: document.getElementById('oPayment').value || null,
             is_recurring:   document.getElementById('oRecurring').checked,
             expense_type:   document.getElementById('oType').value || 'receipt',
@@ -296,32 +386,6 @@ async function discardReceipt() {
     resetUploadDrop();
 }
 
-function setupQuickForm() {
-    document.getElementById('qSave').onclick = async () => {
-        const btn = document.getElementById('qSave'); btn.disabled = true;
-        try {
-            const body = {
-                store_id:  +document.getElementById('qStore').value || null,
-                purchase_date: document.getElementById('qDate').value,
-                total_amount: +document.getElementById('qTotal').value || 0,
-                payment_method: document.getElementById('qPayment').value || null,
-                is_recurring:   document.getElementById('qRecurring').checked,
-                expense_type:   document.getElementById('qType').value || 'receipt',
-                note: document.getElementById('qNote').value || null,
-            };
-            if (!body.purchase_date || body.total_amount <= 0) {
-                showToast('Datum und Betrag erforderlich', 'error'); btn.disabled = false; return;
-            }
-            await AUSGABEN_API.createExpense(body);
-            showToast('Bon gespeichert', 'success');
-            setTimeout(() => location.href = '/ausgaben/', 500);
-        } catch(e) { showToast('Fehler: ' + e.message, 'error'); btn.disabled = false; }
-    };
-    ['qDate','qTotal','qStore'].forEach(id => {
-        document.getElementById(id).addEventListener('change', () => checkDupe('q'));
-    });
-}
-
 function setupManualForm() {
     document.getElementById('mAddItem').onclick = () => addManualItemRow();
     document.getElementById('mSave').onclick = async () => {
@@ -332,7 +396,6 @@ function setupManualForm() {
                 store_id:  +document.getElementById('mStore').value || null,
                 purchase_date: document.getElementById('mDate').value,
                 total_amount: +document.getElementById('mTotal').value || 0,
-                vat_amount:   +document.getElementById('mVat').value || null,
                 payment_method: document.getElementById('mPayment').value || null,
                 is_recurring:   document.getElementById('mRecurring').checked,
                 expense_type:   document.getElementById('mType').value || 'receipt',
