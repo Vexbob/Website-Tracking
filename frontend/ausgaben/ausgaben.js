@@ -46,15 +46,16 @@ const AUSGABEN_API = {
     statsCategory:   (p={}) => { const q = new URLSearchParams(p).toString(); return apiCall('/api/expenses/stats/by-category' + (q ? '?' + q : '')); },
     statsStore:      (p={}) => { const q = new URLSearchParams(p).toString(); return apiCall('/api/expenses/stats/by-store' + (q ? '?' + q : '')); },
     statsMonthly:    (months=12) => apiCall(`/api/expenses/stats/monthly?months=${months}`),
-    heatmap:         () => apiCall('/api/expenses/heatmap'),
+    statsWeekly:     (weeks=12) => apiCall(`/api/expenses/stats/weekly?weeks=${weeks}`),
+    statsDaily:     (days=30) => apiCall(`/api/expenses/stats/daily?days=${days}`),
+    products:        () => apiCall('/api/expenses/products'),
     priceHistory:    (q) => apiCall('/api/expenses/price-history?q=' + encodeURIComponent(q)),
     recurring:       () => apiCall('/api/expenses/recurring/suggestions'),
     checkDuplicate:  (date, total, store_id) => {
         const q = new URLSearchParams({ date, total }); if (store_id) q.append('store_id', store_id);
         return apiCall('/api/expenses/duplicates/check?' + q.toString());
     },
-    exportCsv:  () => `${API_BASE}/api/expenses/export?format=csv`,
-    exportJson: () => `${API_BASE}/api/expenses/export?format=json`,
+    exportCsv:  () => `${API_BASE}/api/expenses/export`,
 };
 
 
@@ -123,4 +124,46 @@ async function fetchImageAsBlobUrl(url) {
     if (!res.ok) throw new Error('Bild laden fehlgeschlagen');
     const blob = await res.blob();
     return URL.createObjectURL(blob);
+}
+
+/* ---------- Datei mit Auth-Header herunterladen (für CSV-Export) ---------- */
+async function downloadFile(url, filename) {
+    try {
+        const token = getToken();
+        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!res.ok) {
+            let msg = 'HTTP ' + res.status;
+            try { const j = await res.json(); if (j.detail) msg = j.detail; } catch(_) {}
+            throw new Error(msg);
+        }
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (e) { showToast('Export fehlgeschlagen: ' + e.message, 'error'); }
+}
+
+/* ---------- Gemeinsame Subnav für alle Ausgaben-Seiten ---------- */
+// Nutzung: <div id="subnav" data-active="..."></div> ins HTML, wobei active z.B.
+// "dashboard" | "neu" | "statistik" | "preisverlauf" | "laeden" | "kategorien"
+function renderSubnav() {
+    const el = document.getElementById('subnav');
+    if (!el) return;
+    const active = el.dataset.active || '';
+    const links = [
+        { key: 'neu',          href: '/ausgaben/neu.html',           label: '+ Neuer Bon' },
+        { key: 'dashboard',    href: '/ausgaben/',                   label: '📋 Übersicht' },
+        { key: 'statistik',    href: '/ausgaben/statistik.html',     label: '📊 Statistik' },
+        { key: 'preisverlauf', href: '/ausgaben/preisverlauf.html',  label: '💶 Preisverlauf' },
+        { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
+        { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },
+    ];
+    el.className = 'subnav';
+    el.innerHTML = links.map(l =>
+        `<a href="${l.href}"${l.key === active ? ' class="primary"' : ''}>${l.label}</a>`
+    ).join('') + '<a href="#" id="exportCsvLink">⬇ CSV</a>';
+    const csv = document.getElementById('exportCsvLink');
+    if (csv) csv.onclick = (e) => { e.preventDefault(); downloadFile(AUSGABEN_API.exportCsv(), 'ausgaben.csv'); };
 }

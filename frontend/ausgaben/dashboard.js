@@ -2,6 +2,7 @@ let stores=[], categories=[];
 
 async function loadInit() {
     const me = await ensureLoggedIn(); if (!me) return;
+    renderSubnav();
     try {
         [stores, categories] = await Promise.all([AUSGABEN_API.stores(), AUSGABEN_API.categories()]);
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
@@ -60,7 +61,21 @@ async function loadExpenses() {
             list.innerHTML = '<div class="empty"><div class="empty-icon">🧾</div>Noch keine Ausgaben — <a href="/ausgaben/neu.html">jetzt anlegen</a></div>';
             return;
         }
-        list.innerHTML = rows.map(r => renderExpItem(r)).join('');
+        // Gruppierung nach Datum (rows sind bereits DESC sortiert vom Backend)
+        const groups = [];
+        let cur = null;
+        for (const r of rows) {
+            const d = r.purchase_date;
+            if (!cur || cur.date !== d) {
+                cur = { date: d, items: [], total: 0 };
+                groups.push(cur);
+            }
+            cur.items.push(r);
+            cur.total += Number(r.total_amount) || 0;
+        }
+        list.innerHTML = groups.map(g =>
+            renderDateHeader(g) + g.items.map(r => renderExpItem(r)).join('')
+        ).join('');
         // Klick-Handler binden
         list.querySelectorAll('.exp-row').forEach(row => {
             row.onclick = (e) => {
@@ -70,6 +85,27 @@ async function loadExpenses() {
             };
         });
     } catch(e) { list.innerHTML = '<div class="empty muted">Fehler: '+e.message+'</div>'; }
+}
+
+// Datums-Trennlinie mit „Heute" / „Gestern" / „<Wochentag>, DD.MM.YYYY" + Tagesumsatz
+function renderDateHeader(g) {
+    const iso = g.date;
+    const d = new Date(iso + 'T00:00:00');
+    const today = new Date(); today.setHours(0,0,0,0);
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const isSameDay = (a, b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+    let label;
+    if (isSameDay(d, today)) label = 'Heute';
+    else if (isSameDay(d, yesterday)) label = 'Gestern';
+    else {
+        const wd = d.toLocaleDateString('de-DE', { weekday: 'long' });
+        label = `${wd}, ${d.toLocaleDateString('de-DE')}`;
+    }
+    return `<div class="date-header">
+        <span class="date-label">${label}</span>
+        <span class="date-line"></span>
+        <span class="date-total">${g.items.length} Bon${g.items.length===1?'':'s'} · ${fmtEur(g.total)}</span>
+    </div>`;
 }
 
 function renderExpItem(r) {
@@ -176,20 +212,6 @@ document.getElementById('filterReset').onclick = () => {
     loadExpenses();
 };
 
-async function downloadFile(url, filename) {
-    try {
-        const token = getToken();
-        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    } catch(e) { showToast('Export fehlgeschlagen: ' + e.message, 'error'); }
-}
-document.getElementById('exportCsvLink').onclick = (e) => { e.preventDefault(); downloadFile(AUSGABEN_API.exportCsv(), 'ausgaben.csv'); };
-document.getElementById('exportJsonLink').onclick = (e) => { e.preventDefault(); downloadFile(AUSGABEN_API.exportJson(), 'ausgaben.json'); };
+// downloadFile + Export-Link kommen aus ausgaben.js (renderSubnav)
 
 loadInit();

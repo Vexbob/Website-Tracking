@@ -2061,6 +2061,44 @@ async def stats_monthly(db=Depends(get_db), user=Depends(get_current_user), mont
     return [{"month": r["month"], "total": float(r["total"] or 0),
              "count": int(r["count"])} for r in rows]
 
+@app.get("/api/expenses/stats/weekly")
+async def stats_weekly(db=Depends(get_db), user=Depends(get_current_user), weeks: int = 12):
+    """Ausgaben pro ISO-Kalenderwoche (letzte N Wochen)."""
+    weeks = max(1, min(weeks, 52))
+    since = date.today() - timedelta(days=7 * (weeks - 1) + date.today().weekday())
+    rows = await db.fetch(
+        """SELECT TO_CHAR(purchase_date, 'IYYY-"KW"IW') AS week,
+                  DATE_TRUNC('week', purchase_date)::date AS week_start,
+                  SUM(total_amount) AS total, COUNT(*) AS count
+           FROM expenses WHERE user_id=$1 AND purchase_date >= $2
+           GROUP BY week, week_start ORDER BY week_start""",
+        user["id"], since)
+    return [{"week": r["week"], "week_start": r["week_start"].isoformat() if r["week_start"] else None,
+             "total": float(r["total"] or 0), "count": int(r["count"])} for r in rows]
+
+
+@app.get("/api/expenses/stats/daily")
+async def stats_daily(db=Depends(get_db), user=Depends(get_current_user), days: int = 30):
+    """Ausgaben pro Tag (letzte N Tage, mit Lücken als 0)."""
+    days = max(1, min(days, 365))
+    since = date.today() - timedelta(days=days - 1)
+    rows = await db.fetch(
+        """SELECT purchase_date AS d, SUM(total_amount) AS total, COUNT(*) AS count
+           FROM expenses WHERE user_id=$1 AND purchase_date >= $2
+           GROUP BY purchase_date ORDER BY purchase_date""",
+        user["id"], since)
+    by_day = {r["d"].isoformat(): (float(r["total"] or 0), int(r["count"])) for r in rows}
+    out = []
+    cur = since
+    end = date.today()
+    while cur <= end:
+        key = cur.isoformat()
+        total, count = by_day.get(key, (0.0, 0))
+        out.append({"date": key, "total": total, "count": count})
+        cur += timedelta(days=1)
+    return out
+
+
 @app.get("/api/expenses/heatmap")
 async def expenses_heatmap(db=Depends(get_db), user=Depends(get_current_user)):
     since = date.today() - timedelta(days=365)
@@ -2217,53 +2255,194 @@ async def check_duplicate(
     return [_ser_exp(r) for r in rows]
 
 
+# ---------- Produkt-Preisverlauf (Aggregation aller gekauften Artikel) ----------
+@app.get("/api/expenses/products")
+async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
+    """Aggregierte Produktliste über alle Bons — fuer den Preisverlauf-Tab.
+
+    Gruppiert nach normalisierter Beschreibung (Basisname vor "(").
+    Fuer jedes Produkt: letzter Preis + Rabatt-/Preiserhoehung ggue. vorherigem Kauf,
+    plus Preis/kg oder Preis/L falls Einheit bekannt.
+    """
+    rows = await db.fetch(
+        """SELECT ei.description, ei.total_price, ei.quantity, ei.quantity_unit,
+                  ei.original_price, ei.is_reduced,
+                  e.purchase_date, e.store_id,
+                  s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
+                  c.name AS category_name
+           FROM expense_items ei
+           JOIN expenses e ON e.id=ei.expense_id
+           LEFT JOIN stores s ON s.id=e.store_id
+           LEFT JOIN expense_categories c ON c.id=ei.category_id
+           WHERE ei.user_id=$1 AND ei.description IS NOT NULL AND ei.description != ''
+           ORDER BY e.purchase_date DESC, ei.id DESC""",
+        user["id"])
+
+    from collections import defaultdict
+
+    def norm_key(desc):
+        d = (desc or "").strip()
+        if "(" in d:
+            d = d.split("(", 1)[0].strip()
+        return d.lower()
+
+    def unit_price_of(r):
+        qty = float(r["quantity"] or 1) or 1
+        return float(r["total_price"]) / qty
+
+    groups = defaultdict(list)
+    for r in rows:
+        groups[norm_key(r["description"])].append(r)
+
+    products = []
+    for key, purchases in groups.items():
+        last = purchases[0]
+        prev = purchases[1] if len(purchases) > 1 else None
+        prices = [float(p["total_price"]) for p in purchases]
+        unit_prices = [unit_price_of(p) for p in purchases]
+
+        change_abs = None
+        change_pct = None
+        change_direction = None
+        if prev is not None:
+            last_up = unit_price_of(last)
+            prev_up = unit_price_of(prev)
+            if prev_up > 0:
+                change_abs = round(last_up - prev_up, 4)
+                change_pct = round((change_abs / prev_up) * 100.0, 1)
+                if change_pct >= 1:
+                    change_direction = "up"
+                elif change_pct <= -1:
+                    change_direction = "down"
+
+        price_per_kg = None
+        price_per_l = None
+        unit = (last["quantity_unit"] or "").lower() if last["quantity_unit"] else ""
+        qty = float(last["quantity"] or 0)
+        tp = float(last["total_price"])
+        if qty > 0 and tp > 0:
+            if unit == "kg":
+                price_per_kg = round(tp / qty, 2)
+            elif unit == "g":
+                price_per_kg = round(tp / (qty / 1000.0), 2)
+            elif unit == "l":
+                price_per_l = round(tp / qty, 2)
+            elif unit == "ml":
+                price_per_l = round(tp / (qty / 1000.0), 2)
+
+        products.append({
+            "key": key,
+            "description": last["description"],
+            "category_name": last["category_name"],
+            "count": len(purchases),
+            "last_date": last["purchase_date"].isoformat() if last["purchase_date"] else None,
+            "last_price": tp,
+            "last_unit_price": round(unit_price_of(last), 4),
+            "last_quantity": float(last["quantity"] or 1),
+            "last_quantity_unit": last["quantity_unit"],
+            "last_original_price": float(last["original_price"]) if last["original_price"] is not None else None,
+            "last_is_reduced": bool(last["is_reduced"]),
+            "last_store_name": last["store_name"] or "Ohne Laden",
+            "last_store_color": last["store_color"] or "#9ca3af",
+            "last_store_icon": last["store_icon"] or "🏪",
+            "min_price": round(min(prices), 2),
+            "max_price": round(max(prices), 2),
+            "min_unit_price": round(min(unit_prices), 4),
+            "max_unit_price": round(max(unit_prices), 4),
+            "avg_unit_price": round(sum(unit_prices) / len(unit_prices), 4),
+            "price_change_abs": change_abs,
+            "price_change_pct": change_pct,
+            "price_change_direction": change_direction,
+            "price_per_kg": price_per_kg,
+            "price_per_l": price_per_l,
+        })
+
+    products.sort(key=lambda p: p["last_date"] or "", reverse=True)
+    return products
+
+
 # ---------- Export ----------
 @app.get("/api/expenses/export")
-async def export_expenses(format: str = "csv",
-                           db=Depends(get_db), user=Depends(get_current_user)):
-    """format=csv|json. CSV enthält Ausgaben-Kopf, JSON enthält alles inkl. Items."""
+async def export_expenses(db=Depends(get_db), user=Depends(get_current_user)):
+    """CSV-Export aller Bons + Einzelpositionen (Semikolon-getrennt, UTF-8 mit BOM).
+
+    Eine Zeile pro Position; Bons ohne Positionen erscheinen mit einer Zeile.
+    """
     rows = await db.fetch(
-        """SELECT e.*, s.name AS store_name FROM expenses e
+        """SELECT e.id, e.purchase_date, e.total_amount, e.payment_method,
+                  e.expense_type, e.note,
+                  s.name AS store_name
+           FROM expenses e
            LEFT JOIN stores s ON s.id=e.store_id
            WHERE e.user_id=$1 ORDER BY e.purchase_date DESC, e.id DESC""",
         user["id"])
-    if format.lower() == "json":
-        items_by_exp = {}
-        item_rows = await db.fetch(
-            """SELECT ei.*, c.name AS category_name FROM expense_items ei
-               LEFT JOIN expense_categories c ON c.id=ei.category_id
-               WHERE ei.user_id=$1 ORDER BY ei.expense_id, ei.sort_order""",
-            user["id"])
-        for it in item_rows:
-            items_by_exp.setdefault(it["expense_id"], []).append(_ser_exp(it))
-        result = []
-        for r in rows:
-            d = _ser_exp(r)
-            d["items"] = items_by_exp.get(r["id"], [])
-            result.append(d)
-        import json as _json
-        content = _json.dumps({"exported_at": datetime.now(timezone.utc).isoformat(),
-                                "expenses": result}, ensure_ascii=False, indent=2)
-        return Response(content=content, media_type="application/json",
-                        headers={"Content-Disposition": 'attachment; filename="expenses.json"'})
-    # CSV
+
+    item_rows = await db.fetch(
+        """SELECT ei.expense_id, ei.description, ei.quantity, ei.quantity_unit,
+                  ei.unit_price, ei.total_price, ei.is_reduced, ei.original_price,
+                  c.name AS category_name
+           FROM expense_items ei
+           LEFT JOIN expense_categories c ON c.id=ei.category_id
+           WHERE ei.user_id=$1 ORDER BY ei.expense_id, ei.sort_order NULLS LAST, ei.id""",
+        user["id"])
+    items_by_exp = {}
+    for it in item_rows:
+        items_by_exp.setdefault(it["expense_id"], []).append(it)
+
     import csv
     import io as _io
+
+    def euro(v):
+        if v is None:
+            return ""
+        try:
+            return f"{float(v):.2f}".replace(".", ",")
+        except (TypeError, ValueError):
+            return ""
+
     buf = _io.StringIO()
-    w = csv.writer(buf, delimiter=";")
-    w.writerow(["Datum", "Laden", "Betrag", "MwSt", "Zahlung", "Wiederkehrend", "Notiz"])
+    # Semikolon + Anführungszeichen als Text-Qualifier -> Excel-kompatibel (DE-Locale)
+    w = csv.writer(buf, delimiter=";", quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    w.writerow([
+        "Datum", "Laden", "Typ", "Gesamt (EUR)", "Zahlungsart",
+        "Position", "Menge", "Einheit", "Einzelpreis (EUR)", "Positionspreis (EUR)",
+        "Original-Preis (EUR)", "Reduziert", "Kategorie", "Notiz",
+    ])
     for r in rows:
-        w.writerow([
+        base = [
             r["purchase_date"].isoformat() if r["purchase_date"] else "",
             r["store_name"] or "",
-            f"{float(r['total_amount']):.2f}".replace(".", ",") if r["total_amount"] is not None else "",
-            f"{float(r['vat_amount']):.2f}".replace(".", ",") if r["vat_amount"] is not None else "",
+            r["expense_type"] or "",
+            euro(r["total_amount"]),
             r["payment_method"] or "",
-            "ja" if r["is_recurring"] else "nein",
-            (r["note"] or "").replace("\n", " "),
-        ])
-    return Response(content=buf.getvalue(), media_type="text/csv; charset=utf-8",
-                    headers={"Content-Disposition": 'attachment; filename="expenses.csv"'})
+        ]
+        note = (r["note"] or "").replace("\n", " ").replace("\r", " ")
+        items = items_by_exp.get(r["id"], [])
+        if not items:
+            w.writerow(base + ["", "", "", "", "", "", "", "", note])
+            continue
+        for it in items:
+            w.writerow(base + [
+                it["description"] or "",
+                euro(it["quantity"]),
+                it["quantity_unit"] or "",
+                euro(it["unit_price"]),
+                euro(it["total_price"]),
+                euro(it["original_price"]),
+                "ja" if it["is_reduced"] else "",
+                it["category_name"] or "",
+                note,
+            ])
+    # BOM voranstellen -> Excel öffnet UTF-8 mit Umlauten korrekt
+    content = ("\ufeff" + buf.getvalue()).encode("utf-8")
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="ausgaben.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 @app.get("/api/expenses/ocr/status")
 async def ocr_status(user=Depends(get_current_user)):

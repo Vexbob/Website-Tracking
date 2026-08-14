@@ -94,7 +94,18 @@ EXTRAKTIONSREGELN:
 6. payment_method: "cash" (Bar/Cash/Bargeld), "card" (EC/Maestro/Girocard/Bankomat/Debit/Contactless/Apple Pay/Google Pay), "credit" (Visa/Mastercard Credit/Amex), "paypal", "other". Debit Mastercard = "card". Falls nicht erkennbar: null.
 
 7. items (Array, ein Eintrag pro Artikelposition):
-   - description: Bereinigter Artikelname. Entferne Steuer-/Kategoriebuchstaben am Zeilenanfang (A, B, C, C1, H, *). Entferne Werbe-Texte, Rabatt-Codes, Pfand-Hinweise. Falls Artikelname über mehrere OCR-Zeilen geht: zusammenführen.
+   - description: Sprechender Produktname im Format "<Basisname> <Menge/Größe> (<Original vom Bon>)".
+     * Basisname = deutsches Wort/Wortkombination WAS das Produkt IST — z.B. "Äpfel", "Vollmilch", "Haferflocken", "Rasiergel", "Toilettenpapier", "Klopapier", "Bananen", "Weißbrot", "Butter". Erste Buchstabe groß, Umlaute korrekt.
+     * Menge/Größe: wenn auf dem Bon erkennbar, direkt anhängen (z.B. "2kg", "1L", "500g", "10 Stk", "10x180 Blatt"). Weglassen wenn nicht erkennbar.
+     * Original in Klammern: der bereinigte Text vom Bon (ohne Steuer-/Kategoriebuchstaben und ohne Zeilenrauschen), damit man den Bezug behält.
+     Beispiele:
+     - Bon "Clever Äpfel 2kg" → "Äpfel 2kg (Clever Äpfel 2kg)"
+     - Bon "C1. ESL-Vollm. 1L" → "Vollmilch 1L (ESL-Vollm. 1L)"
+     - Bon "Clever Haferflocken Zart" → "Haferflocken (Clever Haferflocken Zart)"
+     - Bon "Gillette Rasiergel" → "Rasiergel (Gillette Rasiergel)"
+     - Bon "BI HOME TOPA 10X180 BLATT" → "Klopapier 10x180 Blatt (BI HOME TOPA 10X180 BLATT)"
+     - Bon "Pfand" → "Pfand (Pfand)"
+     Entferne Steuer-/Kategoriebuchstaben am Zeilenanfang (A, B, C, C1, H, *). Entferne Werbe-Texte, Rabatt-Codes. Falls Artikelname über mehrere OCR-Zeilen geht: zusammenführen.
    - quantity: Menge als Zahl (1 wenn nicht angegeben). Bei "2kg" → 2, bei "10X180" → 10, bei "1L" → 1.
    - quantity_unit: "kg", "g", "L", "ml", "Stk", "Pack", "Btl", null
    - unit_price: Einzelpreis als float (falls erkennbar, sonst null). Falls quantity > 1 und total_price gegeben: unit_price = total_price / quantity.
@@ -151,7 +162,7 @@ JSON-FORMAT (exakt diese Struktur):
   "payment_method": "card",
   "items": [
     {{
-      "description": "Clever Äpfel 2kg",
+      "description": "Äpfel 2kg (Clever Äpfel 2kg)",
       "quantity": 2,
       "quantity_unit": "kg",
       "unit_price": 1.66,

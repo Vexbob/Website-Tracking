@@ -11,6 +11,7 @@ function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
 
 async function init() {
     const me = await ensureLoggedIn(); if (!me) return;
+    renderSubnav();
     const id = getId();
     if (!id) { location.href = '/ausgaben/'; return; }
     try {
@@ -57,11 +58,7 @@ async function render() {
             </div>
             <div class="form-row">
                 <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="eTotal" value="${e.total_amount || ''}"></div>
-                <div><label>MwSt (€)</label><input type="number" step="0.01" id="eVat" value="${e.vat_amount ?? ''}"></div>
-            </div>
-            <div class="form-row">
                 <div><label>Zahlungsart</label><select id="ePayment">${paymentOpts}</select></div>
-                <div style="align-self:end"><label><input type="checkbox" id="eRecurring"${e.is_recurring?' checked':''}> Wiederkehrend</label></div>
             </div>
             <div style="margin-top:0.5rem"><label>Notiz</label><textarea id="eNote">${escapeHtml(e.note || '')}</textarea></div>
             <div class="actions">
@@ -149,9 +146,8 @@ async function saveExpense() {
             store_id: +document.getElementById('eStore').value || null,
             purchase_date: document.getElementById('eDate').value,
             total_amount: +document.getElementById('eTotal').value || 0,
-            vat_amount: +document.getElementById('eVat').value || null,
             payment_method: document.getElementById('ePayment').value || null,
-            is_recurring: document.getElementById('eRecurring').checked,
+            is_recurring: false,
             expense_type: document.getElementById('eType').value || 'receipt',
             note: document.getElementById('eNote').value || null,
         };

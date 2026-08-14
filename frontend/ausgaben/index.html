@@ -16,11 +16,12 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 body{visibility:hidden}body.ready{visibility:visible}
-.subnav{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.25rem}
-.subnav a{padding:0.4375rem 0.875rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:0.8125rem;color:var(--text-muted);font-weight:500;text-decoration:none;transition:all .15s}
-.subnav a:hover{color:var(--text);border-color:var(--border-strong);text-decoration:none}
-.subnav a.primary{background:var(--text);color:var(--surface);border-color:var(--text)}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.75rem;margin-bottom:1.5rem}
+.date-header{display:flex;align-items:center;gap:0.625rem;margin:1rem 0 0.5rem;padding:0 0.25rem}
+.date-header:first-child{margin-top:0}
+.date-header .date-label{font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);white-space:nowrap}
+.date-header .date-line{flex:1;height:1px;background:var(--border)}
+.date-header .date-total{font-size:0.75rem;color:var(--text-faint);font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500}
 .kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0.875rem;box-shadow:var(--shadow-sm)}
 .kpi .lbl{font-size:0.6875rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
 .kpi .val{font-size:1.375rem;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.1}
@@ -78,14 +79,7 @@ body{visibility:hidden}body.ready{visibility:visible}
     </div>
 </nav>
 <main class="wide">
-    <div class="subnav">
-        <a href="/ausgaben/neu.html" class="primary">+ Neuer Bon</a>
-        <a href="/ausgaben/statistik.html">📊 Statistik</a>
-        <a href="/ausgaben/laeden.html">🏪 Läden</a>
-        <a href="/ausgaben/kategorien.html">🏷️ Kategorien</a>
-        <a href="#" id="exportCsvLink">⬇ CSV</a>
-        <a href="#" id="exportJsonLink">⬇ JSON</a>
-    </div>
+    <div id="subnav" data-active="dashboard"></div>
     <div class="kpi-grid" id="kpiGrid"></div>
     <div class="card">
         <div class="filter-bar">

@@ -4,6 +4,7 @@ let uploadedImgUrl = null;
 
 async function init() {
     const me = await ensureLoggedIn(); if (!me) return;
+    renderSubnav();
     try {
         [stores, categories] = await Promise.all([AUSGABEN_API.stores(), AUSGABEN_API.categories()]);
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }

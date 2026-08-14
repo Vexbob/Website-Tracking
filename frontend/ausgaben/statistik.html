@@ -18,55 +18,10 @@
 body{visibility:hidden}body.ready{visibility:visible}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
 .card h3{font-size:1rem;margin-bottom:0.75rem;font-weight:600}
-.chart-wrap{position:relative;height:280px}
+.chart-wrap{position:relative;height:260px}
 .chart-wrap.small{height:220px}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 @media(max-width:700px){.split{grid-template-columns:1fr}}
-.hm-wrap{overflow-x:auto;padding-bottom:0.5rem}
-.hm-grid{display:grid;grid-template-rows:repeat(7,12px);grid-auto-flow:column;grid-auto-columns:12px;gap:2px;min-width:min-content}
-.hm-cell{border-radius:2px;background:var(--surface-2);cursor:default}
-.hm-cell.l1{background:#c6f7d5}.hm-cell.l2{background:#7dd3a0}.hm-cell.l3{background:#22c55e}.hm-cell.l4{background:#16a34a}
-:root[data-theme="dark"] .hm-cell{background:#22262f}
-:root[data-theme="dark"] .hm-cell.l1{background:#14532d}
-:root[data-theme="dark"] .hm-cell.l2{background:#166534}
-:root[data-theme="dark"] .hm-cell.l3{background:#22c55e}
-:root[data-theme="dark"] .hm-cell.l4{background:#4ade80}
-.legend{display:flex;align-items:center;gap:4px;font-size:0.75rem;color:var(--text-faint);margin-top:0.5rem}
-.legend-dots{display:flex;gap:2px}
-.legend-dots .hm-cell{width:12px;height:12px}
-.search-row{display:flex;gap:0.5rem;margin-bottom:0.75rem}
-.search-row input{flex:1;margin:0}
-.search-row button{width:auto;margin:0;padding:0.5rem 1rem;background:var(--teal);color:#fff}
-.ph-summary{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:0.75rem;margin-bottom:0.75rem}
-.ph-summary-title{font-size:0.8125rem;font-weight:600;color:var(--text-muted);margin-bottom:0.5rem}
-.ph-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
-@media(max-width:500px){.ph-summary-grid{grid-template-columns:1fr}}
-.ph-summary-card{padding:0.625rem;border-radius:8px;background:var(--surface)}
-.ph-summary-card.cheap{border-left:3px solid var(--green)}
-.ph-summary-card.expensive{border-left:3px solid var(--red)}
-.ph-summary-lbl{font-size:0.6875rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.5px}
-.ph-summary-store{font-weight:600;font-size:0.9375rem;margin:0.125rem 0}
-.ph-summary-val{font-weight:700;font-size:1rem;color:var(--text)}
-.ph-summary-sub{font-size:0.6875rem;color:var(--text-faint);font-weight:500;margin-left:0.375rem}
-.ph-store-row{display:grid;grid-template-columns:1fr auto auto;gap:0.5rem;padding:0.375rem 0.5rem;background:var(--surface-2);border-radius:6px;margin-bottom:0.25rem;font-size:0.8125rem;align-items:center}
-.ph-store-name{font-weight:600}
-.ph-store-count{color:var(--text-faint);font-size:0.75rem}
-.ph-store-price{font-weight:700;font-variant-numeric:tabular-nums}
-.ph-store-price.cheap{color:var(--green-dark)}
-.ph-store-price.expensive{color:var(--red-dark)}
-.ph-store-price small{font-size:0.6875rem;font-weight:500;margin-left:2px}
-.ph-item{display:grid;grid-template-columns:1fr 60px auto;gap:0.5rem;padding:0.4375rem;border-bottom:1px solid var(--border);font-size:0.8125rem;align-items:center}
-.ph-item:last-child{border-bottom:none}
-.ph-item.cheap{background:linear-gradient(to right, rgba(34,197,94,0.06), transparent)}
-.ph-item.expensive{background:linear-gradient(to right, rgba(239,68,68,0.06), transparent)}
-.ph-name{font-weight:500}
-.ph-meta{color:var(--text-muted);font-size:0.75rem;margin-top:2px}
-.ph-price{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
-.ph-diff{font-size:0.75rem;font-weight:600;text-align:right}
-.ph-diff.cheap{color:var(--green-dark)}
-.ph-diff.expensive{color:var(--red-dark)}
-.ph-badge{display:inline-block;background:#dcfce7;color:#166534;font-size:0.625rem;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;letter-spacing:0.3px}
-:root[data-theme="dark"] .ph-badge{background:#14532d;color:#4ade80}
 .ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
 .ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 </style>
@@ -81,23 +36,13 @@ body{visibility:hidden}body.ready{visibility:visible}
     </div>
 </nav>
 <main class="wide">
+    <div id="subnav" data-active="statistik"></div>
     <div class="card"><h3>Monatstrend (12 Monate)</h3><div class="chart-wrap"><canvas id="chartMonthly"></canvas></div></div>
+    <div class="card"><h3>Wochentrend (12 Wochen)</h3><div class="chart-wrap"><canvas id="chartWeekly"></canvas></div></div>
+    <div class="card"><h3>Tagestrend (30 Tage)</h3><div class="chart-wrap"><canvas id="chartDaily"></canvas></div></div>
     <div class="split">
         <div class="card"><h3>Nach Kategorie</h3><div class="chart-wrap small"><canvas id="chartCategory"></canvas></div></div>
         <div class="card"><h3>Nach Laden</h3><div class="chart-wrap small"><canvas id="chartStore"></canvas></div></div>
-    </div>
-    <div class="card">
-        <h3>365-Tage Heatmap</h3>
-        <div class="hm-wrap"><div id="heatmap" class="hm-grid"></div></div>
-        <div class="legend">Weniger <div class="legend-dots"><div class="hm-cell"></div><div class="hm-cell l1"></div><div class="hm-cell l2"></div><div class="hm-cell l3"></div><div class="hm-cell l4"></div></div> Mehr</div>
-    </div>
-    <div class="card">
-        <h3>💶 Preisverlauf für Artikel</h3>
-        <div class="search-row">
-            <input id="searchInput" placeholder="z.B. Milch, Brot, Kaffee …">
-            <button id="searchBtn">Suchen</button>
-        </div>
-        <div id="phResults"></div>
     </div>
 </main>
 <div class="version-tag"></div>

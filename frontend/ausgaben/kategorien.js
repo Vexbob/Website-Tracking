@@ -2,6 +2,7 @@ let categories = [];
 
 async function init() {
     const me = await ensureLoggedIn(); if (!me) return;
+    renderSubnav();
     await Promise.all([loadCategories(), loadRules()]);
     document.getElementById('newBtn').onclick = createCategory;
     document.body.classList.add('ready');
