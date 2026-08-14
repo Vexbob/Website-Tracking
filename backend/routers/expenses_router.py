@@ -1076,7 +1076,7 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
     """
     rows = await db.fetch(
         """SELECT ei.description, ei.total_price, ei.quantity, ei.quantity_unit,
-                  ei.original_price, ei.is_reduced,
+                  ei.original_price, ei.is_reduced, ei.product_group,
                   e.purchase_date, e.store_id,
                   s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
                   c.name AS category_name
@@ -1124,9 +1124,16 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
             return (tp / qty) * 1000.0
         return tp / qty
 
+    def group_key(r):
+        # Manuelle Zuordnung (product_group gesetzt) hat Vorrang, sonst Basisname.
+        pg = (r["product_group"] or "").strip().lower()
+        if pg:
+            return pg
+        return norm_key(r["description"])
+
     groups = defaultdict(list)
     for r in rows:
-        k = norm_key(r["description"])
+        k = group_key(r)
         if not k:
             continue
         groups[k].append(r)
@@ -1198,15 +1205,48 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
     return products
 
 
+class ItemGroupOverride(BaseModel):
+    # None => zurück zum automatischen Grouping (Basisname)
+    # Sonst: expliziter Gruppenschlüssel (z.B. "_solo_<random>" für "alleine lassen")
+    product_group: Optional[str] = None
+
+
+@router.put("/api/expense-items/{iid:int}/product-group")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def set_item_product_group(request: Request, iid: int, b: ItemGroupOverride,
+                                  db=Depends(get_db), user=Depends(get_current_user)):
+    """Überschreibt die Produkt-Gruppe eines einzelnen Items.
+
+    Anwendungsfall: Ein Artikel wurde vom Preisverlauf-Grouping fälschlich mit
+    einem anderen Produkt zusammengefasst (z.B. „Kaffeesahne" landet in „Milch").
+    Der User setzt eine eigene ``product_group`` — entweder einen sprechenden
+    eigenen Namen oder ``null`` um zum automatischen Grouping zurückzukehren.
+    Wenn hier ein zufälliger eindeutiger String gesetzt wird, ist das Item
+    danach in einer eigenen Ein-Item-Gruppe.
+    """
+    existing = await db.fetchval(
+        "SELECT 1 FROM expense_items WHERE id=$1 AND user_id=$2", iid, user["id"])
+    if not existing:
+        raise HTTPException(404, "Nicht gefunden")
+    pg = (b.product_group or "").strip() or None
+    await db.execute(
+        "UPDATE expense_items SET product_group=$1 WHERE id=$2 AND user_id=$3",
+        pg, iid, user["id"])
+    return {"status": "ok", "item_id": iid, "product_group": pg}
+
+
 @router.get("/api/expenses/products/history")
 async def product_history(key: str, db=Depends(get_db), user=Depends(get_current_user)):
-    """Alle Käufe eines Produkts (nach normalisiertem Basisnamen) für Zeitreihen-Chart."""
+    """Alle Käufe eines Produkts (nach normalisiertem Basisnamen ODER expliziter
+    product_group) fuer Zeitreihen-Chart und Item-Liste."""
     key = (key or "").strip().lower()
     if len(key) < 2:
         raise HTTPException(400, "Key zu kurz")
     rows = await db.fetch(
-        """SELECT ei.description, ei.total_price, ei.quantity, ei.quantity_unit,
-                  ei.original_price, ei.is_reduced,
+        """SELECT ei.id AS item_id, ei.description, ei.total_price,
+                  ei.quantity, ei.quantity_unit,
+                  ei.original_price, ei.is_reduced, ei.product_group,
+                  ei.expense_id,
                   e.purchase_date,
                   s.name AS store_name, s.color AS store_color, s.icon AS store_icon
            FROM expense_items ei
@@ -1235,13 +1275,21 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
             return (tp / qty) * 1000.0
         return tp / qty
 
+    def item_key(r):
+        pg = (r["product_group"] or "").strip().lower()
+        if pg:
+            return pg
+        return norm_key(r["description"])
+
     out = []
     for r in rows:
-        if norm_key(r["description"]) != key:
+        if item_key(r) != key:
             continue
         qty = float(r["quantity"] or 1) or 1
         tp = float(r["total_price"])
         out.append({
+            "item_id": r["item_id"],
+            "expense_id": r["expense_id"],
             "date": r["purchase_date"].isoformat() if r["purchase_date"] else None,
             "description": r["description"],
             "total_price": tp,
@@ -1251,6 +1299,7 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
             "unit_price": round(unit_price_norm(qty, tp, r["quantity_unit"]), 4),
             "original_price": float(r["original_price"]) if r["original_price"] is not None else None,
             "is_reduced": bool(r["is_reduced"]),
+            "product_group": r["product_group"],
             "store_name": r["store_name"] or "Ohne Laden",
             "store_color": r["store_color"] or "#9ca3af",
             "store_icon": r["store_icon"] or "🏪",

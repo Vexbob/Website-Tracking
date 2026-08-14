@@ -114,69 +114,130 @@ function renderProductRow(p) {
     </div>`;
 }
 
+// Zerlegt "Basisname 2kg (Original)" → nur den Original-Teil für die Anzeige pro Item.
+function extractOriginal(desc) {
+    if (!desc) return '';
+    const m = String(desc).match(/\(([^)]+)\)\s*$/);
+    return m ? m[1].trim() : String(desc).trim();
+}
+
+let currentChartInstance = null;
+
+function _pvChartOptions() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textCol = isDark ? '#a0a5b0' : '#666';
+    const gridCol = isDark ? '#2a2e37' : '#e8e8e8';
+    return {
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { labels: { color: textCol, font: { size: 11 } } },
+            tooltip: { callbacks: {
+                label: (c) => c.dataset.label + ': ' + fmtEur(c.parsed.y) + ' / Einheit',
+            } },
+        },
+        scales: {
+            x: {
+                type: 'category',
+                ticks: { color: textCol, maxRotation: 0, autoSkip: true, autoSkipPadding: 20,
+                         callback: function(v) { const d = new Date(this.getLabelForValue(v)+'T00:00:00'); return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }); } },
+                grid: { display: false },
+            },
+            y: { ticks: { color: textCol, callback: v => fmtEur(v) }, grid: { color: gridCol }, beginAtZero: true },
+        },
+    };
+}
+
+function _pvRenderChart(history) {
+    if (currentChartInstance) { try { currentChartInstance.destroy(); } catch(_) {} }
+    if (!history.length) return;
+    const byStore = {};
+    for (const h of history) {
+        const sn = h.store_name;
+        if (!byStore[sn]) byStore[sn] = { color: h.store_color, points: [] };
+        byStore[sn].points.push({ x: h.date, y: h.unit_price });
+    }
+    const datasets = Object.entries(byStore).map(([name, obj]) => ({
+        label: name, data: obj.points,
+        borderColor: obj.color, backgroundColor: obj.color,
+        tension: 0.2, spanGaps: true,
+    }));
+    currentChartInstance = new Chart(document.getElementById('pvChart'),
+        { type: 'line', data: { datasets }, options: _pvChartOptions() });
+}
+
+function _pvRenderHistList(history, reloadFn) {
+    const wrap = document.getElementById('pvHistList');
+    if (!history.length) {
+        wrap.innerHTML = '<div class="pv-empty">Keine Käufe mehr in dieser Gruppe.</div>';
+        return;
+    }
+    // neueste oben
+    wrap.innerHTML = history.slice().reverse().map(h => {
+        const original = extractOriginal(h.description);
+        const qtyBits = h.quantity && h.quantity > 1
+            ? ` · ${h.quantity}${h.quantity_unit || ''}` : '';
+        return `<div class="pv-hist-item" data-item-id="${h.item_id}">
+            <span class="pv-hist-date">${fmtDate(h.date)}</span>
+            <div class="pv-hist-body">
+                <div class="pv-hist-desc">${escHtml(original)}${qtyBits}</div>
+                <div class="pv-hist-store" style="color:${h.store_color}">${h.store_icon} ${escHtml(h.store_name)}</div>
+            </div>
+            <span class="pv-hist-price${h.is_reduced ? ' reduced' : ''}">${fmtEur(h.total_price)}${h.is_reduced ? ' 🏷️' : ''}</span>
+            <span class="pv-hist-actions">
+                <a href="/ausgaben/bon.html?id=${h.expense_id}" title="Bon öffnen" target="_blank" rel="noopener">↗</a>
+                <button class="detach" title="Aus dieser Produkt-Gruppe herauslösen">✂</button>
+            </span>
+        </div>`;
+    }).join('');
+    wrap.querySelectorAll('.pv-hist-item').forEach(el => {
+        const iid = +el.dataset.itemId;
+        const detachBtn = el.querySelector('.detach');
+        if (!detachBtn) return;
+        detachBtn.onclick = async () => {
+            if (!confirm('Diesen Artikel aus dieser Produkt-Gruppe herauslösen?\n\nEr bekommt eine eigene Gruppe und erscheint dann separat im Preisverlauf.')) return;
+            detachBtn.disabled = true;
+            try {
+                const soloKey = `_solo_${iid}_${Date.now()}`;
+                await AUSGABEN_API.setItemGroup(iid, soloKey);
+                showToast('Artikel aufgelöst', 'success', 2000);
+                try { allProducts = await AUSGABEN_API.products(); render(); } catch(_) {}
+                await reloadFn();
+            } catch (e) {
+                detachBtn.disabled = false;
+                showToast('Fehler: ' + e.message, 'error');
+            }
+        };
+    });
+}
+
 async function openProductChart(key, title) {
     const modal = openModal(`📈 Preisverlauf: ${escHtml(title)}`,
-        `<div class="pv-chart-wrap"><canvas id="pvChart"></canvas></div><div id="pvHistList"></div>`,
-        { wide: true }
-    );
-    try {
-        const history = await AUSGABEN_API.productHistory(key);
-        if (!history.length) {
-            modal.root.innerHTML = '<div class="pv-empty">Keine Käufe gefunden.</div>';
-            return;
-        }
-        // Chart: Einzelpreis über Zeit, farblich nach Laden
-        const byStore = {};
-        for (const h of history) {
-            const sn = h.store_name;
-            if (!byStore[sn]) byStore[sn] = { color: h.store_color, points: [] };
-            byStore[sn].points.push({ x: h.date, y: h.unit_price });
-        }
-        const datasets = Object.entries(byStore).map(([name, obj]) => ({
-            label: name,
-            data: obj.points,
-            borderColor: obj.color,
-            backgroundColor: obj.color,
-            tension: 0.2,
-            spanGaps: true,
-        }));
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        const textCol = isDark ? '#a0a5b0' : '#666';
-        const gridCol = isDark ? '#2a2e37' : '#e8e8e8';
-        new Chart(document.getElementById('pvChart'), {
-            type: 'line',
-            data: { datasets },
-            options: {
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { labels: { color: textCol, font: { size: 11 } } },
-                    tooltip: { callbacks: {
-                        label: (c) => c.dataset.label + ': ' + fmtEur(c.parsed.y) + ' / Einheit',
-                    } },
-                },
-                scales: {
-                    x: {
-                        type: 'category',
-                        ticks: { color: textCol, maxRotation: 0, autoSkip: true, autoSkipPadding: 20,
-                                 callback: function(v) { const d = new Date(this.getLabelForValue(v)+'T00:00:00'); return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }); } },
-                        grid: { display: false },
-                    },
-                    y: { ticks: { color: textCol, callback: v => fmtEur(v) }, grid: { color: gridCol }, beginAtZero: true },
-                },
+        `<div class="pv-chart-wrap"><canvas id="pvChart"></canvas></div>
+         <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">
+             ↗ öffnet den zugehörigen Bon · ✂ trennt einen fehlerhaft zugeordneten Artikel aus dieser Produkt-Gruppe heraus
+         </div>
+         <div id="pvHistList" class="pv-hist-list"></div>`,
+        {
+            wide: true,
+            onClose: () => {
+                if (currentChartInstance) {
+                    try { currentChartInstance.destroy(); } catch(_) {}
+                    currentChartInstance = null;
+                }
             },
-        });
-        // History-Liste unter dem Chart (neueste oben)
-        const listHtml = history.slice().reverse().map(h => `
-            <div class="pv-hist-item">
-                <span class="pv-hist-date">${fmtDate(h.date)}</span>
-                <span class="pv-hist-store" style="color:${h.store_color}">${h.store_icon} ${escHtml(h.store_name)}${h.quantity > 1 ? ` · ${h.quantity}${h.quantity_unit || ''}` : ''}</span>
-                <span class="pv-hist-price${h.is_reduced ? ' reduced' : ''}">${fmtEur(h.total_price)}${h.is_reduced ? ' 🏷️' : ''}</span>
-            </div>
-        `).join('');
-        document.getElementById('pvHistList').innerHTML = listHtml;
-    } catch (e) {
-        modal.root.innerHTML = `<div class="pv-empty">Fehler: ${escHtml(e.message)}</div>`;
+        }
+    );
+
+    async function reload() {
+        try {
+            const history = await AUSGABEN_API.productHistory(key);
+            _pvRenderChart(history);
+            _pvRenderHistList(history, reload);
+        } catch (e) {
+            modal.root.innerHTML = `<div class="pv-empty">Fehler: ${escHtml(e.message)}</div>`;
+        }
     }
+    await reload();
 }
 
 // Bulk-Reparse aller Bons mit gespeicherten Foto (OCR-Rohtext).

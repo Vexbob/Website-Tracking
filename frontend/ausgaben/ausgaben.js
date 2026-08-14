@@ -52,6 +52,7 @@ const AUSGABEN_API = {
     productHistory:  (key) => apiCall('/api/expenses/products/history?key=' + encodeURIComponent(key)),
     priceHistory:    (q) => apiCall('/api/expenses/price-history?q=' + encodeURIComponent(q)),
     mergeCategory:   (srcId, targetId) => apiCall(`/api/expense-categories/${srcId}/merge-into/${targetId}`, { method: 'POST' }),
+    setItemGroup:    (iid, group) => apiCall(`/api/expense-items/${iid}/product-group`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ product_group: group }) }),
     reparseAllUrl:   () => `${API_BASE}/api/receipts/reparse-all`,
     recurring:       () => apiCall('/api/expenses/recurring/suggestions'),
     checkDuplicate:  (date, total, store_id) => {
