@@ -244,6 +244,12 @@ async function renderOcrEditForm(ocr) {
     else if (!ocr.available) diagBadges = `<span class="badge warn">⚠️ OCR (${ocr.provider}) lieferte leeren Text</span> `;
     else diagBadges = `<span class="badge ok">OCR: ${ocr.provider} · ${ocr.text_length || 0} Zeichen</span> `;
     if (ocr.error) diagBadges += `<span class="badge warn" title="${escapeAttr(ocr.error)}">Fehler</span> `;
+    // Parser-Herkunft anzeigen (AI vs. Regex-Fallback)
+    if (parsed._parser === 'ai') {
+        diagBadges += `<span class="badge ok" title="KI-Parsing: ${escapeAttr(parsed._model || '')}">🤖 KI: ${escapeHtml(parsed._model || 'ai')}</span> `;
+    } else if (parsed._parser === 'regex') {
+        diagBadges += `<span class="badge warn" title="Grund: ${escapeAttr(parsed._fallback_reason || 'unknown')}">⚠️ Regex-Fallback</span> `;
+    }
 
     const rawSection = ocr.raw_text ? `
         <details style="margin-bottom:0.75rem">

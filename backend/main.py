@@ -1879,6 +1879,8 @@ async def upload_receipt(request: Request,
     except Exception as e:
         logger.warning(f"AI parse failed, falling back to regex: {e}")
         parsed = parse_receipt(ocr_text, user_stores=user_stores)
+        parsed["_parser"] = "regex"
+        parsed["_fallback_reason"] = f"outer_exception: {e}"
 
     return {
         "receipt": _ser_exp(row),
@@ -1943,6 +1945,8 @@ async def get_receipt_ocr(rid: int, db=Depends(get_db), user=Depends(get_current
     except Exception as e:
         logger.warning(f"AI parse failed, falling back to regex: {e}")
         parsed = parse_receipt(ocr_text, user_stores=user_stores)
+        parsed["_parser"] = "regex"
+        parsed["_fallback_reason"] = f"outer_exception: {e}"
     return {
         "provider": row["ocr_provider"],
         "raw_text": ocr_text,

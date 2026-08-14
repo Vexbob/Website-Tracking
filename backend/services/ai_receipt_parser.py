@@ -30,6 +30,7 @@ logger = logging.getLogger("vexbob.ai_receipt")
 # ---------------------------------------------------------------------------
 _client = None
 _client_init_tried = False
+_client_init_error: Optional[str] = None  # Grund warum kein Client verfuegbar ist
 
 
 def _get_model_name() -> str:
@@ -38,20 +39,26 @@ def _get_model_name() -> str:
 
 def _get_client():
     """Lazy-Init des Gemini-Clients. Gibt None zurueck, wenn nicht konfiguriert."""
-    global _client, _client_init_tried
+    global _client, _client_init_tried, _client_init_error
     if _client_init_tried:
         return _client
     _client_init_tried = True
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
+        _client_init_error = "GEMINI_API_KEY nicht gesetzt"
         logger.warning("GEMINI_API_KEY nicht gesetzt - AI-Parser deaktiviert, Fallback auf Regex-Parser.")
         return None
     try:
         from google import genai  # type: ignore
         _client = genai.Client(api_key=api_key)
         logger.info("Gemini-Client initialisiert (Modell: %s)", _get_model_name())
+    except ImportError as e:
+        _client_init_error = f"google-genai Paket nicht installiert: {e}"
+        logger.warning("google-genai Paket fehlt: %s", e)
+        _client = None
     except Exception as e:
+        _client_init_error = f"Client-Init-Fehler: {e}"
         logger.warning("Gemini-Client-Init fehlgeschlagen: %s", e)
         _client = None
     return _client
@@ -278,8 +285,12 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
     return out
 
 
-def _fallback_regex(ocr_text: str, stores: list) -> dict:
-    """Regex-Fallback + Anreicherung mit currency/quantity_unit/category_id."""
+def _fallback_regex(ocr_text: str, stores: list, reason: str = "unknown") -> dict:
+    """Regex-Fallback + Anreicherung mit currency/quantity_unit/category_id.
+
+    Der ``reason``-Parameter wird in die Response als ``_parser`` und ``_fallback_reason``
+    aufgenommen, damit man vom Client aus sehen kann warum kein AI-Parsing lief.
+    """
     user_store_names = [s.get("name") for s in (stores or []) if isinstance(s, dict) and s.get("name")]
     parsed = _regex_parse_receipt(ocr_text or "", user_stores=user_store_names)
     parsed.setdefault("currency", None)
@@ -287,6 +298,8 @@ def _fallback_regex(ocr_text: str, stores: list) -> dict:
         it.setdefault("category_id", None)
         it.setdefault("category_name", None)
         it.setdefault("quantity_unit", None)
+    parsed["_parser"] = "regex"
+    parsed["_fallback_reason"] = reason
     return parsed
 
 
@@ -344,10 +357,11 @@ async def ai_parse_receipt(
     stores = stores or []
 
     if not ocr_text or not ocr_text.strip():
-        return _fallback_regex("", stores)
+        return _fallback_regex("", stores, reason="empty_ocr")
 
     if _get_client() is None:
-        return _fallback_regex(ocr_text, stores)
+        return _fallback_regex(ocr_text, stores,
+                               reason=_client_init_error or "client_unavailable")
 
     ocr_input = ocr_text[:_MAX_OCR_CHARS]
 
@@ -358,7 +372,7 @@ async def ai_parse_receipt(
         )
     except Exception as e:
         logger.warning("Prompt-Erstellung fehlgeschlagen: %s", e)
-        return _fallback_regex(ocr_text, stores)
+        return _fallback_regex(ocr_text, stores, reason=f"prompt_error: {e}")
 
     valid_cat_ids = {int(c["id"]) for c in categories if isinstance(c, dict) and "id" in c}
 
@@ -369,14 +383,14 @@ async def ai_parse_receipt(
         )
     except asyncio.TimeoutError:
         logger.warning("Gemini-Aufruf Timeout (30s) - Fallback auf Regex-Parser.")
-        return _fallback_regex(ocr_text, stores)
+        return _fallback_regex(ocr_text, stores, reason="gemini_timeout_30s")
     except Exception as e:
         logger.warning("Gemini-Aufruf fehlgeschlagen (%s) - Fallback auf Regex-Parser.", e)
-        return _fallback_regex(ocr_text, stores)
+        return _fallback_regex(ocr_text, stores, reason=f"gemini_call_error: {e}")
 
     if not text:
         logger.warning("Gemini lieferte leere Antwort - Fallback auf Regex-Parser.")
-        return _fallback_regex(ocr_text, stores)
+        return _fallback_regex(ocr_text, stores, reason="gemini_empty_response")
 
     # Falls Modell trotzdem Markdown-Fence liefert: entfernen
     text_stripped = text.strip()
@@ -393,9 +407,11 @@ async def ai_parse_receipt(
     except Exception as e:
         logger.warning("Gemini-JSON konnte nicht geparst werden (%s) - Fallback. Auszug: %r",
                        e, text_stripped[:200])
-        return _fallback_regex(ocr_text, stores)
+        return _fallback_regex(ocr_text, stores, reason=f"gemini_json_error: {e}")
 
     parsed = _normalize_parsed(raw, valid_cat_ids)
+    parsed["_parser"] = "ai"
+    parsed["_model"] = _get_model_name()
     logger.info(
         "AI-Parser OK (Modell=%s, Tokens=%s, Items=%d, Total=%s)",
         _get_model_name(),
