@@ -372,23 +372,57 @@ async function renderOcrEditForm(ocr) {
 function addOcrItemRow(item) { addItemRow('oItems', item); }
 function addManualItemRow(item) { addItemRow('mItems', item); }
 
+// Zerlegt "Basisname 2kg (Original vom Bon)" in { name, qty, unit, original }.
+// Bei Formaten wie "Milch" oder "Milch 1L" wird trotzdem sinnvoll geparst.
+function splitProductDescription(desc, item) {
+    const out = { name: '', qty: '', unit: '', original: '' };
+    if (!desc) return out;
+    let s = String(desc).trim();
+    // Original in Klammern extrahieren
+    const parenMatch = s.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+    if (parenMatch) {
+        s = parenMatch[1].trim();
+        out.original = parenMatch[2].trim();
+    }
+    // Menge+Einheit am Ende: "2kg", "1L", "500g", "10x180 Blatt", "10 Stk"
+    const qtyMatch = s.match(/^(.*?)[\s]+(\d+(?:[.,]\d+)?)\s*(kg|g|L|ml|Stk|Pack|Btl|Blatt)\b\s*$/i);
+    if (qtyMatch) {
+        out.name = qtyMatch[1].trim();
+        out.qty = qtyMatch[2].replace(',', '.');
+        out.unit = qtyMatch[3];
+    } else {
+        out.name = s;
+    }
+    // Falls das Item-Objekt strukturierte Werte hat, überschreiben (Priorität)
+    if (item) {
+        if (item.quantity != null && item.quantity !== 1 && !out.qty) {
+            out.qty = String(item.quantity).replace(',', '.');
+        }
+        if (item.quantity_unit && !out.unit) out.unit = item.quantity_unit;
+    }
+    return out;
+}
+
 function addItemRow(containerId, item) {
     const c = document.getElementById(containerId);
     const row = document.createElement('div');
     row.className = 'item-row';
     if (item && item.is_reduced) row.dataset.isReduced = '1';
     if (item && item.original_price != null) row.dataset.originalPrice = item.original_price;
+
+    const parts = splitProductDescription(item ? item.description : '', item);
+
     const catOpts = '<option value="">– Kategorie –</option>' +
         categories.map(cat => `<option value="${cat.id}"${item && item.category_id==cat.id?' selected':''}>${cat.icon || ''} ${escapeHtml(cat.name)}</option>`).join('');
-    const reducedBadge = item && item.is_reduced
-        ? `<span class="badge" style="background:#dcfce7;color:#166534;font-size:0.625rem;padding:1px 4px" title="${item.original_price ? 'Vorher: ' + item.original_price + ' €' : 'Reduziert'}">RED</span>`
-        : '';
+
     row.innerHTML = `
-        <input type="text" class="d-desc" placeholder="Beschreibung" value="${item?escapeAttr(item.description||''):''}">
+        <input type="text" class="d-desc" placeholder="Produkt (z.B. Vollmilch)" value="${escapeAttr(parts.name)}">
+        <input type="text" class="d-qty" placeholder="Menge" value="${escapeAttr(parts.qty)}">
+        <input type="text" class="d-unit" placeholder="Einheit" value="${escapeAttr(parts.unit)}" list="unitList">
         <input type="number" step="0.01" class="d-price" placeholder="Preis" value="${item?item.total_price||'':''}">
         <select class="d-cat">${catOpts}</select>
         <button class="del" title="Entfernen">✕</button>
-        ${reducedBadge}
+        ${parts.original ? `<div class="d-orig" title="Vom Bon">📄 ${escapeHtml(parts.original)}${item && item.is_reduced ? ' · <span style="color:var(--green-dark);font-weight:600">REDUZIERT</span>' : ''}</div>` : ''}
     `;
     c.appendChild(row);
     row.querySelector('.del').onclick = () => row.remove();
@@ -411,11 +445,32 @@ function collectItems(containerId) {
     const rows = document.querySelectorAll('#' + containerId + ' .item-row');
     const items = [];
     rows.forEach(r => {
-        const desc = r.querySelector('.d-desc').value.trim();
+        const name = r.querySelector('.d-desc').value.trim();
+        const qtyStr = r.querySelector('.d-qty')?.value.trim() || '';
+        const unit = r.querySelector('.d-unit')?.value.trim() || '';
         const price = parseFloat(r.querySelector('.d-price').value);
-        if (!desc || isNaN(price)) return;
+        if (!name || isNaN(price)) return;
+
+        const qty = qtyStr ? parseFloat(qtyStr.replace(',', '.')) : null;
+
+        // Description im einheitlichen Format bauen: "Name qty+unit (Original)"
+        let descParts = [name];
+        if (qty && qty !== 1 && unit) descParts.push(`${qtyStr}${unit}`);
+        else if (qty && qty !== 1) descParts.push(qtyStr);
+        else if (unit && !qty) descParts.push(unit);
+        // Original aus Dataset (nur bei OCR-Bons)
+        const origText = r.querySelector('.d-orig')?.textContent?.replace(/^📄\s*/, '').replace(/\s·\s.*$/, '').trim();
+        let description = descParts.join(' ').trim();
+        if (origText) description += ` (${origText})`;
+
         const cat = r.querySelector('.d-cat').value;
-        const it = { description: desc, total_price: price, category_id: cat ? +cat : null };
+        const it = {
+            description,
+            total_price: price,
+            category_id: cat ? +cat : null,
+            quantity: qty && qty > 0 ? qty : 1,
+            quantity_unit: unit || null,
+        };
         // Reduziert-Info aus data-Attributen übernehmen (nur bei OCR-Vorbelegung)
         if (r.dataset.isReduced === '1') it.is_reduced = true;
         if (r.dataset.originalPrice) it.original_price = parseFloat(r.dataset.originalPrice);

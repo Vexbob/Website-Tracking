@@ -52,6 +52,7 @@ const AUSGABEN_API = {
     productHistory:  (key) => apiCall('/api/expenses/products/history?key=' + encodeURIComponent(key)),
     priceHistory:    (q) => apiCall('/api/expenses/price-history?q=' + encodeURIComponent(q)),
     mergeCategory:   (srcId, targetId) => apiCall(`/api/expense-categories/${srcId}/merge-into/${targetId}`, { method: 'POST' }),
+    reparseAllUrl:   () => `${API_BASE}/api/receipts/reparse-all`,
     recurring:       () => apiCall('/api/expenses/recurring/suggestions'),
     checkDuplicate:  (date, total, store_id) => {
         const q = new URLSearchParams({ date, total }); if (store_id) q.append('store_id', store_id);

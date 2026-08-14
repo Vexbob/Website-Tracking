@@ -63,6 +63,7 @@ class RuleCreate(BaseModel):
 class ExpenseItemIn(BaseModel):
     description: str
     quantity: Optional[float] = 1
+    quantity_unit: Optional[str] = None
     unit_price: Optional[float] = None
     total_price: float
     category_id: Optional[int] = None
@@ -395,11 +396,13 @@ async def create_expense(request: Request, b: ExpenseCreate,
                         cat_id = None
                 await db.execute(
                     """INSERT INTO expense_items
-                       (user_id, expense_id, description, quantity, unit_price,
-                        total_price, category_id, sort_order, original_price, is_reduced)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)""",
+                       (user_id, expense_id, description, quantity, quantity_unit,
+                        unit_price, total_price, category_id, sort_order,
+                        original_price, is_reduced)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)""",
                     user["id"], eid, it.description.strip(),
-                    it.quantity or 1, it.unit_price, it.total_price, cat_id, idx,
+                    it.quantity or 1, it.quantity_unit,
+                    it.unit_price, it.total_price, cat_id, idx,
                     it.original_price, bool(it.is_reduced))
                 if cat_id and it.category_id is not None:
                     await learn_rule(db, user["id"], it.description, cat_id, b.store_id)
@@ -461,10 +464,11 @@ async def add_item(request: Request, eid: int, b: ExpenseItemIn,
             cat_id = None
     row = await db.fetchrow(
         """INSERT INTO expense_items
-           (user_id, expense_id, description, quantity, unit_price, total_price, category_id,
+           (user_id, expense_id, description, quantity, quantity_unit,
+            unit_price, total_price, category_id,
             original_price, is_reduced)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *""",
-        user["id"], eid, b.description.strip(), b.quantity or 1,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *""",
+        user["id"], eid, b.description.strip(), b.quantity or 1, b.quantity_unit,
         b.unit_price, b.total_price, cat_id, b.original_price, bool(b.is_reduced))
     if cat_id and b.category_id is not None:
         await learn_rule(db, user["id"], b.description, cat_id, exp["store_id"])
@@ -487,10 +491,11 @@ async def update_item(request: Request, iid: int, b: ExpenseItemIn,
             raise HTTPException(400, "Kategorie unbekannt")
     await db.execute(
         """UPDATE expense_items
-           SET description=$1, quantity=$2, unit_price=$3, total_price=$4, category_id=$5,
-               original_price=$6, is_reduced=$7
-           WHERE id=$8 AND user_id=$9""",
-        b.description.strip(), b.quantity or 1, b.unit_price, b.total_price,
+           SET description=$1, quantity=$2, quantity_unit=$3, unit_price=$4,
+               total_price=$5, category_id=$6, original_price=$7, is_reduced=$8
+           WHERE id=$9 AND user_id=$10""",
+        b.description.strip(), b.quantity or 1, b.quantity_unit,
+        b.unit_price, b.total_price,
         cat_id, b.original_price, bool(b.is_reduced), iid, user["id"])
     # Regel lernen wenn Kategorie manuell gesetzt wurde
     if cat_id and cat_id != existing["category_id"]:
@@ -615,6 +620,105 @@ async def delete_receipt(request: Request, rid: int, db=Depends(get_db), user=De
     if r == "DELETE 0":
         raise HTTPException(404, "Nicht gefunden")
     return {"status": "deleted"}
+
+@router.post("/api/receipts/reparse-all")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def reparse_all_receipts(request: Request,
+                                db=Depends(get_db), user=Depends(get_current_user)):
+    """Iteriert über alle Bons des Users mit gespeichertem OCR-Rohtext, ruft den
+    AI-Parser erneut auf und ersetzt die Einzelpositionen. Existierende Ausgaben-
+    Kopfdaten (Betrag, Datum, Laden, Notiz) bleiben unverändert — nur ``items``
+    werden neu geschrieben (alte gelöscht, neue eingefügt).
+
+    Antwortet mit Streaming-JSON-Lines, damit das Frontend live einen Progress-Bar
+    aufbauen kann (eine JSON-Zeile pro verarbeitetem Bon, gefolgt von einem Summary).
+    """
+    from fastapi.responses import StreamingResponse
+    import json as _json
+
+    # Alle Bons des Users mit OCR-Text laden
+    rows = await db.fetch(
+        """SELECT e.id AS expense_id, e.store_id, r.ocr_raw_text
+           FROM expenses e
+           JOIN receipt_images r ON r.id=e.receipt_image_id
+           WHERE e.user_id=$1 AND r.ocr_raw_text IS NOT NULL
+             AND LENGTH(r.ocr_raw_text) > 5
+           ORDER BY e.id""",
+        user["id"])
+
+    total = len(rows)
+    # Kategorien + Läden für den AI-Parser einmalig laden
+    cat_rows = await db.fetch(
+        "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
+    categories = [{"id": r["id"], "name": r["name"]} for r in cat_rows]
+    store_rows = await db.fetch("SELECT name FROM stores WHERE user_id=$1", user["id"])
+    stores = [{"name": r["name"]} for r in store_rows]
+
+    valid_cat_ids = {c["id"] for c in categories}
+
+    async def stream():
+        # Start-Message mit Total
+        yield _json.dumps({"type": "start", "total": total}) + "\n"
+
+        processed = 0
+        updated_items = 0
+        errors = 0
+
+        for row in rows:
+            eid = row["expense_id"]
+            ocr_text = row["ocr_raw_text"] or ""
+            try:
+                parsed = await ai_parse_receipt(ocr_text, categories, stores)
+                items = parsed.get("items") or []
+                # Alte Items löschen
+                await db.execute(
+                    "DELETE FROM expense_items WHERE expense_id=$1 AND user_id=$2",
+                    eid, user["id"])
+                # Neue Items einfügen
+                for idx, it in enumerate(items):
+                    cid = it.get("category_id")
+                    if cid is not None and cid not in valid_cat_ids:
+                        cid = None
+                    await db.execute(
+                        """INSERT INTO expense_items
+                           (user_id, expense_id, description, quantity, quantity_unit,
+                            unit_price, total_price, category_id, sort_order,
+                            original_price, is_reduced)
+                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)""",
+                        user["id"], eid,
+                        (it.get("description") or "").strip(),
+                        it.get("quantity") or 1,
+                        it.get("quantity_unit"),
+                        it.get("unit_price"),
+                        it.get("total_price"),
+                        cid,
+                        idx,
+                        it.get("original_price"),
+                        bool(it.get("is_reduced")),
+                    )
+                updated_items += len(items)
+                yield _json.dumps({
+                    "type": "progress", "expense_id": eid,
+                    "processed": processed + 1, "total": total,
+                    "items": len(items), "ok": True,
+                }) + "\n"
+            except Exception as e:
+                errors += 1
+                logger.exception(f"Reparse fehlgeschlagen für Bon {eid}: {e}")
+                yield _json.dumps({
+                    "type": "progress", "expense_id": eid,
+                    "processed": processed + 1, "total": total,
+                    "ok": False, "error": str(e)[:120],
+                }) + "\n"
+            processed += 1
+
+        yield _json.dumps({
+            "type": "done",
+            "total": total, "updated_items": updated_items, "errors": errors,
+        }) + "\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson")
+
 
 @router.get("/api/receipts/{rid}/ocr")
 async def get_receipt_ocr(rid: int, db=Depends(get_db), user=Depends(get_current_user)):

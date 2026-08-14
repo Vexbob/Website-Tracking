@@ -52,6 +52,12 @@ body{visibility:hidden}body.ready{visibility:visible}
 :root[data-theme="dark"] .pv-badge{background:#14532d;color:#4ade80}
 .pv-empty{text-align:center;color:var(--text-faint);padding:2rem 1rem;font-size:0.875rem}
 .pv-empty .icon{font-size:2.5rem;opacity:0.5;margin-bottom:0.5rem}
+.reparse-progress{display:flex;flex-direction:column;gap:0.5rem}
+.reparse-bar-wrap{background:var(--surface-2);border-radius:8px;overflow:hidden;height:14px;border:1px solid var(--border)}
+.reparse-bar{background:var(--teal);height:100%;width:0;transition:width .2s ease-out;border-radius:8px}
+.reparse-log{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.75rem;max-height:180px;overflow:auto;font-family:ui-monospace,monospace;font-size:0.75rem;color:var(--text-muted);white-space:pre-line}
+.reparse-log .ok{color:var(--green-dark)}
+.reparse-log .err{color:var(--red-dark)}
 .ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
 .ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 </style>
@@ -76,6 +82,7 @@ body{visibility:hidden}body.ready{visibility:visible}
                 <option value="up">Preis gestiegen</option>
                 <option value="down">Preis gesunken</option>
             </select>
+            <button id="pvReparse" style="width:auto;margin:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:0.5rem 0.75rem;font-size:0.8125rem;white-space:nowrap" title="Alle Bons mit Foto neu von der KI parsen (aktualisiert Beschreibungen, Kategorien, Einheiten)">🔄 Alle neu parsen</button>
         </div>
         <div id="pvList"></div>
     </div>

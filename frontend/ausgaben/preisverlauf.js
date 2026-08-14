@@ -13,6 +13,7 @@ async function init() {
     }
     document.getElementById('pvSearch').addEventListener('input', render);
     document.getElementById('pvFilter').onchange = render;
+    document.getElementById('pvReparse').onclick = openReparseModal;
     render();
     // Klick auf Kachel öffnet Chart-Modal
     document.getElementById('pvList').addEventListener('click', (e) => {
@@ -179,6 +180,97 @@ async function openProductChart(key, title) {
         document.getElementById('pvHistList').innerHTML = listHtml;
     } catch (e) {
         modal.root.innerHTML = `<div class="pv-empty">Fehler: ${escHtml(e.message)}</div>`;
+    }
+}
+
+// Bulk-Reparse aller Bons mit gespeicherten Foto (OCR-Rohtext).
+// Der Backend-Endpoint streamt NDJSON — wir lesen inkrementell.
+function openReparseModal() {
+    const modal = openModal('🔄 Alle Bons neu parsen', `
+        <p style="margin-top:0;font-size:0.875rem;color:var(--text-muted)">
+            Ruft für jeden Bon mit hinterlegtem Foto den KI-Parser erneut auf und
+            <strong>ersetzt die Einzelpositionen</strong>. Kopfdaten (Betrag, Datum, Laden)
+            bleiben unverändert. Der Vorgang kann pro Bon ein paar Sekunden dauern.
+        </p>
+        <div class="reparse-progress" style="display:none" id="reparseWrap">
+            <div style="display:flex;justify-content:space-between;font-size:0.8125rem"><span id="reparseStatus">Starte …</span><span id="reparseCount">0/0</span></div>
+            <div class="reparse-bar-wrap"><div class="reparse-bar" id="reparseBar"></div></div>
+            <div class="reparse-log" id="reparseLog"></div>
+        </div>
+        <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
+            <button class="cancel" style="width:auto;margin:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border)">Abbrechen</button>
+            <button class="start primary" style="width:auto;margin:0;background:var(--teal);color:#fff">Los geht's</button>
+        </div>
+    `, { wide: true });
+    modal.root.querySelector('.cancel').onclick = () => modal.close();
+    modal.root.querySelector('.start').onclick = async () => {
+        modal.root.querySelector('.start').disabled = true;
+        modal.root.querySelector('.cancel').disabled = true;
+        document.getElementById('reparseWrap').style.display = 'flex';
+        await runReparse();
+        // Nach Abschluss: Preisverlauf neu laden
+        try { allProducts = await AUSGABEN_API.products(); render(); } catch (_) {}
+    };
+}
+
+async function runReparse() {
+    const bar = document.getElementById('reparseBar');
+    const cnt = document.getElementById('reparseCount');
+    const st = document.getElementById('reparseStatus');
+    const log = document.getElementById('reparseLog');
+    let res;
+    try {
+        res = await fetch(AUSGABEN_API.reparseAllUrl(), {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + getToken() },
+        });
+    } catch (e) {
+        st.textContent = 'Verbindungsfehler';
+        log.innerHTML += `<span class="err">Netzwerkfehler: ${escHtml(e.message)}</span>\n`;
+        return;
+    }
+    if (!res.ok) {
+        st.textContent = 'Server-Fehler ' + res.status;
+        try { const t = await res.text(); log.innerHTML += `<span class="err">${escHtml(t.substring(0, 300))}</span>\n`; } catch (_) {}
+        return;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let total = 0;
+    let ok = 0, err = 0;
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop(); // Rest zurücklegen
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            let msg;
+            try { msg = JSON.parse(line); } catch (_) { continue; }
+            if (msg.type === 'start') {
+                total = msg.total;
+                st.textContent = total ? `Verarbeite ${total} Bons …` : 'Nichts zu tun (keine Bons mit Foto vorhanden)';
+                cnt.textContent = `0/${total}`;
+            } else if (msg.type === 'progress') {
+                const pct = total ? Math.round((msg.processed / total) * 100) : 0;
+                bar.style.width = pct + '%';
+                cnt.textContent = `${msg.processed}/${total}`;
+                if (msg.ok) {
+                    ok++;
+                    log.innerHTML += `<span class="ok">✓ Bon #${msg.expense_id}: ${msg.items} Positionen</span>\n`;
+                } else {
+                    err++;
+                    log.innerHTML += `<span class="err">✕ Bon #${msg.expense_id}: ${escHtml(msg.error || '')}</span>\n`;
+                }
+                log.scrollTop = log.scrollHeight;
+            } else if (msg.type === 'done') {
+                st.textContent = `Fertig — ${msg.updated_items} Positionen aktualisiert, ${msg.errors} Fehler`;
+                bar.style.width = '100%';
+                bar.style.background = msg.errors ? 'var(--orange)' : 'var(--teal)';
+            }
+        }
     }
 }
 
