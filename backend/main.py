@@ -183,7 +183,7 @@ async def login(request: Request,
 async def me(user=Depends(get_current_user)):
     return {"username": user["username"], "is_admin": user["is_admin"], "id": user["id"]}
 
-BACKEND_VERSION = "1.11.0"
+BACKEND_VERSION = "1.11.1"
 
 @app.get("/api/health")
 async def health():

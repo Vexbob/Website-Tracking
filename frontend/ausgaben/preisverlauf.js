@@ -12,7 +12,6 @@ async function init() {
         allProducts = [];
     }
     document.getElementById('pvSearch').addEventListener('input', render);
-    document.getElementById('pvFilter').onchange = render;
     document.getElementById('pvReparse').onclick = openReparseModal;
     render();
     // Klick auf Kachel öffnet Chart-Modal
@@ -36,85 +35,82 @@ function splitDescription(desc) {
 
 function render() {
     const q = (document.getElementById('pvSearch').value || '').trim().toLowerCase();
-    const filter = document.getElementById('pvFilter').value;
     let list = allProducts;
     if (q) {
         list = list.filter(p => (p.description || '').toLowerCase().includes(q) ||
                                 (p.key || '').includes(q));
     }
-    if (filter === 'reduced') {
-        list = list.filter(p => p.last_is_reduced);
-    } else if (filter === 'up') {
-        list = list.filter(p => p.price_change_direction === 'up');
-    } else if (filter === 'down') {
-        list = list.filter(p => p.price_change_direction === 'down');
-    }
-
     const wrap = document.getElementById('pvList');
     if (!list.length) {
         wrap.innerHTML = `<div class="pv-empty"><div class="icon">💶</div>${
-            allProducts.length ? 'Keine Treffer für diese Filter.' :
+            allProducts.length ? 'Keine Treffer.' :
             'Noch keine gespeicherten Positionen. Lade Bons mit „Einzelpositionen speichern" hoch.'
         }</div>`;
         return;
     }
-    wrap.innerHTML = '<div class="pv-grid">' + list.map(renderProductCard).join('') + '</div>';
+    // Sortierung: Preisänderungen zuerst (up), dann normal, dann alphabetisch
+    list = list.slice().sort((a, b) => {
+        const rank = (p) => p.price_change_direction === 'up' ? 0 :
+                           p.price_change_direction === 'down' ? 1 : 2;
+        const r = rank(a) - rank(b);
+        if (r !== 0) return r;
+        return (a.key || '').localeCompare(b.key || '');
+    });
+    wrap.innerHTML = list.map(renderProductRow).join('');
 }
 
-function renderProductCard(p) {
-    const { base, extras } = splitDescription(p.description);
+// Kompakte Listen-Zeile — eine Zeile pro Produkt.
+// Grid: Name+Meta | Preis-Spalte | Änderungsbadge
+function renderProductRow(p) {
+    const { base } = splitDescription(p.description);
+    const name = base || p.description || '(unbekannt)';
 
-    // Klassen für farbliche Markierung
-    let cardCls = '';
-    if (p.last_is_reduced) cardCls = 'reduced';
-    else if (p.price_change_direction === 'up') cardCls = 'increased';
-    else if (p.price_change_direction === 'down') cardCls = 'decreased';
+    // Preisänderungs-Klasse für den linken Border
+    let rowCls = '';
+    if (p.price_change_direction === 'up') rowCls = 'up';
+    else if (p.price_change_direction === 'down') rowCls = 'down';
 
-    // Aktueller Preis + ggf. Originalpreis
-    const priceHtml = `<div class="pv-prices">
-        <span class="pv-current">${fmtEur(p.last_price)}</span>
-        ${p.last_original_price ? `<span class="pv-orig">${fmtEur(p.last_original_price)}</span>` : ''}
-        ${p.last_is_reduced ? '<span class="pv-badge">REDUZIERT</span>' : ''}
-    </div>`;
+    // Kompakter Preis (letzter Kauf) + kleine Zusatzinfo (Menge/Einheit falls sinnvoll)
+    let priceSub = '';
+    if (p.last_quantity && p.last_quantity_unit) {
+        // z.B. "2 kg" oder "1 L"
+        const qty = p.last_quantity === Math.floor(p.last_quantity)
+            ? String(Math.floor(p.last_quantity))
+            : String(p.last_quantity).replace('.', ',');
+        priceSub = `${qty} ${escHtml(p.last_quantity_unit)}`;
+    }
 
-    // Preisänderung ggü. vorherigem Kauf
+    // Änderungs-Badge (kompakt)
     let changeHtml = '';
     if (p.price_change_direction && p.price_change_pct != null) {
-        const cls = p.price_change_direction; // 'up' | 'down'
+        const cls = p.price_change_direction;
         const arrow = cls === 'up' ? '▲' : '▼';
         const sign = p.price_change_pct > 0 ? '+' : '';
-        const abs = p.price_change_abs != null
-            ? ` (${p.price_change_abs > 0 ? '+' : ''}${fmtEur(p.price_change_abs).replace('€', '€')})`
-            : '';
-        changeHtml = `<span class="pv-change ${cls}">${arrow} ${sign}${p.price_change_pct}%${abs}</span>`;
+        changeHtml = `<span class="pv-change ${cls}">${arrow} ${sign}${p.price_change_pct}%</span>`;
+    } else if (p.count > 1) {
+        changeHtml = `<span class="pv-change flat">— stabil</span>`;
+    } else {
+        changeHtml = `<span class="pv-change flat">neu</span>`;
     }
 
-    // Einheitspreise
-    const unitBits = [];
-    if (p.price_per_kg != null) unitBits.push(`<span><strong>${fmtEur(p.price_per_kg)}</strong>/kg</span>`);
-    if (p.price_per_l != null) unitBits.push(`<span><strong>${fmtEur(p.price_per_l)}</strong>/L</span>`);
-    if (p.last_quantity && p.last_quantity > 1 && !p.price_per_kg && !p.price_per_l) {
-        const unit = p.last_quantity_unit || 'Stk';
-        unitBits.push(`<span>${p.last_quantity} ${escHtml(unit)}</span>`);
-    }
-    const unitHtml = unitBits.length ? `<div class="pv-unit">${unitBits.join(' · ')}</div>` : '';
+    // Untere Meta-Zeile: letzter Laden · Kategorie · Datum · Kaufhäufigkeit
+    const subBits = [];
+    subBits.push(`<span style="color:${p.last_store_color}">${p.last_store_icon} ${escHtml(p.last_store_name)}</span>`);
+    if (p.category_name) subBits.push(`<span>${escHtml(p.category_name)}</span>`);
+    subBits.push(`<span>${fmtDate(p.last_date)}</span>`);
+    if (p.count > 1) subBits.push(`<span>${p.count}× gekauft</span>`);
+    const sub = subBits.join('<span class="dot">·</span>');
 
-    // Meta-Chips: Laden, Kategorie, Datum, Anzahl Käufe
-    const chips = [];
-    chips.push(`<span class="chip" style="color:${p.last_store_color}">${p.last_store_icon} ${escHtml(p.last_store_name)}</span>`);
-    if (p.category_name) chips.push(`<span class="chip">${escHtml(p.category_name)}</span>`);
-    chips.push(`<span class="chip">${fmtDate(p.last_date)}</span>`);
-    if (p.count > 1) chips.push(`<span class="chip">${p.count}× gekauft</span>`);
-
-    const titleAttr = (base || p.description || '').replace(/"/g, '&quot;');
-    return `<div class="pv-item ${cardCls}" data-key="${escHtml(p.key)}" data-title="${titleAttr}" role="button" tabindex="0">
-        <div class="pv-title">${escHtml(base || p.description)}${extras ? `<small>${escHtml(extras)}</small>` : ''}</div>
-        ${priceHtml}
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap">
-            ${unitHtml}
-            ${changeHtml}
+    return `<div class="pv-item ${rowCls}" data-key="${escHtml(p.key)}" data-title="${escHtml(name)}" role="button" tabindex="0">
+        <div>
+            <div class="pv-name">${escHtml(name)}${p.last_is_reduced ? ' 🏷️' : ''}</div>
+            <div class="pv-sub">${sub}</div>
         </div>
-        <div class="pv-meta">${chips.join('')}</div>
+        <div class="pv-price-col">
+            <span class="pv-price">${fmtEur(p.last_price)}</span>
+            ${priceSub ? `<span class="pv-price-sub">${priceSub}</span>` : ''}
+        </div>
+        ${changeHtml}
     </div>`;
 }
 

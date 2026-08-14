@@ -624,98 +624,112 @@ async def delete_receipt(request: Request, rid: int, db=Depends(get_db), user=De
 @router.post("/api/receipts/reparse-all")
 @limiter.limit(LIMIT_WRITE_RARE)
 async def reparse_all_receipts(request: Request,
-                                db=Depends(get_db), user=Depends(get_current_user)):
+                                user=Depends(get_current_user)):
     """Iteriert über alle Bons des Users mit gespeichertem OCR-Rohtext, ruft den
     AI-Parser erneut auf und ersetzt die Einzelpositionen. Existierende Ausgaben-
     Kopfdaten (Betrag, Datum, Laden, Notiz) bleiben unverändert — nur ``items``
     werden neu geschrieben (alte gelöscht, neue eingefügt).
 
-    Antwortet mit Streaming-JSON-Lines, damit das Frontend live einen Progress-Bar
-    aufbauen kann (eine JSON-Zeile pro verarbeitetem Bon, gefolgt von einem Summary).
+    Antwortet mit Streaming-NDJSON. Wichtig: wir dürfen hier NICHT ``Depends(get_db)``
+    nutzen, weil FastAPI die Connection freigibt sobald der Handler zurückkehrt —
+    der StreamingResponse-Generator läuft aber danach weiter und würde eine bereits
+    freigegebene Connection nutzen. Stattdessen holen wir uns die Connection direkt
+    aus dem Pool und geben sie am Ende manuell zurück.
     """
     from fastapi.responses import StreamingResponse
     import json as _json
+    import database as db_module
 
-    # Alle Bons des Users mit OCR-Text laden
-    rows = await db.fetch(
-        """SELECT e.id AS expense_id, e.store_id, r.ocr_raw_text
-           FROM expenses e
-           JOIN receipt_images r ON r.id=e.receipt_image_id
-           WHERE e.user_id=$1 AND r.ocr_raw_text IS NOT NULL
-             AND LENGTH(r.ocr_raw_text) > 5
-           ORDER BY e.id""",
-        user["id"])
-
-    total = len(rows)
-    # Kategorien + Läden für den AI-Parser einmalig laden
-    cat_rows = await db.fetch(
-        "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
-    categories = [{"id": r["id"], "name": r["name"]} for r in cat_rows]
-    store_rows = await db.fetch("SELECT name FROM stores WHERE user_id=$1", user["id"])
-    stores = [{"name": r["name"]} for r in store_rows]
-
-    valid_cat_ids = {c["id"] for c in categories}
+    user_id = user["id"]
+    uid_key = user["username"]  # nur für Log
 
     async def stream():
-        # Start-Message mit Total
-        yield _json.dumps({"type": "start", "total": total}) + "\n"
+        # Connection FÜR die gesamte Stream-Dauer halten
+        if db_module._pool is None:
+            import asyncpg as _apg
+            db_module._pool = await _apg.create_pool(
+                db_module.DATABASE_URL, ssl="require", min_size=1, max_size=10)
+        conn = await db_module._pool.acquire()
+        try:
+            rows = await conn.fetch(
+                """SELECT e.id AS expense_id, e.store_id, r.ocr_raw_text
+                   FROM expenses e
+                   JOIN receipt_images r ON r.id=e.receipt_image_id
+                   WHERE e.user_id=$1 AND r.ocr_raw_text IS NOT NULL
+                     AND LENGTH(r.ocr_raw_text) > 5
+                   ORDER BY e.id""",
+                user_id)
+            total = len(rows)
 
-        processed = 0
-        updated_items = 0
-        errors = 0
+            cat_rows = await conn.fetch(
+                "SELECT id, name FROM expense_categories WHERE user_id=$1", user_id)
+            categories = [{"id": r["id"], "name": r["name"]} for r in cat_rows]
+            store_rows = await conn.fetch(
+                "SELECT name FROM stores WHERE user_id=$1", user_id)
+            stores = [{"name": r["name"]} for r in store_rows]
+            valid_cat_ids = {c["id"] for c in categories}
 
-        for row in rows:
-            eid = row["expense_id"]
-            ocr_text = row["ocr_raw_text"] or ""
+            yield _json.dumps({"type": "start", "total": total}) + "\n"
+
+            processed = 0
+            updated_items = 0
+            errors = 0
+
+            for row in rows:
+                eid = row["expense_id"]
+                ocr_text = row["ocr_raw_text"] or ""
+                try:
+                    parsed = await ai_parse_receipt(ocr_text, categories, stores)
+                    items = parsed.get("items") or []
+                    await conn.execute(
+                        "DELETE FROM expense_items WHERE expense_id=$1 AND user_id=$2",
+                        eid, user_id)
+                    for idx, it in enumerate(items):
+                        cid = it.get("category_id")
+                        if cid is not None and cid not in valid_cat_ids:
+                            cid = None
+                        await conn.execute(
+                            """INSERT INTO expense_items
+                               (user_id, expense_id, description, quantity, quantity_unit,
+                                unit_price, total_price, category_id, sort_order,
+                                original_price, is_reduced)
+                               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)""",
+                            user_id, eid,
+                            (it.get("description") or "").strip(),
+                            it.get("quantity") or 1,
+                            it.get("quantity_unit"),
+                            it.get("unit_price"),
+                            it.get("total_price"),
+                            cid,
+                            idx,
+                            it.get("original_price"),
+                            bool(it.get("is_reduced")),
+                        )
+                    updated_items += len(items)
+                    yield _json.dumps({
+                        "type": "progress", "expense_id": eid,
+                        "processed": processed + 1, "total": total,
+                        "items": len(items), "ok": True,
+                    }) + "\n"
+                except Exception as e:
+                    errors += 1
+                    logger.exception(f"Reparse failed for expense {eid}: {e}")
+                    yield _json.dumps({
+                        "type": "progress", "expense_id": eid,
+                        "processed": processed + 1, "total": total,
+                        "ok": False, "error": str(e)[:120],
+                    }) + "\n"
+                processed += 1
+
+            yield _json.dumps({
+                "type": "done",
+                "total": total, "updated_items": updated_items, "errors": errors,
+            }) + "\n"
+        finally:
             try:
-                parsed = await ai_parse_receipt(ocr_text, categories, stores)
-                items = parsed.get("items") or []
-                # Alte Items löschen
-                await db.execute(
-                    "DELETE FROM expense_items WHERE expense_id=$1 AND user_id=$2",
-                    eid, user["id"])
-                # Neue Items einfügen
-                for idx, it in enumerate(items):
-                    cid = it.get("category_id")
-                    if cid is not None and cid not in valid_cat_ids:
-                        cid = None
-                    await db.execute(
-                        """INSERT INTO expense_items
-                           (user_id, expense_id, description, quantity, quantity_unit,
-                            unit_price, total_price, category_id, sort_order,
-                            original_price, is_reduced)
-                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)""",
-                        user["id"], eid,
-                        (it.get("description") or "").strip(),
-                        it.get("quantity") or 1,
-                        it.get("quantity_unit"),
-                        it.get("unit_price"),
-                        it.get("total_price"),
-                        cid,
-                        idx,
-                        it.get("original_price"),
-                        bool(it.get("is_reduced")),
-                    )
-                updated_items += len(items)
-                yield _json.dumps({
-                    "type": "progress", "expense_id": eid,
-                    "processed": processed + 1, "total": total,
-                    "items": len(items), "ok": True,
-                }) + "\n"
-            except Exception as e:
-                errors += 1
-                logger.exception(f"Reparse fehlgeschlagen für Bon {eid}: {e}")
-                yield _json.dumps({
-                    "type": "progress", "expense_id": eid,
-                    "processed": processed + 1, "total": total,
-                    "ok": False, "error": str(e)[:120],
-                }) + "\n"
-            processed += 1
-
-        yield _json.dumps({
-            "type": "done",
-            "total": total, "updated_items": updated_items, "errors": errors,
-        }) + "\n"
+                await db_module._pool.release(conn)
+            except Exception:
+                pass
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")
 
@@ -1075,20 +1089,47 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
         user["id"])
 
     from collections import defaultdict
+    import re
 
     def norm_key(desc):
+        """Normalisiert zu einem Produkt-Basisnamen:
+        - alles nach '(' abschneiden (Originaltext),
+        - Menge+Einheit am Ende entfernen ('2kg', '500g', '1L', '10 Stk'),
+        - lowercase, Whitespace normalisieren.
+        So gruppieren "Vollmilch 1L (ESL-Vollm.)" und "Vollmilch 500ml (Clever)"
+        beide zu 'vollmilch'.
+        """
         d = (desc or "").strip()
         if "(" in d:
             d = d.split("(", 1)[0].strip()
-        return d.lower()
+        # Trailing Menge+Einheit entfernen (mehrfach falls "2 Stk 500g" etc.)
+        d = re.sub(r"\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|stk|pack|btl|blatt|x\d+)\s*$",
+                   "", d, flags=re.IGNORECASE)
+        d = re.sub(r"\s+", " ", d).strip().lower()
+        return d
 
     def unit_price_of(r):
+        """Einheits-normalisierter Preis für Vergleiche über Größenvarianten hinweg.
+        - kg/L: total_price / quantity → Preis pro kg/L
+        - g:    (total_price / quantity) * 1000 → Preis pro kg
+        - ml:   (total_price / quantity) * 1000 → Preis pro L
+        - sonst: total_price / quantity (Stk/Pack/etc.)
+        """
         qty = float(r["quantity"] or 1) or 1
-        return float(r["total_price"]) / qty
+        tp = float(r["total_price"])
+        unit = (r["quantity_unit"] or "").lower()
+        if unit == "g":
+            return (tp / qty) * 1000.0
+        if unit == "ml":
+            return (tp / qty) * 1000.0
+        return tp / qty
 
     groups = defaultdict(list)
     for r in rows:
-        groups[norm_key(r["description"])].append(r)
+        k = norm_key(r["description"])
+        if not k:
+            continue
+        groups[k].append(r)
 
     products = []
     for key, purchases in groups.items():
@@ -1175,11 +1216,24 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
            ORDER BY e.purchase_date ASC, ei.id ASC""",
         user["id"])
 
+    import re
+
     def norm_key(desc):
         d = (desc or "").strip()
         if "(" in d:
             d = d.split("(", 1)[0].strip()
-        return d.lower()
+        d = re.sub(r"\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|stk|pack|btl|blatt|x\d+)\s*$",
+                   "", d, flags=re.IGNORECASE)
+        d = re.sub(r"\s+", " ", d).strip().lower()
+        return d
+
+    def unit_price_norm(qty, tp, unit):
+        u = (unit or "").lower()
+        if u == "g":
+            return (tp / qty) * 1000.0
+        if u == "ml":
+            return (tp / qty) * 1000.0
+        return tp / qty
 
     out = []
     for r in rows:
@@ -1193,7 +1247,8 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
             "total_price": tp,
             "quantity": qty,
             "quantity_unit": r["quantity_unit"],
-            "unit_price": round(tp / qty, 4),
+            # unit_price = einheits-normalisiert (€/kg bei g/kg, €/L bei ml/l, sonst €/Stk)
+            "unit_price": round(unit_price_norm(qty, tp, r["quantity_unit"]), 4),
             "original_price": float(r["original_price"]) if r["original_price"] is not None else None,
             "is_reduced": bool(r["is_reduced"]),
             "store_name": r["store_name"] or "Ohne Laden",
