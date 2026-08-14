@@ -62,43 +62,53 @@ function render() {
 // Kompakte Listen-Zeile — eine Zeile pro Produkt.
 // Grid: Name+Meta | Preis-Spalte | Änderungsbadge
 function renderProductRow(p) {
-    const { base } = splitDescription(p.description);
-    const name = base || p.description || '(unbekannt)';
+    // Backend liefert 'title' als Basisname; Fallback für Alt-Daten
+    const name = p.title || (p.base_name) || splitDescription(p.description).base || p.description || '(unbekannt)';
 
     // Preisänderungs-Klasse für den linken Border
     let rowCls = '';
     if (p.price_change_direction === 'up') rowCls = 'up';
     else if (p.price_change_direction === 'down') rowCls = 'down';
 
-    // Kompakter Preis (letzter Kauf) + kleine Zusatzinfo (Menge/Einheit falls sinnvoll)
+    // Preis-Sub: bevorzugt €/kg oder €/L (ehrlicher Vergleich); sonst Menge/Einheit
     let priceSub = '';
-    if (p.last_quantity && p.last_quantity_unit) {
-        // z.B. "2 kg" oder "1 L"
+    if (p.price_per_kg != null) {
+        priceSub = `${fmtEur(p.price_per_kg)}/kg`;
+    } else if (p.price_per_l != null) {
+        priceSub = `${fmtEur(p.price_per_l)}/L`;
+    } else if (p.last_quantity && p.last_quantity_unit) {
         const qty = p.last_quantity === Math.floor(p.last_quantity)
             ? String(Math.floor(p.last_quantity))
             : String(p.last_quantity).replace('.', ',');
         priceSub = `${qty} ${escHtml(p.last_quantity_unit)}`;
     }
 
-    // Änderungs-Badge (kompakt)
+    // Änderungs-Badge — mit Hinweis "beim selben Laden" wenn zutreffend
     let changeHtml = '';
     if (p.price_change_direction && p.price_change_pct != null) {
         const cls = p.price_change_direction;
         const arrow = cls === 'up' ? '▲' : '▼';
         const sign = p.price_change_pct > 0 ? '+' : '';
-        changeHtml = `<span class="pv-change ${cls}">${arrow} ${sign}${p.price_change_pct}%</span>`;
+        const tooltip = p.price_change_same_store
+            ? `vs. letzter Kauf beim gleichen Laden (${escHtml(p.last_store_name)})`
+            : 'vs. letzter Kauf';
+        changeHtml = `<span class="pv-change ${cls}" title="${tooltip}">${arrow} ${sign}${p.price_change_pct}%</span>`;
     } else if (p.count > 1) {
-        changeHtml = `<span class="pv-change flat">— stabil</span>`;
+        changeHtml = `<span class="pv-change flat" title="Erstkauf bei diesem Laden">neu bei ${escHtml(p.last_store_icon)}</span>`;
     } else {
         changeHtml = `<span class="pv-change flat">neu</span>`;
     }
 
-    // Untere Meta-Zeile: letzter Laden · Kategorie · Datum · Kaufhäufigkeit
+    // Untere Meta-Zeile: Laden · Kategorie · Datum · Kaufhäufigkeit
     const subBits = [];
     subBits.push(`<span style="color:${p.last_store_color}">${p.last_store_icon} ${escHtml(p.last_store_name)}</span>`);
     if (p.category_name) subBits.push(`<span>${escHtml(p.category_name)}</span>`);
     subBits.push(`<span>${fmtDate(p.last_date)}</span>`);
     if (p.count > 1) subBits.push(`<span>${p.count}× gekauft</span>`);
+    // Hinweis wenn Preisdifferenz zwischen Läden groß ist
+    if (p.max_diff_pct != null && p.max_diff_pct >= 10 && p.cheapest_store && p.cheapest_store.store_id !== p.last_store_id) {
+        subBits.push(`<span style="color:var(--green-dark)" title="Ø-Preis bei ${escHtml(p.cheapest_store.store_name)}">💡 -${p.max_diff_pct}% bei ${p.cheapest_store.store_icon} ${escHtml(p.cheapest_store.store_name)}</span>`);
+    }
     const sub = subBits.join('<span class="dot">·</span>');
 
     return `<div class="pv-item ${rowCls}" data-key="${escHtml(p.key)}" data-title="${escHtml(name)}" role="button" tabindex="0">
@@ -147,11 +157,11 @@ function _pvChartOptions() {
     };
 }
 
-function _pvRenderChart(history) {
+function _pvRenderChart(items) {
     if (currentChartInstance) { try { currentChartInstance.destroy(); } catch(_) {} }
-    if (!history.length) return;
+    if (!items.length) return;
     const byStore = {};
-    for (const h of history) {
+    for (const h of items) {
         const sn = h.store_name;
         if (!byStore[sn]) byStore[sn] = { color: h.store_color, points: [] };
         byStore[sn].points.push({ x: h.date, y: h.unit_price });
@@ -165,18 +175,44 @@ function _pvRenderChart(history) {
         { type: 'line', data: { datasets }, options: _pvChartOptions() });
 }
 
-function _pvRenderHistList(history, reloadFn) {
+function _pvRenderStoreSummary(data) {
+    const wrap = document.getElementById('pvStoreSummary');
+    if (!wrap) return;
+    if (!data.cheapest_store || data.store_summary.length < 2) {
+        wrap.innerHTML = '';
+        return;
+    }
+    const c = data.cheapest_store, e = data.most_expensive_store;
+    const savingsPct = data.max_diff_pct;
+    wrap.innerHTML = `
+        <div class="pv-summary-grid">
+            <div class="pv-summary-card cheap">
+                <div class="pv-summary-lbl">💚 Günstigster Laden</div>
+                <div class="pv-summary-store" style="color:${c.store_color}">${c.store_icon} ${escHtml(c.store_name)}</div>
+                <div class="pv-summary-val">${fmtEur(c.avg_unit_price)}<span class="pv-summary-sub">Ø/Einheit · ${c.count}×</span></div>
+            </div>
+            <div class="pv-summary-card expensive">
+                <div class="pv-summary-lbl">🔴 Teuerster Laden</div>
+                <div class="pv-summary-store" style="color:${e.store_color}">${e.store_icon} ${escHtml(e.store_name)}</div>
+                <div class="pv-summary-val">${fmtEur(e.avg_unit_price)}<span class="pv-summary-sub">+${savingsPct}% · ${e.count}×</span></div>
+            </div>
+        </div>
+    `;
+}
+
+function _pvRenderHistList(items, reloadFn) {
     const wrap = document.getElementById('pvHistList');
-    if (!history.length) {
+    if (!items.length) {
         wrap.innerHTML = '<div class="pv-empty">Keine Käufe mehr in dieser Gruppe.</div>';
         return;
     }
-    // neueste oben
-    wrap.innerHTML = history.slice().reverse().map(h => {
-        const original = extractOriginal(h.description);
+    // neueste oben — bevorzuge original_text (strukturiert), sonst extrahiert
+    wrap.innerHTML = items.slice().reverse().map(h => {
+        const original = h.original_text || extractOriginal(h.description) || h.base_name || '';
         const qtyBits = h.quantity && h.quantity > 1
             ? ` · ${h.quantity}${h.quantity_unit || ''}` : '';
-        return `<div class="pv-hist-item" data-item-id="${h.item_id}">
+        const soloCls = (h.product_group || '').startsWith('_solo_') ? ' solo' : '';
+        return `<div class="pv-hist-item${soloCls}" data-item-id="${h.item_id}" data-comparable="${h.price_comparable ? '1' : '0'}">
             <span class="pv-hist-date">${fmtDate(h.date)}</span>
             <div class="pv-hist-body">
                 <div class="pv-hist-desc">${escHtml(original)}${qtyBits}</div>
@@ -185,20 +221,20 @@ function _pvRenderHistList(history, reloadFn) {
             <span class="pv-hist-price${h.is_reduced ? ' reduced' : ''}">${fmtEur(h.total_price)}${h.is_reduced ? ' 🏷️' : ''}</span>
             <span class="pv-hist-actions">
                 <a href="/ausgaben/bon.html?id=${h.expense_id}" title="Bon öffnen" target="_blank" rel="noopener">↗</a>
-                <button class="detach" title="Aus dieser Produkt-Gruppe herauslösen">✂</button>
+                <button class="detach" title="Aus dieser Produkt-Gruppe herauslösen (Fehl­gruppierung)">✂</button>
+                <button class="exclude" title="Aus Preisvergleich ausschließen (z.B. Einmalkauf)">🚫</button>
             </span>
         </div>`;
     }).join('');
     wrap.querySelectorAll('.pv-hist-item').forEach(el => {
         const iid = +el.dataset.itemId;
         const detachBtn = el.querySelector('.detach');
-        if (!detachBtn) return;
-        detachBtn.onclick = async () => {
+        const excludeBtn = el.querySelector('.exclude');
+        if (detachBtn) detachBtn.onclick = async () => {
             if (!confirm('Diesen Artikel aus dieser Produkt-Gruppe herauslösen?\n\nEr bekommt eine eigene Gruppe und erscheint dann separat im Preisverlauf.')) return;
             detachBtn.disabled = true;
             try {
-                const soloKey = `_solo_${iid}_${Date.now()}`;
-                await AUSGABEN_API.setItemGroup(iid, soloKey);
+                await AUSGABEN_API.setItemGroup(iid, `_solo_${iid}_${Date.now()}`);
                 showToast('Artikel aufgelöst', 'success', 2000);
                 try { allProducts = await AUSGABEN_API.products(); render(); } catch(_) {}
                 await reloadFn();
@@ -207,14 +243,28 @@ function _pvRenderHistList(history, reloadFn) {
                 showToast('Fehler: ' + e.message, 'error');
             }
         };
+        if (excludeBtn) excludeBtn.onclick = async () => {
+            if (!confirm('Diesen Artikel dauerhaft vom Preisvergleich ausschließen?\n\nGeeignet für Einmalkäufe (Topf, Vorratsdose, Werkzeug etc.).')) return;
+            excludeBtn.disabled = true;
+            try {
+                await AUSGABEN_API.setItemComparable(iid, false);
+                showToast('Vom Preisvergleich ausgeschlossen', 'success', 2000);
+                try { allProducts = await AUSGABEN_API.products(); render(); } catch(_) {}
+                await reloadFn();
+            } catch (e) {
+                excludeBtn.disabled = false;
+                showToast('Fehler: ' + e.message, 'error');
+            }
+        };
     });
 }
 
 async function openProductChart(key, title) {
     const modal = openModal(`📈 Preisverlauf: ${escHtml(title)}`,
-        `<div class="pv-chart-wrap"><canvas id="pvChart"></canvas></div>
+        `<div id="pvStoreSummary"></div>
+         <div class="pv-chart-wrap"><canvas id="pvChart"></canvas></div>
          <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">
-             ↗ öffnet den zugehörigen Bon · ✂ trennt einen fehlerhaft zugeordneten Artikel aus dieser Produkt-Gruppe heraus
+             ↗ Bon öffnen · ✂ Artikel aus Produkt-Gruppe herauslösen · 🚫 Aus Preisvergleich ausschließen
          </div>
          <div id="pvHistList" class="pv-hist-list"></div>`,
         {
@@ -230,9 +280,11 @@ async function openProductChart(key, title) {
 
     async function reload() {
         try {
-            const history = await AUSGABEN_API.productHistory(key);
-            _pvRenderChart(history);
-            _pvRenderHistList(history, reload);
+            const data = await AUSGABEN_API.productHistory(key);
+            const items = data.items || [];
+            _pvRenderStoreSummary(data);
+            _pvRenderChart(items);
+            _pvRenderHistList(items, reload);
         } catch (e) {
             modal.root.innerHTML = `<div class="pv-empty">Fehler: ${escHtml(e.message)}</div>`;
         }

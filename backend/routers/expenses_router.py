@@ -62,6 +62,9 @@ class RuleCreate(BaseModel):
 
 class ExpenseItemIn(BaseModel):
     description: str
+    # Optional strukturierte Felder — wenn nicht mitgegeben, aus description abgeleitet:
+    base_name: Optional[str] = None
+    original_text: Optional[str] = None
     quantity: Optional[float] = 1
     quantity_unit: Optional[str] = None
     unit_price: Optional[float] = None
@@ -69,6 +72,31 @@ class ExpenseItemIn(BaseModel):
     category_id: Optional[int] = None
     original_price: Optional[float] = None
     is_reduced: Optional[bool] = False
+    price_comparable: Optional[bool] = True
+    user_edited: Optional[bool] = False
+
+def _derive_base_and_original(item: ExpenseItemIn):
+    """Wenn base_name/original_text nicht vom Client mitkamen: aus description ableiten.
+    Format-Erwartung: "Basisname (Original)" oder "Basisname 2kg (Original)"."""
+    base = (item.base_name or "").strip()
+    orig = (item.original_text or "").strip()
+    if not base:
+        desc = (item.description or "").strip()
+        if "(" in desc and desc.endswith(")"):
+            bp, op = desc.rsplit("(", 1)
+            base = bp.strip()
+            if not orig:
+                orig = op.rstrip(")").strip()
+        else:
+            base = desc
+    # Menge/Einheit-Suffix am Basisnamen entfernen (Sanity)
+    import re as _re
+    base = _re.sub(
+        r"\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|stk|pack|btl|blatt)\s*$",
+        "", base, flags=_re.IGNORECASE
+    ).strip() or base
+    return base, (orig or None)
+
 
 class ExpenseCreate(BaseModel):
     store_id: Optional[int] = None
@@ -394,16 +422,21 @@ async def create_expense(request: Request, b: ExpenseCreate,
                         cat_id, user["id"])
                     if not ok:
                         cat_id = None
+                base_n, orig_t = _derive_base_and_original(it)
                 await db.execute(
                     """INSERT INTO expense_items
-                       (user_id, expense_id, description, quantity, quantity_unit,
-                        unit_price, total_price, category_id, sort_order,
-                        original_price, is_reduced)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)""",
+                       (user_id, expense_id, description, base_name, original_text,
+                        quantity, quantity_unit, unit_price, total_price, category_id,
+                        sort_order, original_price, is_reduced,
+                        price_comparable, user_edited)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)""",
                     user["id"], eid, it.description.strip(),
+                    base_n, orig_t,
                     it.quantity or 1, it.quantity_unit,
                     it.unit_price, it.total_price, cat_id, idx,
-                    it.original_price, bool(it.is_reduced))
+                    it.original_price, bool(it.is_reduced),
+                    bool(it.price_comparable) if it.price_comparable is not None else True,
+                    bool(it.user_edited))
                 if cat_id and it.category_id is not None:
                     await learn_rule(db, user["id"], it.description, cat_id, b.store_id)
     return await get_expense(eid, db=db, user=user)
@@ -462,14 +495,18 @@ async def add_item(request: Request, eid: int, b: ExpenseItemIn,
                                 cat_id, user["id"])
         if not ok:
             cat_id = None
+    base_n, orig_t = _derive_base_and_original(b)
     row = await db.fetchrow(
         """INSERT INTO expense_items
-           (user_id, expense_id, description, quantity, quantity_unit,
-            unit_price, total_price, category_id,
-            original_price, is_reduced)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *""",
-        user["id"], eid, b.description.strip(), b.quantity or 1, b.quantity_unit,
-        b.unit_price, b.total_price, cat_id, b.original_price, bool(b.is_reduced))
+           (user_id, expense_id, description, base_name, original_text,
+            quantity, quantity_unit, unit_price, total_price, category_id,
+            original_price, is_reduced, price_comparable, user_edited)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *""",
+        user["id"], eid, b.description.strip(), base_n, orig_t,
+        b.quantity or 1, b.quantity_unit, b.unit_price, b.total_price, cat_id,
+        b.original_price, bool(b.is_reduced),
+        bool(b.price_comparable) if b.price_comparable is not None else True,
+        bool(b.user_edited))
     if cat_id and b.category_id is not None:
         await learn_rule(db, user["id"], b.description, cat_id, exp["store_id"])
     return _ser_exp(row)
@@ -489,14 +526,21 @@ async def update_item(request: Request, iid: int, b: ExpenseItemIn,
                                 cat_id, user["id"])
         if not ok:
             raise HTTPException(400, "Kategorie unbekannt")
+    base_n, orig_t = _derive_base_and_original(b)
+    # PUT durch User => user_edited=true (schützt vor Reparse-Überschreiben)
     await db.execute(
         """UPDATE expense_items
-           SET description=$1, quantity=$2, quantity_unit=$3, unit_price=$4,
-               total_price=$5, category_id=$6, original_price=$7, is_reduced=$8
-           WHERE id=$9 AND user_id=$10""",
-        b.description.strip(), b.quantity or 1, b.quantity_unit,
+           SET description=$1, base_name=$2, original_text=$3,
+               quantity=$4, quantity_unit=$5, unit_price=$6,
+               total_price=$7, category_id=$8, original_price=$9, is_reduced=$10,
+               price_comparable=$11, user_edited=TRUE
+           WHERE id=$12 AND user_id=$13""",
+        b.description.strip(), base_n, orig_t,
+        b.quantity or 1, b.quantity_unit,
         b.unit_price, b.total_price,
-        cat_id, b.original_price, bool(b.is_reduced), iid, user["id"])
+        cat_id, b.original_price, bool(b.is_reduced),
+        bool(b.price_comparable) if b.price_comparable is not None else True,
+        iid, user["id"])
     # Regel lernen wenn Kategorie manuell gesetzt wurde
     if cat_id and cat_id != existing["category_id"]:
         await learn_rule(db, user["id"], b.description, cat_id, existing["store_id"])
@@ -679,31 +723,58 @@ async def reparse_all_receipts(request: Request,
                 eid = row["expense_id"]
                 ocr_text = row["ocr_raw_text"] or ""
                 try:
+                    # User-editierte Items dieses Bons vor dem DELETE sichern
+                    protected = await conn.fetch(
+                        """SELECT description, base_name, original_text, quantity, quantity_unit,
+                                  unit_price, total_price, category_id, sort_order,
+                                  original_price, is_reduced, price_comparable, product_group
+                           FROM expense_items
+                           WHERE expense_id=$1 AND user_id=$2 AND user_edited=TRUE""",
+                        eid, user_id)
+
                     parsed = await ai_parse_receipt(ocr_text, categories, stores)
                     items = parsed.get("items") or []
                     await conn.execute(
                         "DELETE FROM expense_items WHERE expense_id=$1 AND user_id=$2",
                         eid, user_id)
+                    # User-Items zuerst zurückschreiben (behalten user_edited=true)
+                    for p in protected:
+                        await conn.execute(
+                            """INSERT INTO expense_items
+                               (user_id, expense_id, description, base_name, original_text,
+                                quantity, quantity_unit, unit_price, total_price, category_id,
+                                sort_order, original_price, is_reduced,
+                                price_comparable, product_group, user_edited)
+                               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,TRUE)""",
+                            user_id, eid, p["description"], p["base_name"], p["original_text"],
+                            p["quantity"], p["quantity_unit"], p["unit_price"], p["total_price"],
+                            p["category_id"], p["sort_order"], p["original_price"],
+                            p["is_reduced"], p["price_comparable"], p["product_group"])
+                    # Danach die AI-generierten Items (frisches Grouping)
                     for idx, it in enumerate(items):
                         cid = it.get("category_id")
                         if cid is not None and cid not in valid_cat_ids:
                             cid = None
                         await conn.execute(
                             """INSERT INTO expense_items
-                               (user_id, expense_id, description, quantity, quantity_unit,
-                                unit_price, total_price, category_id, sort_order,
-                                original_price, is_reduced)
-                               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)""",
+                               (user_id, expense_id, description, base_name, original_text,
+                                quantity, quantity_unit, unit_price, total_price, category_id,
+                                sort_order, original_price, is_reduced,
+                                price_comparable, user_edited)
+                               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,FALSE)""",
                             user_id, eid,
                             (it.get("description") or "").strip(),
+                            it.get("base_name"),
+                            it.get("original_text"),
                             it.get("quantity") or 1,
                             it.get("quantity_unit"),
                             it.get("unit_price"),
                             it.get("total_price"),
                             cid,
-                            idx,
+                            len(protected) + idx,
                             it.get("original_price"),
                             bool(it.get("is_reduced")),
+                            bool(it.get("price_comparable")) if it.get("price_comparable") is not None else True,
                         )
                     updated_items += len(items)
                     yield _json.dumps({
@@ -1074,8 +1145,10 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
     Fuer jedes Produkt: letzter Preis + Rabatt-/Preiserhoehung ggue. vorherigem Kauf,
     plus Preis/kg oder Preis/L falls Einheit bekannt.
     """
+    # Nur Artikel die als vergleichbar markiert sind (KI-Flag price_comparable=true)
     rows = await db.fetch(
-        """SELECT ei.description, ei.total_price, ei.quantity, ei.quantity_unit,
+        """SELECT ei.description, ei.base_name, ei.original_text,
+                  ei.total_price, ei.quantity, ei.quantity_unit,
                   ei.original_price, ei.is_reduced, ei.product_group,
                   e.purchase_date, e.store_id,
                   s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
@@ -1084,7 +1157,10 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
            JOIN expenses e ON e.id=ei.expense_id
            LEFT JOIN stores s ON s.id=e.store_id
            LEFT JOIN expense_categories c ON c.id=ei.category_id
-           WHERE ei.user_id=$1 AND ei.description IS NOT NULL AND ei.description != ''
+           WHERE ei.user_id=$1
+             AND COALESCE(ei.price_comparable, TRUE)=TRUE
+             AND (ei.base_name IS NOT NULL OR (ei.description IS NOT NULL AND ei.description != ''))
+             AND ei.total_price > 0
            ORDER BY e.purchase_date DESC, ei.id DESC""",
         user["id"])
 
@@ -1125,10 +1201,13 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
         return tp / qty
 
     def group_key(r):
-        # Manuelle Zuordnung (product_group gesetzt) hat Vorrang, sonst Basisname.
+        # Priorität: product_group (manuelle Zuordnung) → base_name → norm_key(description)
         pg = (r["product_group"] or "").strip().lower()
         if pg:
             return pg
+        bn = (r["base_name"] or "").strip().lower()
+        if bn:
+            return bn
         return norm_key(r["description"])
 
     groups = defaultdict(list)
@@ -1140,17 +1219,23 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
 
     products = []
     for key, purchases in groups.items():
+        # rows sind DESC nach Datum → purchases[0] = neuester Kauf
         last = purchases[0]
-        prev = purchases[1] if len(purchases) > 1 else None
         prices = [float(p["total_price"]) for p in purchases]
         unit_prices = [unit_price_of(p) for p in purchases]
 
-        change_abs = None
-        change_pct = None
-        change_direction = None
-        if prev is not None:
+        # --- Preisänderung PRO LADEN berechnen (nicht cross-store!) ---
+        # Suche vorherigen Kauf beim SELBEN Laden wie der letzte Kauf.
+        change_abs = change_pct = change_direction = None
+        last_store_id = last["store_id"]
+        same_store_prev = None
+        for p in purchases[1:]:
+            if p["store_id"] == last_store_id:
+                same_store_prev = p
+                break
+        if same_store_prev is not None:
             last_up = unit_price_of(last)
-            prev_up = unit_price_of(prev)
+            prev_up = unit_price_of(same_store_prev)
             if prev_up > 0:
                 change_abs = round(last_up - prev_up, 4)
                 change_pct = round((change_abs / prev_up) * 100.0, 1)
@@ -1159,6 +1244,28 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
                 elif change_pct <= -1:
                     change_direction = "down"
 
+        # --- Store-Vergleich: welcher Laden ist im Schnitt am günstigsten? ---
+        by_store = defaultdict(list)
+        for p in purchases:
+            by_store[(p["store_id"], p["store_name"], p["store_color"], p["store_icon"])].append(unit_price_of(p))
+        store_stats = []
+        for (sid, sname, scolor, sicon), ups in by_store.items():
+            store_stats.append({
+                "store_id": sid,
+                "store_name": sname or "Ohne Laden",
+                "store_color": scolor or "#9ca3af",
+                "store_icon": sicon or "🏪",
+                "avg_unit_price": round(sum(ups) / len(ups), 4),
+                "count": len(ups),
+            })
+        cheapest = min(store_stats, key=lambda s: s["avg_unit_price"]) if store_stats else None
+        expensive = max(store_stats, key=lambda s: s["avg_unit_price"]) if len(store_stats) > 1 else None
+        max_diff_pct = None
+        if cheapest and expensive and cheapest["store_id"] != expensive["store_id"] and cheapest["avg_unit_price"] > 0:
+            max_diff_pct = round(
+                (expensive["avg_unit_price"] - cheapest["avg_unit_price"]) / cheapest["avg_unit_price"] * 100.0, 1)
+
+        # €/kg bzw €/L für die Preis-Sub-Zeile in der Liste
         price_per_kg = None
         price_per_l = None
         unit = (last["quantity_unit"] or "").lower() if last["quantity_unit"] else ""
@@ -1174,9 +1281,17 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
             elif unit == "ml":
                 price_per_l = round(tp / (qty / 1000.0), 2)
 
+        # Titel: base_name wenn vorhanden, sonst aus description ableiten
+        title = (last["base_name"] or "").strip()
+        if not title:
+            title = norm_key(last["description"]).title() or last["description"]
+
         products.append({
             "key": key,
+            "title": title,
             "description": last["description"],
+            "base_name": last["base_name"],
+            "original_text": last["original_text"],
             "category_name": last["category_name"],
             "count": len(purchases),
             "last_date": last["purchase_date"].isoformat() if last["purchase_date"] else None,
@@ -1186,6 +1301,7 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
             "last_quantity_unit": last["quantity_unit"],
             "last_original_price": float(last["original_price"]) if last["original_price"] is not None else None,
             "last_is_reduced": bool(last["is_reduced"]),
+            "last_store_id": last["store_id"],
             "last_store_name": last["store_name"] or "Ohne Laden",
             "last_store_color": last["store_color"] or "#9ca3af",
             "last_store_icon": last["store_icon"] or "🏪",
@@ -1197,10 +1313,15 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
             "price_change_abs": change_abs,
             "price_change_pct": change_pct,
             "price_change_direction": change_direction,
+            "price_change_same_store": same_store_prev is not None,
             "price_per_kg": price_per_kg,
             "price_per_l": price_per_l,
+            "cheapest_store": cheapest,
+            "most_expensive_store": expensive,
+            "max_diff_pct": max_diff_pct,
         })
 
+    # Default-Sortierung: neuester Kauf zuerst (User erwartet was er zuletzt gekauft hat)
     products.sort(key=lambda p: p["last_date"] or "", reverse=True)
     return products
 
@@ -1235,6 +1356,28 @@ async def set_item_product_group(request: Request, iid: int, b: ItemGroupOverrid
     return {"status": "ok", "item_id": iid, "product_group": pg}
 
 
+class ItemPriceComparableToggle(BaseModel):
+    price_comparable: bool
+
+
+@router.put("/api/expense-items/{iid:int}/price-comparable")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def toggle_price_comparable(request: Request, iid: int, b: ItemPriceComparableToggle,
+                                   db=Depends(get_db), user=Depends(get_current_user)):
+    """Schaltet ein Item aus dem Preisvergleich aus (oder wieder ein).
+    Nützlich für Einmalkäufe wie Töpfe, Vorratsdosen, Werkzeug etc., die die
+    KI falsch als vergleichbar eingestuft hat. Setzt zusätzlich user_edited=TRUE,
+    damit ein zukünftiger Reparse diese manuelle Entscheidung nicht überschreibt."""
+    existing = await db.fetchval(
+        "SELECT 1 FROM expense_items WHERE id=$1 AND user_id=$2", iid, user["id"])
+    if not existing:
+        raise HTTPException(404, "Nicht gefunden")
+    await db.execute(
+        "UPDATE expense_items SET price_comparable=$1, user_edited=TRUE WHERE id=$2 AND user_id=$3",
+        bool(b.price_comparable), iid, user["id"])
+    return {"status": "ok", "item_id": iid, "price_comparable": bool(b.price_comparable)}
+
+
 @router.get("/api/expenses/products/history")
 async def product_history(key: str, db=Depends(get_db), user=Depends(get_current_user)):
     """Alle Käufe eines Produkts (nach normalisiertem Basisnamen ODER expliziter
@@ -1243,11 +1386,11 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
     if len(key) < 2:
         raise HTTPException(400, "Key zu kurz")
     rows = await db.fetch(
-        """SELECT ei.id AS item_id, ei.description, ei.total_price,
-                  ei.quantity, ei.quantity_unit,
+        """SELECT ei.id AS item_id, ei.description, ei.base_name, ei.original_text,
+                  ei.total_price, ei.quantity, ei.quantity_unit,
                   ei.original_price, ei.is_reduced, ei.product_group,
-                  ei.expense_id,
-                  e.purchase_date,
+                  ei.price_comparable, ei.expense_id,
+                  e.purchase_date, e.store_id,
                   s.name AS store_name, s.color AS store_color, s.icon AS store_icon
            FROM expense_items ei
            JOIN expenses e ON e.id=ei.expense_id
@@ -1257,6 +1400,7 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
         user["id"])
 
     import re
+    from collections import defaultdict
 
     def norm_key(desc):
         d = (desc or "").strip()
@@ -1269,9 +1413,7 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
 
     def unit_price_norm(qty, tp, unit):
         u = (unit or "").lower()
-        if u == "g":
-            return (tp / qty) * 1000.0
-        if u == "ml":
+        if u in ("g", "ml"):
             return (tp / qty) * 1000.0
         return tp / qty
 
@@ -1279,32 +1421,65 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
         pg = (r["product_group"] or "").strip().lower()
         if pg:
             return pg
+        bn = (r["base_name"] or "").strip().lower()
+        if bn:
+            return bn
         return norm_key(r["description"])
 
-    out = []
+    items = []
     for r in rows:
         if item_key(r) != key:
             continue
         qty = float(r["quantity"] or 1) or 1
         tp = float(r["total_price"])
-        out.append({
+        items.append({
             "item_id": r["item_id"],
             "expense_id": r["expense_id"],
             "date": r["purchase_date"].isoformat() if r["purchase_date"] else None,
             "description": r["description"],
+            "base_name": r["base_name"],
+            "original_text": r["original_text"],
             "total_price": tp,
             "quantity": qty,
             "quantity_unit": r["quantity_unit"],
-            # unit_price = einheits-normalisiert (€/kg bei g/kg, €/L bei ml/l, sonst €/Stk)
             "unit_price": round(unit_price_norm(qty, tp, r["quantity_unit"]), 4),
             "original_price": float(r["original_price"]) if r["original_price"] is not None else None,
             "is_reduced": bool(r["is_reduced"]),
             "product_group": r["product_group"],
+            "price_comparable": bool(r["price_comparable"]) if r["price_comparable"] is not None else True,
+            "store_id": r["store_id"],
             "store_name": r["store_name"] or "Ohne Laden",
             "store_color": r["store_color"] or "#9ca3af",
             "store_icon": r["store_icon"] or "🏪",
         })
-    return out
+
+    # Store-Vergleichs-Summary
+    by_store = defaultdict(list)
+    for it in items:
+        by_store[(it["store_id"], it["store_name"], it["store_color"], it["store_icon"])].append(it["unit_price"])
+    store_summary = []
+    for (sid, sname, scolor, sicon), ups in by_store.items():
+        store_summary.append({
+            "store_id": sid, "store_name": sname,
+            "store_color": scolor, "store_icon": sicon,
+            "avg_unit_price": round(sum(ups) / len(ups), 4),
+            "count": len(ups),
+        })
+    store_summary.sort(key=lambda s: s["avg_unit_price"])
+    cheapest = store_summary[0] if store_summary else None
+    expensive = store_summary[-1] if len(store_summary) > 1 else None
+    max_diff_pct = None
+    if cheapest and expensive and cheapest["store_id"] != expensive["store_id"] and cheapest["avg_unit_price"] > 0:
+        max_diff_pct = round(
+            (expensive["avg_unit_price"] - cheapest["avg_unit_price"]) / cheapest["avg_unit_price"] * 100.0, 1)
+
+    return {
+        "items": items,
+        "store_summary": store_summary,
+        "cheapest_store": cheapest,
+        "most_expensive_store": expensive,
+        "max_diff_pct": max_diff_pct,
+    }
 
 
 # ---------- Export ----------

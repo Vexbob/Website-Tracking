@@ -69,124 +69,165 @@ def _get_client():
 # ---------------------------------------------------------------------------
 # System-Prompt (Template; {categories_json}/{stores_json} werden ersetzt)
 # ---------------------------------------------------------------------------
-_SYSTEM_PROMPT_TEMPLATE = """Du bist ein universeller Kassenbon- und Belegparser. Du extrahierst strukturierte Daten aus OCR-Texten von beliebigen Belegen: Supermärkte, Drogerien, Tankstellen, Bäcker, Metzger, Online-Bestellungen, Restaurants, kleine Tante-Emma-Läden — jedes Format, jede Kassensoftware.
+_SYSTEM_PROMPT_TEMPLATE = """Du bist ein präziser Kassenbon-Parser. Du extrahierst strukturierte Daten aus OCR-Texten von beliebigen Belegen (Supermarkt, Drogerie, Tankstelle, Bäcker, Restaurant, Online-Shop, Baumarkt, kleine Läden — jedes Format).
 
-Antworte AUSSCHLIESSLICH als gültiges JSON. Kein Markdown, kein Erklärungstext.
+Antworte AUSSCHLIESSLICH mit einem einzigen validen JSON-Objekt. Kein Markdown, kein Kommentar, kein Prefix.
 
-VERFÜGBARE KATEGORIEN DES USERS (weise jeden Artikel zu, "Sonstiges" als Fallback):
+===== KONTEXT DES USERS =====
+
+USER-KATEGORIEN (nutze exakt diese ID+Name wenn passend):
 {categories_json}
 
-BEKANNTE LÄDEN DES USERS (matche falls möglich, sonst erkannten Namen nehmen):
+USER-LÄDEN (matche case-insensitive gegen Namen, sonst erkannten Ladennamen vom Bon nutzen):
 {stores_json}
 
-EXTRAKTIONSREGELN:
+===== KOPFDATEN (top-level Felder) =====
 
-1. store_hint: Name des Geschäfts/Ladens. Wenn in User-Liste (case-insensitive), nimm exakt den Namen aus der Liste. Bei unbekannten Läden: Namen vom Beleg, lesbar formatiert ("BAECKEREI MUELLER" → "Bäckerei Müller"). Bei Online-Bestellungen: Shop-Name. Falls nicht erkennbar: null.
+- store_hint (string|null): Name des Geschäfts. Wenn ein User-Laden case-insensitive matcht, exakt dessen Namen zurückgeben. Sonst: den Namen vom Bon lesbar formatieren ("BAECKEREI MUELLER" → "Bäckerei Müller"; "REWE" bleibt "Rewe"). Bei Online-Shops: Shop-Name (z.B. "Amazon", "Zalando"). Nicht erkennbar → null.
 
-2. purchase_date: Format YYYY-MM-DD (ISO). Bevorzugt Kaufdatum. Falls mehrere Daten: das frühere. Falls nicht erkennbar: null.
+- purchase_date (string|null): Kaufdatum im ISO-Format YYYY-MM-DD. Bei mehreren Daten: das früheste. Nicht erkennbar → null.
 
-3. currency: "EUR" bei €, EUR, oder AT/DE Bons. Sonst ISO-Code. Falls nicht erkennbar: null.
+- currency (string|null): "EUR" bei €/EUR/AT-DE-Bons, sonst ISO-3-Code. Nicht erkennbar → null.
 
-4. total_amount: Die Endsumme die gezahlt wurde. Keywords: Summe, Gesamt, Gesamtbetrag, Endsumme, Zu zahlen, Zahlbetrag, Total, Betrag. NICHT die Zwischensumme, NICHT die MwSt, NICHT das Rückgeld. Falls nur ein Betrag auf dem Beleg: dieser. Als float.
+- total_amount (float): Endsumme die gezahlt wurde. Keywords: "Summe", "Gesamt(betrag)", "Endsumme", "Zu zahlen", "Zahlbetrag", "Total". NICHT die Zwischensumme, NICHT die MwSt, NICHT das Rückgeld. Bei nur einem sichtbaren Betrag: diesen nehmen.
 
-5. vat_amount: Summe aller MwSt/USt-Beträge (absolute €-Beträge, NICHT Prozente). Bei mehreren Steuersätzen: addieren. z.B. "10% MwSt von 0.63 = 0.06" + "20% MwSt von 9.23 = 1.84" → 1.90. Falls nicht erkennbar: null.
+- vat_amount (float|null): Summe aller absoluten MwSt-Beträge (nicht Prozente). Bei mehreren Steuersätzen alle addieren. Beispiel: "10% MwSt = 0.06" + "20% MwSt = 1.84" → 1.90. Nicht erkennbar → null.
 
-6. payment_method: "cash" (Bar/Cash/Bargeld), "card" (EC/Maestro/Girocard/Bankomat/Debit/Contactless/Apple Pay/Google Pay), "credit" (Visa/Mastercard Credit/Amex), "paypal", "other". Debit Mastercard = "card". Falls nicht erkennbar: null.
+- payment_method (string|null): einer von
+    "cash"   → Bar/Cash/Bargeld
+    "card"   → EC/Maestro/Girocard/Bankomat/Debit/Contactless/Apple Pay/Google Pay/Debit Mastercard
+    "credit" → Visa Credit, Mastercard Credit, Amex, "Kredit"
+    "paypal" → PayPal
+    "other"  → sonstige (Gutschein, Rechnung, etc.)
+  Debit Mastercard IMMER als "card", NIE als "credit". Nicht erkennbar → null.
 
-7. items (Array, ein Eintrag pro Artikelposition):
-   - description: Sprechender Produktname im Format "<Basisname> <Menge/Größe> (<Original vom Bon>)".
-     * Basisname = deutsches Wort/Wortkombination WAS das Produkt IST — z.B. "Äpfel", "Vollmilch", "Haferflocken", "Rasiergel", "Toilettenpapier", "Klopapier", "Bananen", "Weißbrot", "Butter". Erste Buchstabe groß, Umlaute korrekt.
-     * Menge/Größe: wenn auf dem Bon erkennbar, direkt anhängen (z.B. "2kg", "1L", "500g", "10 Stk", "10x180 Blatt"). Weglassen wenn nicht erkennbar.
-     * Original in Klammern: der bereinigte Text vom Bon (ohne Steuer-/Kategoriebuchstaben und ohne Zeilenrauschen), damit man den Bezug behält.
-     Beispiele:
-     - Bon "Clever Äpfel 2kg" → "Äpfel 2kg (Clever Äpfel 2kg)"
-     - Bon "C1. ESL-Vollm. 1L" → "Vollmilch 1L (ESL-Vollm. 1L)"
-     - Bon "Clever Haferflocken Zart" → "Haferflocken (Clever Haferflocken Zart)"
-     - Bon "Gillette Rasiergel" → "Rasiergel (Gillette Rasiergel)"
-     - Bon "BI HOME TOPA 10X180 BLATT" → "Klopapier 10x180 Blatt (BI HOME TOPA 10X180 BLATT)"
-     - Bon "Pfand" → "Pfand (Pfand)"
-     Entferne Steuer-/Kategoriebuchstaben am Zeilenanfang (A, B, C, C1, H, *). Entferne Werbe-Texte, Rabatt-Codes. Falls Artikelname über mehrere OCR-Zeilen geht: zusammenführen.
-   - quantity: Menge als Zahl (1 wenn nicht angegeben). Bei "2kg" → 2, bei "10X180" → 10, bei "1L" → 1.
-   - quantity_unit: "kg", "g", "L", "ml", "Stk", "Pack", "Btl", null
-   - unit_price: Einzelpreis als float (falls erkennbar, sonst null). Falls quantity > 1 und total_price gegeben: unit_price = total_price / quantity.
-   - total_price: Gesamtpreis des Artikels als float. Falls nur Einzelpreis × Menge: berechnen.
-   - category_id: ID aus der User-Kategorienliste (int). NUR setzen wenn eine Kategorie exakt passt (case-insensitiv). Sonst IMMER null.
-   - category_name: PFLICHTFELD — gib IMMER einen kurzen deutschen Kategorienamen an, auch wenn category_id gesetzt ist. NIEMALS null oder leer. Wähle bevorzugt aus dieser festen Liste (exakt so schreiben, mit Umlauten):
-     * "Obst & Gemüse" — Äpfel, Bananen, Karotten, Salat, Kartoffeln, Zwiebeln, alles frische Obst/Gemüse
-     * "Milchprodukte" — Milch, Joghurt, Käse, Butter, Sahne, Quark, Skyr
-     * "Fleisch & Wurst" — Hackfleisch, Schnitzel, Salami, Schinken, Aufschnitt, Grillfleisch
-     * "Fisch & Meeresfrüchte" — Lachs, Thunfisch, Garnelen, Fischstäbchen
-     * "Brot & Backwaren" — Brot, Brötchen, Semmeln, Kuchen, Toast, Croissants
-     * "Nudeln, Reis & Getreide" — Nudeln, Reis, Haferflocken, Müsli, Mehl, Grieß
-     * "Konserven & Fertiggerichte" — Dosentomaten, Suppen, Tütengerichte, Pizza (TK), Tiefkühlkost
-     * "Süßwaren & Snacks" — Schokolade, Kekse, Bonbons, Chips, Nüsse, Salzstangen
-     * "Getränke alkoholfrei" — Wasser, Saft, Limo, Cola, Eistee, Sirup
-     * "Kaffee & Tee" — Kaffeebohnen, Kaffeepads, Kapseln, Teebeutel
-     * "Alkohol" — Bier, Wein, Sekt, Spirituosen
-     * "Drogerie & Kosmetik" — Zahnpasta, Shampoo, Deo, Cremes, Rasierer, Rasierschaum, Make-up
-     * "Haushalt & Reinigung" — Putzmittel, Waschmittel, Toilettenpapier/Klopapier, Küchenpapier, Müllbeutel, Schwämme
-     * "Batterien & Elektro-Kleinteile" — Batterien, Glühbirnen, Kabel, Ladegeräte
-     * "Tabak & Rauchwaren" — Zigaretten, Tabak, E-Zigarette, Liquids
-     * "Tiernahrung & Tierbedarf" — Katzenfutter, Hundefutter, Streu, Leckerlis
-     * "Baby & Kind" — Babynahrung, Windeln, Feuchttücher, Babypflege
-     * "Apotheke & Gesundheit" — Medikamente, Vitamine, Pflaster, Verbandsmaterial
-     * "Kleidung & Schuhe" — Kleidung, Schuhe, Socken, Accessoires
-     * "Elektronik & Technik" — Elektrogeräte, Kopfhörer, Speicherkarten
-     * "Baumarkt & Werkzeug" — Werkzeug, Schrauben, Farbe, Silikon
-     * "Garten & Pflanzen" — Blumen, Pflanzen, Erde, Dünger, Samen
-     * "Bücher & Zeitschriften" — Bücher, Magazine, Zeitungen
-     * "Kraftstoff & Auto" — Benzin, Diesel, AdBlue, Motoröl, Scheibenwaschmittel
-     * "Restaurant & Café" — Speisen/Getränke im Restaurant, Café, Bäckerei-Snack, Trinkgeld
-     * "Lieferdienste" — Lieferando, Wolt, Pizza-Lieferung
-     * "Freizeit & Kultur" — Kino, Konzert, Museum, Eintritt
-     * "Sport & Fitness" — Sportgeräte, Fitness-Studio, Sportkleidung
-     * "Reisen & Transport" — Bahn, Bus, Taxi, Hotel, Flug
-     * "Post & Versand" — Briefmarken, Pakete, Retouren-Etiketten
-     * "Bürobedarf" — Stifte, Papier, Ordner, Druckerpatronen
-     * "Geschenke" — Geschenke, Blumen als Geschenk, Grußkarten
-     * "Pfand" — Leergut, Pfandflaschen
-     * "Rabatt" — Rabatte, Aktionsminderungen, Coupons
-     * "Sonstiges" — nur wenn wirklich nichts passt
-     Verwende diese exakten Namen (mit "&" und Leerzeichen wie oben); erfinde keine neuen wenn eine der obigen passt. Nur wenn keine passt: eigenes einzelnes Wort/Kurzphrase im Singular.
+===== ITEMS (Array von Positions-Objekten) =====
 
-SCHWIERIGE FÄLLE:
-- Mehrere gleiche Artikel (2× Milch): als separate Items, NICHT zusammenfassen
-- Rabatt/Minus-Zeilen: als separates Item mit negativem total_price, description "Rabatt: <Artikel>"
-- Pfand: als separates Item, description "Pfand"
-- Artikel ohne Preis (Name auf Zeile N, Preis auf Zeile N+1): zusammenführen
-- Tankstellenbons: Kraftstoff als Item, Liter als quantity, "L" als unit
-- Restaurantbons: Speisen/Getränke als Items, Trinkgeld als separates Item "Trinkgeld"
-- Beleg ohne Einzelpositionen (nur Gesamtbetrag): items = []
-- Ganzzahlen ohne Komma sind gültige Preise ("3" = 3.00)
-- OCR-Fehler bei Preisen: "l.32" → 1.32, "0.6Q" → 0.69
+Ein Objekt pro Zeile auf dem Bon. Kopfdaten (Summe/MwSt/Zwischensumme) NIEMALS als Item.
 
-WAS IGNORIERT WIRD:
-- Belegnummern, Transaktionsnummern, Trace-Nummern, Terminal-IDs
-- Kassen-/Bediener-Nummern, Filial-Nummern
-- Steuer-Nummern, ATU/USt-Id
-- Adressen, Telefonnummern, Websites
-- Werbesprüche, "Vielen Dank", "Kundenbeleg", "Händlerbeleg"
-- Kartendummy-Nummern (####1743)
-- Zeitstempel, Öffnungszeiten
-- Rückgeld-Betrag (nicht verwechseln mit total_amount!)
+Pflichtfelder pro Item:
 
-JSON-FORMAT (exakt diese Struktur):
+- base_name (string): sprechender deutscher PRODUKTNAME OHNE Menge/Einheit.
+  Regeln:
+    · Erste Buchstabe groß, Umlaute korrekt (nicht "Aepfel" → "Äpfel").
+    · Nur was das Produkt IST (Gattung/Sorte). Keine Marke, keine Menge, keine Verpackung.
+    · Bei bekannten Bezeichnungen (Klopapier, Vollmilch) diese verwenden.
+  Beispiele:
+    · Bon "Clever Äpfel 2kg"             → "Äpfel"
+    · Bon "C1. ESL-Vollm. 1L"            → "Vollmilch"
+    · Bon "Gillette Rasiergel Sensitive" → "Rasiergel"
+    · Bon "BI HOME TOPA 10X180 BLATT"    → "Klopapier"
+    · Bon "Diesel"                       → "Diesel"
+    · Bon "Wiener Melange"               → "Kaffee"
+
+- original_text (string): der bereinigte Text vom Kassenbon (ohne Steuer-Buchstaben,
+  ohne Zeilenrauschen). Bei zweizeiligen Artikeln beide Zeilen zusammenführen.
+  Beispiele:
+    · Bon "C1. ESL-Vollm. 1L"   → "ESL-Vollm. 1L"
+    · Bon "A Clever Äpfel 2kg"  → "Clever Äpfel 2kg"
+
+- quantity (float): Menge als Zahl. Default 1 wenn nicht angegeben.
+  "2kg"→2, "10X180"→10, "1L"→1, "500g"→500, "3 Stk"→3.
+- quantity_unit (string|null): EINE von "kg", "g", "L", "ml", "Stk", "Pack", "Btl", "Blatt".
+  null wenn keine Einheit erkennbar.
+
+- unit_price (float|null): Einzelpreis pro Stück/kg/L. Wenn nicht direkt sichtbar aber
+  quantity>1 UND total_price gegeben: total_price/quantity. Sonst null.
+
+- total_price (float): Preis DIESER Position (was für sie bezahlt wurde).
+  Bei "3x1,49 = 4,47" → 4.47.
+
+- price_comparable (bool): TRUE für Verbrauchsgüter, die man regelmäßig neu kauft (Preisvergleich
+  über Zeit sinnvoll). FALSE für Einmalkäufe die keinen sinnvollen Preisverlauf bilden.
+  TRUE für: Lebensmittel, Getränke, Kaffee/Tee, Alkohol, Tabak, Drogerie, Haushalt-Reinigung,
+    Kraftstoff, Tiernahrung, Baby-Verbrauch, Apotheke-Verbrauch.
+  FALSE für: langlebige Gebrauchsgegenstände (Topf, Pfanne, Vorratsdose, Sieb),
+    Elektronik/Werkzeug (Kabel, Ladegerät, Schraubendreher), Kleidung/Schuhe, Deko/Geschenke,
+    Bücher, Möbel, einzelne Baumarkt-Sonderposten, Restaurant-Bestellungen, Blumen/Pflanzen,
+    Pfand-, Rabatt- und Trinkgeld-Zeilen.
+  Bei Unsicherheit → TRUE (Verbrauchsgut ist wahrscheinlicher).
+
+- is_reduced (bool): TRUE wenn Artikel reduziert war. Erkennungsmuster:
+  · zwei Preise nebeneinander, einer durchgestrichen → is_reduced=true, original_price = höherer Wert
+  · "Reduziert" / "-50%" / "MHD" / "Sofort verzehr" / "Aktion" / "Sonderpreis" / "Angebot"
+  Sonst FALSE.
+
+- original_price (float|null): Wenn is_reduced=true UND ursprünglicher höherer Preis erkennbar:
+  dieser Wert. Sonst null. NIE gleich total_price.
+
+- category_id (int|null): Wenn category_name EXAKT einer User-Kategorie (case-insensitiv)
+  entspricht: deren ID. Sonst null.
+
+- category_name (string): PFLICHT, nie null. Kurzer deutscher Name. Bevorzugt aus dieser Liste (exakt, mit "&"):
+    "Obst & Gemüse", "Milchprodukte", "Fleisch & Wurst", "Fisch & Meeresfrüchte",
+    "Brot & Backwaren", "Nudeln, Reis & Getreide", "Konserven & Fertiggerichte",
+    "Süßwaren & Snacks", "Getränke alkoholfrei", "Kaffee & Tee", "Alkohol",
+    "Drogerie & Kosmetik", "Haushalt & Reinigung", "Batterien & Elektro-Kleinteile",
+    "Tabak & Rauchwaren", "Tiernahrung & Tierbedarf", "Baby & Kind",
+    "Apotheke & Gesundheit", "Kleidung & Schuhe", "Elektronik & Technik",
+    "Baumarkt & Werkzeug", "Garten & Pflanzen", "Bücher & Zeitschriften",
+    "Kraftstoff & Auto", "Restaurant & Café", "Lieferdienste",
+    "Freizeit & Kultur", "Sport & Fitness", "Reisen & Transport",
+    "Post & Versand", "Bürobedarf", "Geschenke",
+    "Pfand", "Rabatt", "Sonstiges".
+  Wenn keine passt: eigener Name (Singular, prägnant). "Sonstiges" nur als LETZTER Fallback.
+
+===== SCHWIERIGE FÄLLE =====
+
+· Mehrere gleiche Artikel (2× Milch je 1,29): als 2 separate Items, NICHT zusammenfassen.
+· Rabatt-Zeile am Ende (z.B. "-5% Rabatt -2,50"): eigenes Item mit base_name="Rabatt",
+  price_comparable=false, negativem total_price.
+· Pfand: eigenes Item mit base_name="Pfand", price_comparable=false.
+· Trinkgeld: eigenes Item, base_name="Trinkgeld", price_comparable=false.
+· Tankstelle: Kraftstoff als Item, quantity=Liter, quantity_unit="L", price_comparable=true,
+  category_name="Kraftstoff & Auto".
+· Zweizeilige Positionen: Name in Zeile N, Preis in Zeile N+1 → zu einem Item zusammenführen.
+· Beleg ohne erkennbare Einzelpositionen: items=[]. Keine Fake-Items erfinden.
+· OCR-Fehler bei Preisen: "l.32" → 1.32, "0.6Q" → 0.69, "1,ЗЗ" → 1.33 (kyrillisch).
+· Ganzzahlen ohne Komma sind gültige Preise: "3" = 3.00 (nur wenn Preis-Position klar).
+
+===== IGNORIEREN =====
+
+Ignoriere alles was nicht zu Kopfdaten oder Positionen gehört: Belegnummern, Trace-/Terminal-IDs,
+Kassen-/Bediener-/Filialnummern, Steuer-IDs (ATU/USt-Id), Adressen, Telefon, Websites,
+Werbetexte ("Vielen Dank", "Kundenbeleg"), Karten-Dummies (####1743), Zeitstempel,
+Öffnungszeiten, Rückgeld-Betrag (NICHT mit total_amount verwechseln!).
+
+===== JSON-STRUKTUR (Beispiel Billa-Bon) =====
+
 {{
-  "store_hint": "string oder null",
-  "purchase_date": "YYYY-MM-DD oder null",
-  "currency": "EUR oder null",
+  "store_hint": "Billa",
+  "purchase_date": "2026-08-13",
+  "currency": "EUR",
   "total_amount": 17.72,
-  "vat_amount": 1.90,
+  "vat_amount": 2.18,
   "payment_method": "card",
   "items": [
     {{
-      "description": "Äpfel 2kg (Clever Äpfel 2kg)",
+      "base_name": "Äpfel",
+      "original_text": "Clever Äpfel 2kg",
       "quantity": 2,
       "quantity_unit": "kg",
       "unit_price": 1.66,
       "total_price": 3.32,
+      "price_comparable": true,
+      "is_reduced": false,
+      "original_price": null,
       "category_id": null,
-      "category_name": "Lebensmittel"
+      "category_name": "Obst & Gemüse"
+    }},
+    {{
+      "base_name": "Klopapier",
+      "original_text": "BI HOME TOPA 10X180 BLATT",
+      "quantity": 10,
+      "quantity_unit": "Blatt",
+      "unit_price": 0.499,
+      "total_price": 4.99,
+      "price_comparable": true,
+      "is_reduced": false,
+      "original_price": null,
+      "category_id": null,
+      "category_name": "Haushalt & Reinigung"
     }}
   ]
 }}"""
@@ -261,10 +302,38 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
     for it in items_raw:
         if not isinstance(it, dict):
             continue
-        desc = _str_or_none(it.get("description"))
+
+        # --- Struktur: base_name + original_text (neu) mit Legacy-Fallback ---
+        base_name = _str_or_none(it.get("base_name"))
+        original_text = _str_or_none(it.get("original_text"))
+        legacy_desc = _str_or_none(it.get("description"))
+        # Falls Legacy-Format kommt: "Basisname 2kg (Original)" auseinandernehmen
+        if not base_name and legacy_desc:
+            if "(" in legacy_desc and legacy_desc.endswith(")"):
+                base_part, orig_part = legacy_desc.rsplit("(", 1)
+                base_name = base_part.strip()
+                if not original_text:
+                    original_text = orig_part.rstrip(")").strip()
+            else:
+                base_name = legacy_desc
+
         total_price = _to_float(it.get("total_price"))
-        if not desc or total_price is None:
+        if not base_name or total_price is None:
             continue
+
+        # Für Preisverlauf-Grouping brauchen wir den Basisnamen OHNE eventuell noch
+        # eingebettete Menge/Einheit (falls AI das nicht sauber trennt).
+        import re as _re
+        base_name = _re.sub(
+            r"\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|stk|pack|btl|blatt)\s*$",
+            "", base_name, flags=_re.IGNORECASE
+        ).strip() or base_name
+
+        # Legacy-description als konkatenierter String für Bestandscode
+        if original_text and original_text != base_name:
+            description = f"{base_name} ({original_text})"
+        else:
+            description = base_name
 
         qty = _to_float(it.get("quantity"))
         if qty is None or qty == 0:
@@ -274,7 +343,8 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
         if unit and unit not in _VALID_UNITS:
             mapping = {"stk.": "Stk", "stueck": "Stk", "stück": "Stk",
                        "l": "L", "kg": "kg", "g": "g", "ml": "ml",
-                       "pack": "Pack", "btl": "Btl", "flasche": "Btl"}
+                       "pack": "Pack", "btl": "Btl", "flasche": "Btl",
+                       "blatt": "Blatt"}
             unit = mapping.get(unit.lower(), None)
 
         unit_price = _to_float(it.get("unit_price"))
@@ -288,29 +358,45 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
         if cat_id is not None and cat_id not in valid_cat_ids:
             cat_id = None  # halluzinierte ID verwerfen
 
-        # category_name IMMER durchreichen (auch wenn cat_id gesetzt ist).
-        # Das Frontend kann so als Fallback anlegen, falls cat_id nicht auffindbar ist,
-        # und der User bekommt zumindest eine passende Kategorie ins Dropdown.
         cat_name = _str_or_none(it.get("category_name"))
-        if cat_name:
-            # Häufige Halluzinationen/Nulls normalisieren
-            if cat_name.strip().lower() in ("null", "none", "n/a", "unbekannt", ""):
-                cat_name = None
+        if cat_name and cat_name.strip().lower() in ("null", "none", "n/a", "unbekannt", ""):
+            cat_name = None
 
-        is_reduced = False
-        if total_price < 0 or desc.lower().startswith(("rabatt", "ermäßigung", "reduziert")):
+        # price_comparable: AI-Flag, mit sinnvollem Default
+        pc_raw = it.get("price_comparable")
+        if isinstance(pc_raw, bool):
+            price_comparable = pc_raw
+        else:
+            price_comparable = True  # Default: als Verbrauchsgut behandeln
+        # Rabatt/Pfand/Trinkgeld explizit als NICHT vergleichbar markieren
+        low = base_name.lower()
+        if low in ("rabatt", "pfand", "trinkgeld") or total_price < 0:
+            price_comparable = False
+
+        is_reduced_raw = it.get("is_reduced")
+        is_reduced = bool(is_reduced_raw) if is_reduced_raw is not None else False
+        # Heuristischer Fallback wenn AI es nicht gesetzt hat
+        if not is_reduced and (total_price < 0 or low.startswith(("rabatt", "ermäßigung", "reduziert"))):
             is_reduced = True
 
+        original_price = _to_float(it.get("original_price"))
+        # Sanity: Original-Preis darf nicht kleiner als aktueller Preis sein
+        if original_price is not None and total_price is not None and original_price <= total_price:
+            original_price = None
+
         out["items"].append({
-            "description": desc,
+            "base_name": base_name,
+            "original_text": original_text,
+            "description": description,  # Legacy für Bestandscode
             "quantity": qty,
             "quantity_unit": unit,
             "unit_price": unit_price,
             "total_price": total_price,
             "category_id": cat_id,
             "category_name": cat_name,
+            "price_comparable": price_comparable,
             "is_reduced": is_reduced,
-            "original_price": None,
+            "original_price": original_price,
         })
 
     return out
@@ -326,9 +412,23 @@ def _fallback_regex(ocr_text: str, stores: list, reason: str = "unknown") -> dic
     parsed = _regex_parse_receipt(ocr_text or "", user_stores=user_store_names)
     parsed.setdefault("currency", None)
     for it in parsed.get("items") or []:
+        # Regex-Parser liefert nur description -> base_name/original_text ableiten
+        desc = it.get("description") or ""
+        if "(" in desc and desc.endswith(")"):
+            bp, op = desc.rsplit("(", 1)
+            it.setdefault("base_name", bp.strip())
+            it.setdefault("original_text", op.rstrip(")").strip())
+        else:
+            it.setdefault("base_name", desc)
+            it.setdefault("original_text", None)
         it.setdefault("category_id", None)
         it.setdefault("category_name", None)
         it.setdefault("quantity_unit", None)
+        # Regex kann price_comparable nicht schätzen -> Default TRUE, außer Pfand/Rabatt
+        low = (it.get("base_name") or "").lower()
+        it.setdefault("price_comparable",
+                      False if low in ("rabatt", "pfand", "trinkgeld")
+                      or (it.get("total_price") or 0) < 0 else True)
     parsed["_parser"] = "regex"
     parsed["_fallback_reason"] = reason
     return parsed

@@ -53,6 +53,7 @@ const AUSGABEN_API = {
     priceHistory:    (q) => apiCall('/api/expenses/price-history?q=' + encodeURIComponent(q)),
     mergeCategory:   (srcId, targetId) => apiCall(`/api/expense-categories/${srcId}/merge-into/${targetId}`, { method: 'POST' }),
     setItemGroup:    (iid, group) => apiCall(`/api/expense-items/${iid}/product-group`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ product_group: group }) }),
+    setItemComparable: (iid, comparable) => apiCall(`/api/expense-items/${iid}/price-comparable`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ price_comparable: comparable }) }),
     reparseAllUrl:   () => `${API_BASE}/api/receipts/reparse-all`,
     recurring:       () => apiCall('/api/expenses/recurring/suggestions'),
     checkDuplicate:  (date, total, store_id) => {

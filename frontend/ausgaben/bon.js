@@ -94,15 +94,23 @@ function renderItemRow(item) {
     const row = document.createElement('div');
     row.className = 'item-row';
     row.dataset.id = item.id || '';
+    // Falls Item vom Preisvergleich ausgeschlossen ist: visuell abheben
+    const comparable = item.price_comparable !== false;
+    if (!comparable) row.classList.add('not-comparable');
     const catOpts = '<option value="">– Kategorie –</option>' +
         categories.map(cat => `<option value="${cat.id}"${item.category_id==cat.id?' selected':''}>${cat.icon || ''} ${escapeHtml(cat.name)}</option>`).join('');
     const reducedBadge = item.is_reduced
         ? `<span class="badge" style="background:#dcfce7;color:#166534;font-size:0.625rem;padding:1px 4px" title="${item.original_price ? 'Vorher: ' + item.original_price + ' €' : 'Reduziert'}">RED</span>`
         : '';
+    const cmpTitle = comparable
+        ? 'Aus Preisvergleich ausschließen (z.B. Einmalkauf)'
+        : 'In Preisvergleich aufnehmen';
+    const cmpIcon = comparable ? '📊' : '🚫';
     row.innerHTML = `
         <input type="text" class="d-desc" value="${escapeAttr(item.description||'')}" placeholder="Beschreibung">
         <input type="number" step="0.01" class="d-price" value="${item.total_price || ''}" placeholder="Preis">
         <select class="d-cat">${catOpts}</select>
+        <button class="cmp" title="${cmpTitle}">${cmpIcon}</button>
         <button class="del" title="Entfernen">✕</button>
         ${reducedBadge}
     `;
@@ -114,9 +122,17 @@ function renderItemRow(item) {
         if (!desc || isNaN(price)) return;
         try {
             if (item.id) {
-                await AUSGABEN_API.updateItem(item.id, { description: desc, total_price: price, quantity: item.quantity || 1, category_id: cat ? +cat : null });
+                await AUSGABEN_API.updateItem(item.id, {
+                    description: desc, total_price: price,
+                    quantity: item.quantity || 1, quantity_unit: item.quantity_unit || null,
+                    category_id: cat ? +cat : null,
+                    price_comparable: item.price_comparable !== false,
+                });
             } else {
-                const created = await AUSGABEN_API.addItem(currentExpense.id, { description: desc, total_price: price, quantity: 1, category_id: cat ? +cat : null });
+                const created = await AUSGABEN_API.addItem(currentExpense.id, {
+                    description: desc, total_price: price, quantity: 1,
+                    category_id: cat ? +cat : null,
+                });
                 item.id = created.id;
                 row.dataset.id = created.id;
             }
@@ -124,6 +140,25 @@ function renderItemRow(item) {
         } catch(err) { showToast('Fehler: ' + err.message, 'error'); }
     };
     row.querySelectorAll('input, select').forEach(el => { el.onchange = save; });
+    // Preisvergleich-Toggle
+    row.querySelector('.cmp').onclick = async () => {
+        if (!item.id) {
+            showToast('Erst speichern, dann Preisvergleich togglen', 'error');
+            return;
+        }
+        const newVal = !(item.price_comparable !== false);
+        try {
+            await AUSGABEN_API.setItemComparable(item.id, newVal);
+            item.price_comparable = newVal;
+            row.classList.toggle('not-comparable', !newVal);
+            const btn = row.querySelector('.cmp');
+            btn.textContent = newVal ? '📊' : '🚫';
+            btn.title = newVal
+                ? 'Aus Preisvergleich ausschließen (z.B. Einmalkauf)'
+                : 'In Preisvergleich aufnehmen';
+            showToast(newVal ? 'Wieder im Preisvergleich' : 'Aus Preisvergleich ausgeschlossen', 'success', 1500);
+        } catch (err) { showToast('Fehler: ' + err.message, 'error'); }
+    };
     row.querySelector('.del').onclick = async () => {
         if (!item.id) { row.remove(); return; }
         if (!confirm('Position löschen?')) return;

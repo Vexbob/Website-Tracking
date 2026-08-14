@@ -409,6 +409,8 @@ function addItemRow(containerId, item) {
     row.className = 'item-row';
     if (item && item.is_reduced) row.dataset.isReduced = '1';
     if (item && item.original_price != null) row.dataset.originalPrice = item.original_price;
+    // AI-Flag price_comparable durchreichen (default true wenn nicht gesetzt)
+    row.dataset.comparable = (item && item.price_comparable === false) ? '0' : '1';
 
     const parts = splitProductDescription(item ? item.description : '', item);
 
@@ -466,10 +468,14 @@ function collectItems(containerId) {
         const cat = r.querySelector('.d-cat').value;
         const it = {
             description,
+            base_name: name,                    // strukturiert übermittelt
+            original_text: origText || null,    // dito
             total_price: price,
             category_id: cat ? +cat : null,
             quantity: qty && qty > 0 ? qty : 1,
             quantity_unit: unit || null,
+            price_comparable: r.dataset.comparable !== '0',
+            user_edited: true,                  // manuelle Eingabe -> vor Reparse schützen
         };
         // Reduziert-Info aus data-Attributen übernehmen (nur bei OCR-Vorbelegung)
         if (r.dataset.isReduced === '1') it.is_reduced = true;
