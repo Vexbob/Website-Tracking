@@ -183,9 +183,17 @@ async def login(request: Request,
 async def me(user=Depends(get_current_user)):
     return {"username": user["username"], "is_admin": user["is_admin"], "id": user["id"]}
 
+BACKEND_VERSION = "1.10.2"
+
 @app.get("/api/health")
 async def health():
-    return {"status": "ok"}
+    """Health-Check + Info welches Backend läuft (nützlich nach Deploy-Rollouts)."""
+    return {
+        "status": "ok",
+        "backend_version": BACKEND_VERSION,
+        "routes": sum(1 for r in app.routes if hasattr(r, "endpoint")),
+        "expenses_router": True,
+    }
 
 # ---------- Admin: User-Management (Invite-Flow) ----------
 INVITE_EXPIRES_HOURS = 24 * 7  # 7 Tage
