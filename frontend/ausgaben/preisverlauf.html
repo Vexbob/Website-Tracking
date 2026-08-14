@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Preisverlauf — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/ausgaben/ausgaben.js"></script>
+<style>
+body{visibility:hidden}body.ready{visibility:visible}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.card h3{font-size:1rem;margin-bottom:0.5rem;font-weight:600}
+.pv-search{display:flex;gap:0.5rem;margin-bottom:1rem}
+.pv-search input{flex:1;margin:0}
+.pv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem}
+@media(max-width:520px){.pv-grid{grid-template-columns:1fr}}
+.pv-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0.875rem;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:0.375rem;transition:border-color .15s,transform .15s}
+.pv-item:hover{border-color:var(--border-strong);transform:translateY(-1px)}
+.pv-item.reduced{border-left:4px solid var(--green)}
+.pv-item.increased{border-left:4px solid var(--red)}
+.pv-item.decreased{border-left:4px solid var(--green)}
+.pv-title{font-weight:600;font-size:0.9375rem;line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pv-title small{color:var(--text-faint);font-weight:400;font-size:0.75rem;display:block;margin-top:2px}
+.pv-meta{font-size:0.6875rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:0.375rem;align-items:center}
+.pv-meta .chip{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:1px 6px}
+.pv-prices{display:flex;align-items:baseline;gap:0.5rem;flex-wrap:wrap;margin-top:0.25rem}
+.pv-current{font-size:1.375rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+.pv-orig{font-size:0.875rem;color:var(--text-faint);text-decoration:line-through;font-variant-numeric:tabular-nums}
+.pv-change{font-size:0.75rem;font-weight:700;padding:2px 6px;border-radius:5px;font-variant-numeric:tabular-nums}
+.pv-change.up{background:#fee2e2;color:#991b1b}
+.pv-change.down{background:#dcfce7;color:#166534}
+:root[data-theme="dark"] .pv-change.up{background:#7f1d1d;color:#fca5a5}
+:root[data-theme="dark"] .pv-change.down{background:#14532d;color:#4ade80}
+.pv-unit{font-size:0.75rem;color:var(--text-muted);margin-top:2px;display:flex;gap:0.5rem;flex-wrap:wrap}
+.pv-unit strong{color:var(--text);font-weight:600}
+.pv-badge{display:inline-block;background:#dcfce7;color:#166534;font-size:0.625rem;font-weight:700;padding:1px 5px;border-radius:4px;letter-spacing:0.3px}
+:root[data-theme="dark"] .pv-badge{background:#14532d;color:#4ade80}
+.pv-empty{text-align:center;color:var(--text-faint);padding:2rem 1rem;font-size:0.875rem}
+.pv-empty .icon{font-size:2.5rem;opacity:0.5;margin-bottom:0.5rem}
+.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
+.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/ausgaben/" class="nav-title">← Preisverlauf</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main class="wide">
+    <div id="subnav" data-active="preisverlauf"></div>
+    <div class="card">
+        <div class="pv-search">
+            <input id="pvSearch" placeholder="Suche nach Produktname …">
+            <select id="pvFilter" style="width:auto;margin:0">
+                <option value="">Alle</option>
+                <option value="reduced">Nur reduzierte</option>
+                <option value="up">Preis gestiegen</option>
+                <option value="down">Preis gesunken</option>
+            </select>
+        </div>
+        <div id="pvList"></div>
+    </div>
+</main>
+<div class="version-tag"></div>
+<script src="/ausgaben/preisverlauf.js"></script>
+</body>
+</html>

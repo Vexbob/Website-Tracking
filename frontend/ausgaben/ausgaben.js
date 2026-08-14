@@ -132,8 +132,21 @@ async function downloadFile(url, filename) {
         const token = getToken();
         const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
         if (!res.ok) {
+            // Fehler-Payload robust in einen String verwandeln (nicht "[object Object]")
             let msg = 'HTTP ' + res.status;
-            try { const j = await res.json(); if (j.detail) msg = j.detail; } catch(_) {}
+            try {
+                const txt = await res.text();
+                if (txt) {
+                    try {
+                        const j = JSON.parse(txt);
+                        if (typeof j === 'string') msg = j;
+                        else if (j && typeof j.detail === 'string') msg = j.detail;
+                        else if (j && Array.isArray(j.detail)) msg = j.detail.map(x => x.msg || JSON.stringify(x)).join('; ');
+                        else msg = JSON.stringify(j);
+                    } catch (_) { msg = txt; }
+                }
+            } catch (_) {}
+            console.error('Export-Fehler:', res.status, msg);
             throw new Error(msg);
         }
         const blob = await res.blob();
@@ -142,7 +155,10 @@ async function downloadFile(url, filename) {
         a.download = filename;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    } catch (e) { showToast('Export fehlgeschlagen: ' + e.message, 'error'); }
+    } catch (e) {
+        const msg = (e && typeof e.message === 'string') ? e.message : String(e);
+        showToast('Export fehlgeschlagen: ' + msg, 'error');
+    }
 }
 
 /* ---------- Gemeinsame Subnav für alle Ausgaben-Seiten ---------- */
