@@ -38,6 +38,10 @@ async function loadKpis() {
 
 const TYPE_ICONS = { receipt:'🧾', online_order:'📦', restaurant:'🍽️', subscription:'🔁', other:'📌' };
 const TYPE_LABELS = { receipt:'Kassenbon', online_order:'Online', restaurant:'Restaurant', subscription:'Abo', other:'Sonstiges' };
+const PAYMENT_LABELS = { cash:'Bar', card:'EC/Karte', credit:'Kreditkarte', paypal:'PayPal', other:'Sonstiges' };
+
+// Cache pro Bon-ID: { detail: fullExpense, imgUrl: blobUrl|null, expanded: bool }
+const expDetailCache = new Map();
 
 async function loadExpenses() {
     const params = {
@@ -56,21 +60,98 @@ async function loadExpenses() {
             list.innerHTML = '<div class="empty"><div class="empty-icon">🧾</div>Noch keine Ausgaben — <a href="/ausgaben/neu.html">jetzt anlegen</a></div>';
             return;
         }
-        list.innerHTML = rows.map(r => {
-            const initial = (r.store_name || '€').slice(0,1).toUpperCase();
-            const color = r.store_color || '#6b7280';
-            const typeIcon = TYPE_ICONS[r.expense_type] || '🧾';
-            const typeLabel = TYPE_LABELS[r.expense_type] || 'Kassenbon';
-            return `<a href="/ausgaben/bon.html?id=${r.id}" class="exp-row">
-                <div class="exp-store" style="background:${color}">${r.store_icon || initial}</div>
-                <div class="exp-info">
-                    <div class="exp-name">${typeIcon} ${escapeHtml(r.store_name || typeLabel)}${r.is_recurring?' 🔁':''}</div>
-                    <div class="exp-meta">${fmtDate(r.purchase_date)} · ${r.item_count||0} Position${r.item_count===1?'':'en'}${r.expense_type && r.expense_type !== 'receipt' ? ' · ' + typeLabel : ''}</div>
-                </div>
-                <div class="exp-amount">${fmtEur(r.total_amount)}</div>
-            </a>`;
-        }).join('');
+        list.innerHTML = rows.map(r => renderExpItem(r)).join('');
+        // Klick-Handler binden
+        list.querySelectorAll('.exp-row').forEach(row => {
+            row.onclick = (e) => {
+                e.preventDefault();
+                const id = +row.dataset.id;
+                toggleExpDetail(id, row);
+            };
+        });
     } catch(e) { list.innerHTML = '<div class="empty muted">Fehler: '+e.message+'</div>'; }
+}
+
+function renderExpItem(r) {
+    const initial = (r.store_name || '€').slice(0,1).toUpperCase();
+    const color = r.store_color || '#6b7280';
+    const typeIcon = TYPE_ICONS[r.expense_type] || '🧾';
+    const typeLabel = TYPE_LABELS[r.expense_type] || 'Kassenbon';
+    return `<div class="exp-item" data-item-id="${r.id}">
+        <div class="exp-row" data-id="${r.id}" role="button" tabindex="0">
+            <div class="exp-store" style="background:${color}">${r.store_icon || initial}</div>
+            <div class="exp-info">
+                <div class="exp-name">${typeIcon} ${escapeHtml(r.store_name || typeLabel)}${r.is_recurring?' 🔁':''}</div>
+                <div class="exp-meta">${fmtDate(r.purchase_date)} · ${r.item_count||0} Position${r.item_count===1?'':'en'}${r.expense_type && r.expense_type !== 'receipt' ? ' · ' + typeLabel : ''}</div>
+            </div>
+            <div class="exp-amount">${fmtEur(r.total_amount)}</div>
+            <span class="exp-chevron">▶</span>
+        </div>
+    </div>`;
+}
+
+async function toggleExpDetail(id, rowEl) {
+    const container = rowEl.parentElement; // .exp-item
+    const existingDetail = container.querySelector('.exp-detail');
+    if (existingDetail) {
+        // schließen
+        existingDetail.remove();
+        rowEl.classList.remove('open');
+        return;
+    }
+    // Öffnen: placeholder rendern
+    const placeholder = document.createElement('div');
+    placeholder.className = 'exp-detail';
+    placeholder.innerHTML = '<div class="muted" style="text-align:center;padding:0.5rem">Laden …</div>';
+    container.appendChild(placeholder);
+    rowEl.classList.add('open');
+
+    try {
+        let cache = expDetailCache.get(id);
+        if (!cache) {
+            const detail = await AUSGABEN_API.getExpense(id);
+            let imgUrl = null;
+            if (detail.receipt_image_id) {
+                try {
+                    imgUrl = await fetchImageAsBlobUrl(AUSGABEN_API.receiptThumbUrl(detail.receipt_image_id));
+                } catch (_) {}
+            }
+            cache = { detail, imgUrl };
+            expDetailCache.set(id, cache);
+        }
+        placeholder.innerHTML = renderExpDetail(cache.detail, cache.imgUrl);
+    } catch (e) {
+        placeholder.innerHTML = `<div class="muted">Fehler: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function renderExpDetail(e, imgUrl) {
+    const items = e.items || [];
+    const itemsHtml = items.length
+        ? items.map(it => `<div class="it">
+            <span class="it-desc">${escapeHtml(it.description || '')}${it.category_name ? '<span class="it-cat">· ' + escapeHtml(it.category_name) + '</span>' : ''}</span>
+            <span class="it-price">${fmtEur(it.total_price)}</span>
+        </div>`).join('')
+        : '<div class="muted" style="font-size:0.75rem">Keine Einzelpositionen gespeichert.</div>';
+
+    const pm = e.payment_method ? PAYMENT_LABELS[e.payment_method] || e.payment_method : '–';
+    const typeLabel = TYPE_LABELS[e.expense_type] || 'Kassenbon';
+
+    return `
+        ${imgUrl ? `<img src="${imgUrl}" class="thumb" alt="Bon-Foto">` : ''}
+        <div class="grid">
+            <div class="k">Typ</div><div class="v">${TYPE_ICONS[e.expense_type] || '🧾'} ${typeLabel}</div>
+            <div class="k">Datum</div><div class="v">${fmtDate(e.purchase_date)}</div>
+            <div class="k">Laden</div><div class="v">${escapeHtml(e.store_name || '–')}</div>
+            <div class="k">Zahlungsart</div><div class="v">${pm}</div>
+            <div class="k">Gesamt</div><div class="v"><strong>${fmtEur(e.total_amount)}</strong></div>
+            ${e.note ? `<div class="k">Notiz</div><div class="v">${escapeHtml(e.note)}</div>` : ''}
+        </div>
+        ${items.length ? `<div class="items-hdr">Positionen (${items.length})</div><div class="items">${itemsHtml}</div>` : itemsHtml}
+        <div class="actions">
+            <a href="/ausgaben/bon.html?id=${e.id}" class="nav-btn primary" style="background:var(--teal);color:#fff;border:none">✏️ Bearbeiten</a>
+        </div>
+    `;
 }
 
 async function loadRecurring() {

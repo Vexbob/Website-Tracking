@@ -50,21 +50,34 @@ function setupTabs() {
 
 function setupOcrUpload() {
     const drop = document.getElementById('uploadDrop');
-    const input = document.getElementById('fileInput');
-    drop.onclick = () => input.click();
+    const inputCam = document.getElementById('fileInputCamera');
+    const inputGal = document.getElementById('fileInputGallery');
+    const btnCam = document.getElementById('btnCamera');
+    const btnGal = document.getElementById('btnGallery');
+    const btnPaste = document.getElementById('btnPaste');
+
+    btnCam.onclick = () => inputCam.click();
+    btnGal.onclick = () => inputGal.click();
+    btnPaste.onclick = () => tryPasteFromClipboard();
+
+    inputCam.onchange = () => { if (inputCam.files.length) handleFile(inputCam.files[0]); inputCam.value = ''; };
+    inputGal.onchange = () => { if (inputGal.files.length) handleFile(inputGal.files[0]); inputGal.value = ''; };
+
+    // Drag & Drop bleibt auf der Drop-Zone
     drop.ondragover = e => { e.preventDefault(); drop.classList.add('dragover'); };
     drop.ondragleave = () => drop.classList.remove('dragover');
     drop.ondrop = e => {
         e.preventDefault(); drop.classList.remove('dragover');
         if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
     };
-    input.onchange = () => { if (input.files.length) handleFile(input.files[0]); };
 }
 
-// Bild aus Zwischenablage per Strg+V einfügen (z.B. Screenshot oder kopiertes Bild).
+// Bild aus Zwischenablage einfügen — 2 Varianten:
+// 1) globaler paste-Event (Strg+V irgendwo auf der Seite)
+// 2) Button "Einfügen" nutzt die moderne navigator.clipboard.read()-API
 function setupClipboardPaste() {
+    // Globaler Paste-Listener (Strg+V)
     window.addEventListener('paste', (e) => {
-        // Nur wenn OCR-Tab aktiv und kein Text-Input fokussiert ist
         const ocrTabActive = document.getElementById('ocrPanel')?.classList.contains('active');
         if (!ocrTabActive) return;
         const tag = (document.activeElement?.tagName || '').toLowerCase();
@@ -76,7 +89,6 @@ function setupClipboardPaste() {
                 const blob = it.getAsFile();
                 if (blob) {
                     e.preventDefault();
-                    // Blob als File verpacken, damit handleFile file.name/type nutzen kann
                     const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
                     const file = new File([blob], `clipboard-${Date.now()}.${ext}`, { type: blob.type });
                     handleFile(file);
@@ -85,6 +97,37 @@ function setupClipboardPaste() {
             }
         }
     });
+}
+
+// Explizit über den "Einfügen"-Button: nutzt die async Clipboard-API (Firefox 127+/Chrome).
+// Bietet einen Button-basierten Weg, damit User nicht Strg+V raten müssen.
+async function tryPasteFromClipboard() {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+        showToast('Clipboard-API nicht verfügbar — nutze Strg+V', 'error', 3000);
+        return;
+    }
+    try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+            for (const type of item.types) {
+                if (type.startsWith('image/')) {
+                    const blob = await item.getType(type);
+                    const ext = (type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+                    const file = new File([blob], `clipboard-${Date.now()}.${ext}`, { type });
+                    handleFile(file);
+                    return;
+                }
+            }
+        }
+        showToast('Kein Bild in der Zwischenablage', 'error', 2500);
+    } catch (e) {
+        // NotAllowedError -> User hat Permission abgelehnt
+        if (e.name === 'NotAllowedError') {
+            showToast('Erlaubnis für Zwischenablage abgelehnt', 'error', 3000);
+        } else {
+            showToast('Einfügen fehlgeschlagen: ' + e.message, 'error', 3000);
+        }
+    }
 }
 
 async function handleFile(file) {
@@ -122,7 +165,18 @@ async function handleFile(file) {
 function resetUploadDrop() {
     const drop = document.getElementById('uploadDrop');
     drop.classList.remove('working');
-    drop.innerHTML = '<div class="icon">📸</div><div style="font-weight:600;margin-bottom:0.25rem">Bild wählen</div><div style="font-size:0.8125rem;color:var(--text-muted)">Kamera nutzen oder Datei ziehen · JPG/PNG · max 8 MB</div><input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none">';
+    drop.innerHTML = `
+        <div class="icon">📸</div>
+        <div style="font-weight:600;margin-bottom:0.5rem">Bild wählen</div>
+        <div class="upload-actions">
+            <button type="button" class="upload-btn" id="btnCamera">📷 Kamera</button>
+            <button type="button" class="upload-btn" id="btnGallery">🖼️ Galerie</button>
+            <button type="button" class="upload-btn" id="btnPaste">📋 Einfügen</button>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem">oder Datei hierher ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> · JPG/PNG · max 8 MB</div>
+        <input type="file" id="fileInputCamera" accept="image/*" capture="environment" style="display:none">
+        <input type="file" id="fileInputGallery" accept="image/*" style="display:none">
+    `;
     setupOcrUpload();
 }
 
@@ -280,7 +334,6 @@ async function renderOcrEditForm(ocr) {
             <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="oTotal" value="${parsed.total_amount || ''}"></div>
             <div><label>Zahlungsart</label><select id="oPayment">${paymentOpts}</select></div>
         </div>
-        <label style="margin-top:0.25rem"><input type="checkbox" id="oRecurring"> Wiederkehrend</label>
         <div style="margin-top:1rem;padding:0.625rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
             <label style="display:flex;align-items:center;gap:0.5rem;margin:0;cursor:pointer;font-size:0.875rem">
                 <input type="checkbox" id="oIncludeItems" checked style="width:auto;margin:0">
@@ -382,14 +435,14 @@ async function saveOcrExpense() {
             purchase_date: document.getElementById('oDate').value,
             total_amount: +document.getElementById('oTotal').value || 0,
             payment_method: document.getElementById('oPayment').value || null,
-            is_recurring:   document.getElementById('oRecurring').checked,
+            is_recurring:   false,
             expense_type:   document.getElementById('oType').value || 'receipt',
             note: document.getElementById('oNote').value || null,
             items,
         };
-        const res = await AUSGABEN_API.createExpense(body);
+        await AUSGABEN_API.createExpense(body);
         showToast('Bon gespeichert', 'success');
-        setTimeout(() => location.href = '/ausgaben/bon.html?id=' + res.id, 600);
+        setTimeout(() => location.href = '/ausgaben/', 500);
     } catch(e) { showToast('Fehler: ' + e.message, 'error'); btn.disabled = false; }
 }
 
@@ -413,7 +466,7 @@ function setupManualForm() {
                 purchase_date: document.getElementById('mDate').value,
                 total_amount: +document.getElementById('mTotal').value || 0,
                 payment_method: document.getElementById('mPayment').value || null,
-                is_recurring:   document.getElementById('mRecurring').checked,
+                is_recurring:   false,
                 expense_type:   document.getElementById('mType').value || 'receipt',
                 note: document.getElementById('mNote').value || null,
                 items,
@@ -421,9 +474,9 @@ function setupManualForm() {
             if (!body.purchase_date || body.total_amount <= 0) {
                 showToast('Datum und Betrag erforderlich', 'error'); btn.disabled = false; return;
             }
-            const res = await AUSGABEN_API.createExpense(body);
+            await AUSGABEN_API.createExpense(body);
             showToast('Bon gespeichert', 'success');
-            setTimeout(() => location.href = '/ausgaben/bon.html?id=' + res.id, 500);
+            setTimeout(() => location.href = '/ausgaben/', 500);
         } catch(e) { showToast('Fehler: ' + e.message, 'error'); btn.disabled = false; }
     };
 }
