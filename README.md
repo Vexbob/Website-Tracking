@@ -26,7 +26,7 @@ Persönliche Rezepte mit Zutaten, Schritten und Kategorien.
 ### 📸 Fotos
 Privates Fotoalbum mit Upload und Galerie-Ansicht.
 
-### 💶 Ausgaben-Tracker (neu in v1.7.0)
+### 💶 Ausgaben-Tracker (neu in v1.7.0, KI-Parser seit v1.8.0)
 - **Kassenbon-OCR** via Google Cloud Vision (deutscher Receipt-Parser: Markt/Datum/Betrag/MwSt./Positionen)
 - **Editierbare OCR-Ergebnisse** – nach der Erkennung Werte in einem Formular anpassen bevor gespeichert wird
 - **Bildspeicher** mit Thumbnails, Bild-Preview auf der Bon-Detailseite, jederzeit löschbar

@@ -107,7 +107,22 @@ async function renderOcrEditForm(ocr) {
     let matchedStore = '';
     if (parsed.store_hint) {
         const found = stores.find(s => s.name.toLowerCase() === parsed.store_hint.toLowerCase());
-        if (found) matchedStore = found.id;
+        if (found) {
+            matchedStore = found.id;
+        } else {
+            // Laden nicht in User-Liste -> automatisch anlegen (vom AI-Parser erkannt)
+            try {
+                const created = await AUSGABEN_API.createStore({ name: parsed.store_hint });
+                stores.push(created);
+                stores.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                fillStoreSelects();
+                matchedStore = created.id;
+                showToast('Neuer Laden angelegt: ' + parsed.store_hint, 'success', 2500);
+            } catch (e) {
+                // Nicht kritisch — User kann Laden manuell setzen. Doppelter Name -> ignorieren.
+                console.warn('Auto-Store-Anlage fehlgeschlagen:', e.message);
+            }
+        }
     }
     if (uploadedImgUrl) URL.revokeObjectURL(uploadedImgUrl);
     try { uploadedImgUrl = await fetchImageAsBlobUrl(AUSGABEN_API.receiptThumbUrl(uploadedReceipt.id)); } catch(e) {}
@@ -161,11 +176,11 @@ async function renderOcrEditForm(ocr) {
         </div>
         <div style="margin-top:1rem;padding:0.625rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
             <label style="display:flex;align-items:center;gap:0.5rem;margin:0;cursor:pointer;font-size:0.875rem">
-                <input type="checkbox" id="oIncludeItems" style="width:auto;margin:0">
+                <input type="checkbox" id="oIncludeItems" checked style="width:auto;margin:0">
                 <span>Einzelpositionen speichern (${(parsed.items||[]).length} erkannt) — für Preisverlauf & Detail-Statistik</span>
             </label>
         </div>
-        <div id="oItemsWrap" style="display:none;margin-top:0.75rem">
+        <div id="oItemsWrap" style="margin-top:0.75rem">
             <div id="oItems" class="item-list"></div>
             <button id="oAddItem" style="margin-top:0.5rem;width:auto;padding:0.375rem 0.75rem;font-size:0.8125rem;background:var(--surface-2);color:var(--text);border:1px solid var(--border)">+ Position</button>
         </div>
