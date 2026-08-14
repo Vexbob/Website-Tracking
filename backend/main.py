@@ -1364,6 +1364,7 @@ async def del_snapshot(request: Request, sid: int, db=Depends(get_db), user=Depe
 from services.expenses import suggest_category, learn_rule, process_image
 from services.ocr import get_ocr_provider
 from services.receipt_parser import parse_receipt
+from services.ai_receipt_parser import ai_parse_receipt
 
 def _num(v):
     """asyncpg NUMERIC/Decimal -> float, sonst durchreichen."""
@@ -1864,10 +1865,20 @@ async def upload_receipt(request: Request,
         user["id"], file.filename or "receipt.jpg", mime, size,
         main_bytes, thumb_bytes, ocr_name, ocr_text)
 
-    # Bekannte Läden des Users für Store-Match
+    # Bekannte Läden & Kategorien des Users für Store-Match und AI-Parsing
     user_stores_rows = await db.fetch("SELECT name FROM stores WHERE user_id=$1", user["id"])
     user_stores = [r["name"] for r in user_stores_rows]
-    parsed = parse_receipt(ocr_text, user_stores=user_stores)
+    cat_rows = await db.fetch(
+        "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
+    try:
+        parsed = await ai_parse_receipt(
+            ocr_text,
+            [{"id": r["id"], "name": r["name"]} for r in cat_rows],
+            [{"name": r["name"]} for r in user_stores_rows],
+        )
+    except Exception as e:
+        logger.warning(f"AI parse failed, falling back to regex: {e}")
+        parsed = parse_receipt(ocr_text, user_stores=user_stores)
 
     return {
         "receipt": _ser_exp(row),
@@ -1918,11 +1929,24 @@ async def get_receipt_ocr(rid: int, db=Depends(get_db), user=Depends(get_current
         rid, user["id"])
     if not row:
         raise HTTPException(404, "Nicht gefunden")
-    user_stores = [r["name"] for r in await db.fetch("SELECT name FROM stores WHERE user_id=$1", user["id"])]
+    user_stores_rows = await db.fetch("SELECT name FROM stores WHERE user_id=$1", user["id"])
+    user_stores = [r["name"] for r in user_stores_rows]
+    cat_rows = await db.fetch(
+        "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
+    ocr_text = row["ocr_raw_text"] or ""
+    try:
+        parsed = await ai_parse_receipt(
+            ocr_text,
+            [{"id": r["id"], "name": r["name"]} for r in cat_rows],
+            [{"name": r["name"]} for r in user_stores_rows],
+        )
+    except Exception as e:
+        logger.warning(f"AI parse failed, falling back to regex: {e}")
+        parsed = parse_receipt(ocr_text, user_stores=user_stores)
     return {
         "provider": row["ocr_provider"],
-        "raw_text": row["ocr_raw_text"] or "",
-        "parsed": parse_receipt(row["ocr_raw_text"] or "", user_stores=user_stores),
+        "raw_text": ocr_text,
+        "parsed": parsed,
     }
 
 
