@@ -90,8 +90,26 @@ EXTRAKTIONSREGELN:
    - quantity_unit: "kg", "g", "L", "ml", "Stk", "Pack", "Btl", null
    - unit_price: Einzelpreis als float (falls erkennbar, sonst null). Falls quantity > 1 und total_price gegeben: unit_price = total_price / quantity.
    - total_price: Gesamtpreis des Artikels als float. Falls nur Einzelpreis × Menge: berechnen.
-   - category_id: ID aus der User-Kategorienliste (int). Passe genau, wenn eine passende Kategorie existiert. Sonst null.
-   - category_name: WENN category_id null ist, gib hier einen kurzen, sinnvollen Kategorienamen im Deutschen an (z.B. "Lebensmittel", "Getränke", "Süßwaren", "Drogerie", "Haushalt", "Kraftstoff", "Restaurant"). Erste Buchstabe groß, Singular oder Plural nach üblichem Sprachgebrauch. Bei sehr generischen Sachen: "Sonstiges". Wenn category_id gesetzt: category_name = null.
+   - category_id: ID aus der User-Kategorienliste (int). NUR setzen wenn eine Kategorie exakt passt (case-insensitiv). Sonst IMMER null.
+   - category_name: PFLICHTFELD — gib IMMER einen kurzen deutschen Kategorienamen an, auch wenn category_id gesetzt ist. NIEMALS null oder leer. Wähle bevorzugt aus dieser festen Liste (exakt so schreiben, mit Umlauten):
+     * "Lebensmittel" — Grundnahrungsmittel, Obst, Gemüse, Brot, Milchprodukte, Eier, Fleisch, Wurst, Käse, Nudeln, Reis, Konserven, Tiefkühl
+     * "Getränke" — Wasser, Saft, Limo, Bier, Wein, Kaffee, Tee (verpackt)
+     * "Süßwaren" — Schokolade, Kekse, Bonbons, Chips, Snacks
+     * "Drogerie" — Zahnpasta, Shampoo, Deo, Kosmetik, Rasierer, Rasierschaum, Windeln
+     * "Haushalt" — Putzmittel, Waschmittel, Toilettenpapier, Küchenpapier, Müllbeutel, Batterien, Glühbirnen
+     * "Tabak" — Zigaretten, Tabak, E-Zigarette
+     * "Tiernahrung" — Katzenfutter, Hundefutter, Tierbedarf
+     * "Baby" — Babynahrung, Windeln, Feuchttücher
+     * "Apotheke" — Medikamente, Vitamine, Verbandsmaterial
+     * "Kleidung" — Kleidung, Schuhe, Accessoires
+     * "Elektronik" — Kabel, Ladegeräte, Gadgets
+     * "Baumarkt" — Werkzeug, Schrauben, Farbe
+     * "Kraftstoff" — Benzin, Diesel, AdBlue
+     * "Restaurant" — Speisen/Getränke im Restaurant, Café, Bäckerei-Snack, Trinkgeld
+     * "Pfand" — Leergut, Pfandflaschen
+     * "Rabatt" — Rabatte, Aktionsminderungen, Coupons
+     * "Sonstiges" — nur wenn wirklich nichts passt
+     Verwende diese exakten Namen; erfinde keine neuen wenn eine der obigen passt. Nur wenn keine passt: eigenes einzelnes Wort im Singular.
 
 SCHWIERIGE FÄLLE:
 - Mehrere gleiche Artikel (2× Milch): als separate Items, NICHT zusammenfassen
@@ -129,8 +147,8 @@ JSON-FORMAT (exakt diese Struktur):
       "quantity_unit": "kg",
       "unit_price": 1.66,
       "total_price": 3.32,
-      "category_id": 10,
-      "category_name": null
+      "category_id": null,
+      "category_name": "Lebensmittel"
     }}
   ]
 }}"""
@@ -232,13 +250,14 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
         if cat_id is not None and cat_id not in valid_cat_ids:
             cat_id = None  # halluzinierte ID verwerfen
 
+        # category_name IMMER durchreichen (auch wenn cat_id gesetzt ist).
+        # Das Frontend kann so als Fallback anlegen, falls cat_id nicht auffindbar ist,
+        # und der User bekommt zumindest eine passende Kategorie ins Dropdown.
         cat_name = _str_or_none(it.get("category_name"))
-        # Wenn cat_id bereits gesetzt: Name nicht mehr nötig (Frontend nutzt ID).
-        if cat_id is not None:
-            cat_name = None
-        # "Sonstiges" ist implizit -> Frontend soll dafür nichts neu anlegen.
-        if cat_name and cat_name.strip().lower() in ("sonstiges", "sonstige", "n/a", "unbekannt"):
-            cat_name = None
+        if cat_name:
+            # Häufige Halluzinationen/Nulls normalisieren
+            if cat_name.strip().lower() in ("null", "none", "n/a", "unbekannt", ""):
+                cat_name = None
 
         is_reduced = False
         if total_price < 0 or desc.lower().startswith(("rabatt", "ermäßigung", "reduziert")):

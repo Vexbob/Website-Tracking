@@ -130,63 +130,73 @@ function escapeHtml(s) { if (!s) return ''; return String(s).replace(/[&<>"']/g,
 function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
 
 // Legt fehlende Kategorien an, die die AI per category_name vorgeschlagen hat,
-// und trägt bei den Items category_id nach. Idempotent: existierende (case-insensitive)
-// Kategorien werden wiederverwendet, ohne dass ein API-Call nötig ist.
+// und trägt bei den Items category_id nach. MUSS vor dem Rendern des OCR-Formulars
+// laufen, damit die Kategorien-Dropdowns die frisch angelegten Kategorien enthalten
+// und die Items direkt vorausgewählt werden.
 async function ensureCategoriesFromParsed(parsed) {
     const items = parsed?.items || [];
     if (!items.length) return;
 
-    // Lookup: name-lowercased -> id
-    const byName = new Map(categories.map(c => [(c.name || '').toLowerCase(), c.id]));
+    // Lookup: id-Set und name-lowercased -> id
+    let byId = new Set(categories.map(c => c.id));
+    const byName = () => new Map(categories.map(c => [(c.name || '').toLowerCase(), c.id]));
+    let lookupName = byName();
 
-    // Vor 1. Durchlauf: existierende Kategorien direkt auflösen und queued-Set bilden
-    const toCreate = new Set(); // Namen (Original-Casing)
+    // Schritt 1: ungültige category_id verwerfen, sonst per Namen versuchen
+    const toCreate = new Set(); // Original-Casing
     for (const it of items) {
-        if (it.category_id) continue;
-        const name = (it.category_name || '').trim();
-        if (!name) continue;
-        const hit = byName.get(name.toLowerCase());
-        if (hit) {
-            it.category_id = hit;
-        } else {
-            toCreate.add(name);
+        // ungültige ID -> weg, damit Fallback über Name greift
+        if (it.category_id && !byId.has(it.category_id)) it.category_id = null;
+
+        const rawName = (it.category_name || '').trim();
+        if (!rawName) continue;
+
+        if (!it.category_id) {
+            const hit = lookupName.get(rawName.toLowerCase());
+            if (hit) {
+                it.category_id = hit;
+            } else {
+                toCreate.add(rawName);
+            }
         }
     }
-    if (!toCreate.size) return;
 
-    // Fehlende Kategorien anlegen (sequenziell, damit UniqueViolation deterministisch abgefangen wird)
+    // Schritt 2: fehlende Kategorien anlegen
     let createdCount = 0;
-    for (const name of toCreate) {
-        try {
-            const created = await AUSGABEN_API.createCategory({ name });
-            categories.push(created);
-            byName.set(name.toLowerCase(), created.id);
-            createdCount++;
-        } catch (e) {
-            // Vielleicht Race: nochmals frisch laden und Lookup versuchen
+    if (toCreate.size) {
+        for (const name of toCreate) {
             try {
-                const fresh = await AUSGABEN_API.categories();
-                categories.length = 0;
-                categories.push(...fresh);
-                for (const c of fresh) byName.set((c.name || '').toLowerCase(), c.id);
-            } catch (_) {}
-            console.warn('Auto-Kategorie-Anlage:', name, e.message);
+                const created = await AUSGABEN_API.createCategory({ name });
+                categories.push(created);
+                createdCount++;
+            } catch (e) {
+                // z.B. Race / UniqueViolation -> Liste neu laden
+                console.warn('Auto-Kategorie-Anlage fehlgeschlagen für', name, '-', e.message);
+                try {
+                    const fresh = await AUSGABEN_API.categories();
+                    categories.length = 0;
+                    categories.push(...fresh);
+                } catch (_) {}
+            }
         }
-    }
-    // sort by name for stable Dropdown
-    categories.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        // Neu sortieren und Lookups aktualisieren
+        categories.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        byId = new Set(categories.map(c => c.id));
+        lookupName = byName();
 
-    // 2. Durchlauf: Items final zuweisen
-    for (const it of items) {
-        if (it.category_id) continue;
-        const name = (it.category_name || '').trim().toLowerCase();
-        if (!name) continue;
-        const hit = byName.get(name);
-        if (hit) it.category_id = hit;
-    }
+        // Schritt 3: Items final zuweisen
+        for (const it of items) {
+            if (it.category_id) continue;
+            const rawName = (it.category_name || '').trim().toLowerCase();
+            if (!rawName) continue;
+            const hit = lookupName.get(rawName);
+            if (hit) it.category_id = hit;
+        }
 
-    if (createdCount > 0) {
-        showToast(`${createdCount} neue Kategorie${createdCount === 1 ? '' : 'n'} angelegt`, 'success', 2500);
+        if (createdCount > 0) {
+            showToast(`${createdCount} neue Kategorie${createdCount === 1 ? '' : 'n'} angelegt`,
+                      'success', 2500);
+        }
     }
 }
 
