@@ -1,4 +1,4 @@
-"""KI-gestützter Kassenbon-Parser (Gemini 2.0 Flash).
+"""KI-gestützter Kassenbon-Parser (Gemini 2.5 Flash).
 
 Nimmt OCR-Rohtext + User-Kategorien + User-Läden entgegen und gibt ein
 strukturiertes Dict im gleichen Format wie ``services.receipt_parser.parse_receipt``
@@ -7,7 +7,7 @@ zurück — zusätzlich mit den Feldern ``currency`` sowie pro Item
 
 Konfiguration per ENV:
     GEMINI_API_KEY   API-Key von Google AI Studio (https://aistudio.google.com/apikey)
-    GEMINI_MODEL     Optional. Modellname, default ``gemini-2.0-flash``.
+    GEMINI_MODEL     Optional. Modellname, default ``gemini-2.5-flash``.
 
 Fehlt ``GEMINI_API_KEY`` oder schlägt der Aufruf fehl, wird transparent auf
 den regex-basierten Parser (``receipt_parser.parse_receipt``) zurückgefallen.
@@ -34,7 +34,7 @@ _client_init_error: Optional[str] = None  # Grund warum kein Client verfuegbar i
 
 
 def _get_model_name() -> str:
-    return os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    return os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 
 def _get_client():
@@ -342,7 +342,7 @@ async def ai_parse_receipt(
     categories: list,
     stores: list,
 ) -> dict:
-    """Parst OCR-Text via Gemini 2.0 Flash. Faellt bei Fehler auf Regex-Parser zurueck.
+    """Parst OCR-Text via Gemini 2.5 Flash. Faellt bei Fehler auf Regex-Parser zurueck.
 
     Args:
         ocr_text: Der von OCR extrahierte Rohtext.
