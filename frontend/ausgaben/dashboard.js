@@ -103,79 +103,10 @@ function bindItemHandlers(itemEl) {
     const row = itemEl.querySelector('.exp-row');
     if (!row) return;
     row.onclick = (e) => {
-        // Wenn Swipe offen: erst zurückschieben
-        if (itemEl.classList.contains('swipe-open')) {
-            itemEl.classList.remove('swipe-open');
-            return;
-        }
         e.preventDefault();
         const id = +row.dataset.id;
         toggleExpDetail(id, row);
     };
-
-    // Swipe-Handling nur auf Touch-Geräten (Mobile)
-    let startX = null, startY = null, deltaX = 0, active = false;
-    row.addEventListener('touchstart', (e) => {
-        const t = e.touches[0];
-        startX = t.clientX; startY = t.clientY; deltaX = 0; active = true;
-    }, { passive: true });
-    row.addEventListener('touchmove', (e) => {
-        if (!active || startX === null) return;
-        const t = e.touches[0];
-        const dx = t.clientX - startX;
-        const dy = t.clientY - startY;
-        if (Math.abs(dy) > Math.abs(dx)) { active = false; return; }
-        deltaX = Math.max(-80, Math.min(0, dx));
-    }, { passive: true });
-    row.addEventListener('touchend', () => {
-        if (!active) return;
-        active = false;
-        if (deltaX < -40) itemEl.classList.add('swipe-open');
-        else itemEl.classList.remove('swipe-open');
-    }, { passive: true });
-
-    // Delete-Button in Swipe-Actions
-    const delBtn = itemEl.querySelector('.exp-swipe-actions .del-btn');
-    if (delBtn) delBtn.onclick = async (e) => {
-        e.stopPropagation();
-        const id = +row.dataset.id;
-        await deleteExpenseWithUndo(id, itemEl);
-    };
-}
-
-async function deleteExpenseWithUndo(id, itemEl) {
-    // Wir laden den Bon vor dem Löschen komplett — für Rückgängig
-    let full = null;
-    try { full = await AUSGABEN_API.getExpense(id); } catch (_) {}
-    try {
-        await AUSGABEN_API.deleteExpense(id);
-    } catch (e) { showToast('Löschen fehlgeschlagen: ' + e.message, 'error'); return; }
-    itemEl.style.transition = 'opacity .2s, max-height .2s';
-    itemEl.style.overflow = 'hidden';
-    itemEl.style.maxHeight = itemEl.offsetHeight + 'px';
-    requestAnimationFrame(() => { itemEl.style.maxHeight = '0'; itemEl.style.opacity = '0'; });
-    setTimeout(() => itemEl.remove(), 220);
-    // KPIs neu laden (Betrag hat sich geändert)
-    loadKpis();
-    if (full) {
-        showUndoToast('Bon gelöscht', async () => {
-            // Re-Create mit gleichem Content
-            const items = (full.items || []).map(it => ({
-                description: it.description, quantity: it.quantity, quantity_unit: it.quantity_unit,
-                unit_price: it.unit_price, total_price: it.total_price,
-                category_id: it.category_id, is_reduced: it.is_reduced, original_price: it.original_price,
-            }));
-            await AUSGABEN_API.createExpense({
-                store_id: full.store_id, purchase_date: full.purchase_date,
-                total_amount: full.total_amount, payment_method: full.payment_method,
-                is_recurring: false, expense_type: full.expense_type, note: full.note,
-                receipt_image_id: full.receipt_image_id, items,
-            });
-            await loadExpenses(); loadKpis();
-        }, 3000);
-    } else {
-        showToast('Bon gelöscht', 'success', 1500);
-    }
 }
 
 // Datums-Trennlinie mit „Heute" / „Gestern" / „<Wochentag>, DD.MM.YYYY" + Tagesumsatz
@@ -204,17 +135,12 @@ function renderExpItem(r) {
     const color = r.store_color || '#6b7280';
     const typeIcon = TYPE_ICONS[r.expense_type] || '🧾';
     const typeLabel = TYPE_LABELS[r.expense_type] || 'Kassenbon';
-    const amt = Number(r.total_amount) || 0;
-    // Farb-Codierung: >= 100 € = groß (rot), < 5 € = klein (grün)
-    let sizeCls = '';
-    if (amt >= 100) sizeCls = 'big';
-    else if (amt > 0 && amt < 5) sizeCls = 'tiny';
     // Foto-Icon wenn der Bon ein Bild im Anhang hat (aus OCR-Upload)
     const photoBadge = r.has_image
         ? `<span class="exp-photo-badge" title="Foto vorhanden">📷</span>`
         : '';
     return `<div class="exp-item" data-item-id="${r.id}">
-        <div class="exp-row ${sizeCls}" data-id="${r.id}" role="button" tabindex="0">
+        <div class="exp-row" data-id="${r.id}" role="button" tabindex="0">
             <div class="exp-store" style="background:${color}">${r.store_icon || initial}</div>
             <div class="exp-info">
                 <div class="exp-name">${typeIcon} ${escapeHtml(r.store_name || typeLabel)}${r.is_recurring?' 🔁':''}${photoBadge}</div>
@@ -222,9 +148,6 @@ function renderExpItem(r) {
             </div>
             <div class="exp-amount">${fmtEur(r.total_amount)}</div>
             <span class="exp-chevron">▶</span>
-        </div>
-        <div class="exp-swipe-actions">
-            <button class="del-btn" title="Löschen">🗑️</button>
         </div>
     </div>`;
 }
