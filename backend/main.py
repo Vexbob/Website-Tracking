@@ -1549,6 +1549,47 @@ async def delete_category(request: Request, cid: int, db=Depends(get_db), user=D
     return {"status": "deleted"}
 
 
+@app.post("/api/expense-categories/{cid}/merge-into/{target_id}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def merge_category(request: Request, cid: int, target_id: int,
+                          db=Depends(get_db), user=Depends(get_current_user)):
+    """Verschmilzt die Quell-Kategorie in die Ziel-Kategorie:
+    - alle expense_items werden umgehängt
+    - alle category_rules werden umgehängt (Duplikate ignoriert)
+    - Quell-Kategorie wird gelöscht.
+    Beide müssen dem User gehören.
+    """
+    if cid == target_id:
+        raise HTTPException(400, "Quelle und Ziel identisch")
+    src = await db.fetchval("SELECT id FROM expense_categories WHERE id=$1 AND user_id=$2", cid, user["id"])
+    dst = await db.fetchval("SELECT id FROM expense_categories WHERE id=$1 AND user_id=$2", target_id, user["id"])
+    if not src or not dst:
+        raise HTTPException(404, "Kategorie nicht gefunden")
+    moved_items = 0
+    moved_rules = 0
+    async with db.transaction():
+        r = await db.execute(
+            "UPDATE expense_items SET category_id=$1 WHERE category_id=$2 AND user_id=$3",
+            target_id, cid, user["id"])
+        try: moved_items = int(r.split()[-1])
+        except (ValueError, IndexError): pass
+        # Rules: doppelte (description,store_id) für Ziel entfernen, dann umhängen
+        await db.execute(
+            """DELETE FROM category_rules WHERE category_id=$1 AND user_id=$2
+               AND (description, COALESCE(store_id, -1)) IN
+               (SELECT description, COALESCE(store_id, -1) FROM category_rules
+                WHERE category_id=$3 AND user_id=$2)""",
+            cid, user["id"], target_id)
+        r = await db.execute(
+            "UPDATE category_rules SET category_id=$1 WHERE category_id=$2 AND user_id=$3",
+            target_id, cid, user["id"])
+        try: moved_rules = int(r.split()[-1])
+        except (ValueError, IndexError): pass
+        await db.execute("DELETE FROM expense_categories WHERE id=$1 AND user_id=$2", cid, user["id"])
+    logger.info(f"User {user['id']} merged category {cid} into {target_id}: {moved_items} items, {moved_rules} rules")
+    return {"status": "merged", "moved_items": moved_items, "moved_rules": moved_rules}
+
+
 # ---------- Category Rules (mitlernend) ----------
 @app.get("/api/category-rules")
 async def list_rules(db=Depends(get_db), user=Depends(get_current_user)):
@@ -1607,6 +1648,7 @@ async def list_expenses(
     store_id: Optional[int] = None,
     category_id: Optional[int] = None,
     expense_type: Optional[str] = None,
+    q: Optional[str] = None,          # Volltextsuche (Notiz, Laden, Item-Beschreibungen)
     limit: int = 200,
 ):
     conds = ["e.user_id=$1"]
@@ -1627,10 +1669,19 @@ async def list_expenses(
         params.append(category_id)
         conds.append(
             f"EXISTS (SELECT 1 FROM expense_items ei WHERE ei.expense_id=e.id AND ei.category_id=${len(params)})")
+    if q and len(q.strip()) >= 2:
+        params.append("%" + q.strip().lower() + "%")
+        idx = len(params)
+        conds.append(
+            f"(LOWER(COALESCE(s.name,'')) LIKE ${idx} "
+            f"OR LOWER(COALESCE(e.note,'')) LIKE ${idx} "
+            f"OR EXISTS (SELECT 1 FROM expense_items ei WHERE ei.expense_id=e.id AND LOWER(ei.description) LIKE ${idx}))"
+        )
     params.append(max(1, min(limit, 500)))
     rows = await db.fetch(
         f"""SELECT e.*, s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
-                   (SELECT COUNT(*) FROM expense_items ei WHERE ei.expense_id=e.id) AS item_count
+                   (SELECT COUNT(*) FROM expense_items ei WHERE ei.expense_id=e.id) AS item_count,
+                   (e.receipt_image_id IS NOT NULL) AS has_image
            FROM expenses e
            LEFT JOIN stores s ON s.id=e.store_id
            WHERE {' AND '.join(conds)}
@@ -2359,6 +2410,52 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
 
     products.sort(key=lambda p: p["last_date"] or "", reverse=True)
     return products
+
+
+@app.get("/api/expenses/products/history")
+async def product_history(key: str, db=Depends(get_db), user=Depends(get_current_user)):
+    """Alle Käufe eines Produkts (nach normalisiertem Basisnamen) für Zeitreihen-Chart."""
+    key = (key or "").strip().lower()
+    if len(key) < 2:
+        raise HTTPException(400, "Key zu kurz")
+    rows = await db.fetch(
+        """SELECT ei.description, ei.total_price, ei.quantity, ei.quantity_unit,
+                  ei.original_price, ei.is_reduced,
+                  e.purchase_date,
+                  s.name AS store_name, s.color AS store_color, s.icon AS store_icon
+           FROM expense_items ei
+           JOIN expenses e ON e.id=ei.expense_id
+           LEFT JOIN stores s ON s.id=e.store_id
+           WHERE ei.user_id=$1
+           ORDER BY e.purchase_date ASC, ei.id ASC""",
+        user["id"])
+
+    def norm_key(desc):
+        d = (desc or "").strip()
+        if "(" in d:
+            d = d.split("(", 1)[0].strip()
+        return d.lower()
+
+    out = []
+    for r in rows:
+        if norm_key(r["description"]) != key:
+            continue
+        qty = float(r["quantity"] or 1) or 1
+        tp = float(r["total_price"])
+        out.append({
+            "date": r["purchase_date"].isoformat() if r["purchase_date"] else None,
+            "description": r["description"],
+            "total_price": tp,
+            "quantity": qty,
+            "quantity_unit": r["quantity_unit"],
+            "unit_price": round(tp / qty, 4),
+            "original_price": float(r["original_price"]) if r["original_price"] is not None else None,
+            "is_reduced": bool(r["is_reduced"]),
+            "store_name": r["store_name"] or "Ohne Laden",
+            "store_color": r["store_color"] or "#9ca3af",
+            "store_icon": r["store_icon"] or "🏪",
+        })
+    return out
 
 
 # ---------- Export ----------

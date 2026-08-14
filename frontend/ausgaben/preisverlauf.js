@@ -14,6 +14,13 @@ async function init() {
     document.getElementById('pvSearch').addEventListener('input', render);
     document.getElementById('pvFilter').onchange = render;
     render();
+    // Klick auf Kachel öffnet Chart-Modal
+    document.getElementById('pvList').addEventListener('click', (e) => {
+        const card = e.target.closest('.pv-item');
+        if (!card) return;
+        const key = card.dataset.key;
+        if (key) openProductChart(key, card.dataset.title || '');
+    });
     document.body.classList.add('ready');
     document.body.style.visibility = 'visible';
 }
@@ -98,7 +105,8 @@ function renderProductCard(p) {
     chips.push(`<span class="chip">${fmtDate(p.last_date)}</span>`);
     if (p.count > 1) chips.push(`<span class="chip">${p.count}× gekauft</span>`);
 
-    return `<div class="pv-item ${cardCls}">
+    const titleAttr = (base || p.description || '').replace(/"/g, '&quot;');
+    return `<div class="pv-item ${cardCls}" data-key="${escHtml(p.key)}" data-title="${titleAttr}" role="button" tabindex="0">
         <div class="pv-title">${escHtml(base || p.description)}${extras ? `<small>${escHtml(extras)}</small>` : ''}</div>
         ${priceHtml}
         <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap">
@@ -107,6 +115,71 @@ function renderProductCard(p) {
         </div>
         <div class="pv-meta">${chips.join('')}</div>
     </div>`;
+}
+
+async function openProductChart(key, title) {
+    const modal = openModal(`📈 Preisverlauf: ${escHtml(title)}`,
+        `<div class="pv-chart-wrap"><canvas id="pvChart"></canvas></div><div id="pvHistList"></div>`,
+        { wide: true }
+    );
+    try {
+        const history = await AUSGABEN_API.productHistory(key);
+        if (!history.length) {
+            modal.root.innerHTML = '<div class="pv-empty">Keine Käufe gefunden.</div>';
+            return;
+        }
+        // Chart: Einzelpreis über Zeit, farblich nach Laden
+        const byStore = {};
+        for (const h of history) {
+            const sn = h.store_name;
+            if (!byStore[sn]) byStore[sn] = { color: h.store_color, points: [] };
+            byStore[sn].points.push({ x: h.date, y: h.unit_price });
+        }
+        const datasets = Object.entries(byStore).map(([name, obj]) => ({
+            label: name,
+            data: obj.points,
+            borderColor: obj.color,
+            backgroundColor: obj.color,
+            tension: 0.2,
+            spanGaps: true,
+        }));
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const textCol = isDark ? '#a0a5b0' : '#666';
+        const gridCol = isDark ? '#2a2e37' : '#e8e8e8';
+        new Chart(document.getElementById('pvChart'), {
+            type: 'line',
+            data: { datasets },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: textCol, font: { size: 11 } } },
+                    tooltip: { callbacks: {
+                        label: (c) => c.dataset.label + ': ' + fmtEur(c.parsed.y) + ' / Einheit',
+                    } },
+                },
+                scales: {
+                    x: {
+                        type: 'category',
+                        ticks: { color: textCol, maxRotation: 0, autoSkip: true, autoSkipPadding: 20,
+                                 callback: function(v) { const d = new Date(this.getLabelForValue(v)+'T00:00:00'); return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }); } },
+                        grid: { display: false },
+                    },
+                    y: { ticks: { color: textCol, callback: v => fmtEur(v) }, grid: { color: gridCol }, beginAtZero: true },
+                },
+            },
+        });
+        // History-Liste unter dem Chart (neueste oben)
+        const listHtml = history.slice().reverse().map(h => `
+            <div class="pv-hist-item">
+                <span class="pv-hist-date">${fmtDate(h.date)}</span>
+                <span class="pv-hist-store" style="color:${h.store_color}">${h.store_icon} ${escHtml(h.store_name)}${h.quantity > 1 ? ` · ${h.quantity}${h.quantity_unit || ''}` : ''}</span>
+                <span class="pv-hist-price${h.is_reduced ? ' reduced' : ''}">${fmtEur(h.total_price)}${h.is_reduced ? ' 🏷️' : ''}</span>
+            </div>
+        `).join('');
+        document.getElementById('pvHistList').innerHTML = listHtml;
+    } catch (e) {
+        modal.root.innerHTML = `<div class="pv-empty">Fehler: ${escHtml(e.message)}</div>`;
+    }
 }
 
 init();

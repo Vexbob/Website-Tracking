@@ -49,7 +49,9 @@ const AUSGABEN_API = {
     statsWeekly:     (weeks=12) => apiCall(`/api/expenses/stats/weekly?weeks=${weeks}`),
     statsDaily:     (days=30) => apiCall(`/api/expenses/stats/daily?days=${days}`),
     products:        () => apiCall('/api/expenses/products'),
+    productHistory:  (key) => apiCall('/api/expenses/products/history?key=' + encodeURIComponent(key)),
     priceHistory:    (q) => apiCall('/api/expenses/price-history?q=' + encodeURIComponent(q)),
+    mergeCategory:   (srcId, targetId) => apiCall(`/api/expense-categories/${srcId}/merge-into/${targetId}`, { method: 'POST' }),
     recurring:       () => apiCall('/api/expenses/recurring/suggestions'),
     checkDuplicate:  (date, total, store_id) => {
         const q = new URLSearchParams({ date, total }); if (store_id) q.append('store_id', store_id);
@@ -81,6 +83,56 @@ function showToast(msg, type='info', ms=2500) {
     setTimeout(() => t.classList.add('show'), 10);
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, ms);
     if (type === 'error') haptic('error'); else if (type === 'success') haptic('success');
+}
+
+/* ---------- Undo-Toast (mit Rückgängig-Button, 3 Sekunden) ---------- */
+function showUndoToast(msg, onUndo, ms=3000) {
+    const t = document.createElement('div');
+    t.className = 'ausg-toast ausg-toast-undo';
+    t.innerHTML = `<span>${msg}</span> <button class="undo-btn" type="button">↺ Rückgängig</button>`;
+    document.body.appendChild(t);
+    let done = false;
+    const cleanup = () => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); };
+    t.querySelector('.undo-btn').onclick = async () => {
+        if (done) return; done = true;
+        cleanup();
+        try { await onUndo(); showToast('Rückgängig gemacht', 'success', 1500); }
+        catch (e) { showToast('Rückgängig fehlgeschlagen: ' + e.message, 'error'); }
+    };
+    setTimeout(() => t.classList.add('show'), 10);
+    setTimeout(() => { if (!done) cleanup(); }, ms);
+    haptic('tap');
+}
+
+/* ---------- Fullscreen-Image-Viewer ---------- */
+function openImageFullscreen(src) {
+    const overlay = document.createElement('div');
+    overlay.className = 'img-fullscreen';
+    overlay.innerHTML = `<button class="img-close" aria-label="Schließen">✕</button><img src="${src}" alt="Bon">`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('show'));
+    const close = () => { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 200); };
+    overlay.onclick = (e) => { if (e.target === overlay || e.target.classList.contains('img-close')) close(); };
+    const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+}
+
+/* ---------- Modal (generisch) ---------- */
+function openModal(title, contentHtml, opts={}) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal-box${opts.wide ? ' wide' : ''}">
+        <div class="modal-head"><h3>${title}</h3><button class="modal-close" aria-label="Schließen">✕</button></div>
+        <div class="modal-body">${contentHtml}</div>
+    </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('show'));
+    const close = () => { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 200); if (opts.onClose) opts.onClose(); };
+    overlay.querySelector('.modal-close').onclick = close;
+    overlay.onclick = (e) => { if (e.target === overlay) close(); };
+    const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+    return { close, root: overlay.querySelector('.modal-body') };
 }
 
 /* ---------- Bild-Kompression ---------- */

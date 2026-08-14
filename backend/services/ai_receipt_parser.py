@@ -112,24 +112,42 @@ EXTRAKTIONSREGELN:
    - total_price: Gesamtpreis des Artikels als float. Falls nur Einzelpreis × Menge: berechnen.
    - category_id: ID aus der User-Kategorienliste (int). NUR setzen wenn eine Kategorie exakt passt (case-insensitiv). Sonst IMMER null.
    - category_name: PFLICHTFELD — gib IMMER einen kurzen deutschen Kategorienamen an, auch wenn category_id gesetzt ist. NIEMALS null oder leer. Wähle bevorzugt aus dieser festen Liste (exakt so schreiben, mit Umlauten):
-     * "Lebensmittel" — Grundnahrungsmittel, Obst, Gemüse, Brot, Milchprodukte, Eier, Fleisch, Wurst, Käse, Nudeln, Reis, Konserven, Tiefkühl
-     * "Getränke" — Wasser, Saft, Limo, Bier, Wein, Kaffee, Tee (verpackt)
-     * "Süßwaren" — Schokolade, Kekse, Bonbons, Chips, Snacks
-     * "Drogerie" — Zahnpasta, Shampoo, Deo, Kosmetik, Rasierer, Rasierschaum, Windeln
-     * "Haushalt" — Putzmittel, Waschmittel, Toilettenpapier, Küchenpapier, Müllbeutel, Batterien, Glühbirnen
-     * "Tabak" — Zigaretten, Tabak, E-Zigarette
-     * "Tiernahrung" — Katzenfutter, Hundefutter, Tierbedarf
-     * "Baby" — Babynahrung, Windeln, Feuchttücher
-     * "Apotheke" — Medikamente, Vitamine, Verbandsmaterial
-     * "Kleidung" — Kleidung, Schuhe, Accessoires
-     * "Elektronik" — Kabel, Ladegeräte, Gadgets
-     * "Baumarkt" — Werkzeug, Schrauben, Farbe
-     * "Kraftstoff" — Benzin, Diesel, AdBlue
-     * "Restaurant" — Speisen/Getränke im Restaurant, Café, Bäckerei-Snack, Trinkgeld
+     * "Obst & Gemüse" — Äpfel, Bananen, Karotten, Salat, Kartoffeln, Zwiebeln, alles frische Obst/Gemüse
+     * "Milchprodukte" — Milch, Joghurt, Käse, Butter, Sahne, Quark, Skyr
+     * "Fleisch & Wurst" — Hackfleisch, Schnitzel, Salami, Schinken, Aufschnitt, Grillfleisch
+     * "Fisch & Meeresfrüchte" — Lachs, Thunfisch, Garnelen, Fischstäbchen
+     * "Brot & Backwaren" — Brot, Brötchen, Semmeln, Kuchen, Toast, Croissants
+     * "Nudeln, Reis & Getreide" — Nudeln, Reis, Haferflocken, Müsli, Mehl, Grieß
+     * "Konserven & Fertiggerichte" — Dosentomaten, Suppen, Tütengerichte, Pizza (TK), Tiefkühlkost
+     * "Süßwaren & Snacks" — Schokolade, Kekse, Bonbons, Chips, Nüsse, Salzstangen
+     * "Getränke alkoholfrei" — Wasser, Saft, Limo, Cola, Eistee, Sirup
+     * "Kaffee & Tee" — Kaffeebohnen, Kaffeepads, Kapseln, Teebeutel
+     * "Alkohol" — Bier, Wein, Sekt, Spirituosen
+     * "Drogerie & Kosmetik" — Zahnpasta, Shampoo, Deo, Cremes, Rasierer, Rasierschaum, Make-up
+     * "Haushalt & Reinigung" — Putzmittel, Waschmittel, Toilettenpapier/Klopapier, Küchenpapier, Müllbeutel, Schwämme
+     * "Batterien & Elektro-Kleinteile" — Batterien, Glühbirnen, Kabel, Ladegeräte
+     * "Tabak & Rauchwaren" — Zigaretten, Tabak, E-Zigarette, Liquids
+     * "Tiernahrung & Tierbedarf" — Katzenfutter, Hundefutter, Streu, Leckerlis
+     * "Baby & Kind" — Babynahrung, Windeln, Feuchttücher, Babypflege
+     * "Apotheke & Gesundheit" — Medikamente, Vitamine, Pflaster, Verbandsmaterial
+     * "Kleidung & Schuhe" — Kleidung, Schuhe, Socken, Accessoires
+     * "Elektronik & Technik" — Elektrogeräte, Kopfhörer, Speicherkarten
+     * "Baumarkt & Werkzeug" — Werkzeug, Schrauben, Farbe, Silikon
+     * "Garten & Pflanzen" — Blumen, Pflanzen, Erde, Dünger, Samen
+     * "Bücher & Zeitschriften" — Bücher, Magazine, Zeitungen
+     * "Kraftstoff & Auto" — Benzin, Diesel, AdBlue, Motoröl, Scheibenwaschmittel
+     * "Restaurant & Café" — Speisen/Getränke im Restaurant, Café, Bäckerei-Snack, Trinkgeld
+     * "Lieferdienste" — Lieferando, Wolt, Pizza-Lieferung
+     * "Freizeit & Kultur" — Kino, Konzert, Museum, Eintritt
+     * "Sport & Fitness" — Sportgeräte, Fitness-Studio, Sportkleidung
+     * "Reisen & Transport" — Bahn, Bus, Taxi, Hotel, Flug
+     * "Post & Versand" — Briefmarken, Pakete, Retouren-Etiketten
+     * "Bürobedarf" — Stifte, Papier, Ordner, Druckerpatronen
+     * "Geschenke" — Geschenke, Blumen als Geschenk, Grußkarten
      * "Pfand" — Leergut, Pfandflaschen
      * "Rabatt" — Rabatte, Aktionsminderungen, Coupons
      * "Sonstiges" — nur wenn wirklich nichts passt
-     Verwende diese exakten Namen; erfinde keine neuen wenn eine der obigen passt. Nur wenn keine passt: eigenes einzelnes Wort im Singular.
+     Verwende diese exakten Namen (mit "&" und Leerzeichen wie oben); erfinde keine neuen wenn eine der obigen passt. Nur wenn keine passt: eigenes einzelnes Wort/Kurzphrase im Singular.
 
 SCHWIERIGE FÄLLE:
 - Mehrere gleiche Artikel (2× Milch): als separate Items, NICHT zusammenfassen

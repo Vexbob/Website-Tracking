@@ -33,6 +33,7 @@ function renderRow(c) {
         <input class="icon" value="${escAttr(c.icon || '')}" placeholder="📚" maxlength="3">
         <input class="color" type="color" value="${c.color || '#3b82f6'}">
         <button class="save">Speichern</button>
+        <button class="merge" title="In andere Kategorie zusammenführen">🔀</button>
         <button class="del" title="Löschen">🗑</button>
     `;
     row.querySelector('.save').onclick = async () => {
@@ -46,12 +47,41 @@ function renderRow(c) {
             loadCategories();
         } catch(e) { showToast('Fehler: ' + e.message, 'error'); }
     };
+    row.querySelector('.merge').onclick = () => openMergeModal(c);
     row.querySelector('.del').onclick = async () => {
         if (!confirm('Kategorie "' + c.name + '" löschen? Positionen behalten ihre Werte, verlieren nur die Zuordnung.')) return;
         try { await AUSGABEN_API.deleteCategory(c.id); loadCategories(); loadRules(); showToast('Gelöscht', 'success', 1200); }
         catch(e) { showToast('Fehler: ' + e.message, 'error'); }
     };
     document.getElementById('list').appendChild(row);
+}
+
+function openMergeModal(src) {
+    const targets = categories.filter(x => x.id !== src.id);
+    if (!targets.length) { showToast('Keine andere Kategorie zum Verschmelzen vorhanden', 'error'); return; }
+    const options = targets.map(t => `<option value="${t.id}">${t.icon || ''} ${escHtml(t.name)}</option>`).join('');
+    const modal = openModal(`🔀 „${escHtml(src.name)}" zusammenführen`,
+        `<p style="margin-top:0;font-size:0.875rem;color:var(--text-muted)">
+            Alle Positionen und Regeln von <strong>${escHtml(src.name)}</strong>
+            werden in die gewählte Ziel-Kategorie verschoben. Die Quelle wird danach gelöscht.
+        </p>
+        <label>Ziel-Kategorie</label>
+        <select id="mergeTarget" style="width:100%;margin-bottom:1rem">${options}</select>
+        <div style="display:flex;gap:0.5rem;justify-content:flex-end">
+            <button class="cancel" style="width:auto;margin:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border)">Abbrechen</button>
+            <button class="confirm primary" style="width:auto;margin:0;background:var(--teal);color:#fff">Zusammenführen</button>
+        </div>`
+    );
+    modal.root.querySelector('.cancel').onclick = () => modal.close();
+    modal.root.querySelector('.confirm').onclick = async () => {
+        const targetId = +modal.root.querySelector('#mergeTarget').value;
+        try {
+            const res = await AUSGABEN_API.mergeCategory(src.id, targetId);
+            modal.close();
+            showToast(`${res.moved_items} Positionen verschoben`, 'success', 2500);
+            await Promise.all([loadCategories(), loadRules()]);
+        } catch (e) { showToast('Fehler: ' + e.message, 'error'); }
+    };
 }
 
 async function createCategory() {

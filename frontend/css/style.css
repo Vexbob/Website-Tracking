@@ -165,3 +165,52 @@ input[type="checkbox"] { display: inline; width: auto; }
     color: var(--surface);
     border-color: var(--text);
 }
+
+/* ---------- Undo-Toast (mit Aktion) ---------- */
+.ausg-toast-undo { display: flex; gap: 0.75rem; align-items: center; }
+.ausg-toast-undo .undo-btn {
+    background: transparent; color: var(--surface); border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 6px; padding: 0.25rem 0.625rem; font-size: 0.8125rem; font-weight: 600;
+    cursor: pointer; width: auto; margin: 0;
+}
+.ausg-toast-undo .undo-btn:hover { background: rgba(255,255,255,0.12); }
+
+/* ---------- Fullscreen-Image ---------- */
+.img-fullscreen {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000;
+    display: flex; align-items: center; justify-content: center; padding: 1rem;
+    opacity: 0; transition: opacity 0.2s;
+}
+.img-fullscreen.show { opacity: 1; }
+.img-fullscreen img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.img-close {
+    position: absolute; top: 1rem; right: 1rem; width: 40px; height: 40px;
+    background: rgba(255,255,255,0.15); color: #fff; border: none; border-radius: 20px;
+    font-size: 1.25rem; cursor: pointer; z-index: 2001;
+}
+.img-close:hover { background: rgba(255,255,255,0.25); }
+
+/* ---------- Modal ---------- */
+.modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1900;
+    display: flex; align-items: center; justify-content: center; padding: 1rem;
+    opacity: 0; transition: opacity 0.18s;
+}
+.modal-overlay.show { opacity: 1; }
+.modal-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.35); max-width: 460px; width: 100%;
+    max-height: calc(100vh - 2rem); display: flex; flex-direction: column; overflow: hidden;
+}
+.modal-box.wide { max-width: 680px; }
+.modal-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.875rem 1rem; border-bottom: 1px solid var(--border);
+}
+.modal-head h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+.modal-close {
+    background: transparent; border: none; font-size: 1.125rem; color: var(--text-muted);
+    cursor: pointer; padding: 0; width: 28px; height: 28px; margin: 0;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 1rem; overflow: auto; }
