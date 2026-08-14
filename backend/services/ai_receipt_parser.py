@@ -158,19 +158,81 @@ Pflichtfelder pro Item:
 - category_id (int|null): Wenn category_name EXAKT einer User-Kategorie (case-insensitiv)
   entspricht: deren ID. Sonst null.
 
-- category_name (string): PFLICHT, nie null. Kurzer deutscher Name. Bevorzugt aus dieser Liste (exakt, mit "&"):
-    "Obst & Gemüse", "Milchprodukte", "Fleisch & Wurst", "Fisch & Meeresfrüchte",
-    "Brot & Backwaren", "Nudeln, Reis & Getreide", "Konserven & Fertiggerichte",
-    "Süßwaren & Snacks", "Getränke alkoholfrei", "Kaffee & Tee", "Alkohol",
-    "Drogerie & Kosmetik", "Haushalt & Reinigung", "Batterien & Elektro-Kleinteile",
-    "Tabak & Rauchwaren", "Tiernahrung & Tierbedarf", "Baby & Kind",
-    "Apotheke & Gesundheit", "Kleidung & Schuhe", "Elektronik & Technik",
-    "Baumarkt & Werkzeug", "Garten & Pflanzen", "Bücher & Zeitschriften",
-    "Kraftstoff & Auto", "Restaurant & Café", "Lieferdienste",
-    "Freizeit & Kultur", "Sport & Fitness", "Reisen & Transport",
-    "Post & Versand", "Bürobedarf", "Geschenke",
-    "Pfand", "Rabatt", "Sonstiges".
-  Wenn keine passt: eigener Name (Singular, prägnant). "Sonstiges" nur als LETZTER Fallback.
+- category_name (string): PFLICHT, nie null. Kurzer deutscher Name. Bevorzugt EXAKT aus dieser
+  bereichsgegliederten Liste (Groß-/Kleinschreibung und "&" beachten):
+
+  ▸ Lebensmittel:
+    "Obst & Gemüse", "Milchprodukte", "Käse", "Eier",
+    "Fleisch & Wurst", "Fisch & Meeresfrüchte",
+    "Brot & Backwaren", "Nudeln, Reis & Getreide",
+    "Konserven", "Tiefkühlkost", "Fertiggerichte",
+    "Gewürze & Öl", "Aufstriche & Süßes zum Brot",
+    "Süßwaren", "Snacks & Chips", "Nüsse & Trockenfrüchte",
+    "Bio & Vegan"
+
+  ▸ Getränke:
+    "Wasser & Softdrinks", "Säfte", "Kaffee & Tee",
+    "Bier", "Wein & Sekt", "Spirituosen"
+
+  ▸ Drogerie & Gesundheit:
+    "Körperpflege", "Kosmetik & Make-up", "Zahnpflege",
+    "Rasur & Haarpflege", "Damenhygiene",
+    "Apotheke & Medikamente", "Vitamine & Nahrungsergänzung",
+    "Erste Hilfe & Verband"
+
+  ▸ Haushalt:
+    "Wasch- & Putzmittel", "Toilettenpapier & Küchentücher",
+    "Müllbeutel & Zubehör", "Batterien & Glühbirnen",
+    "Küchenzubehör (Verbrauch)", "Haushaltsgeräte (Anschaffung)",
+    "Wäsche & Textilpflege"
+
+  ▸ Wohnen & Fixkosten:
+    "Miete", "Nebenkosten", "Strom", "Gas & Heizung", "Wasser",
+    "Internet & Telefon", "Mobilfunk",
+    "Rundfunkbeitrag", "Versicherung",
+    "Möbel", "Dekoration", "Bettwäsche & Handtücher"
+
+  ▸ Mobilität:
+    "Kraftstoff", "Auto-Wartung & Reparatur", "Auto-Zubehör",
+    "Parkgebühren & Maut", "Öffentlicher Verkehr",
+    "Taxi & Sharing", "Fahrrad"
+
+  ▸ Essen auswärts:
+    "Restaurant", "Café & Bäckerei",
+    "Fast Food", "Lieferdienst", "Trinkgeld"
+
+  ▸ Kinder & Tier:
+    "Baby-Nahrung", "Windeln & Babypflege",
+    "Kinder-Spielzeug & Bedarf",
+    "Tiernahrung", "Tierbedarf & Zubehör"
+
+  ▸ Freizeit & Bildung:
+    "Bücher & Zeitschriften", "Kino, Konzert & Events",
+    "Museum & Kultur", "Sport & Fitness-Studio",
+    "Sportartikel", "Streaming & Abos",
+    "Software & Apps", "Kurse & Weiterbildung"
+
+  ▸ Sonstige Anschaffungen:
+    "Kleidung", "Schuhe", "Accessoires & Schmuck",
+    "Elektronik", "Handy & Zubehör", "Computer & Zubehör",
+    "Werkzeug & Baumarkt", "Garten & Pflanzen",
+    "Hobby & Bastelbedarf"
+
+  ▸ Sonstiges:
+    "Post & Versand", "Bürobedarf",
+    "Geschenke", "Spenden",
+    "Tabak & Rauchwaren", "Glücksspiel & Lotto",
+    "Bankgebühren",
+    "Pfand", "Rabatt",
+    "Sonstiges"
+
+  Regeln:
+    · Wähle die spezifischste passende Kategorie ("Käse" statt "Milchprodukte" wenn Käse).
+    · "Milchprodukte" nur für Milch/Joghurt/Butter/Sahne/Quark/Skyr — Käse gehört zu "Käse".
+    · "Küchenzubehör (Verbrauch)" = Schwämme, Backpapier, Alufolie, Frischhaltefolie, Papiertüten.
+    · "Haushaltsgeräte (Anschaffung)" = Kaffeemaschine, Wasserkocher, Toaster (mit price_comparable=false).
+    · "Möbel" und "Dekoration" nur bei tatsächlich langlebigen Möbeln/Deko (price_comparable=false).
+    · Wenn NICHTS passt: eigener kurzer Name (Singular). "Sonstiges" nur als absolut letzter Fallback.
 
 ===== SCHWIERIGE FÄLLE =====
 
