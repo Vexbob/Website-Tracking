@@ -10,10 +10,9 @@ os.environ.setdefault("DATABASE_URL", "postgres://test:test@localhost/test")
 
 from database import week_key_for, month_key_for, period_key, prev_period
 
-def milestones_at(sv, cv, inc, direction):
-    if inc <= 0: return 0
-    if direction == "increase": return max(0, int((cv - sv) // inc))
-    return max(0, int((sv - cv) // inc))
+# Importiere die echte Funktion aus main.py, damit Bugfixes hier
+# automatisch mitgetestet werden (v1.15.0: Fliesskomma-Toleranz).
+from main import _milestones_at as milestones_at
 
 def test_week_key_format():
     assert week_key_for(date(2025, 11, 20)) == "2025-W47"
@@ -52,6 +51,29 @@ def test_milestones_zero_increment():
 def test_milestones_below_start_no_negative():
     assert milestones_at(10, 5, 1, "increase") == 0
     assert milestones_at(0, 10, 1, "decrease") == 0
+
+def test_milestones_float_accumulation_v1_15_0():
+    """Regression: 10 x +0.1 muss einen Meilenstein bei inc=1 ergeben.
+
+    Vor v1.15.0 lieferte ``int((cv - sv) // inc)`` durch Fliesskomma-
+    Rundungsfehler (0.1+...+0.1 = 0.9999...) faelschlich 0. Damit blieb
+    die Reward-Auszahlung aus.
+    """
+    cv = 0.0
+    for _ in range(10):
+        cv += 0.1
+    # cv ist typischerweise 0.9999999999999999 — trotzdem muessen es 1 sein
+    assert milestones_at(0, cv, 1, "increase") == 1
+
+    # Auch bei step_amount kleiner als threshold_increment:
+    # 4 x +0.5 = 2.0, threshold = 2 => 1 Meilenstein.
+    cv = 0.0
+    for _ in range(4):
+        cv += 0.5
+    assert milestones_at(0, cv, 2, "increase") == 1
+
+    # Kein false positive: 1.9 mit inc=2 sollte 0 Meilensteine liefern.
+    assert milestones_at(0, 1.9, 2, "increase") == 0
 
 def test_streak_bonus_modulo():
     # Streak bonus triggers at N % threshold == 0

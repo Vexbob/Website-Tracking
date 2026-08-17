@@ -1,4 +1,5 @@
 import os
+import math
 import logging
 import asyncio
 from datetime import date, timedelta, datetime, timezone
@@ -183,7 +184,7 @@ async def login(request: Request,
 async def me(user=Depends(get_current_user)):
     return {"username": user["username"], "is_admin": user["is_admin"], "id": user["id"]}
 
-BACKEND_VERSION = "1.14.0"
+BACKEND_VERSION = "1.15.0"
 
 
 @app.get("/api/health")
@@ -442,11 +443,24 @@ async def upd_sg(request: Request, gid: int, b: SavGoalUpd, db=Depends(get_db), 
 
 # ---------- Achievements ----------
 def _milestones_at(sv, cv, inc, direction):
+    """Zaehlt, wieviele Meilenstein-Schwellen bei ``cv`` bereits erreicht sind.
+
+    Bugfix v1.15.0: Fliesskomma-Toleranz. Ohne Epsilon wuerde z.B.
+    ``(9.999999999 // 1.0) == 9`` liefern, obwohl der User in Wahrheit
+    per +0.1-Klicks den 10ten Meilenstein erreicht hat — die Belohnung
+    wuerde ausbleiben, bis der naechste Klick kommt.
+    """
     if inc <= 0:
         return 0
+    inc = float(inc)
+    # relative Toleranz von 1e-6 · inc — deckt akkumulierte Float-Fehler
+    # ueber viele +x-Klicks ab, verfaelscht aber keine echten Zwischenwerte.
+    eps = inc * 1e-6
     if direction == "increase":
-        return max(0, int((cv - sv) // inc))
-    return max(0, int((sv - cv) // inc))
+        raw = (float(cv) - float(sv) + eps) / inc
+    else:
+        raw = (float(sv) - float(cv) + eps) / inc
+    return max(0, int(math.floor(raw)))
 
 @app.get("/api/achievements")
 async def list_ach(db=Depends(get_db), user=Depends(get_current_user)):
@@ -545,16 +559,27 @@ async def edit_ach(request: Request, aid: int, b: AchEdit, db=Depends(get_db), u
     if not old:
         raise HTTPException(404, "Not found")
     sets = []; vals = []; idx = 1; milestone_affecting = False
+    # Bugfix v1.15.0: Vorher wurde ``if val is not None`` genutzt — damit
+    # war es unmoeglich, ``target_value`` (Zielwert) durch Uebergabe von
+    # ``null`` zu loeschen. Wir unterscheiden jetzt "Feld nicht mitgeschickt"
+    # (via ``model_fields_set``) von "Feld explizit auf None gesetzt".
+    provided = b.model_fields_set
     for field in ["title","reward_amount","unit","start_value","threshold_increment","step_amount","target_value","direction"]:
+        if field not in provided:
+            continue
         val = getattr(b, field)
+        # Nur target_value darf via null geleert werden, alle anderen
+        # Felder bleiben Pflichtwerte (also weiter "None ignorieren").
+        if val is None and field != "target_value":
+            continue
         if val is not None:
             if field == "threshold_increment" and float(val) <= 0:
                 raise HTTPException(400, "Meilenstein-Schwelle muss > 0 sein")
             if field == "step_amount" and float(val) <= 0:
                 raise HTTPException(400, "Schrittweite pro Klick muss > 0 sein")
-            if field in ("start_value","threshold_increment","direction"):
-                milestone_affecting = True
-            sets.append(f"{field}=${idx}"); vals.append(val); idx += 1
+        if field in ("start_value","threshold_increment","direction"):
+            milestone_affecting = True
+        sets.append(f"{field}=${idx}"); vals.append(val); idx += 1
     if sets:
         vals.append(aid); vals.append(user["id"])
         await db.execute(
@@ -1044,13 +1069,150 @@ async def del_st(request: Request, tid: int, db=Depends(get_db), user=Depends(ge
     await db.execute("DELETE FROM savings_transactions WHERE id=$1 AND user_id=$2", tid, user["id"])
     return {"status": "deleted"}
 
+# ---------------------------------------------------------------
+# Helfer fuer Export-Metadaten (Bugfix v1.15.0)
+# ---------------------------------------------------------------
+def _export_csv_field(s: str) -> str:
+    s = (s or "").replace('"', '""').replace(';', ',').replace('\n', ' ').replace('\r', ' ')
+    return f'"{s}"'
+
+
+def _export_amt(v) -> str:
+    try:
+        return f"{float(v):.2f}"
+    except Exception:
+        return ""
+
+
+def _build_export_header(user) -> list[str]:
+    export_dt = datetime.now(timezone.utc).isoformat()
+    return [
+        f"# Vexbob Sparziel-Export;user={_export_csv_field(user['username'])};generated_at={export_dt}",
+        "",
+    ]
+
+
+async def _build_export_metadata(db, user_id: int) -> list[str]:
+    """Baut den Metadaten-Vorspann des Sparziel-CSV-Exports.
+
+    Enthaelt: Sparziele, Achievements, Wochen-/Monatsziele, Wunsch-
+    Anschaffungen, Zukunftsideen und Trophaeen. Jede Sektion beginnt
+    mit ``# SEKTION: ...`` und ihrem eigenen Spalten-Header.
+    """
+    out: list[str] = []
+
+    # Sparziele
+    out.append("# SEKTION: Sparziele")
+    out.append("id;name;target_amount;is_active;created_at")
+    for r in await db.fetch(
+        "SELECT id, name, target_amount, is_active, created_at FROM savings_goals "
+        "WHERE user_id=$1 ORDER BY is_active DESC, id", user_id):
+        created = r["created_at"].isoformat() if r["created_at"] else ""
+        out.append(
+            f'{r["id"]};{_export_csv_field(r["name"] or "")};{_export_amt(r["target_amount"])};'
+            f'{"true" if r["is_active"] else "false"};{created}'
+        )
+    out.append("")
+
+    # Achievements
+    out.append("# SEKTION: Achievements")
+    out.append("id;title;unit;start_value;current_value;threshold_increment;step_amount;target_value;direction;reward_amount;credited_milestones;is_completed")
+    for r in await db.fetch(
+        "SELECT id, title, unit, start_value, current_value, threshold_increment, step_amount, "
+        "target_value, direction, reward_amount, credited_milestones, is_completed "
+        "FROM achievements WHERE user_id=$1 ORDER BY sort_order NULLS LAST, id", user_id):
+        out.append(
+            f'{r["id"]};{_export_csv_field(r["title"] or "")};{_export_csv_field(r["unit"] or "")};'
+            f'{_export_amt(r["start_value"])};{_export_amt(r["current_value"])};'
+            f'{_export_amt(r["threshold_increment"])};{_export_amt(r["step_amount"])};'
+            f'{_export_amt(r["target_value"]) if r["target_value"] is not None else ""};'
+            f'{r["direction"] or ""};{_export_amt(r["reward_amount"])};'
+            f'{int(r["credited_milestones"] or 0)};'
+            f'{"true" if r["is_completed"] else "false"}'
+        )
+    out.append("")
+
+    # Wochen-/Monatsziele
+    out.append("# SEKTION: Wochen-/Monatsziele")
+    out.append("id;title;rhythm_type;target_count;reward_amount;streak_bonus_amount;streak_bonus_threshold")
+    for r in await db.fetch(
+        "SELECT id, title, rhythm_type, target_count, reward_amount, "
+        "streak_bonus_amount, streak_bonus_threshold "
+        "FROM progress_goals WHERE user_id=$1 ORDER BY sort_order NULLS LAST, id", user_id):
+        out.append(
+            f'{r["id"]};{_export_csv_field(r["title"] or "")};{r["rhythm_type"] or "weekly"};'
+            f'{int(r["target_count"] or 0)};{_export_amt(r["reward_amount"])};'
+            f'{_export_amt(r["streak_bonus_amount"])};{int(r["streak_bonus_threshold"] or 0)}'
+        )
+    out.append("")
+
+    # Wunsch-Anschaffungen
+    out.append("# SEKTION: Wunsch-Anschaffungen")
+    out.append("id;name;estimated_price")
+    for r in await db.fetch(
+        "SELECT id, name, estimated_price FROM potential_goals "
+        "WHERE user_id=$1 ORDER BY id", user_id):
+        out.append(
+            f'{r["id"]};{_export_csv_field(r["name"] or "")};'
+            f'{_export_amt(r["estimated_price"]) if r["estimated_price"] is not None else ""}'
+        )
+    out.append("")
+
+    # Zukuenftige Ideen
+    out.append("# SEKTION: Zukuenftige Ideen")
+    out.append("id;title;category")
+    for r in await db.fetch(
+        "SELECT id, title, category FROM future_ideas "
+        "WHERE user_id=$1 ORDER BY id", user_id):
+        out.append(
+            f'{r["id"]};{_export_csv_field(r["title"] or "")};{_export_csv_field(r["category"] or "")}'
+        )
+    out.append("")
+
+    # Trophaeen
+    out.append("# SEKTION: Trophaeen (abgeschlossene Sparziele)")
+    out.append("id;name;target_amount;final_amount;started_at;completed_at;duration_days;icon;note")
+    for r in await db.fetch(
+        "SELECT id, name, target_amount, final_amount, started_at, completed_at, "
+        "duration_days, icon, note FROM completed_goals WHERE user_id=$1 ORDER BY completed_at",
+        user_id):
+        started = r["started_at"].isoformat() if r["started_at"] else ""
+        completed = r["completed_at"].isoformat() if r["completed_at"] else ""
+        out.append(
+            f'{r["id"]};{_export_csv_field(r["name"] or "")};{_export_amt(r["target_amount"])};'
+            f'{_export_amt(r["final_amount"])};{started};{completed};'
+            f'{int(r["duration_days"] or 0) if r["duration_days"] is not None else ""};'
+            f'{_export_csv_field(r["icon"] or "")};{_export_csv_field(r["note"] or "")}'
+        )
+    out.append("")
+
+    return out
+
+
 @app.get("/api/savings-transactions/export")
 async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
-    lines = ["Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz"]
-
+    # ---------- CSV-Helfer ----------
     def _csv_field(s: str) -> str:
         s = (s or "").replace('"', '""').replace(';', ',').replace('\n', ' ').replace('\r', ' ')
         return f'"{s}"'
+
+    def _amt(v) -> str:
+        try:
+            return f"{float(v):.2f}"
+        except Exception:
+            return ""
+
+    # Bugfix v1.15.0: Der Export enthaelt jetzt vorab einen Metadaten-
+    # Block mit allen Sparzielen, Achievements, Wochen-/Monatszielen,
+    # Wunsch-Anschaffungen, Zukunftsideen und Trophaeen. Danach folgt
+    # das eigentliche Protokoll wie bisher. Jede Sektion beginnt mit
+    # einer Kommentarzeile ``# SEKTION: ...`` und ihrem eigenen Header.
+    lines: list[str] = _build_export_header(user)
+    lines.extend(await _build_export_metadata(db, user["id"]))
+    lines.append("# SEKTION: Protokoll")
+    log_header = "Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz"
+    lines.append(log_header)
+    log_body: list[str] = []
 
     ci_rows = await db.fetch(
         """SELECT pl.log_date, pl.week_key, pl.month_key, pl.created_at, pl.note,
@@ -1071,7 +1233,7 @@ async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
         amt = float(r["reward_amount"]) if just_fulfilled else 0.0
         d = r["created_at"].isoformat() if r["created_at"] else ""
         desc = f"{cnt_upto}/{target}"
-        lines.append(f'{d};checkin;{_csv_field(r["title"])};{_csv_field(desc)};{pk or ""};{amt:.2f};{_csv_field(r["note"] or "")}')
+        log_body.append(f'{d};checkin;{_csv_field(r["title"])};{_csv_field(desc)};{pk or ""};{amt:.2f};{_csv_field(r["note"] or "")}')
 
     ml_rows = await db.fetch(
         """SELECT al.achieved_value, al.reward_amount, al.date_achieved, al.note, a.title, a.unit
@@ -1083,7 +1245,7 @@ async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
         d = r["date_achieved"].isoformat() if r["date_achieved"] else ""
         unit = r["unit"] or ""
         desc = f"Bei {fmt_de_num(r['achieved_value'])} {unit}".strip()
-        lines.append(f'{d};milestone;{_csv_field(r["title"])};{_csv_field(desc)};;{float(r["reward_amount"]):.2f};{_csv_field(r["note"] or "")}')
+        log_body.append(f'{d};milestone;{_csv_field(r["title"])};{_csv_field(desc)};;{float(r["reward_amount"]):.2f};{_csv_field(r["note"] or "")}')
 
     tx_rows = await db.fetch(
         """SELECT created_at, amount, source_type, source_id, description, period_key, note
@@ -1101,11 +1263,10 @@ async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
         row_type = "streak_bonus" if is_streak_bonus else st
         desc = r["description"] or ""
         title = "Anfangsbestand" if st == "initial" else (desc[:40] or st)
-        lines.append(f'{d};{row_type};{_csv_field(title)};{_csv_field(desc)};{pk};{float(r["amount"]):.2f};{_csv_field(r["note"] or "")}')
+        log_body.append(f'{d};{row_type};{_csv_field(title)};{_csv_field(desc)};{pk};{float(r["amount"]):.2f};{_csv_field(r["note"] or "")}')
 
-    header = lines[0]
-    body = sorted(lines[1:])
-    csv = header + "\n" + "\n".join(body) + "\n"
+    lines.extend(sorted(log_body))
+    csv = "\n".join(lines) + "\n"
     return Response(content=csv, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": "attachment; filename=vexbob-log.csv"})
 

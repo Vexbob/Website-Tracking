@@ -15,7 +15,8 @@
 - **Aktivitäts-Log** mit Wochenübersicht, Filter, Suche, Notizen pro Eintrag
 - **GitHub-Style Heatmap** über 365 Tage
 - **Trophäen-Wand** für abgeschlossene Ziele
-- **CSV-Export**, **JSON-Backup & Restore**, automatische tägliche Snapshots
+- **CSV-Export** mit Metadaten-Vorspann (Sparziele, Achievements, Wochen-/Monatsziele, Wunsch-Anschaffungen, Zukunftsideen, Trophäen) + Protokoll (v1.15.0)
+- **JSON-Backup & Restore**, automatische tägliche Snapshots
 
 ### 📝 Notizen
 Notiz-Ablage im **Apple-Notes-Stil** (Master-Detail): Sidebar-Liste + Detail-Editor, einzelne Notizen per Link aufrufbar (`#note-42`).
