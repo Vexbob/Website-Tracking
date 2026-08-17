@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Notizen — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<style>
+body{visibility:hidden}body.ready{visibility:visible}
+
+.nz-toolbar{display:flex;flex-wrap:wrap;gap:0.625rem;align-items:center;margin-bottom:1rem}
+.nz-toolbar .nz-search{position:relative;flex:1;min-width:200px}
+.nz-toolbar .nz-search input{width:100%;box-sizing:border-box;padding:0.5rem 0.75rem 0.5rem 2rem;font-size:0.875rem;margin:0;border-radius:10px}
+.nz-toolbar .nz-search .nz-search-icon{position:absolute;left:0.625rem;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:0.875rem;pointer-events:none}
+.nz-toolbar select,.nz-toolbar button.nz-btn{padding:0.5rem 0.75rem;font-size:0.8125rem;margin:0;width:auto;border-radius:10px}
+.nz-toolbar button.nz-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.nz-count{font-size:0.75rem;color:var(--text-faint);margin:0 0 0.25rem auto;align-self:center}
+
+.nz-tags{display:flex;flex-wrap:wrap;gap:0.375rem;margin-bottom:1.25rem}
+.nz-tags .nz-tag{padding:0.25rem 0.625rem;font-size:0.75rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:999px;cursor:pointer;width:auto;margin:0;font-weight:500}
+.nz-tags .nz-tag:hover{border-color:var(--border-strong);color:var(--text)}
+.nz-tags .nz-tag.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+.nz-composer{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem;margin-bottom:1.5rem;box-shadow:var(--shadow-sm)}
+.nz-composer input.nz-title{font-size:1rem;font-weight:600;border:none;background:transparent;color:var(--text);width:100%;margin:0;padding:0 0 0.5rem;outline:none;border-bottom:1px solid var(--border)}
+.nz-composer textarea.nz-content{width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);font-family:inherit;font-size:0.9rem;line-height:1.5;margin:0;padding:0.625rem 0;resize:vertical;min-height:80px;outline:none}
+.nz-composer .nz-composer-foot{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;padding-top:0.625rem;border-top:1px solid var(--border)}
+.nz-composer .nz-color-pick{display:flex;gap:0.3rem}
+.nz-composer .nz-color-pick button{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;margin:0}
+.nz-composer .nz-color-pick button.sel{border-color:var(--text)}
+.nz-composer .nz-tags-input{flex:1;min-width:160px;padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;border-radius:8px}
+.nz-composer .nz-meta{font-size:0.75rem;color:var(--text-faint);margin-left:auto;white-space:nowrap}
+.nz-composer .nz-save{padding:0.5rem 1.1rem;font-size:0.875rem;background:var(--green);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;width:auto;margin:0}
+.nz-composer .nz-save:hover{background:var(--green-dark)}
+.nz-hint{font-size:0.75rem;color:var(--text-faint);margin-top:0.5rem}
+
+.nz-grid{columns:3;column-gap:0.875rem}
+@media (max-width:900px){.nz-grid{columns:2}}
+@media (max-width:560px){.nz-grid{columns:1}}
+.nz-card{break-inside:avoid;background:var(--surface);border:1px solid var(--border);border-left-width:4px;border-radius:12px;padding:0.875rem 1rem;margin-bottom:0.875rem;box-shadow:var(--shadow-sm);transition:box-shadow .15s,border-color .15s;position:relative}
+.nz-card:hover{box-shadow:var(--shadow);border-color:var(--border-strong)}
+.nz-card.nz-color-default{border-left-color:var(--border-strong)}
+.nz-card.nz-color-red{border-left-color:var(--red)}
+.nz-card.nz-color-orange{border-left-color:var(--orange)}
+.nz-card.nz-color-yellow{border-left-color:var(--gold)}
+.nz-card.nz-color-green{border-left-color:var(--green)}
+.nz-card.nz-color-blue{border-left-color:var(--blue)}
+.nz-card.nz-color-purple{border-left-color:var(--purple)}
+.nz-card.nz-color-pink{border-left-color:var(--pink)}
+.nz-card-title{font-size:0.9375rem;font-weight:600;color:var(--text);margin-bottom:0.375rem;word-wrap:break-word;cursor:text}
+.nz-card-title:empty:before{content:"Ohne Titel";color:var(--text-faint);font-style:italic}
+.nz-card-body{font-size:0.8125rem;color:var(--text-muted);line-height:1.55;word-wrap:break-word;white-space:pre-wrap;cursor:text}
+.nz-card-body h1,.nz-card-body h2,.nz-card-body h3{color:var(--text);font-size:0.875rem;margin:0.4rem 0 0.2rem}
+.nz-card-body ul,.nz-card-body ol{margin:0.25rem 0;padding-left:1.1rem}
+.nz-card-body li{margin:0.15rem 0}
+.nz-card-body code{background:var(--surface-2);padding:1px 4px;border-radius:4px;font-size:0.8rem}
+.nz-card-body a{color:var(--blue)}
+.nz-card-body .nz-task{display:flex;gap:0.4rem;align-items:flex-start;list-style:none;margin-left:-1.1rem}
+.nz-card-body .nz-task input{margin-top:3px;accent-color:var(--blue)}
+.nz-card-body .nz-task.done{color:var(--text-faint);text-decoration:line-through}
+.nz-card-body .nz-task .nz-task-txt{flex:1}
+.nz-card-foot{display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-top:0.625rem}
+.nz-card-foot .nz-tag{font-size:0.6875rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:0.125rem 0.5rem;cursor:pointer;width:auto;margin:0}
+.nz-card-foot .nz-tag:hover{border-color:var(--blue);color:var(--blue)}
+.nz-card-foot .nz-date{font-size:0.6875rem;color:var(--text-faint);margin-left:auto;cursor:default}
+.nz-card-actions{position:absolute;top:0.5rem;right:0.5rem;display:flex;gap:0.125rem;opacity:0;transition:opacity .15s}
+.nz-card:hover .nz-card-actions{opacity:1}
+.nz-card-actions button{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;width:26px;height:26px;font-size:0.8rem;cursor:pointer;color:var(--text-muted);padding:0;margin:0;line-height:1}
+.nz-card-actions button:hover{color:var(--text);border-color:var(--border-strong)}
+.nz-card-actions button.on{color:var(--orange);border-color:var(--orange)}
+.nz-card.nz-pinned{box-shadow:var(--shadow)}
+.nz-card.nz-pinned .nz-pin-badge{position:absolute;top:-6px;left:10px;font-size:0.85rem;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:1px 6px;line-height:1.2}
+
+.nz-empty{text-align:center;padding:3rem 1rem;color:var(--text-faint)}
+.nz-empty .nz-empty-icon{font-size:3rem;opacity:0.4;margin-bottom:0.5rem}
+.nz-empty h3{font-size:1rem;margin-bottom:0.25rem;color:var(--text-muted)}
+
+.nz-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(120px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);max-width:90vw;display:flex;align-items:center;gap:0.5rem}
+.nz-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.nz-toast .nz-undo-btn{background:transparent;color:var(--surface);border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:0.25rem 0.625rem;font-size:0.8125rem;font-weight:600;cursor:pointer;margin-left:0.25rem;width:auto}
+.nz-toast .nz-undo-btn:hover{background:rgba(255,255,255,0.12)}
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/" class="nav-title">← Notizen</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn" title="Design umschalten">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main class="wide">
+    <div class="nz-toolbar">
+        <div class="nz-search">
+            <span class="nz-search-icon">🔍</span>
+            <input type="search" id="search" placeholder="Notizen durchsuchen (Titel, Inhalt, Tags)…">
+        </div>
+        <button class="nz-btn" id="archiveBtn" title="Archivierte anzeigen">🗄️ Archiv</button>
+        <span class="nz-count" id="count"></span>
+    </div>
+    <div class="nz-tags" id="tagBar"></div>
+
+    <div class="nz-composer" id="composer">
+        <input type="text" class="nz-title" id="cTitle" placeholder="Titel (optional)" maxlength="200">
+        <textarea class="nz-content" id="cContent" placeholder="Schreib was…"></textarea>
+        <div class="nz-composer-foot">
+            <div class="nz-color-pick" id="cColors"></div>
+            <input type="text" class="nz-tags-input" id="cTags" placeholder="Tags (Komma-getrennt, z.B. Idee, Arbeit)">
+            <span class="nz-meta" id="cMeta"></span>
+            <button class="nz-save" id="cSave">Speichern</button>
+        </div>
+        <div class="nz-hint">Tastatur: <b>n</b> = neue Notiz, <b>Esc</b> = abbrechen · Tipp: <code>- [ ]</code> für Checkboxen, <code>**fett**</code>, <code>*kursiv*</code>, <code>`code`</code></div>
+    </div>
+
+    <div id="grid" class="nz-grid"></div>
+    <div id="empty" class="nz-empty" style="display:none">
+        <div class="nz-empty-icon">📝</div>
+        <h3>Noch keine Notizen</h3>
+        <div>Schreib oben deine erste Notiz und drück Speichern.</div>
+    </div>
+</main>
+<div class="version-tag"></div>
+<script src="/notizen/notizen.js"></script>
+</body>
+</html>

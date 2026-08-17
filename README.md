@@ -18,7 +18,14 @@
 - **CSV-Export**, **JSON-Backup & Restore**, automatische tägliche Snapshots
 
 ### 📝 Notizen
-Schnelle Notiz-Ablage mit Kategorien.
+Schnelle Notiz-Ablage mit **Tags**, **Farblabels** (8 Farben), **Pin** & **Archiv**.
+- **Markdown-Light**-Rendering (fett/kursiv/Code, Listen, Überschriften, Links)
+- **anklickbare Checkboxen** (`- [ ]`/`- [x]`) — umschalten speichert automatisch
+- **Suche** über Titel/Inhalt/Tags + **Tag-Filter-Chips**
+- **Inline-Edit** direkt in der Karte (Titel & Inhalt)
+- **Auto-Draft** in localStorage, **Undo** beim Löschen, relative Zeitstempel
+- Tastatur-Shortcut `n` = neue Notiz, `Esc` = abbrechen, `Strg/Cmd+Enter` = speichern
+- responsives Masonry-Kartenraster, Dark-Mode, PWA
 
 ### 🍳 Rezeptbuch
 Persönliche Rezepte mit Zutaten, Schritten und Kategorien.

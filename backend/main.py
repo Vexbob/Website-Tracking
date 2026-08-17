@@ -183,7 +183,8 @@ async def login(request: Request,
 async def me(user=Depends(get_current_user)):
     return {"username": user["username"], "is_admin": user["is_admin"], "id": user["id"]}
 
-BACKEND_VERSION = "1.12.1"
+BACKEND_VERSION = "1.13.0"
+
 
 @app.get("/api/health")
 async def health():
@@ -193,6 +194,7 @@ async def health():
         "backend_version": BACKEND_VERSION,
         "routes": sum(1 for r in app.routes if hasattr(r, "endpoint")),
         "expenses_router": True,
+        "notes_router": True,
     }
 
 # ---------- Admin: User-Management (Invite-Flow) ----------
@@ -1368,3 +1370,9 @@ async def del_snapshot(request: Request, sid: int, db=Depends(get_db), user=Depe
 # ==========================================================================
 from routers.expenses_router import router as expenses_router
 app.include_router(expenses_router)
+
+# ==========================================================================
+# Notizen-Modul (Paket 14) — ausgelagert in routers/notes_router.py
+# ==========================================================================
+from routers.notes_router import router as notes_router
+app.include_router(notes_router)
