@@ -60,21 +60,33 @@ body{display:flex;flex-direction:column;overflow:hidden}
 .nz-d-title{font-size:1.5rem;font-weight:700;border:none;background:transparent;color:var(--text);width:100%;padding:1rem 1.5rem 0.5rem;outline:none}
 .nz-d-title::placeholder{color:var(--text-fainter);font-weight:600}
 .nz-d-divider{height:1px;background:var(--border);margin:0 1.5rem}
-.nz-d-scroll{flex:1;overflow:auto;padding:0.75rem 1.5rem 1rem;display:flex;flex-direction:column;gap:0.75rem}
-.nz-d-content{width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);font-family:inherit;font-size:0.9375rem;line-height:1.6;resize:none;min-height:200px;outline:none}
-.nz-d-preview{font-size:0.875rem;color:var(--text-muted);line-height:1.55;word-wrap:break-word;padding-top:0.5rem;border-top:1px dashed var(--border)}
-.nz-d-preview:empty{display:none}
-.nz-d-preview h1,.nz-d-preview h2,.nz-d-preview h3{color:var(--text);font-size:0.95rem;margin:0.5rem 0 0.25rem}
-.nz-d-preview ul,.nz-d-preview ol{margin:0.5rem 0;padding-left:1.4rem}
-.nz-d-preview li{margin:0.3rem 0}
-.nz-d-preview p{margin:0.3rem 0}
-.nz-d-preview .nz-task{display:flex;gap:0.45rem;align-items:flex-start;list-style:none;margin-left:0;margin-bottom:0.3rem}
-.nz-d-preview .nz-task input{margin-top:3px;accent-color:var(--blue);cursor:pointer}
-.nz-d-preview .nz-task.done{color:var(--text-faint);text-decoration:line-through}
-.nz-d-preview .nz-task .nz-task-txt{flex:1}
-.nz-d-preview code{background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:0.82rem}
-.nz-d-preview a{color:var(--blue)}
-.nz-d-preview-hint{font-size:0.7rem;color:var(--text-faint)}
+
+/* ---------- Formatierungs-Toolbar ---------- */
+.nz-toolbar{display:flex;gap:0.2rem;flex-wrap:wrap;padding:0.5rem 1.5rem;border-bottom:1px solid var(--border);background:var(--surface)}
+.nz-tb{padding:0.3rem 0.5rem;font-size:0.85rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:7px;cursor:pointer;width:auto;margin:0;font-weight:600;line-height:1;min-width:30px}
+.nz-tb:hover{color:var(--text);border-color:var(--border-strong);background:var(--surface)}
+.nz-tb.sep{background:none;border:none;cursor:default;width:auto;min-width:0;padding:0 0.1rem;color:var(--text-fainter)}
+.nz-tb.italic{font-style:italic}
+
+/* ---------- Rich-Text-Editor ---------- */
+.nz-d-scroll{flex:1;overflow:auto;padding:0.75rem 1.5rem 2rem}
+.nz-d-content{outline:none;font-size:0.9375rem;line-height:1.6;color:var(--text);min-height:200px;word-wrap:break-word}
+.nz-d-content:empty:before{content:attr(data-ph);color:var(--text-fainter)}
+.nz-d-content h1,.nz-d-content h2,.nz-d-content h3{color:var(--text);margin:0.6rem 0 0.3rem}
+.nz-d-content h1{font-size:1.3rem}.nz-d-content h2{font-size:1.15rem}.nz-d-content h3{font-size:1.05rem}
+.nz-d-content p{margin:0.3rem 0}
+.nz-d-content ul,.nz-d-content ol{margin:0.4rem 0;padding-left:1.5rem}
+.nz-d-content li{margin:0.25rem 0}
+.nz-d-content code{background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:0.85rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.nz-d-content a{color:var(--blue)}
+.nz-d-content b,.nz-d-content strong{font-weight:700}
+.nz-d-content i,.nz-d-content em{font-style:italic}
+.nz-d-content .nz-task{display:flex;gap:0.45rem;align-items:flex-start;margin:0.3rem 0;padding-left:0}
+.nz-d-content .nz-task input[type=checkbox]{margin-top:4px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
+.nz-d-content .nz-task .nz-task-txt{flex:1}
+.nz-d-content .nz-task.done .nz-task-txt{color:var(--text-faint);text-decoration:line-through}
+
+/* ---------- Detail-Fuß ---------- */
 .nz-detail-foot{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;padding:0.625rem 1.5rem;border-top:1px solid var(--border);background:var(--surface)}
 .nz-d-color{display:flex;gap:0.3rem}
 .nz-d-color button{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;margin:0}
@@ -95,7 +107,7 @@ body{display:flex;flex-direction:column;overflow:hidden}
 .nz-toast .nz-undo-btn{background:transparent;color:var(--surface);border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:0.25rem 0.625rem;font-size:0.8125rem;font-weight:600;cursor:pointer;margin-left:0.25rem;width:auto}
 .nz-toast .nz-undo-btn:hover{background:rgba(255,255,255,0.12)}
 
-/* ---------- Mobile (Single-Pane) ---------- */
+/* ---------- Mobile ---------- */
 @media (max-width:768px){
     .nz-sidebar{width:100%}
     .nz-app.show-detail .nz-sidebar{display:none}
@@ -103,7 +115,8 @@ body{display:flex;flex-direction:column;overflow:hidden}
     .nz-back{display:inline-flex}
     .nz-d-title{padding:1rem 1rem 0.5rem;font-size:1.3rem}
     .nz-d-divider{margin:0 1rem}
-    .nz-d-scroll{padding:0.75rem 1rem 1rem}
+    .nz-toolbar{padding:0.5rem 1rem}
+    .nz-d-scroll{padding:0.75rem 1rem 2rem}
     .nz-detail-foot{padding:0.625rem 1rem}
 }
 </style>
@@ -143,10 +156,19 @@ body{display:flex;flex-direction:column;overflow:hidden}
             <button class="nz-back" id="nzBack" type="button">← Liste</button>
             <input class="nz-d-title" id="nzDTitle" type="text" placeholder="Titel">
             <div class="nz-d-divider"></div>
+            <div class="nz-toolbar" id="nzToolbar">
+                <button class="nz-tb" data-cmd="bold" title="Fett (Strg+B)"><b>B</b></button>
+                <button class="nz-tb italic" data-cmd="italic" title="Kursiv (Strg+I)"><i>I</i></button>
+                <span class="nz-tb sep">|</span>
+                <button class="nz-tb" data-cmd="insertUnorderedList" title="Aufzählung">• Liste</button>
+                <button class="nz-tb" data-cmd="insertOrderedList" title="Nummerierung">1. Liste</button>
+                <button class="nz-tb" data-cmd="formatBlockH3" title="Überschrift">H</button>
+                <span class="nz-tb sep">|</span>
+                <button class="nz-tb" data-cmd="task" title="Aufgabe einfügen">☑ Aufgabe</button>
+                <button class="nz-tb" data-cmd="createLink" title="Link">🔗</button>
+            </div>
             <div class="nz-d-scroll">
-                <textarea class="nz-d-content" id="nzDContent" placeholder="Schreib was…"></textarea>
-                <div class="nz-d-preview" id="nzDPreview"></div>
-                <div class="nz-d-preview-hint" id="nzDPreviewHint"></div>
+                <div class="nz-d-content" id="nzDContent" contenteditable="true" data-ph="Schreib was…" spellcheck="true"></div>
             </div>
             <div class="nz-detail-foot">
                 <div class="nz-d-color" id="nzDColor"></div>
