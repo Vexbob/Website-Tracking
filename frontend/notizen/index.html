@@ -13,79 +13,99 @@
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
 <style>
-body{visibility:hidden}body.ready{visibility:visible}
+html,body{height:100%}
+body{display:flex;flex-direction:column;overflow:hidden}
+.nz-app{flex:1;display:flex;min-height:0;overflow:hidden}
 
-.nz-toolbar{display:flex;flex-wrap:wrap;gap:0.625rem;align-items:center;margin-bottom:1rem}
-.nz-toolbar .nz-search{position:relative;flex:1;min-width:200px}
-.nz-toolbar .nz-search input{width:100%;box-sizing:border-box;padding:0.5rem 0.75rem 0.5rem 2rem;font-size:0.875rem;margin:0;border-radius:10px}
-.nz-toolbar .nz-search .nz-search-icon{position:absolute;left:0.625rem;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:0.875rem;pointer-events:none}
-.nz-toolbar select,.nz-toolbar button.nz-btn{padding:0.5rem 0.75rem;font-size:0.8125rem;margin:0;width:auto;border-radius:10px}
-.nz-toolbar button.nz-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-.nz-count{font-size:0.75rem;color:var(--text-faint);margin:0 0 0.25rem auto;align-self:center}
+/* ---------- Sidebar ---------- */
+.nz-sidebar{width:300px;flex-shrink:0;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border)}
+.nz-side-head{padding:0.75rem;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:0.5rem}
+.nz-new{display:flex;align-items:center;justify-content:center;gap:0.4rem;padding:0.55rem 0.75rem;font-size:0.875rem;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:10px;cursor:pointer;width:100%;margin:0}
+.nz-new:hover{background:var(--blue-dark)}
+.nz-side-row{display:flex;gap:0.4rem}
+.nz-side-row input[type=search]{flex:1;padding:0.45rem 0.625rem;font-size:0.8125rem;margin:0;border-radius:8px;min-width:0}
+.nz-side-row select{padding:0.45rem 0.4rem;font-size:0.8125rem;margin:0;border-radius:8px;width:auto}
+.nz-side-toggle{padding:0.4rem 0.5rem;font-size:0.75rem;margin:0;width:auto;border-radius:8px;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);cursor:pointer;font-weight:500}
+.nz-side-toggle.active{background:var(--orange);color:#fff;border-color:var(--orange)}
+.nz-list{flex:1;overflow:auto;padding:0.375rem}
+.nz-section{font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-faint);padding:0.625rem 0.5rem 0.25rem}
+.nz-item{display:flex;gap:0.5rem;padding:0.55rem 0.625rem;border-radius:9px;cursor:pointer;border-left:3px solid transparent;margin-bottom:1px;transition:background .12s}
+.nz-item:hover{background:var(--surface-2)}
+.nz-item.active{background:var(--blue-bg);border-left-color:var(--blue)}
+.nz-item-main{flex:1;min-width:0}
+.nz-item-title{font-size:0.875rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nz-item-title:empty:before{content:"Neue Notiz";color:var(--text-faint);font-style:italic;font-weight:500}
+.nz-item-preview{font-size:0.75rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.nz-item-preview:empty:before{content:"Keine weiteren Zeilen";color:var(--text-fainter)}
+.nz-item-date{font-size:0.6875rem;color:var(--text-faint);margin-top:2px}
+.nz-item-pin{font-size:0.8rem;align-self:flex-start;color:var(--orange)}
+.nz-color-default{border-left-color:var(--border-strong)}
+.nz-color-red{border-left-color:var(--red)}
+.nz-color-orange{border-left-color:var(--orange)}
+.nz-color-yellow{border-left-color:var(--gold)}
+.nz-color-green{border-left-color:var(--green)}
+.nz-color-blue{border-left-color:var(--blue)}
+.nz-color-purple{border-left-color:var(--purple)}
+.nz-color-pink{border-left-color:var(--pink)}
+.nz-list-empty{text-align:center;padding:2rem 1rem;color:var(--text-faint);font-size:0.8125rem}
 
-.nz-tags{display:flex;flex-wrap:wrap;gap:0.375rem;margin-bottom:1.25rem}
-.nz-tags .nz-tag{padding:0.25rem 0.625rem;font-size:0.75rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:999px;cursor:pointer;width:auto;margin:0;font-weight:500}
-.nz-tags .nz-tag:hover{border-color:var(--border-strong);color:var(--text)}
-.nz-tags .nz-tag.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+/* ---------- Detail ---------- */
+.nz-detail{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;background:var(--bg)}
+.nz-detail-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-faint);text-align:center;padding:2rem}
+.nz-de-icon{font-size:3rem;opacity:0.4;margin-bottom:0.5rem}
+.nz-detail-empty h3{font-size:1rem;color:var(--text-muted);margin-bottom:0.25rem}
+.nz-detail-edit{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.nz-back{display:none;align-self:flex-start;margin:0.75rem 0 0;background:transparent;border:none;color:var(--blue);font-size:0.875rem;font-weight:600;cursor:pointer;padding:0.25rem 0}
+.nz-back:hover{text-decoration:underline}
+.nz-d-title{font-size:1.5rem;font-weight:700;border:none;background:transparent;color:var(--text);width:100%;padding:1rem 1.5rem 0.5rem;outline:none}
+.nz-d-title::placeholder{color:var(--text-fainter);font-weight:600}
+.nz-d-divider{height:1px;background:var(--border);margin:0 1.5rem}
+.nz-d-scroll{flex:1;overflow:auto;padding:0.75rem 1.5rem 1rem;display:flex;flex-direction:column;gap:0.75rem}
+.nz-d-content{width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);font-family:inherit;font-size:0.9375rem;line-height:1.6;resize:none;min-height:200px;outline:none}
+.nz-d-preview{font-size:0.875rem;color:var(--text-muted);line-height:1.55;word-wrap:break-word;padding-top:0.5rem;border-top:1px dashed var(--border)}
+.nz-d-preview:empty{display:none}
+.nz-d-preview h1,.nz-d-preview h2,.nz-d-preview h3{color:var(--text);font-size:0.95rem;margin:0.5rem 0 0.25rem}
+.nz-d-preview ul,.nz-d-preview ol{margin:0.5rem 0;padding-left:1.4rem}
+.nz-d-preview li{margin:0.3rem 0}
+.nz-d-preview p{margin:0.3rem 0}
+.nz-d-preview .nz-task{display:flex;gap:0.45rem;align-items:flex-start;list-style:none;margin-left:0;margin-bottom:0.3rem}
+.nz-d-preview .nz-task input{margin-top:3px;accent-color:var(--blue);cursor:pointer}
+.nz-d-preview .nz-task.done{color:var(--text-faint);text-decoration:line-through}
+.nz-d-preview .nz-task .nz-task-txt{flex:1}
+.nz-d-preview code{background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:0.82rem}
+.nz-d-preview a{color:var(--blue)}
+.nz-d-preview-hint{font-size:0.7rem;color:var(--text-faint)}
+.nz-detail-foot{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;padding:0.625rem 1.5rem;border-top:1px solid var(--border);background:var(--surface)}
+.nz-d-color{display:flex;gap:0.3rem}
+.nz-d-color button{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;margin:0}
+.nz-d-color button.sel{border-color:var(--text)}
+.nz-d-act{padding:0.4rem 0.6rem;font-size:0.8125rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:8px;cursor:pointer;width:auto;margin:0;font-weight:500}
+.nz-d-act:hover{color:var(--text);border-color:var(--border-strong)}
+.nz-d-act.on{color:var(--orange);border-color:var(--orange)}
+.nz-d-act.danger:hover{color:var(--red);border-color:var(--red)}
+.nz-d-status{margin-left:auto;font-size:0.75rem;color:var(--text-faint);font-weight:500;display:flex;align-items:center;gap:0.3rem}
+.nz-d-status .dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint)}
+.nz-d-status.saving .dot{background:var(--orange);animation:nzpulse 1s infinite}
+.nz-d-status.saved .dot{background:var(--green)}
+@keyframes nzpulse{0%,100%{opacity:1}50%{opacity:0.3}}
 
-.nz-composer{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem;margin-bottom:1.5rem;box-shadow:var(--shadow-sm)}
-.nz-composer input.nz-title{font-size:1rem;font-weight:600;border:none;background:transparent;color:var(--text);width:100%;margin:0;padding:0 0 0.5rem;outline:none;border-bottom:1px solid var(--border)}
-.nz-composer textarea.nz-content{width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);font-family:inherit;font-size:0.9rem;line-height:1.5;margin:0;padding:0.625rem 0;resize:vertical;min-height:80px;outline:none}
-.nz-composer .nz-composer-foot{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;padding-top:0.625rem;border-top:1px solid var(--border)}
-.nz-composer .nz-color-pick{display:flex;gap:0.3rem}
-.nz-composer .nz-color-pick button{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;margin:0}
-.nz-composer .nz-color-pick button.sel{border-color:var(--text)}
-.nz-composer .nz-tags-input{flex:1;min-width:160px;padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;border-radius:8px}
-.nz-composer .nz-meta{font-size:0.75rem;color:var(--text-faint);margin-left:auto;white-space:nowrap}
-.nz-composer .nz-save{padding:0.5rem 1.1rem;font-size:0.875rem;background:var(--green);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;width:auto;margin:0}
-.nz-composer .nz-save:hover{background:var(--green-dark)}
-.nz-hint{font-size:0.75rem;color:var(--text-faint);margin-top:0.5rem}
-
-.nz-grid{columns:3;column-gap:0.875rem}
-@media (max-width:900px){.nz-grid{columns:2}}
-@media (max-width:560px){.nz-grid{columns:1}}
-.nz-card{break-inside:avoid;background:var(--surface);border:1px solid var(--border);border-left-width:4px;border-radius:12px;padding:0.875rem 1rem;margin-bottom:0.875rem;box-shadow:var(--shadow-sm);transition:box-shadow .15s,border-color .15s;position:relative}
-.nz-card:hover{box-shadow:var(--shadow);border-color:var(--border-strong)}
-.nz-card.nz-color-default{border-left-color:var(--border-strong)}
-.nz-card.nz-color-red{border-left-color:var(--red)}
-.nz-card.nz-color-orange{border-left-color:var(--orange)}
-.nz-card.nz-color-yellow{border-left-color:var(--gold)}
-.nz-card.nz-color-green{border-left-color:var(--green)}
-.nz-card.nz-color-blue{border-left-color:var(--blue)}
-.nz-card.nz-color-purple{border-left-color:var(--purple)}
-.nz-card.nz-color-pink{border-left-color:var(--pink)}
-.nz-card-title{font-size:0.9375rem;font-weight:600;color:var(--text);margin-bottom:0.375rem;word-wrap:break-word;cursor:text}
-.nz-card-title:empty:before{content:"Ohne Titel";color:var(--text-faint);font-style:italic}
-.nz-card-body{font-size:0.8125rem;color:var(--text-muted);line-height:1.55;word-wrap:break-word;white-space:pre-wrap;cursor:text}
-.nz-card-body h1,.nz-card-body h2,.nz-card-body h3{color:var(--text);font-size:0.875rem;margin:0.4rem 0 0.2rem}
-.nz-card-body ul,.nz-card-body ol{margin:0.25rem 0;padding-left:1.1rem}
-.nz-card-body li{margin:0.15rem 0}
-.nz-card-body code{background:var(--surface-2);padding:1px 4px;border-radius:4px;font-size:0.8rem}
-.nz-card-body a{color:var(--blue)}
-.nz-card-body .nz-task{display:flex;gap:0.4rem;align-items:flex-start;list-style:none;margin-left:-1.1rem}
-.nz-card-body .nz-task input{margin-top:3px;accent-color:var(--blue)}
-.nz-card-body .nz-task.done{color:var(--text-faint);text-decoration:line-through}
-.nz-card-body .nz-task .nz-task-txt{flex:1}
-.nz-card-foot{display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-top:0.625rem}
-.nz-card-foot .nz-tag{font-size:0.6875rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:0.125rem 0.5rem;cursor:pointer;width:auto;margin:0}
-.nz-card-foot .nz-tag:hover{border-color:var(--blue);color:var(--blue)}
-.nz-card-foot .nz-date{font-size:0.6875rem;color:var(--text-faint);margin-left:auto;cursor:default}
-.nz-card-actions{position:absolute;top:0.5rem;right:0.5rem;display:flex;gap:0.125rem;opacity:0;transition:opacity .15s}
-.nz-card:hover .nz-card-actions{opacity:1}
-.nz-card-actions button{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;width:26px;height:26px;font-size:0.8rem;cursor:pointer;color:var(--text-muted);padding:0;margin:0;line-height:1}
-.nz-card-actions button:hover{color:var(--text);border-color:var(--border-strong)}
-.nz-card-actions button.on{color:var(--orange);border-color:var(--orange)}
-.nz-card.nz-pinned{box-shadow:var(--shadow)}
-.nz-card.nz-pinned .nz-pin-badge{position:absolute;top:-6px;left:10px;font-size:0.85rem;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:1px 6px;line-height:1.2}
-
-.nz-empty{text-align:center;padding:3rem 1rem;color:var(--text-faint)}
-.nz-empty .nz-empty-icon{font-size:3rem;opacity:0.4;margin-bottom:0.5rem}
-.nz-empty h3{font-size:1rem;margin-bottom:0.25rem;color:var(--text-muted)}
-
+/* ---------- Toast ---------- */
 .nz-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(120px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);max-width:90vw;display:flex;align-items:center;gap:0.5rem}
 .nz-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .nz-toast .nz-undo-btn{background:transparent;color:var(--surface);border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:0.25rem 0.625rem;font-size:0.8125rem;font-weight:600;cursor:pointer;margin-left:0.25rem;width:auto}
 .nz-toast .nz-undo-btn:hover{background:rgba(255,255,255,0.12)}
+
+/* ---------- Mobile (Single-Pane) ---------- */
+@media (max-width:768px){
+    .nz-sidebar{width:100%}
+    .nz-app.show-detail .nz-sidebar{display:none}
+    .nz-app:not(.show-detail) .nz-detail{display:none}
+    .nz-back{display:inline-flex}
+    .nz-d-title{padding:1rem 1rem 0.5rem;font-size:1.3rem}
+    .nz-d-divider{margin:0 1rem}
+    .nz-d-scroll{padding:0.75rem 1rem 1rem}
+    .nz-detail-foot{padding:0.625rem 1rem}
+}
 </style>
 </head>
 <body>
@@ -97,36 +117,47 @@ body{visibility:hidden}body.ready{visibility:visible}
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main class="wide">
-    <div class="nz-toolbar">
-        <div class="nz-search">
-            <span class="nz-search-icon">🔍</span>
-            <input type="search" id="search" placeholder="Notizen durchsuchen (Titel, Inhalt, Tags)…">
+<div class="nz-app" id="nzApp">
+    <aside class="nz-sidebar">
+        <div class="nz-side-head">
+            <button class="nz-new" id="nzNew" title="Neue Notiz">＋ Notiz</button>
+            <div class="nz-side-row">
+                <input type="search" id="nzSearch" placeholder="🔍 Suchen…">
+                <select id="nzSort" title="Sortierung">
+                    <option value="updated">Geändert</option>
+                    <option value="created">Erstellt</option>
+                    <option value="title">Titel</option>
+                </select>
+            </div>
+            <button class="nz-side-toggle" id="nzArchiveBtn">🗄️ Archiv</button>
         </div>
-        <button class="nz-btn" id="archiveBtn" title="Archivierte anzeigen">🗄️ Archiv</button>
-        <span class="nz-count" id="count"></span>
-    </div>
-    <div class="nz-tags" id="tagBar"></div>
-
-    <div class="nz-composer" id="composer">
-        <input type="text" class="nz-title" id="cTitle" placeholder="Titel (optional)" maxlength="200">
-        <textarea class="nz-content" id="cContent" placeholder="Schreib was…"></textarea>
-        <div class="nz-composer-foot">
-            <div class="nz-color-pick" id="cColors"></div>
-            <input type="text" class="nz-tags-input" id="cTags" placeholder="Tags (Komma-getrennt, z.B. Idee, Arbeit)">
-            <span class="nz-meta" id="cMeta"></span>
-            <button class="nz-save" id="cSave">Speichern</button>
+        <div class="nz-list" id="nzList"></div>
+    </aside>
+    <section class="nz-detail" id="nzDetail">
+        <div class="nz-detail-empty" id="nzDetailEmpty">
+            <div class="nz-de-icon">📝</div>
+            <h3>Keine Notiz ausgewählt</h3>
+            <div>Wähle links eine Notiz oder lege eine neue an.</div>
         </div>
-        <div class="nz-hint">Tastatur: <b>n</b> = neue Notiz, <b>Esc</b> = abbrechen · Tipp: <code>- [ ]</code> für Checkboxen, <code>**fett**</code>, <code>*kursiv*</code>, <code>`code`</code></div>
-    </div>
-
-    <div id="grid" class="nz-grid"></div>
-    <div id="empty" class="nz-empty" style="display:none">
-        <div class="nz-empty-icon">📝</div>
-        <h3>Noch keine Notizen</h3>
-        <div>Schreib oben deine erste Notiz und drück Speichern.</div>
-    </div>
-</main>
+        <div class="nz-detail-edit" id="nzDetailEdit" style="display:none">
+            <button class="nz-back" id="nzBack" type="button">← Liste</button>
+            <input class="nz-d-title" id="nzDTitle" type="text" placeholder="Titel">
+            <div class="nz-d-divider"></div>
+            <div class="nz-d-scroll">
+                <textarea class="nz-d-content" id="nzDContent" placeholder="Schreib was…"></textarea>
+                <div class="nz-d-preview" id="nzDPreview"></div>
+                <div class="nz-d-preview-hint" id="nzDPreviewHint"></div>
+            </div>
+            <div class="nz-detail-foot">
+                <div class="nz-d-color" id="nzDColor"></div>
+                <button class="nz-d-act" id="nzDPin" type="button">📍 Pin</button>
+                <button class="nz-d-act" id="nzDArchive" type="button">🗄️ Archiv</button>
+                <button class="nz-d-act danger" id="nzDDelete" type="button">🗑️ Löschen</button>
+                <span class="nz-d-status" id="nzDStatus"><span class="dot"></span><span class="txt"></span></span>
+            </div>
+        </div>
+    </section>
+</div>
 <div class="version-tag"></div>
 <script src="/notizen/notizen.js"></script>
 </body>

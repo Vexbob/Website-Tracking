@@ -1,4 +1,4 @@
-"""Notizen-Router — schnelle Notiz-Ablage mit Tags, Farben, Pin & Archiv.
+"""Notizen-Router — schnelle Notiz-Ablage mit Farben, Pin & Archiv (Master-Detail).
 
 Kein Prefix: die Endpoints behalten ihre absoluten Pfade (``/api/notes`` …).
 """
@@ -28,7 +28,6 @@ class NoteCreate(BaseModel):
     content: Optional[str] = ""
     color: Optional[str] = "default"
     pinned: Optional[bool] = False
-    tags: Optional[list[str]] = []
 
 
 class NoteUpd(BaseModel):
@@ -37,7 +36,6 @@ class NoteUpd(BaseModel):
     color: Optional[str] = None
     pinned: Optional[bool] = None
     archived: Optional[bool] = None
-    tags: Optional[list[str]] = None
     sort_order: Optional[int] = None
 
 
@@ -52,23 +50,6 @@ def _ser(row) -> dict:
         if hasattr(v, "isoformat"):
             d[k] = v.isoformat()
     return d
-
-
-def _clean_tags(tags):
-    """Tags bereinigen: trimmen, '#' entfernen, leer filtern, deduplizieren."""
-    if not tags:
-        return []
-    seen, out = set(), []
-    for t in tags:
-        t = (t or "").strip().lstrip("#")
-        if not t:
-            continue
-        key = t.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(t)
-    return out
 
 
 # ---------- Endpoints ----------
@@ -91,6 +72,16 @@ async def list_notes(
     return [_ser(r) for r in rows]
 
 
+@router.get("/api/notes/{nid}")
+async def get_note(nid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    """Einzelne Notiz abrufen (deep-link-fähig)."""
+    row = await db.fetchrow(
+        "SELECT * FROM notes WHERE id=$1 AND user_id=$2", nid, user["id"])
+    if not row:
+        raise HTTPException(404, "Nicht gefunden")
+    return _ser(row)
+
+
 @router.post("/api/notes")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def create_note(request: Request, b: NoteCreate, db=Depends(get_db), user=Depends(get_current_user)):
@@ -98,10 +89,10 @@ async def create_note(request: Request, b: NoteCreate, db=Depends(get_db), user=
     if color not in ALLOWED_COLORS:
         raise HTTPException(400, f"Unbekannte Farbe: {color}")
     row = await db.fetchrow(
-        "INSERT INTO notes (user_id,title,content,color,pinned,tags) "
-        "VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
+        "INSERT INTO notes (user_id,title,content,color,pinned) "
+        "VALUES ($1,$2,$3,$4,$5) RETURNING *",
         user["id"], (b.title or "").strip(), (b.content or "").rstrip(),
-        color, bool(b.pinned), _clean_tags(b.tags),
+        color, bool(b.pinned),
     )
     logger.info(f"User {user['id']} created note {row['id']}")
     return _ser(row)
@@ -128,8 +119,6 @@ async def update_note(request: Request, nid: int, b: NoteUpd, db=Depends(get_db)
         fields.append(f"pinned=${len(vals)+1}"); vals.append(bool(b.pinned))
     if b.archived is not None:
         fields.append(f"archived=${len(vals)+1}"); vals.append(bool(b.archived))
-    if b.tags is not None:
-        fields.append(f"tags=${len(vals)+1}"); vals.append(_clean_tags(b.tags))
     if b.sort_order is not None:
         fields.append(f"sort_order=${len(vals)+1}"); vals.append(int(b.sort_order))
 
@@ -143,6 +132,7 @@ async def update_note(request: Request, nid: int, b: NoteUpd, db=Depends(get_db)
         *vals,
     )
     return _ser(await db.fetchrow("SELECT * FROM notes WHERE id=$1", nid))
+
 
 
 @router.delete("/api/notes/{nid}")

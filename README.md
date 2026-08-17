@@ -18,14 +18,14 @@
 - **CSV-Export**, **JSON-Backup & Restore**, automatische tägliche Snapshots
 
 ### 📝 Notizen
-Schnelle Notiz-Ablage mit **Tags**, **Farblabels** (8 Farben), **Pin** & **Archiv**.
+Notiz-Ablage im **Apple-Notes-Stil** (Master-Detail): Sidebar-Liste + Detail-Editor, einzelne Notizen per Link aufrufbar (`#note-42`).
 - **Markdown-Light**-Rendering (fett/kursiv/Code, Listen, Überschriften, Links)
-- **anklickbare Checkboxen** (`- [ ]`/`- [x]`) — umschalten speichert automatisch
-- **Suche** über Titel/Inhalt/Tags + **Tag-Filter-Chips**
-- **Inline-Edit** direkt in der Karte (Titel & Inhalt)
-- **Auto-Draft** in localStorage, **Undo** beim Löschen, relative Zeitstempel
-- Tastatur-Shortcut `n` = neue Notiz, `Esc` = abbrechen, `Strg/Cmd+Enter` = speichern
-- responsives Masonry-Kartenraster, Dark-Mode, PWA
+- **Dynamisches Abhak-Feature** — anklickbare Checkboxen (`- [ ]`/`- [x]`) in der Live-Vorschau, beim Tippen direkt abhakbar
+- **Farblabels** (8 Farben), **Pin** (eigene Sektion oben), **Archiv**
+- **Auto-Save** — Änderungen speichern automatisch, Status-Indikator (Speichern… → Gespeichert ✓)
+- **Sortieren** (Geändert / Erstellt / Titel) + **Suche** filtern die Sidebar live
+- Leere Neue Notizen werden beim Verlassen automatisch gelöscht, **Undo** beim Löschen
+- responsiv (mobil einspaltig mit Back-Button), Dark-Mode, PWA
 
 ### 🍳 Rezeptbuch
 Persönliche Rezepte mit Zutaten, Schritten und Kategorien.
