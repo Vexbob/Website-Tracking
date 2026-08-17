@@ -1209,12 +1209,10 @@ async def list_products(
     Fuer jedes Produkt: letzter Preis + Rabatt-/Preiserhoehung ggue. vorherigem Kauf,
     plus Preis/kg oder Preis/L falls Einheit bekannt.
 
-    Parameter ``min_count`` (v1.16.0): Nur Produkte mit mindestens N Kaeufen
-    zurueckgeben — die Standard-Ansicht zeigt nur Produkte, die man mehrmals
-    gekauft hat (Einmal-Kaeufe sind fuer Preisverlauf uninteressant). Wenn
-    ein Item einer Marke zugeordnet ist, bleibt es unabhaengig vom Count
-    sichtbar (der User hat es bewusst klassifiziert). ``min_count=1`` gibt
-    alle Produkte zurueck (Kompatibilitaet, Client-Fallback).
+    Parameter ``min_count`` (v1.16.0, strikt ab v1.17.x): Nur Produkte mit
+    mindestens N Kaeufen zurueckgeben — die Standard-Ansicht zeigt nur Produkte,
+    die man mehrmals gekauft hat (Einmal-Kaeufe sind fuer Preisverlauf
+    uninteressant). ``min_count=1`` gibt alle Produkte zurueck.
     """
     # Nur Artikel die als vergleichbar markiert sind (KI-Flag price_comparable=true)
     rows = await db.fetch(
@@ -1360,11 +1358,12 @@ async def list_products(
         if not title:
             title = norm_key(last["description"]).title() or last["description"]
 
-        # v1.16.0: Filter nach min_count — Produkte die wir NICHT drin haben wollen
-        # ueberspringen. Ausnahmen: (a) mind. 1 Kauf ist bewusst klassifiziert
-        # (brand_id gesetzt) → immer drin. (b) min_count=1 → alles drin.
-        has_brand_purchase = any(p.get("brand_id") for p in purchases)
-        if min_count > 1 and len(purchases) < min_count and not has_brand_purchase:
+        # v1.17.x: Filter nach min_count strikt — Produkte mit weniger als
+        # ``min_count`` Kaeufen werden konsequent ausgeblendet.
+        # (Frueher Ausnahme fuer brand_id gesetzt: fiel weg, weil der KI-Parser
+        # inzwischen fast jedem Item eine Marke zuordnet und dadurch die
+        # UI-Zusage "nur mehrfach gekaufte Produkte" verletzt wurde.)
+        if len(purchases) < min_count:
             continue
 
         # Sammle Marken-Info (von der letzten Buchung)

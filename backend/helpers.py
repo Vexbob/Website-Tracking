@@ -189,8 +189,6 @@ async def _build_export_metadata(db, user_id: int) -> list[str]:
         )
     out.append("")
 
-    return streak
-
     # Zukuenftige Ideen
     out.append("# SEKTION: Zukuenftige Ideen")
     out.append("id;title;category")

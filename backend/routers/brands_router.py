@@ -53,16 +53,20 @@ async def list_brands(
     Bei ~800 Seed-Marken pro User ist der Default-Limit 5000 groesszuegig genug
     (Client filtert clientseitig fuer Autocomplete).
     """
-    conds = ["user_id=$1"]
+    # Bugfix: alle Spalten in der WHERE-Klausel MUESSEN mit Tabellen-Alias
+    # praefixiert sein, sonst kollidiert ``user_id`` zwischen ``brands`` und
+    # ``stores`` (beide Tabellen haben eine ``user_id``-Spalte) und Postgres
+    # wirft ``column reference "user_id" is ambiguous``.
+    conds = ["b.user_id=$1"]
     params: list = [user["id"]]
     if q and len(q.strip()) >= 1:
         params.append("%" + q.strip().lower() + "%")
-        conds.append(f"LOWER(name) LIKE ${len(params)}")
+        conds.append(f"LOWER(b.name) LIKE ${len(params)}")
     if store_id:
         params.append(store_id)
-        conds.append(f"store_id=${len(params)}")
+        conds.append(f"b.store_id=${len(params)}")
     if private_only:
-        conds.append("is_private_label=TRUE")
+        conds.append("b.is_private_label=TRUE")
     params.append(max(1, min(limit, 10000)))
     rows = await db.fetch(
         f"""SELECT b.*, s.name AS store_name, s.color AS store_color, s.icon AS store_icon
