@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Marken — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/ausgaben/ausgaben.js"></script>
+<style>
+body{visibility:hidden}body.ready{visibility:visible}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.brand-toolbar{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.75rem}
+.brand-toolbar input,.brand-toolbar select{margin:0;padding:0.5rem 0.625rem;font-size:0.875rem}
+.brand-toolbar input.search{flex:1;min-width:180px}
+.brand-toolbar .filter-chip{padding:0.375rem 0.75rem;font-size:0.75rem;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);color:var(--text-muted);cursor:pointer;width:auto;font-weight:600;margin:0}
+.brand-toolbar .filter-chip.active{background:var(--teal);color:#fff;border-color:var(--teal)}
+.add-form{display:grid;grid-template-columns:1fr 1fr auto;gap:0.5rem;align-items:center;margin-top:0.75rem}
+@media(max-width:600px){.add-form{grid-template-columns:1fr}}
+.add-form input,.add-form select,.add-form button{margin:0;padding:0.5rem 0.625rem;font-size:0.875rem}
+.add-form button.primary{background:var(--teal);color:#fff;width:auto;padding:0.5rem 1rem}
+.brand-list{display:flex;flex-direction:column;gap:0.375rem;margin-top:0.75rem;max-height:70vh;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:0.5rem}
+.brand-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:0.5rem;align-items:center;padding:0.5rem 0.625rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px}
+.brand-name{font-weight:600;font-size:0.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand-meta{font-size:0.6875rem;color:var(--text-faint);margin-top:1px;display:flex;gap:0.375rem;align-items:center;flex-wrap:wrap}
+.brand-badge{padding:1px 6px;border-radius:6px;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
+.brand-badge.private{background:#dbeafe;color:#1e40af}
+.brand-badge.parent{background:#fce7f3;color:#9d174d}
+:root[data-theme="dark"] .brand-badge.private{background:#1e3a8a;color:#93c5fd}
+:root[data-theme="dark"] .brand-badge.parent{background:#831843;color:#fbcfe8}
+.brand-row select.store{padding:0.25rem 0.375rem;font-size:0.75rem;margin:0;max-width:140px;background:var(--surface);border:1px solid var(--border);border-radius:6px}
+.brand-row button.del{background:transparent;border:none;color:var(--red);cursor:pointer;padding:0.25rem 0.375rem;width:auto;margin:0;font-size:0.9375rem}
+.brand-row.system{opacity:0.85}
+.brand-count{color:var(--text-muted);font-size:0.8125rem;font-weight:500;margin-bottom:0.5rem}
+.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
+.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.ausg-toast-success{background:var(--green-dark)}.ausg-toast-error{background:var(--red-dark)}
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/ausgaben/" class="nav-title">← Marken</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main>
+<div id="subnav" data-active="marken"></div>
+    <div class="card">
+        <h3 style="margin-bottom:0.5rem">Neue Marke hinzufügen</h3>
+        <div class="add-form">
+            <input type="text" id="newName" placeholder="Markenname z.B. Milbona, Milka, Nutella">
+            <select id="newStore">
+                <option value="">– Hersteller-Marke (kein Laden) –</option>
+            </select>
+            <button id="newBtn" class="primary">Hinzufügen</button>
+        </div>
+        <div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-faint)">Mit Laden verknüpfen = <strong>Eigenmarke</strong>, sonst Hersteller-Marke.</div>
+    </div>
+    <div class="card">
+        <h3>Meine Marken</h3>
+        <div class="brand-toolbar">
+            <input type="search" class="search" id="q" placeholder="🔍 Marke suchen …">
+            <button class="filter-chip active" data-filter="all">Alle</button>
+            <button class="filter-chip" data-filter="private">Nur Eigenmarken</button>
+            <button class="filter-chip" data-filter="brand">Nur Hersteller</button>
+        </div>
+        <div class="brand-count" id="brandCount"></div>
+        <div id="list" class="brand-list"></div>
+    </div>
+</main>
+<div class="version-tag"></div>
+<script src="/ausgaben/marken.js"></script>
+</body>
+</html>

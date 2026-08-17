@@ -16,16 +16,23 @@
 - **GitHub-Style Heatmap** über 365 Tage
 - **Trophäen-Wand** für abgeschlossene Ziele
 - **CSV-Export** mit Metadaten-Vorspann (Sparziele, Achievements, Wochen-/Monatsziele, Wunsch-Anschaffungen, Zukunftsideen, Trophäen) + Protokoll (v1.15.0)
+- Fallende Achievements: Meilenstein zählt erst bei **strikt unter** der Schwelle (v1.15.1)
 - **JSON-Backup & Restore**, automatische tägliche Snapshots
 
-### 📝 Notizen
-Notiz-Ablage im **Apple-Notes-Stil** (Master-Detail): Sidebar-Liste + Detail-Editor, einzelne Notizen per Link aufrufbar (`#note-42`).
-- **Markdown-Light**-Rendering (fett/kursiv/Code, Listen, Überschriften, Links)
-- **Dynamisches Abhak-Feature** — anklickbare Checkboxen (`- [ ]`/`- [x]`) in der Live-Vorschau, beim Tippen direkt abhakbar
-- **Farblabels** (8 Farben), **Pin** (eigene Sektion oben), **Archiv**
-- **Auto-Save** — Änderungen speichern automatisch, Status-Indikator (Speichern… → Gespeichert ✓)
-- **Sortieren** (Geändert / Erstellt / Titel) + **Suche** filtern die Sidebar live
-- Leere Neue Notizen werden beim Verlassen automatisch gelöscht, **Undo** beim Löschen
+### 📝 Notizen (komplett überarbeitet in v1.17.0)
+Notiz-Ablage im **Bear/Obsidian-Stil** (Master-Detail): Sidebar-Liste + Editor/Preview-Toggle, einzelne Notizen per Link aufrufbar (`#note-42`).
+- **Speicherformat: Markdown** — sauberes Textformat statt fragiles contenteditable-HTML (v1.17.0)
+- **Zwei Ansichten**: Editor (Textarea mit Monospace-Font) und Live-Preview (Cmd/Ctrl+E zum Umschalten)
+- **Task-Checkboxen** — `- [ ]` / `- [x]` im Editor, in der Preview **echt klickbar** — Klick schreibt im Text zurück, keine DOM-Fummelei mehr (v1.17.0 Bugfix)
+- **Markdown-Renderer** unterstützt: `# ## ###` Überschriften, `**fett**`, `*kursiv*`, `` `code` ``, ```` ``` ```` Codeblöcke, `[Text](url)`, `> Zitat`, `---` Trennlinien, `-` / `1.` Listen
+- **Smart-Enter**: neue Zeile in Listen/Aufgaben führt automatisch das Prefix fort; leere Zeile beendet Liste
+- **Toolbar** mit Format-Buttons (H1-H3, Bold, Italic, Code, Listen, Aufgabe, Zitat, Link, HR)
+- **Keyboard-Shortcuts**: Cmd/Ctrl+B/I/K/` (Formatierung), +E (Modus-Toggle), +Shift+7/8/9 (Aufgabe/Ul/Ol), +N (neue Notiz)
+- **Automatische Migration** alter HTML-Notizen (v1.14-v1.16) → Markdown beim ersten Öffnen (v1.17.0)
+- **Farblabels** (8 Farben), **Pin** (eigene Sektion oben), **Archiv** mit Tab-Toggle
+- **Auto-Save** mit Debounce, Status-Indikator (Speichern… → Gespeichert ✓)
+- **Sortieren** (Geändert / Erstellt / Titel) + **Live-Suche** filtern die Sidebar
+- Leere Neue Notizen werden beim Verlassen automatisch gelöscht, **Undo** beim Löschen/Archivieren
 - responsiv (mobil einspaltig mit Back-Button), Dark-Mode, PWA
 
 ### 🍳 Rezeptbuch
@@ -34,12 +41,15 @@ Persönliche Rezepte mit Zutaten, Schritten und Kategorien.
 ### 📸 Fotos
 Privates Fotoalbum mit Upload und Galerie-Ansicht.
 
-### 💶 Ausgaben-Tracker (neu in v1.7.0, KI-Parser seit v1.8.0)
+### 💶 Ausgaben-Tracker (neu in v1.7.0, KI-Parser seit v1.8.0, Marken seit v1.16.0)
 - **Kassenbon-OCR** via Google Cloud Vision (deutscher Receipt-Parser: Markt/Datum/Betrag/MwSt./Positionen)
 - **Editierbare OCR-Ergebnisse** – nach der Erkennung Werte in einem Formular anpassen bevor gespeichert wird
 - **Bildspeicher** mit Thumbnails, Bild-Preview auf der Bon-Detailseite, jederzeit löschbar
 - **Läden + Kategorien** verwalten (Farbe/Icon), Ausgaben pro Laden / pro Kategorie auswerten
+- **Marken-System** (v1.16.0) – ~800 vordefinierte Eigen- und Herstellermarken, automatisch beim ersten Start pro User geseedet; AI-Parser erhält Markenkontext und weist Artikel automatisch zu; eigener Marken-Tab mit Filter (Alle / Eigenmarken / Hersteller)
+- **Inline-Anlage von Läden & Kategorien** (v1.16.0) direkt beim Bon-Eingeben — kein Tab-Wechsel nötig
 - **Auto-Kategorisierung** mit mitlernenden Regeln (Keyword → Kategorie, Bestätigungs-Counter)
+- **Verbesserter KI-Parser** (v1.16.0) – Default-Modell auf `gemini-flash-latest` hochgesetzt; Prompt behält jetzt beschreibende Adjektive (z.B. "Mais geröstet gesalzen" statt nur "Mais")
 - **Schnelleingabe-Modus** – nur Betrag + Laden + Datum ohne Positionen
 - **Manuelle Eingabe** mit beliebig vielen Positionen und Split-Kategorien pro Bon
 - **Wiederkehrende Ausgaben** – automatische Vorschlagsliste anhand von Buchungshistorie
@@ -47,6 +57,8 @@ Privates Fotoalbum mit Upload und Galerie-Ansicht.
 - **Client-Bildkompression** (Canvas API, max. 1600 px, ~85 % JPEG-Qualität)
 - **PWA-Kamera-Direktaufnahme** via `capture="environment"` auf Smartphones
 - **Statistik**: Monatstrend, Doughnut nach Kategorie/Laden, 365-Tage-Heatmap, Preisverlauf-Suche
+- **Preisverlauf-Redesign** (v1.16.0) – Kachel-Grid mit SVG-Sparkline pro Produkt statt Liste, filtert Einmalkäufe automatisch (nur Produkte mit ≥2 Käufen oder Marken-Bezug), Listen-Ansicht optional umschaltbar
+- **Preisvergleich zweigeteilt** (v1.16.0) – im Detail-Modal zwei Tabs: „📊 Preisverlauf pro Laden" (mit Rabatt/Preissteigerung) und „🏪 Läden-Vergleich" (Tabellensicht wer billiger ist)
 - **Export** als CSV (Semikolon-getrennt, deutsche Zahlenformatierung) und JSON (inkl. Items)
 
 ### 👤 User- & Admin-System
@@ -158,16 +170,25 @@ Das Frontend kann parallel z.B. hinter nginx/Caddy als Static-Site ausgeliefert 
 ```
 Website/
 ├── backend/
-│   ├── main.py                  # FastAPI-App & alle Endpoints
+│   ├── main.py                  # FastAPI-App & Sparziel-Endpoints (seit v1.15.1 verschlankt)
+│   ├── schemas.py               # Pydantic-Models (ausgelagert v1.15.1)
+│   ├── helpers.py               # Utility-Funktionen (ausgelagert v1.15.1)
+│   ├── deps.py                  # Rate-Limiter, geteilte Utilities
 │   ├── auth.py                  # JWT + bcrypt
 │   ├── database.py              # asyncpg-Pool, Init, Migrationen
-│   ├── services/
-│   │   └── backup.py            # Snapshots, Restore, Prune
+│   ├── routers/                 # Ausgelagerte Endpoint-Gruppen (expenses, notes)
+│   ├── services/                # OCR, AI-Parser, Backup, Ausgaben-Logik
 │   ├── migrations/sql/          # nummerierte SQL-Migrationen
 │   └── tests/
+├── docs/
+│   └── BLOG_KONZEPT.md          # Konzept fuer das kommende Blog-Modul
 └── frontend/
     ├── index.html               # Dashboard-Landing
-    ├── sparziel/                # Sparziel-Tracker (Hauptfeature)
+    ├── sparziel/                # Sparziel-Tracker
+    │   ├── index.html           # nur noch Markup (v1.15.1)
+    │   ├── sparziel.css         # ausgelagerte Styles (v1.15.1)
+    │   └── sparziel.js          # ausgelagerte Logik (v1.15.1)
+    ├── ausgaben/                # Ausgaben-Tracker (bereits modular)
     ├── notizen/                 # Notizen
     ├── rezeptbuch/              # Rezepte
     ├── photos/                  # Fotoalbum

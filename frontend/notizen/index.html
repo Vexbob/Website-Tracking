@@ -9,117 +9,10 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/notizen/notizen.css">
 <script src="/js/config.js"></script>
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
-<style>
-html,body{height:100%}
-body{display:flex;flex-direction:column;overflow:hidden}
-.nz-app{flex:1;display:flex;min-height:0;overflow:hidden}
-
-/* ---------- Sidebar ---------- */
-.nz-sidebar{width:300px;flex-shrink:0;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border)}
-.nz-side-head{padding:0.75rem;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:0.5rem}
-.nz-new{display:flex;align-items:center;justify-content:center;gap:0.4rem;padding:0.55rem 0.75rem;font-size:0.875rem;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:10px;cursor:pointer;width:100%;margin:0}
-.nz-new:hover{background:var(--blue-dark)}
-.nz-side-row{display:flex;gap:0.4rem}
-.nz-side-row input[type=search]{flex:1;padding:0.45rem 0.625rem;font-size:0.8125rem;margin:0;border-radius:8px;min-width:0}
-.nz-side-row select{padding:0.45rem 0.4rem;font-size:0.8125rem;margin:0;border-radius:8px;width:auto}
-.nz-side-toggle{padding:0.4rem 0.5rem;font-size:0.75rem;margin:0;width:auto;border-radius:8px;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);cursor:pointer;font-weight:500}
-.nz-side-toggle.active{background:var(--orange);color:#fff;border-color:var(--orange)}
-.nz-list{flex:1;overflow:auto;padding:0.375rem}
-.nz-section{font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-faint);padding:0.625rem 0.5rem 0.25rem}
-.nz-item{display:flex;gap:0.5rem;padding:0.55rem 0.625rem;border-radius:9px;cursor:pointer;border-left:3px solid transparent;margin-bottom:1px;transition:background .12s}
-.nz-item:hover{background:var(--surface-2)}
-.nz-item.active{background:var(--blue-bg);border-left-color:var(--blue)}
-.nz-item-main{flex:1;min-width:0}
-.nz-item-title{font-size:0.875rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nz-item-title:empty:before{content:"Neue Notiz";color:var(--text-faint);font-style:italic;font-weight:500}
-.nz-item-preview{font-size:0.75rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
-.nz-item-preview:empty:before{content:"Keine weiteren Zeilen";color:var(--text-fainter)}
-.nz-item-date{font-size:0.6875rem;color:var(--text-faint);margin-top:2px}
-.nz-item-pin{font-size:0.8rem;align-self:flex-start;color:var(--orange)}
-.nz-color-default{border-left-color:var(--border-strong)}
-.nz-color-red{border-left-color:var(--red)}
-.nz-color-orange{border-left-color:var(--orange)}
-.nz-color-yellow{border-left-color:var(--gold)}
-.nz-color-green{border-left-color:var(--green)}
-.nz-color-blue{border-left-color:var(--blue)}
-.nz-color-purple{border-left-color:var(--purple)}
-.nz-color-pink{border-left-color:var(--pink)}
-.nz-list-empty{text-align:center;padding:2rem 1rem;color:var(--text-faint);font-size:0.8125rem}
-
-/* ---------- Detail ---------- */
-.nz-detail{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;background:var(--bg)}
-.nz-detail-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-faint);text-align:center;padding:2rem}
-.nz-de-icon{font-size:3rem;opacity:0.4;margin-bottom:0.5rem}
-.nz-detail-empty h3{font-size:1rem;color:var(--text-muted);margin-bottom:0.25rem}
-.nz-detail-edit{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
-.nz-back{display:none;align-self:flex-start;margin:0.75rem 0 0;background:transparent;border:none;color:var(--blue);font-size:0.875rem;font-weight:600;cursor:pointer;padding:0.25rem 0}
-.nz-back:hover{text-decoration:underline}
-.nz-d-title{font-size:1.5rem;font-weight:700;border:none;background:transparent;color:var(--text);width:100%;padding:1rem 1.5rem 0.5rem;outline:none}
-.nz-d-title::placeholder{color:var(--text-fainter);font-weight:600}
-.nz-d-divider{height:1px;background:var(--border);margin:0 1.5rem}
-
-/* ---------- Formatierungs-Toolbar ---------- */
-.nz-toolbar{display:flex;gap:0.2rem;flex-wrap:wrap;padding:0.5rem 1.5rem;border-bottom:1px solid var(--border);background:var(--surface)}
-.nz-tb{padding:0.3rem 0.5rem;font-size:0.85rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:7px;cursor:pointer;width:auto;margin:0;font-weight:600;line-height:1;min-width:30px}
-.nz-tb:hover{color:var(--text);border-color:var(--border-strong);background:var(--surface)}
-.nz-tb.sep{background:none;border:none;cursor:default;width:auto;min-width:0;padding:0 0.1rem;color:var(--text-fainter)}
-.nz-tb.italic{font-style:italic}
-
-/* ---------- Rich-Text-Editor ---------- */
-.nz-d-scroll{flex:1;overflow:auto;padding:0.75rem 1.5rem 2rem}
-.nz-d-content{outline:none;font-size:0.9375rem;line-height:1.6;color:var(--text);min-height:200px;word-wrap:break-word}
-.nz-d-content:empty:before{content:attr(data-ph);color:var(--text-fainter)}
-.nz-d-content h1,.nz-d-content h2,.nz-d-content h3{color:var(--text);margin:0.6rem 0 0.3rem}
-.nz-d-content h1{font-size:1.3rem}.nz-d-content h2{font-size:1.15rem}.nz-d-content h3{font-size:1.05rem}
-.nz-d-content p{margin:0.3rem 0}
-.nz-d-content ul,.nz-d-content ol{margin:0.4rem 0;padding-left:1.5rem}
-.nz-d-content li{margin:0.25rem 0}
-.nz-d-content code{background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:0.85rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.nz-d-content a{color:var(--blue)}
-.nz-d-content b,.nz-d-content strong{font-weight:700}
-.nz-d-content i,.nz-d-content em{font-style:italic}
-.nz-d-content .nz-task{display:flex;gap:0.45rem;align-items:flex-start;margin:0.3rem 0;padding-left:0}
-.nz-d-content .nz-task input[type=checkbox]{margin-top:4px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
-.nz-d-content .nz-task .nz-task-txt{flex:1}
-.nz-d-content .nz-task.done .nz-task-txt{color:var(--text-faint);text-decoration:line-through}
-
-/* ---------- Detail-Fuß ---------- */
-.nz-detail-foot{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;padding:0.625rem 1.5rem;border-top:1px solid var(--border);background:var(--surface)}
-.nz-d-color{display:flex;gap:0.3rem}
-.nz-d-color button{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;margin:0}
-.nz-d-color button.sel{border-color:var(--text)}
-.nz-d-act{padding:0.4rem 0.6rem;font-size:0.8125rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:8px;cursor:pointer;width:auto;margin:0;font-weight:500}
-.nz-d-act:hover{color:var(--text);border-color:var(--border-strong)}
-.nz-d-act.on{color:var(--orange);border-color:var(--orange)}
-.nz-d-act.danger:hover{color:var(--red);border-color:var(--red)}
-.nz-d-status{margin-left:auto;font-size:0.75rem;color:var(--text-faint);font-weight:500;display:flex;align-items:center;gap:0.3rem}
-.nz-d-status .dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint)}
-.nz-d-status.saving .dot{background:var(--orange);animation:nzpulse 1s infinite}
-.nz-d-status.saved .dot{background:var(--green)}
-@keyframes nzpulse{0%,100%{opacity:1}50%{opacity:0.3}}
-
-/* ---------- Toast ---------- */
-.nz-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(120px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);max-width:90vw;display:flex;align-items:center;gap:0.5rem}
-.nz-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-.nz-toast .nz-undo-btn{background:transparent;color:var(--surface);border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:0.25rem 0.625rem;font-size:0.8125rem;font-weight:600;cursor:pointer;margin-left:0.25rem;width:auto}
-.nz-toast .nz-undo-btn:hover{background:rgba(255,255,255,0.12)}
-
-/* ---------- Mobile ---------- */
-@media (max-width:768px){
-    .nz-sidebar{width:100%}
-    .nz-app.show-detail .nz-sidebar{display:none}
-    .nz-app:not(.show-detail) .nz-detail{display:none}
-    .nz-back{display:inline-flex}
-    .nz-d-title{padding:1rem 1rem 0.5rem;font-size:1.3rem}
-    .nz-d-divider{margin:0 1rem}
-    .nz-toolbar{padding:0.5rem 1rem}
-    .nz-d-scroll{padding:0.75rem 1rem 2rem}
-    .nz-detail-foot{padding:0.625rem 1rem}
-}
-</style>
 </head>
 <body>
 <nav class="navbar">
@@ -133,42 +26,70 @@ body{display:flex;flex-direction:column;overflow:hidden}
 <div class="nz-app" id="nzApp">
     <aside class="nz-sidebar">
         <div class="nz-side-head">
-            <button class="nz-new" id="nzNew" title="Neue Notiz">＋ Notiz</button>
+            <button class="nz-new" id="nzNew" title="Neue Notiz (Cmd/Ctrl+N)">
+                <span class="ico">✎</span><span>Neue Notiz</span>
+            </button>
+            <div class="nz-search-wrap">
+                <span class="nz-search-ico">🔍</span>
+                <input type="search" id="nzSearch" placeholder="Suchen…">
+            </div>
             <div class="nz-side-row">
-                <input type="search" id="nzSearch" placeholder="🔍 Suchen…">
-                <select id="nzSort" title="Sortierung">
-                    <option value="updated">Geändert</option>
+                <select id="nzSort" title="Sortierung" class="nz-side-sort">
+                    <option value="updated">Zuletzt geändert</option>
                     <option value="created">Erstellt</option>
-                    <option value="title">Titel</option>
+                    <option value="title">Titel A-Z</option>
                 </select>
             </div>
-            <button class="nz-side-toggle" id="nzArchiveBtn">🗄️ Archiv</button>
+            <div class="nz-side-tabs">
+                <button class="nz-side-tab active" data-scope="active">📋 Aktiv</button>
+                <button class="nz-side-tab" data-scope="archived">🗄️ Archiv</button>
+            </div>
         </div>
         <div class="nz-list" id="nzList"></div>
     </aside>
     <section class="nz-detail" id="nzDetail">
         <div class="nz-detail-empty" id="nzDetailEmpty">
-            <div class="nz-de-icon">📝</div>
+            <div class="nz-de-illu">✎</div>
             <h3>Keine Notiz ausgewählt</h3>
-            <div>Wähle links eine Notiz oder lege eine neue an.</div>
+            <div>Wähle links eine Notiz aus oder lege eine neue an.</div>
+            <button class="nz-de-cta" id="nzDeCta" type="button">＋ Neue Notiz erstellen</button>
         </div>
         <div class="nz-detail-edit" id="nzDetailEdit" style="display:none">
-            <button class="nz-back" id="nzBack" type="button">← Liste</button>
-            <input class="nz-d-title" id="nzDTitle" type="text" placeholder="Titel">
-            <div class="nz-d-divider"></div>
-            <div class="nz-toolbar" id="nzToolbar">
-                <button class="nz-tb" data-cmd="bold" title="Fett (Strg+B)"><b>B</b></button>
-                <button class="nz-tb italic" data-cmd="italic" title="Kursiv (Strg+I)"><i>I</i></button>
-                <span class="nz-tb sep">|</span>
-                <button class="nz-tb" data-cmd="insertUnorderedList" title="Aufzählung">• Liste</button>
-                <button class="nz-tb" data-cmd="insertOrderedList" title="Nummerierung">1. Liste</button>
-                <button class="nz-tb" data-cmd="formatBlockH3" title="Überschrift">H</button>
-                <span class="nz-tb sep">|</span>
-                <button class="nz-tb" data-cmd="task" title="Aufgabe einfügen">☑ Aufgabe</button>
-                <button class="nz-tb" data-cmd="createLink" title="Link">🔗</button>
+            <div class="nz-d-head">
+                <button class="nz-back" id="nzBack" type="button">← Liste</button>
+                <input class="nz-d-title" id="nzDTitle" type="text" placeholder="Titel">
+                <div class="nz-d-mode" role="group" aria-label="Ansicht">
+                    <button class="nz-mode-btn active" data-mode="edit" title="Editor (Cmd/Ctrl+E)">✎ Editor</button>
+                    <button class="nz-mode-btn" data-mode="preview" title="Vorschau (Cmd/Ctrl+E)">👁 Vorschau</button>
+                </div>
             </div>
-            <div class="nz-d-scroll">
-                <div class="nz-d-content" id="nzDContent" contenteditable="true" data-ph="Schreib was…" spellcheck="true"></div>
+            <div class="nz-toolbar" id="nzToolbar">
+                <button class="nz-tb" data-md="bold"     title="Fett (Cmd/Ctrl+B)"><b>B</b></button>
+                <button class="nz-tb" data-md="italic"   title="Kursiv (Cmd/Ctrl+I)"><i>I</i></button>
+                <button class="nz-tb" data-md="code"     title="Inline-Code"><code>{ }</code></button>
+                <span class="nz-tb-sep"></span>
+                <button class="nz-tb" data-md="h1"       title="Überschrift 1">H1</button>
+                <button class="nz-tb" data-md="h2"       title="Überschrift 2">H2</button>
+                <button class="nz-tb" data-md="h3"       title="Überschrift 3">H3</button>
+                <span class="nz-tb-sep"></span>
+                <button class="nz-tb" data-md="ul"       title="Aufzählung">• Liste</button>
+                <button class="nz-tb" data-md="ol"       title="Nummerierung">1. Liste</button>
+                <button class="nz-tb accent" data-md="task" title="Aufgabe (Cmd/Ctrl+Shift+7)">☐ Aufgabe</button>
+                <span class="nz-tb-sep"></span>
+                <button class="nz-tb" data-md="quote"    title="Zitat">❝ Zitat</button>
+                <button class="nz-tb" data-md="link"     title="Link (Cmd/Ctrl+K)">🔗 Link</button>
+                <button class="nz-tb" data-md="hr"       title="Trennlinie">— HR</button>
+            </div>
+            <div class="nz-d-body">
+                <textarea class="nz-d-editor" id="nzDEditor" spellcheck="true" placeholder="Schreib was… ✨
+
+Markdown funktioniert:
+  **fett**, *kursiv*, `code`, [Link](url)
+  # Überschrift, > Zitat, --- Trennlinie
+  - [ ] Aufgabe (in der Vorschau klickbar)
+  - Aufzählungspunkt
+  1. Nummerierung"></textarea>
+                <div class="nz-d-preview" id="nzDPreview"></div>
             </div>
             <div class="nz-detail-foot">
                 <div class="nz-d-color" id="nzDColor"></div>

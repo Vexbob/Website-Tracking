@@ -1,5 +1,4 @@
 import os
-import math
 import logging
 import asyncio
 from datetime import date, timedelta, datetime, timezone
@@ -8,14 +7,10 @@ from fastapi import FastAPI, Depends, HTTPException, Request, status, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 import asyncpg
 import secrets
-from datetime import date as _date_type
-from fastapi.security import OAuth2PasswordRequestForm
 
 import database as db_module
 from database import (
@@ -29,6 +24,20 @@ from services.backup import create_snapshot, restore_snapshot, prune_snapshots
 from deps import (
     logger, limiter,
     LIMIT_LOGIN, LIMIT_WRITE_FREQUENT, LIMIT_WRITE_STANDARD, LIMIT_WRITE_RARE,
+)
+
+# Ausgelagerte Pydantic-Models (v1.15.1)
+from schemas import (
+    SavGoalUpd, SavGoalCreate, AchCreate, AchUpd, AchEdit,
+    PGCreate, PGUpd, CheckinBody, NoteBody, HMCreate,
+    PotCreate, FICreate, ReorderBody, RestoreBody,
+    UserCreate, UserPasswordReset, UserCreateInvite, ActivateBody, TrophyCreate,
+)
+
+# Ausgelagerte Utility-Funktionen (v1.15.1)
+from helpers import (
+    ser, fmt_de_num, _milestones_at, _active_goal_id, _streak,
+    _build_export_header, _build_export_metadata,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
@@ -73,101 +82,30 @@ async def _auto_backup_loop():
 async def startup():
     logger.info("Startup: initializing DB")
     await init_db()
+    # v1.16.0: Marken-Seed fuer alle vorhandenen User nachziehen (idempotent).
+    # Neu-angelegte User bekommen ihn automatisch via ``_seed_empty_user``,
+    # bestehende User beim ersten Backend-Start nach dem Update.
+    try:
+        if db_module._pool is None:
+            db_module._pool = await asyncpg.create_pool(
+                db_module.DATABASE_URL, ssl="require", min_size=1, max_size=10)
+        async with db_module._pool.acquire() as conn:
+            user_ids = [r["id"] for r in await conn.fetch("SELECT id FROM users")]
+            for uid in user_ids:
+                try:
+                    await _seed_empty_user(conn, uid)
+                except Exception as e:
+                    logger.warning(f"Brand-seed for user {uid} failed: {e}")
+        if user_ids:
+            logger.info(f"Brand-seed nachgezogen fuer {len(user_ids)} User")
+    except Exception as e:
+        logger.warning(f"Brand-seed at startup failed: {e}")
     logger.info(f"Startup complete. CORS origins: {CORS_ORIGINS}")
     asyncio.create_task(_auto_backup_loop())
 
-def ser(row):
-    d = dict(row)
-    for k, v in d.items():
-        if hasattr(v, 'isoformat'):
-            d[k] = v.isoformat()
-    return d
-
-def fmt_de_num(v):
-    f = float(v)
-    if f == int(f):
-        return str(int(f))
-    return f"{f:.2f}".rstrip("0").rstrip(".").replace(".", ",")
-
-# ---------- Models ----------
-class SavGoalUpd(BaseModel):
-    name: Optional[str] = None
-    target_amount: Optional[float] = None
-
-class AchCreate(BaseModel):
-    title: str; reward_amount: float; unit: str
-    start_value: float = 0; threshold_increment: float
-    step_amount: Optional[float] = None  # Klick-Schrittweite; default = threshold_increment
-    target_value: Optional[float] = None; direction: str = "increase"
-
-class AchUpd(BaseModel):
-    current_value: float
-    achieved_at: Optional[str] = None
-    note: Optional[str] = None  # optionale Notiz für neu erzeugte Meilenstein-Einträge
-
-class AchEdit(BaseModel):
-    title: Optional[str] = None; reward_amount: Optional[float] = None
-    unit: Optional[str] = None; start_value: Optional[float] = None
-    threshold_increment: Optional[float] = None
-    step_amount: Optional[float] = None
-    target_value: Optional[float] = None
-    direction: Optional[str] = None
-
-class PGCreate(BaseModel):
-    title: str; reward_amount: float; rhythm_type: str = "weekly"; target_count: int
-    streak_bonus_amount: float = 0; streak_bonus_threshold: int = 0
-
-class PGUpd(BaseModel):
-    title: Optional[str] = None; reward_amount: Optional[float] = None
-    target_count: Optional[int] = None; rhythm_type: Optional[str] = None
-    streak_bonus_amount: Optional[float] = None; streak_bonus_threshold: Optional[int] = None
-
-class CheckinBody(BaseModel):
-    log_date: Optional[str] = None
-    note: Optional[str] = None
-
-class NoteBody(BaseModel):
-    note: Optional[str] = None
-
-class HMCreate(BaseModel):
-    metric_type: str; value: float
-
-class PotCreate(BaseModel):
-    name: str; estimated_price: Optional[float] = None
-
-class FICreate(BaseModel):
-    title: str; category: Optional[str] = None
-
-class ReorderBody(BaseModel):
-    order: list[int]
-
-class RestoreBody(BaseModel):
-    payload: dict
-    wipe: bool = False
-
-class UserCreate(BaseModel):
-    username: str
-    password: str
-
-class UserPasswordReset(BaseModel):
-    password: str
-
-class UserCreateInvite(BaseModel):
-    username: str
-
-class ActivateBody(BaseModel):
-    token: str
-    password: str
-
-class TrophyCreate(BaseModel):
-    name: str
-    target_amount: float
-    final_amount: float
-    started_at: Optional[str] = None
-    icon: Optional[str] = "🏆"
-    color: Optional[str] = "gold"
-    note: Optional[str] = None
-    photo_url: Optional[str] = None
+# Pydantic-Models leben in ``schemas.py`` (ausgelagert v1.15.1)
+# Utility-Funktionen (``ser``, ``fmt_de_num``, ``_milestones_at``,
+# ``_active_goal_id``, ``_streak``, Export-Helfer) leben in ``helpers.py``.
 
 # ---------- Auth ----------
 @app.post("/token")
@@ -184,7 +122,7 @@ async def login(request: Request,
 async def me(user=Depends(get_current_user)):
     return {"username": user["username"], "is_admin": user["is_admin"], "id": user["id"]}
 
-BACKEND_VERSION = "1.15.0"
+BACKEND_VERSION = "1.17.0"
 
 
 @app.get("/api/health")
@@ -323,11 +261,7 @@ async def invite_activate(request: Request, b: ActivateBody, db=Depends(get_db))
     return {"access_token": create_token(user["username"]), "token_type": "bearer"}
 
 # ---------- Savings Goal ----------
-async def _active_goal_id(db, user_id: int) -> Optional[int]:
-    """Gibt die ID des aktiven Sparziels zurück (oder None)."""
-    return await db.fetchval(
-        "SELECT id FROM savings_goals WHERE user_id=$1 AND is_active=TRUE ORDER BY id DESC LIMIT 1",
-        user_id)
+# ``_active_goal_id`` lebt in ``helpers.py`` (ausgelagert v1.15.1)
 
 @app.get("/api/savings-goal")
 async def get_sg(db=Depends(get_db), user=Depends(get_current_user)):
@@ -359,11 +293,6 @@ async def list_sg(db=Depends(get_db), user=Depends(get_current_user)):
         d["saved_amount"] = float(r["saved_amount"] or 0)
         out.append(d)
     return out
-
-class SavGoalCreate(BaseModel):
-    name: str
-    target_amount: float
-    activate: bool = True
 
 @app.post("/api/savings-goals")
 @limiter.limit(LIMIT_WRITE_STANDARD)
@@ -442,25 +371,7 @@ async def upd_sg(request: Request, gid: int, b: SavGoalUpd, db=Depends(get_db), 
     return ser(await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid))
 
 # ---------- Achievements ----------
-def _milestones_at(sv, cv, inc, direction):
-    """Zaehlt, wieviele Meilenstein-Schwellen bei ``cv`` bereits erreicht sind.
-
-    Bugfix v1.15.0: Fliesskomma-Toleranz. Ohne Epsilon wuerde z.B.
-    ``(9.999999999 // 1.0) == 9`` liefern, obwohl der User in Wahrheit
-    per +0.1-Klicks den 10ten Meilenstein erreicht hat — die Belohnung
-    wuerde ausbleiben, bis der naechste Klick kommt.
-    """
-    if inc <= 0:
-        return 0
-    inc = float(inc)
-    # relative Toleranz von 1e-6 · inc — deckt akkumulierte Float-Fehler
-    # ueber viele +x-Klicks ab, verfaelscht aber keine echten Zwischenwerte.
-    eps = inc * 1e-6
-    if direction == "increase":
-        raw = (float(cv) - float(sv) + eps) / inc
-    else:
-        raw = (float(sv) - float(cv) + eps) / inc
-    return max(0, int(math.floor(raw)))
+# ``_milestones_at`` lebt in ``helpers.py`` (ausgelagert v1.15.1)
 
 @app.get("/api/achievements")
 async def list_ach(db=Depends(get_db), user=Depends(get_current_user)):
@@ -679,23 +590,7 @@ async def del_achievement_log(request: Request, log_id: int, db=Depends(get_db),
     return {"status": "deleted", "payout_removed": payout_removed}
 
 # ---------- Progress Goals ----------
-async def _streak(db, gid: int, user_id: int, rhythm: str, target: int) -> int:
-    col = "month_key" if rhythm == "monthly" else "week_key"
-    rows = await db.fetch(
-        f"SELECT {col} AS k, COUNT(*) AS c FROM progress_logs WHERE progress_goal_id=$1 AND user_id=$2 GROUP BY {col}",
-        gid, user_id)
-    fulfilled = {r["k"] for r in rows if r["c"] >= target}
-    streak = 0
-    cursor = date.today()
-    if period_key(rhythm, cursor) not in fulfilled:
-        cursor = prev_period(rhythm, cursor)
-    for _ in range(520):
-        if period_key(rhythm, cursor) in fulfilled:
-            streak += 1
-            cursor = prev_period(rhythm, cursor)
-        else:
-            break
-    return streak
+# ``_streak`` lebt in ``helpers.py`` (ausgelagert v1.15.1)
 
 @app.get("/api/progress-goals")
 async def list_pg(db=Depends(get_db), user=Depends(get_current_user)):
@@ -1069,124 +964,7 @@ async def del_st(request: Request, tid: int, db=Depends(get_db), user=Depends(ge
     await db.execute("DELETE FROM savings_transactions WHERE id=$1 AND user_id=$2", tid, user["id"])
     return {"status": "deleted"}
 
-# ---------------------------------------------------------------
-# Helfer fuer Export-Metadaten (Bugfix v1.15.0)
-# ---------------------------------------------------------------
-def _export_csv_field(s: str) -> str:
-    s = (s or "").replace('"', '""').replace(';', ',').replace('\n', ' ').replace('\r', ' ')
-    return f'"{s}"'
-
-
-def _export_amt(v) -> str:
-    try:
-        return f"{float(v):.2f}"
-    except Exception:
-        return ""
-
-
-def _build_export_header(user) -> list[str]:
-    export_dt = datetime.now(timezone.utc).isoformat()
-    return [
-        f"# Vexbob Sparziel-Export;user={_export_csv_field(user['username'])};generated_at={export_dt}",
-        "",
-    ]
-
-
-async def _build_export_metadata(db, user_id: int) -> list[str]:
-    """Baut den Metadaten-Vorspann des Sparziel-CSV-Exports.
-
-    Enthaelt: Sparziele, Achievements, Wochen-/Monatsziele, Wunsch-
-    Anschaffungen, Zukunftsideen und Trophaeen. Jede Sektion beginnt
-    mit ``# SEKTION: ...`` und ihrem eigenen Spalten-Header.
-    """
-    out: list[str] = []
-
-    # Sparziele
-    out.append("# SEKTION: Sparziele")
-    out.append("id;name;target_amount;is_active;created_at")
-    for r in await db.fetch(
-        "SELECT id, name, target_amount, is_active, created_at FROM savings_goals "
-        "WHERE user_id=$1 ORDER BY is_active DESC, id", user_id):
-        created = r["created_at"].isoformat() if r["created_at"] else ""
-        out.append(
-            f'{r["id"]};{_export_csv_field(r["name"] or "")};{_export_amt(r["target_amount"])};'
-            f'{"true" if r["is_active"] else "false"};{created}'
-        )
-    out.append("")
-
-    # Achievements
-    out.append("# SEKTION: Achievements")
-    out.append("id;title;unit;start_value;current_value;threshold_increment;step_amount;target_value;direction;reward_amount;credited_milestones;is_completed")
-    for r in await db.fetch(
-        "SELECT id, title, unit, start_value, current_value, threshold_increment, step_amount, "
-        "target_value, direction, reward_amount, credited_milestones, is_completed "
-        "FROM achievements WHERE user_id=$1 ORDER BY sort_order NULLS LAST, id", user_id):
-        out.append(
-            f'{r["id"]};{_export_csv_field(r["title"] or "")};{_export_csv_field(r["unit"] or "")};'
-            f'{_export_amt(r["start_value"])};{_export_amt(r["current_value"])};'
-            f'{_export_amt(r["threshold_increment"])};{_export_amt(r["step_amount"])};'
-            f'{_export_amt(r["target_value"]) if r["target_value"] is not None else ""};'
-            f'{r["direction"] or ""};{_export_amt(r["reward_amount"])};'
-            f'{int(r["credited_milestones"] or 0)};'
-            f'{"true" if r["is_completed"] else "false"}'
-        )
-    out.append("")
-
-    # Wochen-/Monatsziele
-    out.append("# SEKTION: Wochen-/Monatsziele")
-    out.append("id;title;rhythm_type;target_count;reward_amount;streak_bonus_amount;streak_bonus_threshold")
-    for r in await db.fetch(
-        "SELECT id, title, rhythm_type, target_count, reward_amount, "
-        "streak_bonus_amount, streak_bonus_threshold "
-        "FROM progress_goals WHERE user_id=$1 ORDER BY sort_order NULLS LAST, id", user_id):
-        out.append(
-            f'{r["id"]};{_export_csv_field(r["title"] or "")};{r["rhythm_type"] or "weekly"};'
-            f'{int(r["target_count"] or 0)};{_export_amt(r["reward_amount"])};'
-            f'{_export_amt(r["streak_bonus_amount"])};{int(r["streak_bonus_threshold"] or 0)}'
-        )
-    out.append("")
-
-    # Wunsch-Anschaffungen
-    out.append("# SEKTION: Wunsch-Anschaffungen")
-    out.append("id;name;estimated_price")
-    for r in await db.fetch(
-        "SELECT id, name, estimated_price FROM potential_goals "
-        "WHERE user_id=$1 ORDER BY id", user_id):
-        out.append(
-            f'{r["id"]};{_export_csv_field(r["name"] or "")};'
-            f'{_export_amt(r["estimated_price"]) if r["estimated_price"] is not None else ""}'
-        )
-    out.append("")
-
-    # Zukuenftige Ideen
-    out.append("# SEKTION: Zukuenftige Ideen")
-    out.append("id;title;category")
-    for r in await db.fetch(
-        "SELECT id, title, category FROM future_ideas "
-        "WHERE user_id=$1 ORDER BY id", user_id):
-        out.append(
-            f'{r["id"]};{_export_csv_field(r["title"] or "")};{_export_csv_field(r["category"] or "")}'
-        )
-    out.append("")
-
-    # Trophaeen
-    out.append("# SEKTION: Trophaeen (abgeschlossene Sparziele)")
-    out.append("id;name;target_amount;final_amount;started_at;completed_at;duration_days;icon;note")
-    for r in await db.fetch(
-        "SELECT id, name, target_amount, final_amount, started_at, completed_at, "
-        "duration_days, icon, note FROM completed_goals WHERE user_id=$1 ORDER BY completed_at",
-        user_id):
-        started = r["started_at"].isoformat() if r["started_at"] else ""
-        completed = r["completed_at"].isoformat() if r["completed_at"] else ""
-        out.append(
-            f'{r["id"]};{_export_csv_field(r["name"] or "")};{_export_amt(r["target_amount"])};'
-            f'{_export_amt(r["final_amount"])};{started};{completed};'
-            f'{int(r["duration_days"] or 0) if r["duration_days"] is not None else ""};'
-            f'{_export_csv_field(r["icon"] or "")};{_export_csv_field(r["note"] or "")}'
-        )
-    out.append("")
-
-    return out
+# Export-Helfer leben in ``helpers.py`` (ausgelagert v1.15.1)
 
 
 @app.get("/api/savings-transactions/export")
@@ -1533,6 +1311,13 @@ from routers.expenses_router import router as expenses_router
 app.include_router(expenses_router)
 
 # ==========================================================================
+# Marken-Modul (v1.16.0) — ausgelagert in routers/brands_router.py
+# ------------------------------------------------------------------
+from routers.brands_router import router as brands_router
+app.include_router(brands_router)
+
+
+# ------------------------------------------------------------------
 # Notizen-Modul (Paket 14) — ausgelagert in routers/notes_router.py
 # ==========================================================================
 from routers.notes_router import router as notes_router

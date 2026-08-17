@@ -15,14 +15,16 @@ async def get_db():
 
 
 async def _seed_empty_user(conn, user_id: int):
-    """Neue Accounts starten mit leerem Sparziel + Basis-Kategorien für Ausgaben."""
+    """Neue Accounts starten mit leerem Sparziel + Basis-Kategorien fuer Ausgaben +
+    Marken-Seed (v1.16.0). Alle Operationen sind idempotent — wird auch bei
+    bestehenden Accounts sicher wieder ausgefuehrt (z.B. um Marken nachzuziehen)."""
     has_any = await conn.fetchval(
         "SELECT 1 FROM savings_goals WHERE user_id=$1 LIMIT 1", user_id)
     if not has_any:
         await conn.execute(
             "INSERT INTO savings_goals (user_id,name,target_amount,is_active) VALUES ($1,'Mein Sparziel',100,TRUE)",
             user_id)
-    # Default-Kategorien für Ausgaben (idempotent per uniq-Index)
+    # Default-Kategorien fuer Ausgaben (idempotent per uniq-Index)
     has_cats = await conn.fetchval(
         "SELECT 1 FROM expense_categories WHERE user_id=$1 LIMIT 1", user_id)
     if not has_cats:
@@ -42,6 +44,65 @@ async def _seed_empty_user(conn, user_id: int):
                 "INSERT INTO expense_categories (user_id,name,color,icon,sort_order) "
                 "VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING",
                 user_id, name, color, icon, order)
+    # Marken-Seed (v1.16.0). Idempotent per uniq_brands_user_name.
+    # ``store_id`` nur setzen wenn User bereits einen Laden mit passendem Namen hat.
+    await _seed_brands_for_user(conn, user_id)
+
+
+async def _seed_brands_for_user(conn, user_id: int):
+    """Legt vordefinierte Marken fuer den User an (falls noch keine existieren).
+
+    Eigenmarken werden auf einen bereits vorhandenen User-Store (case-insensitive
+    Name-Match) verlinkt; findet sich kein Store, bleibt ``store_id=NULL``.
+    Hersteller-Marken haben nie eine ``store_id``.
+
+    Der Seeder rennt nur einmal pro User durch (Guard: ``seed_source='system'``
+    schon vorhanden). Neue User-Marken (``seed_source=NULL``) bleiben unberuehrt.
+    """
+    already_seeded = await conn.fetchval(
+        "SELECT 1 FROM brands WHERE user_id=$1 AND seed_source='system' LIMIT 1",
+        user_id)
+    if already_seeded:
+        return
+    try:
+        from brand_seed_data import PRIVATE_LABELS, BRANDS
+    except ImportError:
+        return  # Seed-Daten fehlen -> ueberspringen
+
+    # Store-Lookup (case-insensitive) fuer Eigenmarken-Verknuepfung
+    store_rows = await conn.fetch(
+        "SELECT id, LOWER(name) AS lname FROM stores WHERE user_id=$1", user_id)
+    store_by_name = {r["lname"]: r["id"] for r in store_rows}
+
+    def _find_store_id(hint: str):
+        if not hint:
+            return None
+        h = hint.lower().strip()
+        # Direkte Uebereinstimmung
+        if h in store_by_name:
+            return store_by_name[h]
+        # Fuzzy: Store-Name enthaelt Hint oder umgekehrt
+        for lname, sid in store_by_name.items():
+            if h in lname or lname in h:
+                return sid
+        return None
+
+    # Eigenmarken
+    for name, store_hint in PRIVATE_LABELS:
+        sid = _find_store_id(store_hint)
+        await conn.execute(
+            "INSERT INTO brands (user_id, name, is_private_label, store_id, seed_source) "
+            "VALUES ($1, $2, TRUE, $3, 'system') "
+            "ON CONFLICT (user_id, LOWER(name)) DO NOTHING",
+            user_id, name, sid)
+
+    # Hersteller-Marken
+    for name, parent in BRANDS:
+        await conn.execute(
+            "INSERT INTO brands (user_id, name, is_private_label, parent_company, seed_source) "
+            "VALUES ($1, $2, FALSE, $3, 'system') "
+            "ON CONFLICT (user_id, LOWER(name)) DO NOTHING",
+            user_id, name, parent)
 
 
 async def init_db():

@@ -36,7 +36,10 @@ _client_init_error: Optional[str] = None  # Grund warum kein Client verfuegbar i
 
 
 def _get_model_name() -> str:
-    return os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    # v1.16.0: Default auf "gemini-flash-latest" (staerkeres Modell) statt
+    # flash-lite, weil der Lite-Modell zu oft Produktnamen kappt
+    # ("gerösteter Mais" wurde nur zu "Mais"). Kann via ENV ueberschrieben werden.
+    return os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 
 
 def _get_client():
@@ -81,6 +84,9 @@ USER-KATEGORIEN (nutze exakt diese ID+Name wenn passend):
 USER-LÄDEN (matche case-insensitive gegen Namen, sonst erkannten Ladennamen vom Bon nutzen):
 {stores_json}
 
+USER-MARKEN (bekannte Eigenmarken und Herstellermarken — case-insensitive matchen):
+{brands_json}
+
 ===== KOPFDATEN (top-level Felder) =====
 
 - store_hint (string|null): Name des Geschäfts. Wenn ein User-Laden case-insensitive matcht, exakt dessen Namen zurückgeben. Sonst: den Namen vom Bon lesbar formatieren ("BAECKEREI MUELLER" → "Bäckerei Müller"; "REWE" bleibt "Rewe"). Bei Online-Shops: Shop-Name (z.B. "Amazon", "Zalando"). Nicht erkennbar → null.
@@ -107,24 +113,47 @@ Ein Objekt pro Zeile auf dem Bon. Kopfdaten (Summe/MwSt/Zwischensumme) NIEMALS a
 
 Pflichtfelder pro Item:
 
-- base_name (string): sprechender deutscher PRODUKTNAME OHNE Menge/Einheit.
+- base_name (string): sprechender deutscher PRODUKTNAME OHNE Menge/Einheit, ABER MIT
+  charakterisierenden Adjektiven & Sorten-/Zubereitungs-Hinweisen.
   Regeln:
     · Erste Buchstabe groß, Umlaute korrekt (nicht "Aepfel" → "Äpfel").
-    · Nur was das Produkt IST (Gattung/Sorte). Keine Marke, keine Menge, keine Verpackung.
-    · Bei bekannten Bezeichnungen (Klopapier, Vollmilch) diese verwenden.
+    · Beschreibt das Produkt so präzise wie möglich: enthaltene Adjektive,
+      Sorten, Zubereitungs-Hinweise (gebraten, geröstet, gewürzt, gesalzen,
+      geräuchert, mariniert, tiefgekühlt, in Öl, in Salzlake, bio, vegan,
+      laktosefrei, glutenfrei, vollkorn, halbfett, dunkel/hell, süß/sauer, ...)
+      MÜSSEN erhalten bleiben.
+    · Keine Marke im base_name (die kommt separat in ``brand_name``).
+    · Keine Menge / Einheit / Verpackung (die kommen separat in quantity/quantity_unit).
+    · Bei etablierten deutschen Bezeichnungen (Klopapier, Vollmilch) diese verwenden.
+    · Bei generischen Kategorien wie "Diesel", "Zeitschrift", "Trinkgeld"
+      steht dort nur die Gattung.
   Beispiele:
-    · Bon "Clever Äpfel 2kg"             → "Äpfel"
-    · Bon "C1. ESL-Vollm. 1L"            → "Vollmilch"
-    · Bon "Gillette Rasiergel Sensitive" → "Rasiergel"
-    · Bon "BI HOME TOPA 10X180 BLATT"    → "Klopapier"
-    · Bon "Diesel"                       → "Diesel"
-    · Bon "Wiener Melange"               → "Kaffee"
+    · Bon "Clever Äpfel 2kg"                    → "Äpfel"
+    · Bon "C1. ESL-Vollm. 1L"                   → "Vollmilch"
+    · Bon "Gillette Rasiergel Sensitive"        → "Rasiergel sensitiv"
+    · Bon "BI HOME TOPA 10X180 BLATT"           → "Klopapier"
+    · Bon "Ye! Salted Roasted Corn 200g"        → "Mais geröstet gesalzen"
+    · Bon "Chef Sel. Hendlbrust gegrillt 400g"  → "Hähnchenbrust gegrillt"
+    · Bon "Iglo Fischstäbchen paniert 450g"     → "Fischstäbchen paniert"
+    · Bon "Bio Vollkorn-Haferflocken 500g"      → "Haferflocken Vollkorn Bio"
+    · Bon "Actimel Erdbeere 8x100g"             → "Trinkjoghurt Erdbeere"
+    · Bon "Diesel"                              → "Diesel"
 
 - original_text (string): der bereinigte Text vom Kassenbon (ohne Steuer-Buchstaben,
   ohne Zeilenrauschen). Bei zweizeiligen Artikeln beide Zeilen zusammenführen.
   Beispiele:
     · Bon "C1. ESL-Vollm. 1L"   → "ESL-Vollm. 1L"
     · Bon "A Clever Äpfel 2kg"  → "Clever Äpfel 2kg"
+
+- brand_name (string|null): Erkannte Marke. Regeln:
+    · Wenn der Artikel eine der USER-MARKEN oben enthält, exakt diesen Marken-Namen
+      zurückgeben (case-preserving vom Kontext, also "Milbona" statt "MILBONA").
+    · Wenn der Artikel eine bekannte Marke enthält, die NICHT in USER-MARKEN ist,
+      trotzdem den Marken-Namen zurückgeben (der Server legt sie ggf. neu an).
+    · Bei generischen Waren ohne Marke (Obst/Gemuese lose, Backwaren aus der Theke,
+      Kraftstoff, Trinkgeld, Rabatt, Pfand): null.
+    · Eigenmarken sollen NICHT als base_name auftauchen. Beispiel:
+        Bon "Clever Äpfel 2kg" → base_name="Äpfel", brand_name="clever"
 
 - quantity (float): Menge als Zahl. Default 1 wenn nicht angegeben.
   "2kg"→2, "10X180"→10, "1L"→1, "500g"→500, "3 Stk"→3.
@@ -267,6 +296,7 @@ Werbetexte ("Vielen Dank", "Kundenbeleg"), Karten-Dummies (####1743), Zeitstempe
   "items": [
     {{
       "base_name": "Äpfel",
+      "brand_name": "clever",
       "original_text": "Clever Äpfel 2kg",
       "quantity": 2,
       "quantity_unit": "kg",
@@ -280,6 +310,7 @@ Werbetexte ("Vielen Dank", "Kundenbeleg"), Karten-Dummies (####1743), Zeitstempe
     }},
     {{
       "base_name": "Klopapier",
+      "brand_name": "BI HOME",
       "original_text": "BI HOME TOPA 10X180 BLATT",
       "quantity": 10,
       "quantity_unit": "Blatt",
@@ -290,6 +321,20 @@ Werbetexte ("Vielen Dank", "Kundenbeleg"), Karten-Dummies (####1743), Zeitstempe
       "original_price": null,
       "category_id": null,
       "category_name": "Haushalt & Reinigung"
+    }},
+    {{
+      "base_name": "Mais geröstet gesalzen",
+      "brand_name": null,
+      "original_text": "Ye! Salted Roasted Corn 200g",
+      "quantity": 200,
+      "quantity_unit": "g",
+      "unit_price": 1.99,
+      "total_price": 1.99,
+      "price_comparable": true,
+      "is_reduced": false,
+      "original_price": null,
+      "category_id": null,
+      "category_name": "Snacks & Knabberzeug"
     }}
   ]
 }}"""
@@ -446,8 +491,13 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
         if original_price is not None and total_price is not None and original_price <= total_price:
             original_price = None
 
+        # v1.16.0: brand_name aus AI-Response uebernehmen (nur Name — die
+        # eigentliche Verknuepfung mit ``brands.id`` macht der Router beim
+        # Speichern, weil dort die User-DB verfuegbar ist.
+        brand_name = _str_or_none(it.get("brand_name"))
         out["items"].append({
             "base_name": base_name,
+            "brand_name": brand_name,
             "original_text": original_text,
             "description": description,  # Legacy für Bestandscode
             "quantity": qty,
@@ -486,6 +536,7 @@ def _fallback_regex(ocr_text: str, stores: list, reason: str = "unknown") -> dic
         it.setdefault("category_id", None)
         it.setdefault("category_name", None)
         it.setdefault("quantity_unit", None)
+        it.setdefault("brand_name", None)  # v1.16.0
         # Regex kann price_comparable nicht schätzen -> Default TRUE, außer Pfand/Rabatt
         low = (it.get("base_name") or "").lower()
         it.setdefault("price_comparable",
@@ -534,21 +585,27 @@ async def ai_parse_receipt(
     ocr_text: str,
     categories: list,
     stores: list,
+    brands: list | None = None,
 ) -> dict:
-    """Parst OCR-Text via Gemini (Modell laut GEMINI_MODEL, default Flash-Lite).
+    """Parst OCR-Text via Gemini (Modell laut GEMINI_MODEL, default flash-latest v1.16.0).
     Faellt bei Fehler auf Regex-Parser zurueck.
 
     Args:
         ocr_text: Der von OCR extrahierte Rohtext.
         categories: Liste von ``{"id": int, "name": str}``.
         stores: Liste von ``{"name": str}``.
+        brands: Optionale Liste von ``{"name": str}`` bekannter Marken/Eigenmarken.
+                Wird dem Modell als Kontext gegeben, damit es Marken sauber
+                aus dem base_name heraushebt (v1.16.0).
 
     Returns:
         Dict analog ``receipt_parser.parse_receipt`` + Felder ``currency``
-        sowie pro Item ``quantity``, ``quantity_unit``, ``category_id``.
+        sowie pro Item ``quantity``, ``quantity_unit``, ``category_id`` und
+        ``brand_name`` (neu v1.16.0).
     """
     categories = categories or []
     stores = stores or []
+    brands = brands or []
 
     if not ocr_text or not ocr_text.strip():
         return _fallback_regex("", stores, reason="empty_ocr")
@@ -559,10 +616,16 @@ async def ai_parse_receipt(
 
     ocr_input = ocr_text[:_MAX_OCR_CHARS]
 
+    # Brands-Liste kann sehr gross werden (>800). Fuer den Prompt reichen die
+    # Namen — wir kappen bei den ersten 800 (Alphabet-neutral, keine Prio).
+    brands_for_prompt = [b.get("name") for b in brands if isinstance(b, dict) and b.get("name")]
+    brands_for_prompt = brands_for_prompt[:800]
+
     try:
         prompt = _SYSTEM_PROMPT_TEMPLATE.format(
             categories_json=json.dumps(categories, ensure_ascii=False),
             stores_json=json.dumps(stores, ensure_ascii=False),
+            brands_json=json.dumps(brands_for_prompt, ensure_ascii=False),
         )
     except Exception as e:
         logger.warning("Prompt-Erstellung fehlgeschlagen: %s", e)

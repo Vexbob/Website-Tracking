@@ -27,13 +27,42 @@ async function init() {
 
 function fillStoreSelects() {
     const html = stores.map(s => `<option value="${s.id}">${s.icon || ''} ${escapeHtml(s.name)}</option>`).join('');
-    ['mStore'].forEach(id => {
+    // v1.16.0: Sondereintrag "+ Neuen Laden anlegen" am Ende jedes Store-Selects.
+    const inlineAdd = '<option value="__new__" style="font-style:italic">➕ Neuen Laden anlegen …</option>';
+    ['mStore', 'oStore'].forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
         const prev = sel.value;
-        sel.innerHTML = '<option value="">– Kein Laden –</option>' + html;
-        if (prev) sel.value = prev;
+        sel.innerHTML = '<option value="">– Kein Laden –</option>' + html + inlineAdd;
+        if (prev && prev !== '__new__') sel.value = prev;
+        // Handler nur einmal setzen
+        if (!sel.dataset.inlineHooked) {
+            sel.addEventListener('change', () => handleStoreSelectChange(sel));
+            sel.dataset.inlineHooked = '1';
+        }
     });
+}
+
+/** v1.16.0: Wenn "+ Neuen Laden anlegen" in einem Store-Select gewaehlt wurde,
+ * per prompt() sofort anlegen und alle Store-Selects refreshen. */
+async function handleStoreSelectChange(sel) {
+    if (sel.value !== '__new__') return;
+    const name = prompt('Name des neuen Ladens (z.B. Aldi, dm, Amazon):');
+    if (!name || !name.trim()) { sel.value = ''; return; }
+    try {
+        const created = await AUSGABEN_API.createStore({
+            name: name.trim(),
+            color: '#6b7280',
+            icon: null,
+        });
+        stores.push(created);
+        fillStoreSelects();
+        sel.value = created.id;
+        showToast(`Laden "${created.name}" angelegt`, 'success', 1200);
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'error');
+        sel.value = '';
+    }
 }
 
 function setupTabs() {
@@ -414,8 +443,10 @@ function addItemRow(containerId, item) {
 
     const parts = splitProductDescription(item ? item.description : '', item);
 
+    // v1.16.0: Inline-Anlage per Sondereintrag am Ende
     const catOpts = '<option value="">– Kategorie –</option>' +
-        categories.map(cat => `<option value="${cat.id}"${item && item.category_id==cat.id?' selected':''}>${cat.icon || ''} ${escapeHtml(cat.name)}</option>`).join('');
+        categories.map(cat => `<option value="${cat.id}"${item && item.category_id==cat.id?' selected':''}>${cat.icon || ''} ${escapeHtml(cat.name)}</option>`).join('') +
+        '<option value="__new__" style="font-style:italic">➕ Neue Kategorie anlegen …</option>';
 
     row.innerHTML = `
         <input type="text" class="d-desc" placeholder="Produkt (z.B. Vollmilch)" value="${escapeAttr(parts.name)}">
@@ -430,6 +461,33 @@ function addItemRow(containerId, item) {
     row.querySelector('.del').onclick = () => row.remove();
     const descInput = row.querySelector('.d-desc');
     const catSelect = row.querySelector('.d-cat');
+    // v1.16.0: Inline-Kategorie-Anlage bei "__new__"-Wahl
+    catSelect.addEventListener('change', async () => {
+        if (catSelect.value !== '__new__') return;
+        const name = prompt('Name der neuen Kategorie (z.B. Snacks, Tiernahrung):');
+        if (!name || !name.trim()) { catSelect.value = ''; return; }
+        try {
+            const created = await AUSGABEN_API.createCategory({
+                name: name.trim(),
+                color: '#3b82f6',
+                icon: null,
+            });
+            categories.push(created);
+            // Alle offenen d-cat-Selects neu bestuecken, damit die neue Cat ueberall auftaucht
+            document.querySelectorAll('select.d-cat').forEach(sel => {
+                const cur = sel.value === '__new__' ? '' : sel.value;
+                sel.innerHTML = '<option value="">– Kategorie –</option>' +
+                    categories.map(cat => `<option value="${cat.id}">${(cat.icon || '') + ' ' + escapeHtml(cat.name)}</option>`).join('') +
+                    '<option value="__new__" style="font-style:italic">➕ Neue Kategorie anlegen …</option>';
+                sel.value = cur;
+            });
+            catSelect.value = created.id;
+            showToast(`Kategorie "${created.name}" angelegt`, 'success', 1200);
+        } catch (e) {
+            showToast('Fehler: ' + e.message, 'error');
+            catSelect.value = '';
+        }
+    });
     descInput.onblur = async () => {
         if (catSelect.value || !descInput.value) return;
         try {
@@ -471,7 +529,7 @@ function collectItems(containerId) {
             base_name: name,                    // strukturiert übermittelt
             original_text: origText || null,    // dito
             total_price: price,
-            category_id: cat ? +cat : null,
+            category_id: (cat && cat !== '__new__') ? +cat : null,
             quantity: qty && qty > 0 ? qty : 1,
             quantity_unit: unit || null,
             price_comparable: r.dataset.comparable !== '0',
@@ -492,7 +550,7 @@ async function saveOcrExpense() {
         const includeItems = document.getElementById('oIncludeItems')?.checked;
         const items = includeItems ? collectItems('oItems') : [];
         const body = {
-            store_id:  +document.getElementById('oStore').value || null,
+            store_id:  (document.getElementById('oStore').value && document.getElementById('oStore').value !== '__new__') ? +document.getElementById('oStore').value : null,
             receipt_image_id: uploadedReceipt.id,
             purchase_date: document.getElementById('oDate').value,
             total_amount: +document.getElementById('oTotal').value || 0,
@@ -524,7 +582,7 @@ function setupManualForm() {
         try {
             const items = collectItems('mItems');
             const body = {
-                store_id:  +document.getElementById('mStore').value || null,
+                store_id:  (document.getElementById('mStore').value && document.getElementById('mStore').value !== '__new__') ? +document.getElementById('mStore').value : null,
                 purchase_date: document.getElementById('mDate').value,
                 total_amount: +document.getElementById('mTotal').value || 0,
                 payment_method: document.getElementById('mPayment').value || null,

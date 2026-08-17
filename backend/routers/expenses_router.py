@@ -74,6 +74,49 @@ class ExpenseItemIn(BaseModel):
     is_reduced: Optional[bool] = False
     price_comparable: Optional[bool] = True
     user_edited: Optional[bool] = False
+    # v1.16.0: Marken-Verknuepfung. Entweder ``brand_id`` direkt oder
+    # ``brand_name`` (dann wird eine passende Marke gesucht bzw. angelegt).
+    brand_id: Optional[int] = None
+    brand_name: Optional[str] = None
+
+
+async def _resolve_brand_id(db, user_id: int,
+                            brand_id: Optional[int],
+                            brand_name: Optional[str],
+                            store_id: Optional[int]) -> Optional[int]:
+    """Loest ``brand_name`` in eine ``brand_id`` auf. Findet keine passende
+    Marke, wird eine neue User-Marke angelegt (User-Anlage, kein Seed).
+
+    Wenn ``brand_id`` bereits gesetzt und dem User gehoert, wird sie ver-
+    wendet. Ansonsten wird ``brand_name`` (case-insensitive) gesucht.
+    """
+    if brand_id:
+        ok = await db.fetchval(
+            "SELECT 1 FROM brands WHERE id=$1 AND user_id=$2", brand_id, user_id)
+        return brand_id if ok else None
+    if not brand_name:
+        return None
+    name_clean = brand_name.strip()
+    if not name_clean:
+        return None
+    # Existierende Marke suchen
+    existing = await db.fetchval(
+        "SELECT id FROM brands WHERE user_id=$1 AND LOWER(name)=LOWER($2)",
+        user_id, name_clean)
+    if existing:
+        return existing
+    # Neu anlegen. Wenn ein store_id mitgeliefert wurde, ist es plausibel eine
+    # Eigenmarke — der User kann das spaeter in der UI korrigieren.
+    try:
+        return await db.fetchval(
+            "INSERT INTO brands (user_id, name, is_private_label, store_id, seed_source) "
+            "VALUES ($1, $2, FALSE, $3, NULL) RETURNING id",
+            user_id, name_clean, store_id)
+    except asyncpg.UniqueViolationError:
+        # Race-Condition: parallel angelegt
+        return await db.fetchval(
+            "SELECT id FROM brands WHERE user_id=$1 AND LOWER(name)=LOWER($2)",
+            user_id, name_clean)
 
 def _derive_base_and_original(item: ExpenseItemIn):
     """Wenn base_name/original_text nicht vom Client mitkamen: aus description ableiten.
@@ -369,9 +412,11 @@ async def get_expense(eid: int, db=Depends(get_db), user=Depends(get_current_use
     if not row:
         raise HTTPException(404, "Nicht gefunden")
     items = await db.fetch(
-        """SELECT ei.*, c.name AS category_name, c.color AS category_color, c.icon AS category_icon
+        """SELECT ei.*, c.name AS category_name, c.color AS category_color, c.icon AS category_icon,
+                  b.name AS brand_name, b.is_private_label AS brand_is_private_label
            FROM expense_items ei
            LEFT JOIN expense_categories c ON c.id=ei.category_id
+           LEFT JOIN brands b ON b.id=ei.brand_id
            WHERE ei.expense_id=$1 ORDER BY sort_order NULLS LAST, ei.id""", eid)
     result = _ser_exp(row)
     result["items"] = [_ser_exp(i) for i in items]
@@ -423,20 +468,23 @@ async def create_expense(request: Request, b: ExpenseCreate,
                     if not ok:
                         cat_id = None
                 base_n, orig_t = _derive_base_and_original(it)
+                # v1.16.0: Marke aufloesen (id oder name)
+                brand_id = await _resolve_brand_id(
+                    db, user["id"], it.brand_id, it.brand_name, b.store_id)
                 await db.execute(
                     """INSERT INTO expense_items
                        (user_id, expense_id, description, base_name, original_text,
                         quantity, quantity_unit, unit_price, total_price, category_id,
                         sort_order, original_price, is_reduced,
-                        price_comparable, user_edited)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)""",
+                        price_comparable, user_edited, brand_id)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)""",
                     user["id"], eid, it.description.strip(),
                     base_n, orig_t,
                     it.quantity or 1, it.quantity_unit,
                     it.unit_price, it.total_price, cat_id, idx,
                     it.original_price, bool(it.is_reduced),
                     bool(it.price_comparable) if it.price_comparable is not None else True,
-                    bool(it.user_edited))
+                    bool(it.user_edited), brand_id)
                 if cat_id and it.category_id is not None:
                     await learn_rule(db, user["id"], it.description, cat_id, b.store_id)
     return await get_expense(eid, db=db, user=user)
@@ -606,16 +654,19 @@ async def upload_receipt(request: Request,
         user["id"], file.filename or "receipt.jpg", mime, size,
         main_bytes, thumb_bytes, ocr_name, ocr_text)
 
-    # Bekannte Läden & Kategorien des Users für Store-Match und AI-Parsing
+    # Bekannte Läden, Kategorien & Marken des Users für AI-Parsing (v1.16.0)
     user_stores_rows = await db.fetch("SELECT name FROM stores WHERE user_id=$1", user["id"])
     user_stores = [r["name"] for r in user_stores_rows]
     cat_rows = await db.fetch(
         "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
+    brand_rows = await db.fetch(
+        "SELECT name FROM brands WHERE user_id=$1", user["id"])
     try:
         parsed = await ai_parse_receipt(
             ocr_text,
             [{"id": r["id"], "name": r["name"]} for r in cat_rows],
             [{"name": r["name"]} for r in user_stores_rows],
+            brands=[{"name": r["name"]} for r in brand_rows],
         )
     except Exception as e:
         logger.warning(f"AI parse failed, falling back to regex: {e}")
@@ -711,6 +762,9 @@ async def reparse_all_receipts(request: Request,
             store_rows = await conn.fetch(
                 "SELECT name FROM stores WHERE user_id=$1", user_id)
             stores = [{"name": r["name"]} for r in store_rows]
+            brand_rows_re = await conn.fetch(
+                "SELECT name FROM brands WHERE user_id=$1", user_id)
+            brands_ctx = [{"name": r["name"]} for r in brand_rows_re]
             valid_cat_ids = {c["id"] for c in categories}
 
             yield _json.dumps({"type": "start", "total": total}) + "\n"
@@ -732,7 +786,7 @@ async def reparse_all_receipts(request: Request,
                            WHERE expense_id=$1 AND user_id=$2 AND user_edited=TRUE""",
                         eid, user_id)
 
-                    parsed = await ai_parse_receipt(ocr_text, categories, stores)
+                    parsed = await ai_parse_receipt(ocr_text, categories, stores, brands=brands_ctx)
                     items = parsed.get("items") or []
                     await conn.execute(
                         "DELETE FROM expense_items WHERE expense_id=$1 AND user_id=$2",
@@ -755,13 +809,16 @@ async def reparse_all_receipts(request: Request,
                         cid = it.get("category_id")
                         if cid is not None and cid not in valid_cat_ids:
                             cid = None
+                        # v1.16.0: brand_name -> brand_id aufloesen (via conn)
+                        bid = await _resolve_brand_id(
+                            conn, user_id, None, it.get("brand_name"), None)
                         await conn.execute(
                             """INSERT INTO expense_items
                                (user_id, expense_id, description, base_name, original_text,
                                 quantity, quantity_unit, unit_price, total_price, category_id,
                                 sort_order, original_price, is_reduced,
-                                price_comparable, user_edited)
-                               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,FALSE)""",
+                                price_comparable, user_edited, brand_id)
+                               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,FALSE,$15)""",
                             user_id, eid,
                             (it.get("description") or "").strip(),
                             it.get("base_name"),
@@ -775,6 +832,7 @@ async def reparse_all_receipts(request: Request,
                             it.get("original_price"),
                             bool(it.get("is_reduced")),
                             bool(it.get("price_comparable")) if it.get("price_comparable") is not None else True,
+                            bid,
                         )
                     updated_items += len(items)
                     yield _json.dumps({
@@ -816,12 +874,15 @@ async def get_receipt_ocr(rid: int, db=Depends(get_db), user=Depends(get_current
     user_stores = [r["name"] for r in user_stores_rows]
     cat_rows = await db.fetch(
         "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
+    brand_rows = await db.fetch(
+        "SELECT name FROM brands WHERE user_id=$1", user["id"])
     ocr_text = row["ocr_raw_text"] or ""
     try:
         parsed = await ai_parse_receipt(
             ocr_text,
             [{"id": r["id"], "name": r["name"]} for r in cat_rows],
             [{"name": r["name"]} for r in user_stores_rows],
+            brands=[{"name": r["name"]} for r in brand_rows],
         )
     except Exception as e:
         logger.warning(f"AI parse failed, falling back to regex: {e}")
@@ -1138,25 +1199,38 @@ async def check_duplicate(
 
 # ---------- Produkt-Preisverlauf (Aggregation aller gekauften Artikel) ----------
 @router.get("/api/expenses/products")
-async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
+async def list_products(
+    min_count: int = 2,
+    db=Depends(get_db), user=Depends(get_current_user),
+):
     """Aggregierte Produktliste über alle Bons — fuer den Preisverlauf-Tab.
 
     Gruppiert nach normalisierter Beschreibung (Basisname vor "(").
     Fuer jedes Produkt: letzter Preis + Rabatt-/Preiserhoehung ggue. vorherigem Kauf,
     plus Preis/kg oder Preis/L falls Einheit bekannt.
+
+    Parameter ``min_count`` (v1.16.0): Nur Produkte mit mindestens N Kaeufen
+    zurueckgeben — die Standard-Ansicht zeigt nur Produkte, die man mehrmals
+    gekauft hat (Einmal-Kaeufe sind fuer Preisverlauf uninteressant). Wenn
+    ein Item einer Marke zugeordnet ist, bleibt es unabhaengig vom Count
+    sichtbar (der User hat es bewusst klassifiziert). ``min_count=1`` gibt
+    alle Produkte zurueck (Kompatibilitaet, Client-Fallback).
     """
     # Nur Artikel die als vergleichbar markiert sind (KI-Flag price_comparable=true)
     rows = await db.fetch(
         """SELECT ei.description, ei.base_name, ei.original_text,
                   ei.total_price, ei.quantity, ei.quantity_unit,
                   ei.original_price, ei.is_reduced, ei.product_group,
+                  ei.brand_id,
                   e.purchase_date, e.store_id,
                   s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
-                  c.name AS category_name
+                  c.name AS category_name,
+                  b.name AS brand_name, b.is_private_label AS brand_is_private_label
            FROM expense_items ei
            JOIN expenses e ON e.id=ei.expense_id
            LEFT JOIN stores s ON s.id=e.store_id
            LEFT JOIN expense_categories c ON c.id=ei.category_id
+           LEFT JOIN brands b ON b.id=ei.brand_id
            WHERE ei.user_id=$1
              AND COALESCE(ei.price_comparable, TRUE)=TRUE
              AND (ei.base_name IS NOT NULL OR (ei.description IS NOT NULL AND ei.description != ''))
@@ -1286,6 +1360,17 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
         if not title:
             title = norm_key(last["description"]).title() or last["description"]
 
+        # v1.16.0: Filter nach min_count — Produkte die wir NICHT drin haben wollen
+        # ueberspringen. Ausnahmen: (a) mind. 1 Kauf ist bewusst klassifiziert
+        # (brand_id gesetzt) → immer drin. (b) min_count=1 → alles drin.
+        has_brand_purchase = any(p.get("brand_id") for p in purchases)
+        if min_count > 1 and len(purchases) < min_count and not has_brand_purchase:
+            continue
+
+        # Sammle Marken-Info (von der letzten Buchung)
+        last_brand_id = last.get("brand_id")
+        last_brand_name = last.get("brand_name")
+
         products.append({
             "key": key,
             "title": title,
@@ -1293,6 +1378,9 @@ async def list_products(db=Depends(get_db), user=Depends(get_current_user)):
             "base_name": last["base_name"],
             "original_text": last["original_text"],
             "category_name": last["category_name"],
+            "brand_id": last_brand_id,
+            "brand_name": last_brand_name,
+            "brand_is_private_label": bool(last.get("brand_is_private_label")),
             "count": len(purchases),
             "last_date": last["purchase_date"].isoformat() if last["purchase_date"] else None,
             "last_price": tp,

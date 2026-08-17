@@ -1,4 +1,12 @@
-/* Notizen-Modul — Master-Detail mit Rich-Text-Editor — Vexbob */
+/* Notizen — v1.17.0 Rewrite
+ * Speicherformat: Markdown (statt v1.16 HTML). Alte HTML-Notizen werden
+ * beim ersten Laden client-side zu Markdown migriert und beim naechsten
+ * Save mit ``format='markdown'`` zurueckgeschrieben.
+ *
+ * Editor: <textarea> (statt contenteditable). Live-Preview per klick-
+ * barem HTML-Render mit echt funktionierenden Task-Checkboxen —
+ * die Klicks schreiben ``- [ ]`` <-> ``- [x]`` im Textarea-Content zurueck.
+ */
 
 const NOTES_API = {
     list:   (archived) => apiCall('/api/notes' + (archived ? '?archived=true' : '')),
@@ -9,30 +17,33 @@ const NOTES_API = {
 };
 
 const COLORS = [
-    { key: 'default', hex: '#9ca3af' },
-    { key: 'red',     hex: '#ef4444' },
-    { key: 'orange',  hex: '#f59e0b' },
-    { key: 'yellow',  hex: '#eab308' },
-    { key: 'green',   hex: '#22c55e' },
-    { key: 'blue',    hex: '#3b82f6' },
-    { key: 'purple',  hex: '#8b5cf6' },
-    { key: 'pink',    hex: '#ec4899' },
+    { key: 'default', hex: '#9ca3af', label: 'Standard' },
+    { key: 'red',     hex: '#ef4444', label: 'Rot' },
+    { key: 'orange',  hex: '#f59e0b', label: 'Orange' },
+    { key: 'yellow',  hex: '#eab308', label: 'Gelb' },
+    { key: 'green',   hex: '#22c55e', label: 'Grün' },
+    { key: 'blue',    hex: '#3b82f6', label: 'Blau' },
+    { key: 'purple',  hex: '#8b5cf6', label: 'Lila' },
+    { key: 'pink',    hex: '#ec4899', label: 'Pink' },
 ];
 
-let state = {
+const state = {
     notes: [],
     selectedId: null,
     query: '',
-    sortMode: 'updated',     // updated | created | title
+    sortMode: 'updated',
     showArchived: false,
+    mode: 'edit',             // 'edit' | 'preview'
     saveTimer: null,
-    saveToken: 0,            // verhindert Race-Conditions beim schnellen Wechseln
-    status: 'idle',          // idle | saving | saved
+    saveToken: 0,
+    status: 'idle',           // idle | saving | saved
     statusTimer: null,
-    justCreated: new Set(),   // IDs leerer Notizen, die beim Verlassen gelöscht werden
+    justCreated: new Set(),   // IDs leerer Notizen, die beim Verlassen geloescht werden
 };
 
-// ---------- Boot ----------
+// ==========================================================
+// Boot
+// ==========================================================
 async function boot() {
     if (!isLoggedIn()) { window.location.href = '/private/login.html'; return; }
     try {
@@ -46,10 +57,12 @@ async function boot() {
     const m = location.hash.match(/^#note-(\d+)$/);
     if (m && state.notes.some(n => n.id === Number(m[1]))) selectNote(Number(m[1]));
     window.addEventListener('hashchange', onHashChange);
+    window.addEventListener('beforeunload', () => { flushSave(); });
 }
 
 function bindUI() {
     document.getElementById('nzNew').onclick = newNote;
+    document.getElementById('nzDeCta').onclick = newNote;
     document.getElementById('nzSearch').addEventListener('input', (e) => {
         state.query = e.target.value.trim().toLowerCase();
         renderSidebar();
@@ -58,414 +71,761 @@ function bindUI() {
         state.sortMode = e.target.value;
         renderSidebar();
     });
-    document.getElementById('nzArchiveBtn').onclick = async () => {
-        await flushSave();
-        await cleanupEmptyJustCreated();
-        state.showArchived = !state.showArchived;
-        const btn = document.getElementById('nzArchiveBtn');
-        btn.classList.toggle('active', state.showArchived);
-        btn.textContent = state.showArchived ? '📋 Aktiv' : '🗄️ Archiv';
-        state.selectedId = null;
-        history.replaceState(null, '', location.pathname);
-        await loadNotes();
-    };
+    document.querySelectorAll('.nz-side-tab').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const scope = btn.dataset.scope;
+            const wantArchived = scope === 'archived';
+            if (wantArchived === state.showArchived) return;
+            await flushSave();
+            await cleanupEmptyJustCreated();
+            state.showArchived = wantArchived;
+            document.querySelectorAll('.nz-side-tab').forEach(b => b.classList.toggle('active', b === btn));
+            state.selectedId = null;
+            history.replaceState(null, '', location.pathname);
+            await loadNotes();
+        });
+    });
     document.getElementById('nzBack').onclick = backToList;
     document.getElementById('nzDTitle').addEventListener('input', onTitleInput);
-    const editor = document.getElementById('nzDContent');
+    const editor = document.getElementById('nzDEditor');
     editor.addEventListener('input', onContentInput);
     editor.addEventListener('keydown', onEditorKeydown);
-    editor.addEventListener('mousedown', onEditorMousedown); // Checkbox-Klicks abfangen
+    document.querySelectorAll('.nz-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => setMode(btn.dataset.mode));
+    });
+    document.querySelectorAll('.nz-tb').forEach(btn => {
+        btn.addEventListener('click', (e) => { e.preventDefault(); applyMarkdown(btn.dataset.md); });
+    });
     document.getElementById('nzDPin').onclick = () => togglePin(state.selectedId);
     document.getElementById('nzDArchive').onclick = () => toggleArchive(state.selectedId);
     document.getElementById('nzDDelete').onclick = () => deleteNote(state.selectedId);
-    // Toolbar
-    document.getElementById('nzToolbar').addEventListener('mousedown', (e) => {
-        // Verhindert, dass der Editor den Fokus verliert, wenn ein Toolbar-Button gedrückt wird.
-        if (e.target.closest('.nz-tb[data-cmd]')) e.preventDefault();
+
+    // Preview: Klicks auf Task-Checkboxen fangen und im Markdown zurueckschreiben
+    document.getElementById('nzDPreview').addEventListener('click', onPreviewClick);
+    // Preview: Links in neuem Tab
+    document.getElementById('nzDPreview').addEventListener('click', (e) => {
+        const a = e.target.closest('a[href]');
+        if (a) { e.preventDefault(); window.open(a.href, '_blank', 'noopener'); }
     });
-    document.getElementById('nzToolbar').addEventListener('click', onToolbarClick);
-    renderColorPicker();
+
+    // Farb-Swatches im Footer
+    const cwrap = document.getElementById('nzDColor');
+    COLORS.forEach(c => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'nz-d-swatch';
+        b.style.background = c.hex;
+        b.dataset.color = c.key;
+        b.title = c.label;
+        b.onclick = () => setColor(c.key);
+        cwrap.appendChild(b);
+    });
+
+    // Globale Shortcuts
+    document.addEventListener('keydown', onGlobalKeydown);
 }
 
-// ---------- Daten laden ----------
+// ==========================================================
+// Loading
+// ==========================================================
 async function loadNotes() {
     try {
         state.notes = await NOTES_API.list(state.showArchived);
     } catch (e) {
         showToast('Laden fehlgeschlagen: ' + e.message, true);
-        return;
+        state.notes = [];
     }
+    // Client-side Migration: alte HTML-Notizen zu Markdown umwandeln.
+    // Der eigentliche Save passiert erst wenn der User die Notiz oeffnet
+    // oder aendert — hier nur in-memory konvertieren, damit die Suche/
+    // Vorschau bereits sauber arbeiten.
+    state.notes.forEach(n => {
+        if (n.format === 'html' && n.content) {
+            n.content = htmlToMarkdown(n.content);
+            n._needsFormatSave = true;   // Marker: beim naechsten Save format='markdown' senden
+        }
+    });
     renderSidebar();
-    if (state.selectedId && !state.notes.some(n => n.id === state.selectedId)) state.selectedId = null;
     renderDetail();
 }
 
-// ---------- Sidebar ----------
-function sortedNotes() {
-    const arr = state.notes.slice();
-    if (state.sortMode === 'title') {
-        arr.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de') || b.id - a.id);
-    } else if (state.sortMode === 'created') {
-        arr.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '') || b.id - a.id);
-    } else {
-        arr.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '') || b.id - a.id);
-    }
-    return arr;
-}
-function filteredNotes() {
-    let notes = sortedNotes();
-    if (state.query) {
-        notes = notes.filter(n =>
-            ((n.title || '') + ' ' + stripHtml(n.content || '')).toLowerCase().includes(state.query));
-    }
-    return notes;
-}
+// ==========================================================
+// Sidebar
+// ==========================================================
 function renderSidebar() {
     const list = document.getElementById('nzList');
-    const notes = filteredNotes();
-    list.innerHTML = '';
-    if (notes.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'nz-list-empty';
-        empty.textContent = state.query ? 'Keine Treffer'
-            : (state.showArchived ? 'Keine archivierten Notizen' : 'Noch keine Notizen');
-        list.appendChild(empty);
+    const q = state.query;
+    let notes = state.notes.slice();
+    if (q) {
+        notes = notes.filter(n => {
+            const hay = ((n.title || '') + ' ' + (n.content || '')).toLowerCase();
+            return hay.includes(q);
+        });
+    }
+    // Sort
+    const sortFn = {
+        updated: (a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''),
+        created: (a, b) => (b.created_at || '').localeCompare(a.created_at || ''),
+        title:   (a, b) => (a.title || '').localeCompare(b.title || '', 'de', { sensitivity: 'base' }),
+    }[state.sortMode] || ((a, b) => 0);
+    notes.sort(sortFn);
+
+    if (!notes.length) {
+        const msg = state.query
+            ? 'Keine Treffer für <strong>' + escapeHtml(state.query) + '</strong>.'
+            : state.showArchived
+                ? 'Kein archiviertes Element.'
+                : 'Noch keine Notizen. Leg oben eine an.';
+        list.innerHTML = `<div class="nz-list-empty">${msg}</div>`;
         return;
     }
-    const pinned = notes.filter(n => n.pinned);
-    const others = notes.filter(n => !n.pinned);
-    if (pinned.length && !state.showArchived) {
-        const sec = document.createElement('div'); sec.className = 'nz-section'; sec.textContent = '📌 Pinniert';
-        list.appendChild(sec);
-        pinned.forEach(n => list.appendChild(buildItem(n)));
-        if (others.length) { const s2 = document.createElement('div'); s2.className = 'nz-section'; s2.textContent = 'Alle Notizen'; list.appendChild(s2); }
+
+    // Pinned zuerst, Rest darunter — jeweils mit Section-Header
+    const pinned = notes.filter(n => n.pinned && !state.showArchived);
+    const rest = notes.filter(n => !n.pinned || state.showArchived);
+    let html = '';
+    if (pinned.length) {
+        html += '<div class="nz-section">📌 Angepinnt</div>';
+        html += pinned.map(renderNoteItem).join('');
     }
-    others.forEach(n => list.appendChild(buildItem(n)));
-}
-function buildItem(n) {
-    const item = document.createElement('div');
-    item.className = `nz-item nz-color-${n.color || 'default'}` + (n.id === state.selectedId ? ' active' : '');
-    item.dataset.id = n.id;
-    item.onclick = () => selectNote(n.id);
-    const main = document.createElement('div'); main.className = 'nz-item-main';
-    const title = document.createElement('div'); title.className = 'nz-item-title'; title.textContent = n.title || '';
-    main.appendChild(title);
-    const prev = document.createElement('div'); prev.className = 'nz-item-preview'; prev.textContent = firstLine(stripHtml(n.content || ''));
-    main.appendChild(prev);
-    const date = document.createElement('div'); date.className = 'nz-item-date'; date.textContent = relTime(n.updated_at);
-    main.appendChild(date);
-    item.appendChild(main);
-    if (n.pinned) { const pin = document.createElement('span'); pin.className = 'nz-item-pin'; pin.textContent = '📌'; item.appendChild(pin); }
-    return item;
-}
-function firstLine(text) {
-    if (!text) return '';
-    const line = text.split('\n').find(l => l.trim());
-    return line || '';
+    if (rest.length) {
+        if (pinned.length) html += `<div class="nz-section">${state.showArchived ? 'Archiv' : 'Alle Notizen'}</div>`;
+        html += rest.map(renderNoteItem).join('');
+    }
+    list.innerHTML = html;
+
+    // Klick-Handler
+    list.querySelectorAll('.nz-item').forEach(el => {
+        el.addEventListener('click', () => selectNote(Number(el.dataset.id)));
+    });
 }
 
-// ---------- Detail & Auswahl ----------
-async function selectNote(id, skipCleanup) {
-    if (id === state.selectedId) return;
-    await flushSave();
-    if (!skipCleanup) await cleanupEmptyJustCreated();
-    state.selectedId = id;
-    history.replaceState(null, '', `#note-${id}`);
-    renderSidebar();
-    renderDetail();
-    document.getElementById('nzApp').classList.add('show-detail');
+function renderNoteItem(n) {
+    const active = state.selectedId === n.id ? ' active' : '';
+    const color = 'nz-color-' + (n.color || 'default');
+    const title = escapeHtml(n.title || '');
+    const preview = escapeHtml(previewText(n.content || ''));
+    const pin = n.pinned ? '<span class="nz-item-pin">📌</span>' : '';
+    const badges = [];
+    if (n.archived) badges.push('<span class="nz-item-badge">Archiv</span>');
+    return `<div class="nz-item ${color}${active}" data-id="${n.id}">
+        <div class="nz-item-main">
+            <div class="nz-item-title">${title}</div>
+            <div class="nz-item-preview">${preview}</div>
+            <div class="nz-item-meta">
+                <span>${relTime(n.updated_at)}</span>
+                ${badges.join('')}
+            </div>
+        </div>
+        ${pin}
+    </div>`;
 }
 
-function backToList() {
-    (async () => {
-        await flushSave();
-        await cleanupEmptyJustCreated();
-        state.selectedId = null;
-        history.replaceState(null, '', location.pathname);
-        renderSidebar();
-        renderDetail();
-        document.getElementById('nzApp').classList.remove('show-detail');
-    })();
+function previewText(md) {
+    if (!md) return '';
+    // Erste sinnvolle Zeile aus Markdown extrahieren.
+    const lines = md.split('\n');
+    for (const raw of lines) {
+        const l = raw.trim();
+        if (!l) continue;
+        // Markdown-Zeichen weglassen fuer die Vorschau
+        return l.replace(/^#+\s*/, '')                      // Ueberschriften
+                .replace(/^[-*+]\s*\[[ x]\]\s*/i, '☐ ')      // Task
+                .replace(/^[-*+]\s+/, '• ')                  // Bullet
+                .replace(/^\d+\.\s+/, '')                    // Ordered
+                .replace(/^>\s*/, '❝ ')                      // Quote
+                .replace(/[*_`]/g, '');                      // inline
+    }
+    return '';
 }
 
+
+// ==========================================================
+// Detail (Editor / Preview)
+// ==========================================================
 function renderDetail() {
     const empty = document.getElementById('nzDetailEmpty');
     const edit = document.getElementById('nzDetailEdit');
     const n = state.notes.find(x => x.id === state.selectedId);
-    if (!n) { empty.style.display = ''; edit.style.display = 'none'; return; }
+    if (!n) {
+        empty.style.display = '';
+        edit.style.display = 'none';
+        document.getElementById('nzApp').classList.remove('nz-mobile-detail');
+        return;
+    }
     empty.style.display = 'none';
     edit.style.display = 'flex';
+    document.getElementById('nzApp').classList.add('nz-mobile-detail');
     document.getElementById('nzDTitle').value = n.title || '';
-    // Editor: HTML direkt setzen (Speicherformat ist HTML).
-    document.getElementById('nzDContent').innerHTML = n.content || '';
-    updateDetailActions(n);
+    document.getElementById('nzDEditor').value = n.content || '';
+    updatePreview();
+    document.getElementById('nzDPin').classList.toggle('active-pin', !!n.pinned);
+    document.getElementById('nzDPin').textContent = n.pinned ? '📌 Angepinnt' : '📍 Pin';
+    document.getElementById('nzDArchive').textContent = n.archived ? '📤 Wiederherstellen' : '🗄️ Archiv';
+    document.querySelectorAll('.nz-d-swatch').forEach(s => {
+        s.classList.toggle('active', s.dataset.color === (n.color || 'default'));
+    });
+    applyModeUI();
     setStatus('idle');
 }
 
-function updateDetailActions(n) {
-    const pinBtn = document.getElementById('nzDPin');
-    pinBtn.classList.toggle('on', !!n.pinned);
-    pinBtn.textContent = n.pinned ? '📌 Pinniert' : '📍 Pinnen';
-    document.getElementById('nzDArchive').textContent = n.archived ? '📋 Wiederherstellen' : '🗄️ Archivieren';
-    document.querySelectorAll('#nzDColor button').forEach(b => {
-        b.classList.toggle('sel', b.dataset.color === (n.color || 'default'));
-    });
+async function selectNote(id) {
+    if (id === state.selectedId) return;
+    await flushSave();
+    await cleanupEmptyJustCreated(id);
+    state.selectedId = id;
+    if (id) location.hash = 'note-' + id;
+    else history.replaceState(null, '', location.pathname);
+    renderSidebar();
+    renderDetail();
+    const n = state.notes.find(x => x.id === id);
+    if (n && n._needsFormatSave) {
+        n._needsFormatSave = false;
+        scheduleSave();
+    }
 }
 
-function renderColorPicker() {
-    const wrap = document.getElementById('nzDColor');
-    wrap.innerHTML = '';
-    COLORS.forEach(c => {
-        const b = document.createElement('button');
-        b.type = 'button'; b.title = c.key; b.style.background = c.hex; b.dataset.color = c.key;
-        b.onclick = () => setColor(state.selectedId, c.key);
-        wrap.appendChild(b);
-    });
+function backToList() {
+    state.selectedId = null;
+    history.replaceState(null, '', location.pathname);
+    document.getElementById('nzApp').classList.remove('nz-mobile-detail');
+    renderSidebar();
+    renderDetail();
 }
 
-// ---------- Auto-Save ----------
+async function newNote() {
+    await flushSave();
+    try {
+        const created = await NOTES_API.create({
+            title: '', content: '', color: 'default', format: 'markdown',
+        });
+        state.notes.unshift(created);
+        state.justCreated.add(created.id);
+        state.selectedId = created.id;
+        location.hash = 'note-' + created.id;
+        renderSidebar();
+        renderDetail();
+        setTimeout(() => document.getElementById('nzDTitle').focus(), 50);
+    } catch (e) { showToast('Anlegen fehlgeschlagen: ' + e.message, true); }
+}
+
+
+// ==========================================================
+// Input / Save
+// ==========================================================
 function onTitleInput() {
     const n = state.notes.find(x => x.id === state.selectedId);
-    if (n) n.title = document.getElementById('nzDTitle').value;
-    renderSidebarItemTitle(n);
+    if (!n) return;
+    n.title = document.getElementById('nzDTitle').value;
+    const el = document.querySelector(`.nz-item[data-id="${n.id}"] .nz-item-title`);
+    if (el) el.textContent = n.title;
     scheduleSave();
 }
+
 function onContentInput() {
     const n = state.notes.find(x => x.id === state.selectedId);
-    if (n) n.content = document.getElementById('nzDContent').innerHTML;
-    renderSidebarItemPreview(n);
+    if (!n) return;
+    n.content = document.getElementById('nzDEditor').value;
+    if (state.mode === 'preview') updatePreview();
+    const el = document.querySelector(`.nz-item[data-id="${n.id}"] .nz-item-preview`);
+    if (el) el.textContent = previewText(n.content || '');
     scheduleSave();
 }
 
 function scheduleSave() {
-    clearTimeout(state.saveTimer);
+    if (state.saveTimer) clearTimeout(state.saveTimer);
     setStatus('saving');
-    state.saveTimer = setTimeout(doSave, 800);
+    state.saveTimer = setTimeout(doSave, 600);
 }
+
 async function doSave() {
     const n = state.notes.find(x => x.id === state.selectedId);
-    if (!n) { setStatus('idle'); return; }
-    const myToken = ++state.saveToken;
+    if (!n) return;
+    const token = ++state.saveToken;
     try {
-        const upd = await NOTES_API.update(n.id, { title: n.title || '', content: n.content || '' });
-        if (myToken === state.saveToken) {
-            Object.assign(n, { updated_at: upd.updated_at });
-            setStatus('saved');
-            clearTimeout(state.statusTimer);
-            state.statusTimer = setTimeout(() => setStatus('idle'), 2000);
+        const body = {
+            title: n.title || '',
+            content: n.content || '',
+            format: 'markdown',
+        };
+        const updated = await NOTES_API.update(n.id, body);
+        if (token !== state.saveToken) return;
+        Object.assign(n, updated);
+        if ((n.title || '').trim() || (n.content || '').trim()) {
+            state.justCreated.delete(n.id);
         }
+        setStatus('saved');
     } catch (e) {
-        if (myToken === state.saveToken) { setStatus('idle'); showToast('Speichern fehlgeschlagen: ' + e.message, true); }
+        setStatus('idle');
+        showToast('Speichern fehlgeschlagen: ' + e.message, true);
     }
 }
+
 async function flushSave() {
-    if (state.saveTimer) { clearTimeout(state.saveTimer); state.saveTimer = null; await doSave(); }
+    if (state.saveTimer) {
+        clearTimeout(state.saveTimer);
+        state.saveTimer = null;
+        await doSave();
+    }
 }
+
 function setStatus(s) {
     state.status = s;
     const el = document.getElementById('nzDStatus');
-    const txt = el.querySelector('.txt');
     el.classList.remove('saving', 'saved');
+    const txt = el.querySelector('.txt');
     if (s === 'saving') { el.classList.add('saving'); txt.textContent = 'Speichern…'; }
     else if (s === 'saved') { el.classList.add('saved'); txt.textContent = 'Gespeichert ✓'; }
-    else {
-        const n = state.notes.find(x => x.id === state.selectedId);
-        txt.textContent = n ? 'Bearbeitet ' + relTime(n.updated_at) : '';
+    else txt.textContent = '';
+    if (state.statusTimer) clearTimeout(state.statusTimer);
+    if (s === 'saved') {
+        state.statusTimer = setTimeout(() => { if (state.status === 'saved') setStatus('idle'); }, 2000);
     }
 }
 
-// ---------- Aktionen ----------
-async function newNote() {
-    await flushSave();
-    await cleanupEmptyJustCreated();
-    try {
-        const created = await NOTES_API.create({ title: '', content: '' });
-        state.notes.unshift(created);
-        state.justCreated.add(created.id);
-        state.query = '';
-        document.getElementById('nzSearch').value = '';
-        await selectNote(created.id, true);  // skipCleanup — sonst löscht cleanup die neue leere Notiz sofort
-        document.getElementById('nzDTitle').focus();
-    } catch (e) { showToast('Anlegen fehlgeschlagen: ' + e.message, true); }
+async function cleanupEmptyJustCreated(exceptId) {
+    const toDelete = [];
+    state.justCreated.forEach(id => {
+        if (id === exceptId) return;
+        const n = state.notes.find(x => x.id === id);
+        if (!n) { state.justCreated.delete(id); return; }
+        if (!(n.title || '').trim() && !(n.content || '').trim()) toDelete.push(id);
+        else state.justCreated.delete(id);
+    });
+    for (const id of toDelete) {
+        try { await NOTES_API.remove(id); } catch (_) {}
+        state.notes = state.notes.filter(n => n.id !== id);
+        state.justCreated.delete(id);
+    }
 }
+
+
+// ==========================================================
+// Actions: pin / archive / delete / color
+// ==========================================================
 async function togglePin(id) {
     const n = state.notes.find(x => x.id === id);
     if (!n) return;
-    try { const upd = await NOTES_API.update(id, { pinned: !n.pinned }); Object.assign(n, upd); updateDetailActions(n); renderSidebar(); haptic('tap'); }
-    catch (e) { showToast('Fehler: ' + e.message, true); }
+    const wantPin = !n.pinned;
+    try {
+        const updated = await NOTES_API.update(id, { pinned: wantPin });
+        Object.assign(n, updated);
+        renderSidebar();
+        renderDetail();
+        showToast(wantPin ? 'Angepinnt' : 'Pin entfernt');
+    } catch (e) { showToast('Fehler: ' + e.message, true); }
 }
+
 async function toggleArchive(id) {
     const n = state.notes.find(x => x.id === id);
     if (!n) return;
-    const archived = !n.archived;
-    await flushSave();
+    const wantArchive = !n.archived;
     try {
-        const upd = await NOTES_API.update(id, { archived }); Object.assign(n, upd);
+        await NOTES_API.update(id, { archived: wantArchive });
+        // Aus aktueller Ansicht rausnehmen
         state.notes = state.notes.filter(x => x.id !== id);
         state.selectedId = null;
         history.replaceState(null, '', location.pathname);
-        renderSidebar(); renderDetail();
-        document.getElementById('nzApp').classList.remove('show-detail');
-        showToast(archived ? 'Notiz archiviert' : 'Notiz wiederhergestellt');
+        renderSidebar();
+        renderDetail();
+        showUndoToast(wantArchive ? 'Archiviert' : 'Wiederhergestellt', async () => {
+            await NOTES_API.update(id, { archived: !wantArchive });
+            await loadNotes();
+        });
     } catch (e) { showToast('Fehler: ' + e.message, true); }
 }
-async function setColor(id, color) {
-    const n = state.notes.find(x => x.id === id);
-    if (!n) return;
-    try { const upd = await NOTES_API.update(id, { color }); Object.assign(n, upd); updateDetailActions(n); renderSidebar(); }
-    catch (e) { showToast('Fehler: ' + e.message, true); }
-}
+
 async function deleteNote(id) {
     const n = state.notes.find(x => x.id === id);
     if (!n) return;
-    const snap = { ...n };
-    state.notes = state.notes.filter(x => x.id !== id);
-    state.selectedId = null;
-    state.justCreated.delete(id);
-    history.replaceState(null, '', location.pathname);
-    renderSidebar(); renderDetail();
-    document.getElementById('nzApp').classList.remove('show-detail');
-    showUndoToast(`„${n.title || 'Notiz'}“ gelöscht`, async () => {
-        try {
-            const created = await NOTES_API.create({ title: snap.title, content: snap.content, color: snap.color, pinned: snap.pinned });
-            state.notes.unshift(created);
-            await selectNote(created.id, true);
-        } catch (e) { showToast('Wiederherstellen fehlgeschlagen: ' + e.message, true); }
-    });
-    try { await NOTES_API.remove(id); haptic('tap'); }
-    catch (e) { state.notes.unshift(snap); renderSidebar(); showToast('Löschen fehlgeschlagen: ' + e.message, true); }
+    const snapshot = { ...n };  // fuer Undo
+    if (!confirm('Notiz "' + (n.title || '(ohne Titel)') + '" wirklich löschen?')) return;
+    try {
+        await NOTES_API.remove(id);
+        state.notes = state.notes.filter(x => x.id !== id);
+        state.selectedId = null;
+        state.justCreated.delete(id);
+        history.replaceState(null, '', location.pathname);
+        renderSidebar();
+        renderDetail();
+        showUndoToast('Notiz gelöscht', async () => {
+            const restored = await NOTES_API.create({
+                title: snapshot.title || '',
+                content: snapshot.content || '',
+                color: snapshot.color || 'default',
+                pinned: !!snapshot.pinned,
+                format: 'markdown',
+            });
+            state.notes.unshift(restored);
+            state.selectedId = restored.id;
+            location.hash = 'note-' + restored.id;
+            renderSidebar();
+            renderDetail();
+        });
+    } catch (e) { showToast('Löschen fehlgeschlagen: ' + e.message, true); }
 }
-async function cleanupEmptyJustCreated() {
-    const ids = [...state.justCreated];
-    state.justCreated.clear();
-    for (const id of ids) {
-        const n = state.notes.find(x => x.id === id);
-        if (n && !(n.title || '').trim() && !stripHtml(n.content || '').trim()) {
-            try { await NOTES_API.remove(id); } catch (e) {}
-            state.notes = state.notes.filter(x => x.id !== id);
+
+async function setColor(color) {
+    const n = state.notes.find(x => x.id === state.selectedId);
+    if (!n) return;
+    n.color = color;
+    document.querySelectorAll('.nz-d-swatch').forEach(s => {
+        s.classList.toggle('active', s.dataset.color === color);
+    });
+    // Sidebar-Farbstreifen live nachziehen
+    const item = document.querySelector(`.nz-item[data-id="${n.id}"]`);
+    if (item) {
+        item.className = item.className.replace(/\bnz-color-\w+\b/g, '') + ' nz-color-' + color;
+    }
+    try { await NOTES_API.update(n.id, { color }); }
+    catch (e) { showToast('Farbe speichern fehlgeschlagen: ' + e.message, true); }
+}
+
+// ==========================================================
+// Mode-Switch (Editor / Preview)
+// ==========================================================
+function setMode(m) {
+    if (m !== 'edit' && m !== 'preview') return;
+    state.mode = m;
+    applyModeUI();
+    if (m === 'preview') updatePreview();
+    else setTimeout(() => document.getElementById('nzDEditor').focus(), 20);
+}
+
+function applyModeUI() {
+    document.querySelectorAll('.nz-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === state.mode));
+    document.querySelector('.nz-d-body').setAttribute('data-mode', state.mode);
+    // Toolbar nur im Edit-Modus sinnvoll — im Preview trotzdem zeigen (User sieht Buttons, die tun nix
+    // → einfacher: bei Preview verstecken)
+    document.getElementById('nzToolbar').style.display = state.mode === 'edit' ? '' : 'none';
+}
+
+function updatePreview() {
+    const md = document.getElementById('nzDEditor').value || '';
+    document.getElementById('nzDPreview').innerHTML = renderMarkdown(md);
+}
+
+
+// ==========================================================
+// Markdown-Renderer (schlank, mit Task-Checkboxen)
+// ==========================================================
+function renderMarkdown(md) {
+    if (!md) return '<div style="color:var(--text-faint);font-style:italic">Nichts geschrieben.</div>';
+    // 1) Fenced Codeblocks ``` extrahieren und durch Platzhalter ersetzen
+    const codeBlocks = [];
+    md = md.replace(/```([a-z0-9]*)\n([\s\S]*?)```/gi, (_, lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push(`<pre><code>${escapeHtml(code)}</code></pre>`);
+        return `\u0000CODE${idx}\u0000`;
+    });
+    const lines = md.split('\n');
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+        const line = lines[i];
+        if (/^\s*$/.test(line)) { i++; continue; }
+        // Ueberschriften
+        const h = line.match(/^(#{1,3})\s+(.*)$/);
+        if (h) { out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
+        // Trennlinie
+        if (/^(?:---|\*\*\*|___)\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+        // Blockquote
+        if (/^>\s?/.test(line)) {
+            const buf = [];
+            while (i < lines.length && /^>\s?/.test(lines[i])) {
+                buf.push(lines[i].replace(/^>\s?/, ''));
+                i++;
+            }
+            out.push('<blockquote>' + inline(buf.join('<br>')) + '</blockquote>');
+            continue;
+        }
+        // Listen (unordered / ordered / task)
+        if (/^\s*(?:[-*+]|\d+\.)\s+/.test(line)) {
+            const isOrdered = /^\s*\d+\.\s+/.test(line);
+            const isTaskList = /^\s*[-*+]\s*\[[ xX]\]\s*/.test(line);
+            const items = [];
+            while (i < lines.length && /^\s*(?:[-*+]|\d+\.)\s+/.test(lines[i])) {
+                const l = lines[i];
+                const task = l.match(/^\s*[-*+]\s*\[([ xX])\]\s*(.*)$/);
+                if (task) {
+                    const done = task[1].toLowerCase() === 'x';
+                    items.push(
+                        `<li class="nz-task${done ? ' done' : ''}" data-line="${i}">` +
+                        `<input type="checkbox"${done ? ' checked' : ''}>` +
+                        `<span class="nz-task-txt">${inline(task[2])}</span></li>`
+                    );
+                } else {
+                    const m = l.match(/^\s*(?:[-*+]|\d+\.)\s+(.*)$/);
+                    items.push('<li>' + inline(m[1]) + '</li>');
+                }
+                i++;
+            }
+            const tag = isOrdered ? 'ol' : 'ul';
+            const cls = isTaskList ? ' class="nz-task-list"' : '';
+            out.push(`<${tag}${cls}>${items.join('')}</${tag}>`);
+            continue;
+        }
+        // Absatz
+        const buf = [line];
+        i++;
+        while (i < lines.length && !/^\s*$/.test(lines[i])
+                && !/^(#{1,3}\s|>|\s*(?:[-*+]|\d+\.)\s|---|\*\*\*|___)/.test(lines[i])) {
+            buf.push(lines[i]); i++;
+        }
+        out.push('<p>' + inline(buf.join('<br>')) + '</p>');
+    }
+    let html = out.join('\n');
+    html = html.replace(/\u0000CODE(\d+)\u0000/g, (_, idx) => codeBlocks[+idx] || '');
+    return html;
+}
+
+/** Inline-Formatierung: **fett**, *kursiv*, `code`, [Link](url), Autolinks */
+function inline(s) {
+    s = escapeHtml(s);
+    const codes = [];
+    s = s.replace(/`([^`\n]+)`/g, (_, c) => {
+        codes.push(`<code>${c}</code>`);
+        return `\u0001C${codes.length - 1}\u0001`;
+    });
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>');
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/(^|[\s(])((?:https?:\/\/)[^\s<]+)/g,
+        '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+    s = s.replace(/\u0001C(\d+)\u0001/g, (_, idx) => codes[+idx] || '');
+    return s;
+}
+
+/** Preview-Click: Task-Checkbox → Zeile im Textarea umschreiben. */
+function onPreviewClick(e) {
+    const cb = e.target;
+    if (cb.tagName !== 'INPUT' || cb.type !== 'checkbox') return;
+    const li = cb.closest('.nz-task');
+    if (!li) return;
+    const lineNo = parseInt(li.dataset.line, 10);
+    if (isNaN(lineNo)) return;
+    const editor = document.getElementById('nzDEditor');
+    const lines = editor.value.split('\n');
+    if (lineNo < 0 || lineNo >= lines.length) return;
+    const l = lines[lineNo];
+    const wantChecked = cb.checked;
+    const replaced = l.replace(/^(\s*[-*+]\s*\[)([ xX])(\]\s*)/,
+        (_, pre, mid, post) => pre + (wantChecked ? 'x' : ' ') + post);
+    if (replaced === l) return;
+    lines[lineNo] = replaced;
+    editor.value = lines.join('\n');
+    li.classList.toggle('done', wantChecked);
+    const n = state.notes.find(x => x.id === state.selectedId);
+    if (n) { n.content = editor.value; scheduleSave(); }
+    haptic('tap');
+}
+
+
+// ==========================================================
+// Toolbar-Aktionen (Markdown in Textarea einfuegen)
+// ==========================================================
+function applyMarkdown(cmd) {
+    const ta = document.getElementById('nzDEditor');
+    if (!ta) return;
+    if (state.mode !== 'edit') setMode('edit');
+    ta.focus();
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const val = ta.value;
+    const selected = val.substring(start, end);
+
+    const wrap = (before, after, placeholder) => {
+        const text = selected || placeholder || '';
+        const insert = before + text + after;
+        ta.value = val.substring(0, start) + insert + val.substring(end);
+        const cursorStart = start + before.length;
+        const cursorEnd = cursorStart + text.length;
+        ta.setSelectionRange(cursorStart, cursorEnd);
+    };
+
+    const linePrefix = (prefix, placeholder) => {
+        const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+        const lineEnd = val.indexOf('\n', end);
+        const effectiveEnd = lineEnd === -1 ? val.length : lineEnd;
+        const block = val.substring(lineStart, effectiveEnd);
+        const linesOut = (block || placeholder).split('\n').map(l => {
+            const stripped = l.replace(/^#{1,3}\s*/, '')
+                              .replace(/^[-*+]\s*(?:\[[ xX]\]\s*)?/, '')
+                              .replace(/^\d+\.\s+/, '')
+                              .replace(/^>\s?/, '');
+            return prefix + stripped;
+        });
+        const insert = linesOut.join('\n');
+        ta.value = val.substring(0, lineStart) + insert + val.substring(effectiveEnd);
+        const newCursor = lineStart + insert.length;
+        ta.setSelectionRange(newCursor, newCursor);
+    };
+
+    switch (cmd) {
+        case 'bold':   wrap('**', '**', 'fetter Text'); break;
+        case 'italic': wrap('*',  '*',  'kursiver Text'); break;
+        case 'code':   wrap('`',  '`',  'code'); break;
+        case 'h1':     linePrefix('# ',   'Überschrift'); break;
+        case 'h2':     linePrefix('## ',  'Überschrift'); break;
+        case 'h3':     linePrefix('### ', 'Überschrift'); break;
+        case 'ul':     linePrefix('- ',   'Punkt'); break;
+        case 'ol':     linePrefix('1. ',  'Punkt'); break;
+        case 'task':   linePrefix('- [ ] ', 'Neue Aufgabe'); break;
+        case 'quote':  linePrefix('> ',   'Zitat'); break;
+        case 'hr': {
+            const insert = (val[start-1] && val[start-1] !== '\n' ? '\n' : '') + '---\n';
+            ta.value = val.substring(0, start) + insert + val.substring(end);
+            ta.setSelectionRange(start + insert.length, start + insert.length);
+            break;
+        }
+        case 'link': {
+            const url = prompt('URL:', selected.startsWith('http') ? selected : 'https://');
+            if (!url) return;
+            const label = selected && !selected.startsWith('http') ? selected : 'Link';
+            const insert = `[${label}](${url})`;
+            ta.value = val.substring(0, start) + insert + val.substring(end);
+            const cursor = start + 1;
+            ta.setSelectionRange(cursor, cursor + label.length);
+            break;
+        }
+        default: return;
+    }
+    ta.dispatchEvent(new Event('input'));
+}
+
+
+// ==========================================================
+// Keydown im Editor: Cmd/Ctrl-Shortcuts + smart Enter in Listen
+// ==========================================================
+function onEditorKeydown(e) {
+    const isMod = e.metaKey || e.ctrlKey;
+    if (!isMod) {
+        if (e.key === 'Enter') {
+            const ta = e.currentTarget;
+            const pos = ta.selectionStart;
+            const lineStart = ta.value.lastIndexOf('\n', pos - 1) + 1;
+            const line = ta.value.substring(lineStart, pos);
+            const taskMatch = line.match(/^(\s*)([-*+])\s+\[[ xX]\]\s*/);
+            const bulletMatch = line.match(/^(\s*)([-*+])\s+/);
+            const orderedMatch = line.match(/^(\s*)(\d+)\.\s+/);
+            const doExit = (match) => {
+                // Prefix entfernen, Cursor bleibt auf leerer Zeile
+                e.preventDefault();
+                ta.value = ta.value.substring(0, lineStart) + ta.value.substring(pos);
+                ta.setSelectionRange(lineStart, lineStart);
+                ta.dispatchEvent(new Event('input'));
+            };
+            const doContinue = (insert) => {
+                e.preventDefault();
+                ta.value = ta.value.substring(0, pos) + insert + ta.value.substring(pos);
+                ta.setSelectionRange(pos + insert.length, pos + insert.length);
+                ta.dispatchEvent(new Event('input'));
+            };
+            if (taskMatch) {
+                if (line.replace(taskMatch[0], '').trim() === '') return doExit();
+                return doContinue('\n' + taskMatch[1] + taskMatch[2] + ' [ ] ');
+            }
+            if (bulletMatch) {
+                if (line.replace(bulletMatch[0], '').trim() === '') return doExit();
+                return doContinue('\n' + bulletMatch[1] + bulletMatch[2] + ' ');
+            }
+            if (orderedMatch) {
+                if (line.replace(orderedMatch[0], '').trim() === '') return doExit();
+                const next = parseInt(orderedMatch[2], 10) + 1;
+                return doContinue('\n' + orderedMatch[1] + next + '. ');
+            }
+        }
+        return;
+    }
+    // Modifier-Shortcuts
+    const k = e.key.toLowerCase();
+    if (k === 'b') { e.preventDefault(); applyMarkdown('bold'); }
+    else if (k === 'i') { e.preventDefault(); applyMarkdown('italic'); }
+    else if (k === 'k') { e.preventDefault(); applyMarkdown('link'); }
+    else if (k === '`') { e.preventDefault(); applyMarkdown('code'); }
+    else if (k === 'e') { e.preventDefault(); setMode(state.mode === 'edit' ? 'preview' : 'edit'); }
+    else if (e.shiftKey && (k === '7' || k === '&')) { e.preventDefault(); applyMarkdown('task'); }
+    else if (e.shiftKey && (k === '8' || k === '(')) { e.preventDefault(); applyMarkdown('ul'); }
+    else if (e.shiftKey && (k === '9' || k === ')')) { e.preventDefault(); applyMarkdown('ol'); }
+}
+
+// ==========================================================
+// Globale Shortcuts (funktionieren wenn nicht in Input/Textarea)
+// ==========================================================
+function onGlobalKeydown(e) {
+    const isMod = e.metaKey || e.ctrlKey;
+    if (!isMod) return;
+    const k = e.key.toLowerCase();
+    if (k === 'n' && !e.shiftKey) {
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        if (tag !== 'input' && tag !== 'textarea') {
+            e.preventDefault();
+            newNote();
         }
     }
-    if (ids.length) renderSidebar();
-}
-function renderSidebarItemTitle(n) {
-    if (!n) return;
-    const el = document.querySelector(`.nz-item[data-id="${n.id}"] .nz-item-title`);
-    if (el) el.textContent = n.title || '';
-}
-function renderSidebarItemPreview(n) {
-    if (!n) return;
-    const el = document.querySelector(`.nz-item[data-id="${n.id}"] .nz-item-preview`);
-    if (el) el.textContent = firstLine(stripHtml(n.content || ''));
 }
 
-// ---------- Toolbar & Rich-Text ----------
-function onToolbarClick(e) {
-    const btn = e.target.closest('.nz-tb[data-cmd]');
-    if (!btn) return;
-    const cmd = btn.dataset.cmd;
-    const editor = document.getElementById('nzDContent');
-    editor.focus();
-    if (cmd === 'bold') { document.execCommand('bold'); }
-    else if (cmd === 'italic') { document.execCommand('italic'); }
-    else if (cmd === 'insertUnorderedList') { document.execCommand('insertUnorderedList'); }
-    else if (cmd === 'insertOrderedList') { document.execCommand('insertOrderedList'); }
-    else if (cmd === 'formatBlockH3') { document.execCommand('formatBlock', 'H3'); }
-    else if (cmd === 'task') { insertTask(); }
-    else if (cmd === 'createLink') {
-        const url = prompt('Link-URL:');
-        if (url) document.execCommand('createLink', false, url);
-    }
-    onContentInput();
+
+// ==========================================================
+// HTML → Markdown Migration (v1.14-v1.16 contenteditable-Output)
+// ==========================================================
+function htmlToMarkdown(html) {
+    if (!html) return '';
+    const doc = document.implementation.createHTMLDocument('');
+    doc.body.innerHTML = html;
+    const walker = (node) => {
+        if (node.nodeType === 3) return node.nodeValue;
+        if (node.nodeType !== 1) return '';
+        const tag = node.tagName.toLowerCase();
+        const kids = Array.from(node.childNodes).map(walker).join('');
+        switch (tag) {
+            case 'br': return '\n';
+            case 'strong': case 'b': return `**${kids}**`;
+            case 'em': case 'i': return `*${kids}*`;
+            case 'code': return `\`${kids}\``;
+            case 'a': {
+                const href = node.getAttribute('href') || '';
+                return href ? `[${kids}](${href})` : kids;
+            }
+            case 'h1': return `\n# ${kids}\n\n`;
+            case 'h2': return `\n## ${kids}\n\n`;
+            case 'h3': return `\n### ${kids}\n\n`;
+            case 'ul': case 'ol': {
+                let idx = 1;
+                const items = Array.from(node.children)
+                    .filter(c => c.tagName.toLowerCase() === 'li')
+                    .map(li => {
+                        const prefix = tag === 'ol' ? `${idx++}. ` : '- ';
+                        const inner = Array.from(li.childNodes).map(walker).join('').trim();
+                        return prefix + inner;
+                    });
+                return '\n' + items.join('\n') + '\n\n';
+            }
+            case 'blockquote': return '\n' + kids.split('\n').map(l => '> ' + l).join('\n') + '\n\n';
+            case 'hr': return '\n---\n\n';
+            case 'div': {
+                if (node.classList.contains('nz-task')) {
+                    const done = node.classList.contains('done');
+                    const txtEl = node.querySelector('.nz-task-txt');
+                    const txt = txtEl ? txtEl.textContent : node.textContent;
+                    return `- [${done ? 'x' : ' '}] ${txt.trim()}\n`;
+                }
+                return kids + '\n';
+            }
+            case 'p': return kids + '\n\n';
+            default: return kids;
+        }
+    };
+    let md = Array.from(doc.body.childNodes).map(walker).join('');
+    md = md.replace(/\n{3,}/g, '\n\n').trim();
+    md = md.replace(/\u00a0/g, ' ');
+    return md;
 }
 
-// Eine neue Aufgabe (Checkbox + Text) an der Cursorposition einfügen.
-function insertTask() {
-    const editor = document.getElementById('nzDContent');
-    editor.focus();
-    const html = '<div class="nz-task"><input type="checkbox"><span class="nz-task-txt">&nbsp;</span></div><p><br></p>';
-    document.execCommand('insertHTML', false, html);
-    // Cursor in den Task-Text setzen
-    const txt = editor.querySelector('.nz-task:last-child .nz-task-txt');
-    if (txt) {
-        const r = document.createRange();
-        r.setStart(txt, 0); r.collapse(true);
-        const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
-        txt.innerHTML = '';
-    }
-}
-
-// Checkbox-Klicks im Editor abfangen: Caret nicht bewegen, sondern toggeln.
-function onEditorMousedown(e) {
-    const cb = e.target.closest('.nz-task input[type=checkbox]');
-    if (!cb) return;
-    e.preventDefault();
-    cb.checked = !cb.checked;
-    const task = cb.closest('.nz-task');
-    if (task) task.classList.toggle('done', cb.checked);
-    onContentInput();
-}
-
-// Enter in einer Aufgabe erzeugt eine neue Aufgabe (außer die aktuelle ist leer → dann normale Zeile).
-function onEditorKeydown(e) {
-    if (e.key !== 'Enter' || e.shiftKey) return;
-    const sel = window.getSelection();
-    if (!sel.rangeCount) return;
-    let node = sel.anchorNode;
-    const editor = document.getElementById('nzDContent');
-    // Herausfinden, ob der Cursor in einer .nz-task steht.
-    const task = node ? (node.nodeType === 3 ? node.parentElement : node).closest('.nz-task') : null;
-    if (!task) return;
-    const txtEl = task.querySelector('.nz-task-txt');
-    const isEmpty = txtEl ? !txtEl.textContent.trim() : true;
-    if (isEmpty) {
-        // Leere Aufgabe → Enter beendet die Aufgabenfolge (normale Zeile).
-        e.preventDefault();
-        const p = document.createElement('p');
-        p.innerHTML = '<br>';
-        task.after(p);
-        task.remove();
-        const r = document.createRange();
-        r.setStart(p, 0); r.collapse(true);
-        sel.removeAllRanges(); sel.addRange(r);
-    } else {
-        // Neue Aufgabe anhängen.
-        e.preventDefault();
-        const next = document.createElement('div');
-        next.className = 'nz-task';
-        next.innerHTML = '<input type="checkbox"><span class="nz-task-txt">&nbsp;</span>';
-        task.after(next);
-        const nt = next.querySelector('.nz-task-txt');
-        const r = document.createRange(); r.setStart(nt, 0); r.collapse(true);
-        sel.removeAllRanges(); sel.addRange(r);
-        nt.innerHTML = '';
-    }
-    onContentInput();
-}
-
-// ---------- Helper ----------
-function stripHtml(html) {
-    // HTML → Plaintext (für Sidebar-Vorschau & Suche).
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    // Checkbox-Aufgaben als „☐ text“ darstellen, Zeilenumbrüche erhalten.
-    let out = '';
-    tmp.querySelectorAll('.nz-task').forEach(t => {
-        const done = t.classList.contains('done');
-        const txt = t.querySelector('.nz-task-txt');
-        const pre = document.createTextNode((done ? '☑ ' : '☐ ') + (txt ? txt.textContent : '') + '\n');
-        t.replaceWith(pre);
-    });
-    // Blockelemente als Zeilenumbrüche.
-    tmp.querySelectorAll('div,p,li,h1,h2,h3,br').forEach(el => {
-        el.append('\n');
-    });
-    return (tmp.textContent || '').replace(/\u00a0/g, ' ');
-}
-function escapeHtml(s) {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-// ---------- Hash-Deep-Link ----------
+// ==========================================================
+// Hash-Deep-Link
+// ==========================================================
 function onHashChange() {
     const m = location.hash.match(/^#note-(\d+)$/);
     const id = m ? Number(m[1]) : null;
@@ -474,7 +834,16 @@ function onHashChange() {
     else if (!id) { state.selectedId = null; renderSidebar(); renderDetail(); }
 }
 
-// ---------- Zeit-Formatierung ----------
+// ==========================================================
+// Helper
+// ==========================================================
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function relTime(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -486,7 +855,10 @@ function relTime(iso) {
     return d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// ---------- Toast ----------
+
+// ==========================================================
+// Toast (mit optionalem Undo-Button)
+// ==========================================================
 let toastEl = null, toastTimer = null;
 function showToast(msg, isError, ms) {
     if (toastEl) { toastEl.remove(); clearTimeout(toastTimer); }
@@ -495,9 +867,14 @@ function showToast(msg, isError, ms) {
     toastEl.innerHTML = `<span>${escapeHtml(msg)}</span>`;
     document.body.appendChild(toastEl);
     requestAnimationFrame(() => toastEl.classList.add('show'));
-    toastTimer = setTimeout(() => { toastEl.classList.remove('show'); setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 250); }, ms || 2500);
-    haptic(isError ? 'error' : 'tap');
+    toastTimer = setTimeout(() => {
+        if (!toastEl) return;
+        toastEl.classList.remove('show');
+        setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 250);
+    }, ms || 2500);
+    if (typeof haptic === 'function') haptic(isError ? 'error' : 'tap');
 }
+
 function showUndoToast(msg, onUndo, ms) {
     if (toastEl) { toastEl.remove(); clearTimeout(toastTimer); }
     toastEl = document.createElement('div');
@@ -505,7 +882,10 @@ function showUndoToast(msg, onUndo, ms) {
     toastEl.innerHTML = `<span>${escapeHtml(msg)}</span><button class="nz-undo-btn" type="button">↺ Rückgängig</button>`;
     document.body.appendChild(toastEl);
     let done = false;
-    const cleanup = () => { toastEl.classList.remove('show'); setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 250); };
+    const cleanup = () => {
+        toastEl.classList.remove('show');
+        setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 250);
+    };
     toastEl.querySelector('.nz-undo-btn').onclick = async () => {
         if (done) return; done = true; cleanup();
         try { await onUndo(); showToast('Rückgängig gemacht'); }
@@ -513,7 +893,8 @@ function showUndoToast(msg, onUndo, ms) {
     };
     requestAnimationFrame(() => toastEl.classList.add('show'));
     toastTimer = setTimeout(() => { if (!done) cleanup(); }, ms || 5000);
-    haptic('tap');
+    if (typeof haptic === 'function') haptic('tap');
 }
 
 boot();
+

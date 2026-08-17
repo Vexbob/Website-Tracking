@@ -11,6 +11,11 @@ const AUSGABEN_API = {
     updateCategory:  (id, b) => apiCall(`/api/expense-categories/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     deleteCategory:  (id) => apiCall(`/api/expense-categories/${id}`, { method: 'DELETE' }),
 
+    brands:      () => apiCall('/api/brands'),
+    createBrand: (b) => apiCall('/api/brands', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
+    updateBrand: (id, b) => apiCall(`/api/brands/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
+    deleteBrand: (id) => apiCall(`/api/brands/${id}`, { method: 'DELETE' }),
+
     rules:      () => apiCall('/api/category-rules'),
     createRule: (b) => apiCall('/api/category-rules', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     deleteRule: (id) => apiCall(`/api/category-rules/${id}`, { method: 'DELETE' }),
@@ -48,7 +53,7 @@ const AUSGABEN_API = {
     statsMonthly:    (months=12) => apiCall(`/api/expenses/stats/monthly?months=${months}`),
     statsWeekly:     (weeks=12) => apiCall(`/api/expenses/stats/weekly?weeks=${weeks}`),
     statsDaily:     (days=30) => apiCall(`/api/expenses/stats/daily?days=${days}`),
-    products:        () => apiCall('/api/expenses/products'),
+    products:        (minCount) => apiCall('/api/expenses/products' + (minCount ? ('?min_count=' + minCount) : '')),
     productHistory:  (key) => apiCall('/api/expenses/products/history?key=' + encodeURIComponent(key)),
     priceHistory:    (q) => apiCall('/api/expenses/price-history?q=' + encodeURIComponent(q)),
     mergeCategory:   (srcId, targetId) => apiCall(`/api/expense-categories/${srcId}/merge-into/${targetId}`, { method: 'POST' }),
@@ -230,6 +235,7 @@ function renderSubnav() {
         { key: 'preisverlauf', href: '/ausgaben/preisverlauf.html',  label: '💶 Preisverlauf' },
         { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
         { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },
+        { key: 'marken',       href: '/ausgaben/marken.html',        label: '🏭 Marken' },
     ];
     el.className = 'subnav';
     el.innerHTML = links.map(l =>

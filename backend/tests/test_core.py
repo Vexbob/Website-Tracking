@@ -41,9 +41,34 @@ def test_milestones_increase():
     assert milestones_at(0, 2.5, 2.5, "increase") == 1
 
 def test_milestones_decrease():
-    assert milestones_at(140, 130, 5, "decrease") == 2
-    assert milestones_at(140, 132, 5, "decrease") == 1
+    # v1.15.1: bei "decrease" gilt: Meilenstein #k gilt erst als erreicht,
+    # wenn cv < sv - k*inc  (strikt drunter, nicht gleich).
+    assert milestones_at(140, 129, 5, "decrease") == 2   # 129 < 130 → 2 Meilensteine
+    assert milestones_at(140, 130, 5, "decrease") == 1   # 130 = Schwelle Nr.2, zaehlt NICHT
+    assert milestones_at(140, 131, 5, "decrease") == 1   # 131 < 135 → 1 Meilenstein
+    assert milestones_at(140, 135, 5, "decrease") == 0   # 135 = Schwelle Nr.1, zaehlt NICHT
     assert milestones_at(140, 140, 5, "decrease") == 0
+
+def test_milestones_decrease_strict_v1_15_1():
+    """Regression v1.15.1: 'auf der Schwelle stehen' ist bei fallenden
+    Achievements KEIN erreichter Meilenstein — erst wenn der Wert echt
+    drunter liegt. Schwelle #k liegt bei sv - k*inc.
+    """
+    # Gewicht-abnehmen: sv=90, inc=1. Schwelle #1 = 89, #2 = 88, ...
+    # Bei cv=89 ist Schwelle #1 (89) NICHT strikt drunter -> 0 Meilensteine.
+    # Bei cv=88 ist Schwelle #1 (89) drunter, #2 (88) NICHT -> 1 Meilenstein.
+    for cv in range(80, 91):
+        expected = max(0, 90 - cv - 1)  # cv=90→0, 89→0, 88→1, ..., 80→9
+        assert milestones_at(90, cv, 1, "decrease") == expected, (
+            f"cv={cv} sollte {expected} Meilensteine ergeben"
+        )
+    # Fliesskomma-Sicherheit: 90 - (0.1*10) darf nicht faelschlich
+    # als "strikt drunter 89" erkannt werden.
+    cv = 90.0
+    for _ in range(10):
+        cv -= 0.1  # cv wird ~89.00000000000001 durch Rundung
+    # cv liegt nicht strikt unter 89 -> 0 Meilensteine
+    assert milestones_at(90, cv, 1, "decrease") == 0
 
 def test_milestones_zero_increment():
     assert milestones_at(0, 10, 0, "increase") == 0

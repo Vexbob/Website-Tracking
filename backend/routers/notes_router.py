@@ -20,6 +20,7 @@ router = APIRouter(tags=["notes"])
 ALLOWED_COLORS = {
     "default", "red", "orange", "yellow", "green", "blue", "purple", "pink",
 }
+ALLOWED_FORMATS = {"markdown", "html"}
 
 
 # ---------- Models ----------
@@ -28,6 +29,8 @@ class NoteCreate(BaseModel):
     content: Optional[str] = ""
     color: Optional[str] = "default"
     pinned: Optional[bool] = False
+    # v1.17.0: Speicherformat. Default 'markdown' fuer neue Notizen.
+    format: Optional[str] = "markdown"
 
 
 class NoteUpd(BaseModel):
@@ -37,6 +40,8 @@ class NoteUpd(BaseModel):
     pinned: Optional[bool] = None
     archived: Optional[bool] = None
     sort_order: Optional[int] = None
+    # v1.17.0: Client kann Format aendern (z.B. bei Migration alter HTML-Notizen).
+    format: Optional[str] = None
 
 
 class ReorderBody(BaseModel):
@@ -88,11 +93,14 @@ async def create_note(request: Request, b: NoteCreate, db=Depends(get_db), user=
     color = (b.color or "default").strip() or "default"
     if color not in ALLOWED_COLORS:
         raise HTTPException(400, f"Unbekannte Farbe: {color}")
+    fmt = (b.format or "markdown").strip() or "markdown"
+    if fmt not in ALLOWED_FORMATS:
+        raise HTTPException(400, f"Unbekanntes Format: {fmt}")
     row = await db.fetchrow(
-        "INSERT INTO notes (user_id,title,content,color,pinned) "
-        "VALUES ($1,$2,$3,$4,$5) RETURNING *",
+        "INSERT INTO notes (user_id,title,content,color,pinned,format) "
+        "VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
         user["id"], (b.title or "").strip(), (b.content or "").rstrip(),
-        color, bool(b.pinned),
+        color, bool(b.pinned), fmt,
     )
     logger.info(f"User {user['id']} created note {row['id']}")
     return _ser(row)
@@ -107,6 +115,8 @@ async def update_note(request: Request, nid: int, b: NoteUpd, db=Depends(get_db)
         raise HTTPException(404, "Nicht gefunden")
     if b.color is not None and b.color not in ALLOWED_COLORS:
         raise HTTPException(400, f"Unbekannte Farbe: {b.color}")
+    if b.format is not None and b.format not in ALLOWED_FORMATS:
+        raise HTTPException(400, f"Unbekanntes Format: {b.format}")
 
     fields, vals = [], []
     if b.title is not None:
@@ -121,6 +131,8 @@ async def update_note(request: Request, nid: int, b: NoteUpd, db=Depends(get_db)
         fields.append(f"archived=${len(vals)+1}"); vals.append(bool(b.archived))
     if b.sort_order is not None:
         fields.append(f"sort_order=${len(vals)+1}"); vals.append(int(b.sort_order))
+    if b.format is not None:
+        fields.append(f"format=${len(vals)+1}"); vals.append(b.format)
 
     if not fields:
         return _ser(await db.fetchrow("SELECT * FROM notes WHERE id=$1", nid))
