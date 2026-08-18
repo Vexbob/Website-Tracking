@@ -3,8 +3,6 @@
 Öffentliche Read-Endpoints unter ``/api/public/blog/*`` (kein Auth).
 Admin-Write-Endpoints unter ``/api/blog/*`` (require_admin).
 """
-from __future__ import annotations
-
 import re
 import unicodedata
 from typing import List, Optional
