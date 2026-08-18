@@ -89,7 +89,7 @@ async function renderList() {
     view.innerHTML = `
         <div class="blog-header">
             <h1>📰 Vexbob Blog</h1>
-            <p>Gedanken, Projekte, Rezepte, Musik.</p>
+            <p>Test</p>
         </div>
         <div class="blog-tags" id="blogTags"></div>
         <div id="blogList"><div class="blog-loading">Lade …</div></div>`;
