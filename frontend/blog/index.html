@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Blog — Vexbob</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/blog/blog.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/blog/" class="nav-title">📰 Vexbob-Blog</a>
+    <div class="nav-right">
+        <button class="nav-btn" id="themeBtn" title="Design umschalten">🌓</button>
+        <a class="nav-btn" href="/private/login.html" id="loginLink">Login</a>
+        <a class="nav-btn" href="/" id="homeLink" style="display:none">Dashboard</a>
+    </div>
+</nav>
+<main class="blog-main">
+    <div id="blogView"></div>
+</main>
+<div class="version-tag"></div>
+<script src="/blog/blog.js"></script>
+</body>
+</html>

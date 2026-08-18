@@ -1,6 +1,13 @@
 # 📰 Blog-Modul für Vexbob — Konzept & Roadmap
 
-> Status: **Konzept** (v1.15.0 – noch nicht implementiert)
+> Status: **Implementiert in v1.18.0** ✅
+> - Migration: `019_blog.sql`
+> - Backend-Router: `backend/routers/blog_router.py` (öffentliche + Admin-Endpoints)
+> - Frontend öffentlich: `frontend/blog/`
+> - Frontend Admin-Editor: `frontend/blog/admin/`
+> - Login-Seite mit Teasern der letzten 5 Beiträge
+> - Dashboard-Kachel „Blog verwalten" (nur Admin)
+>
 > Ziel: Öffentlich lesbarer Blog, der auf der **Login-Seite** angeteasert wird
 > und ohne Login voll konsumierbar ist. Schreib-/Verwaltungsseite bleibt privat.
 

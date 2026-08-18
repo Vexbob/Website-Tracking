@@ -17,23 +17,34 @@
 - **Trophäen-Wand** für abgeschlossene Ziele
 - **CSV-Export** mit Metadaten-Vorspann (Sparziele, Achievements, Wochen-/Monatsziele, Wunsch-Anschaffungen, Zukunftsideen, Trophäen) + Protokoll (v1.15.0)
 - Fallende Achievements: Meilenstein zählt erst bei **strikt unter** der Schwelle (v1.15.1)
+- **v1.18.0 Repair-Job**: beim Backend-Startup werden verpasste Meilenstein-Auszahlungen automatisch nachgetragen (Log + Savings-Transaktion mit Note „Nachtrag v1.18: Meilenstein-Reparatur"), `credited_milestones` neu synchronisiert.
+- **Wochenziel-Historie erweitert** (v1.18.0): pro Wochenziel wird der Verlauf der letzten 12–52 Perioden mit Status-Chips (✓/◐/✕/⏳), Check-in-Anzahl und Auszahlungs-Marker gezeigt; nachträglicher Check-in in vergangene Wochen per +1-Button möglich.
 - **JSON-Backup & Restore**, automatische tägliche Snapshots
 
-### 📝 Notizen (komplett überarbeitet in v1.17.0)
-Notiz-Ablage im **Bear/Obsidian-Stil** (Master-Detail): Sidebar-Liste + Editor/Preview-Toggle, einzelne Notizen per Link aufrufbar (`#note-42`).
-- **Speicherformat: Markdown** — sauberes Textformat statt fragiles contenteditable-HTML (v1.17.0)
-- **Zwei Ansichten**: Editor (Textarea mit Monospace-Font) und Live-Preview (Cmd/Ctrl+E zum Umschalten)
-- **Task-Checkboxen** — `- [ ]` / `- [x]` im Editor, in der Preview **echt klickbar** — Klick schreibt im Text zurück, keine DOM-Fummelei mehr (v1.17.0 Bugfix)
-- **Markdown-Renderer** unterstützt: `# ## ###` Überschriften, `**fett**`, `*kursiv*`, `` `code` ``, ```` ``` ```` Codeblöcke, `[Text](url)`, `> Zitat`, `---` Trennlinien, `-` / `1.` Listen
-- **Smart-Enter**: neue Zeile in Listen/Aufgaben führt automatisch das Prefix fort; leere Zeile beendet Liste
-- **Toolbar** mit Format-Buttons (H1-H3, Bold, Italic, Code, Listen, Aufgabe, Zitat, Link, HR)
-- **Keyboard-Shortcuts**: Cmd/Ctrl+B/I/K/` (Formatierung), +E (Modus-Toggle), +Shift+7/8/9 (Aufgabe/Ul/Ol), +N (neue Notiz)
-- **Automatische Migration** alter HTML-Notizen (v1.14-v1.16) → Markdown beim ersten Öffnen (v1.17.0)
-- **Farblabels** (8 Farben), **Pin** (eigene Sektion oben), **Archiv** mit Tab-Toggle
-- **Auto-Save** mit Debounce, Status-Indikator (Speichern… → Gespeichert ✓)
-- **Sortieren** (Geändert / Erstellt / Titel) + **Live-Suche** filtern die Sidebar
-- Leere Neue Notizen werden beim Verlassen automatisch gelöscht, **Undo** beim Löschen/Archivieren
-- responsiv (mobil einspaltig mit Back-Button), Dark-Mode, PWA
+### 📝 Notizen (komplett überarbeitet in v1.18.0 → WYSIWYG)
+Notiz-Ablage im **Apple-Notes-Stil** (Master-Detail): Sidebar-Liste + inline formatierender Editor, einzelne Notizen per Link aufrufbar (`#note-42`).
+- **WYSIWYG-Editor** (v1.18.0): `contenteditable`, was du tippst wird sofort formatiert — **kein Umschalten** zwischen Editor und Vorschau mehr.
+- **Speicherformat: HTML** (`format='html'`) — strukturiertes DOM statt Textarea-Text.
+- **Task-Checkboxen als eigene Blöcke**: `<div class="nz-task" data-done="…">` mit klickbarer Custom-Box (kein `<input>`) — löst die Cursor-/Fokus-Probleme früherer Versionen komplett.
+- **Enter in Task**: neue Task-Zeile; **Enter in leerer Task**: raus zu normalem Absatz (Apple-Notes-Verhalten).
+- **Markdown-Shortcuts beim Tippen**: `# ` → H1, `## ` → H2, `### ` → H3, `- ` → Bullet, `1. ` → nummeriert, `> ` → Zitat, `- [ ] ` → Task, `- [x] ` → abgehakte Task.
+- **Toolbar** sticky oben: H1-H3, **B** / *I* / U / S / `code`, Listen, Aufgabe, Zitat, Link, HR.
+- **Keyboard-Shortcuts**: Cmd/Ctrl+B/I/U/K, +Shift+7/8/9 (Aufgabe/Ul/Ol), +N (neue Notiz).
+- **Auto-Migration** alter Markdown-Notizen (v1.17) → HTML beim ersten Öffnen, wird beim nächsten Save als `format='html'` zurückgeschrieben.
+- **Farblabels** (8 Farben), **Pin** (eigene Sektion oben), **Archiv** mit Tab-Toggle.
+- **Auto-Save** mit Debounce (700 ms), Status-Indikator (Speichern… → Gespeichert ✓).
+- **Sortieren** (Geändert / Erstellt / Titel) + **Live-Suche** filtern die Sidebar.
+- Leere Neue Notizen werden beim Verlassen automatisch gelöscht, **Undo** beim Löschen/Archivieren.
+- responsiv (mobil einspaltig mit Back-Button), Dark-Mode, PWA.
+
+### 📰 Blog (neu in v1.18.0)
+Öffentlich lesbares Blog-Modul — die einzige nach außen sichtbare Fläche der App.
+- **Öffentliche API** (`/api/public/blog/*`, kein Auth, Rate-Limit `120/min`).
+- **URL-Struktur**: `/blog/` (Übersicht) und `/blog/#<slug>` (Detail).
+- **Login-Seite** zeigt die 5 neuesten Beiträge rechts als Teaser.
+- **Admin-Editor** (`/blog/admin/`, nur `is_admin`) mit **gleicher WYSIWYG-Logik** wie Notizen, Auto-Save, Publish/Unpublish, Slug editierbar (auto aus Titel), Cover-URL, Tag-Chips.
+- **Tag-Filter** in der Übersicht, **Lesezeit-Schätzung** (200 Wörter/min), **View-Counter**.
+- **XSS-Schutz** via Whitelist-Sanitizer im Frontend (nur `p, h1-h6, ul, ol, li, blockquote, pre, code, strong/b, em/i, u, s, a, br, hr, img, div, span` + gefilterte Attribute).
 
 ### 🍳 Rezeptbuch
 Persönliche Rezepte mit Zutaten, Schritten und Kategorien.
@@ -50,6 +61,7 @@ Privates Fotoalbum mit Upload und Galerie-Ansicht.
 - **Inline-Anlage von Läden & Kategorien** (v1.16.0) direkt beim Bon-Eingeben — kein Tab-Wechsel nötig
 - **Auto-Kategorisierung** mit mitlernenden Regeln (Keyword → Kategorie, Bestätigungs-Counter)
 - **Verbesserter KI-Parser** (v1.16.0) – Default-Modell auf `gemini-flash-latest` hochgesetzt; Prompt behält jetzt beschreibende Adjektive (z.B. "Mais geröstet gesalzen" statt nur "Mais")
+- **Statistik-Redesign** (v1.18.0) – komplett neue Statistikseite mit **globalem Zeitraumfilter** (7T/30T/90T/12M/Alle/Custom), **KPI-Kacheln** mit Vorperiode-Vergleich (Gesamt · Ø/Tag · größter Bon · teuerster Wochentag), **Zeitverlauf-Chart** mit umschaltbarer Granularität (Tag/Woche/Monat) + rollierender Trendlinie, **Donut nach Kategorie + Balken nach Laden** je mit Detail-Tabelle inkl. Vorperiode-Delta-Pills, **Wochentag-Verteilung**, **Top-Artikel-Tabelle**, **365-Tage-Heatmap** und automatisch generierte **Insight-Cards** („Du gibst freitags 40% mehr aus", „Kategorie Lebensmittel stieg um +23% ggü. Vorperiode"…). Neuer Backend-Endpoint `/api/expenses/stats/insights?from=&to=` mit `by_weekday`, `top_items`, `top_stores`, `top_categories` und Prev-Period-Diff.
 - **Schnelleingabe-Modus** – nur Betrag + Laden + Datum ohne Positionen
 - **Manuelle Eingabe** mit beliebig vielen Positionen und Split-Kategorien pro Bon
 - **Wiederkehrende Ausgaben** – automatische Vorschlagsliste anhand von Buchungshistorie

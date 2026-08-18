@@ -9,24 +9,45 @@
     <script src="/js/version.js"></script>
     <script src="/js/api.js"></script>
     <style>
-        .login-wrap { max-width: 380px; margin: 4rem auto; padding: 0 1rem; }
-        .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; box-shadow: var(--shadow); }
-        .login-card h1 { text-align: center; font-size: 1.5rem; margin-bottom: 1.5rem; }
-        .login-card input { padding: 0.75rem; font-size: 1rem; }
-        .login-card button { padding: 0.75rem; margin-top: 0.5rem; background: var(--accent); color: #fff; }
-        .login-error { text-align: center; min-height: 1.25rem; }
+        body { min-height: 100vh; }
+        .lp-wrap { max-width: 1000px; margin: 3rem auto; padding: 0 1rem; display: grid; grid-template-columns: 380px 1fr; gap: 2.5rem; align-items: start; }
+        @media(max-width: 800px) { .lp-wrap { grid-template-columns: 1fr; margin: 1.5rem auto; gap: 1.5rem; } }
+        .lp-login { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; box-shadow: var(--shadow); }
+        .lp-login h1 { text-align: center; font-size: 1.5rem; margin: 0 0 1.5rem; letter-spacing: -0.02em; }
+        .lp-login input { padding: 0.75rem; font-size: 1rem; }
+        .lp-login button { padding: 0.75rem; margin-top: 0.5rem; background: var(--accent); color: #fff; font-weight: 600; }
+        .lp-error { text-align: center; min-height: 1.25rem; }
+        .lp-blog-teaser { min-width: 0; }
+        .lp-blog-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; }
+        .lp-blog-header h2 { margin: 0; font-size: 1.25rem; letter-spacing: -0.01em; }
+        .lp-blog-header .lp-blog-all { font-size: 0.8125rem; color: var(--accent); text-decoration: none; font-weight: 600; }
+        .lp-blog-header .lp-blog-all:hover { text-decoration: underline; }
+        .lp-post { display: block; padding: 1rem 1.125rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 0.65rem; text-decoration: none; color: inherit; transition: transform .12s, box-shadow .15s; }
+        .lp-post:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+        .lp-post-title { font-weight: 700; margin-bottom: 0.2rem; color: var(--text); font-size: 0.95rem; line-height: 1.35; }
+        .lp-post-sub { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.45; margin-bottom: 0.4rem; }
+        .lp-post-meta { font-size: 0.7rem; color: var(--text-faint); display: flex; gap: 0.5rem; align-items: center; }
+        .lp-post-meta .dot { width: 3px; height: 3px; background: var(--text-faint); border-radius: 50%; }
+        .lp-blog-empty { padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.8125rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; }
     </style>
 </head>
 <body>
-    <div class="login-wrap">
-        <div class="login-card">
+    <div class="lp-wrap">
+        <div class="lp-login">
             <h1>Vexbob</h1>
             <form id="login-form">
                 <input type="text" id="username" placeholder="Benutzername" required autocomplete="username" autofocus>
                 <input type="password" id="password" placeholder="Passwort" required autocomplete="current-password">
                 <button type="submit">Einloggen</button>
             </form>
-            <p id="error-msg" class="error login-error"></p>
+            <p id="error-msg" class="error lp-error"></p>
+        </div>
+        <div class="lp-blog-teaser">
+            <div class="lp-blog-header">
+                <h2>📰 Neueste Beiträge</h2>
+                <a href="/blog/" class="lp-blog-all">Alle ansehen →</a>
+            </div>
+            <div id="lpBlogList"><div class="lp-blog-empty">Lade …</div></div>
         </div>
     </div>
     <div class="version-tag"></div>
@@ -40,6 +61,35 @@
             } catch (err) { errorP.textContent = 'Falsche Zugangsdaten'; }
         });
         if (isLoggedIn()) window.location.href = '/';
+
+        // Blog-Teaser laden (öffentliche API, kein Auth)
+        (async function() {
+            const box = document.getElementById('lpBlogList');
+            try {
+                const r = await fetch(API_BASE + '/api/public/blog/posts?limit=5');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const posts = await r.json();
+                if (!posts.length) {
+                    box.innerHTML = '<div class="lp-blog-empty">Noch keine Beiträge veröffentlicht.<br><br>Kommt bald! ✨</div>';
+                    return;
+                }
+                const esc = (s) => (s == null ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+                const fmtDate = (iso) => new Date(iso).toLocaleDateString('de-DE',{day:'2-digit',month:'long',year:'numeric'});
+                box.innerHTML = posts.map(p => `
+                    <a class="lp-post" href="/blog/#${esc(p.slug)}">
+                        <div class="lp-post-title">${esc(p.title)}</div>
+                        ${p.subtitle ? `<div class="lp-post-sub">${esc(p.subtitle)}</div>` : ''}
+                        <div class="lp-post-meta">
+                            <span>${fmtDate(p.published_at)}</span>
+                            <span class="dot"></span>
+                            <span>${esc(p.author_name || 'Anonym')}</span>
+                        </div>
+                    </a>
+                `).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="lp-blog-empty">Beiträge konnten nicht geladen werden.</div>';
+            }
+        })();
     </script>
 </body>
 </html>

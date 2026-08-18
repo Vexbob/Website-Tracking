@@ -984,61 +984,211 @@ async def stats_by_store(db=Depends(get_db), user=Depends(get_current_user),
     return [_ser_exp(r) for r in rows]
 
 
+def _resolve_range(date_from: Optional[str], date_to: Optional[str],
+                   fallback_days: int) -> tuple:
+    """Ermittelt (since, until) aus optionalen ISO-Strings, mit Fallback."""
+    until = _parse_iso_date(date_to) if date_to else date.today()
+    if date_from:
+        since = _parse_iso_date(date_from)
+    else:
+        since = until - timedelta(days=fallback_days - 1)
+    return since, until
+
+
+async def _insights_tops(db, user, since, until, prev_since, prev_until):
+    """Top-Laeden + Top-Kategorien inkl. Vorperiode-Vergleich."""
+    ts_rows = await db.fetch(
+        """SELECT COALESCE(s.id,0) AS sid, COALESCE(s.name,'Ohne Laden') AS name,
+                  COALESCE(s.color,'#9ca3af') AS color, COALESCE(s.icon,'🏪') AS icon,
+                  SUM(e.total_amount) AS total, COUNT(*) AS visits
+           FROM expenses e LEFT JOIN stores s ON s.id=e.store_id
+           WHERE e.user_id=$1 AND e.purchase_date BETWEEN $2 AND $3
+           GROUP BY s.id, s.name, s.color, s.icon
+           ORDER BY total DESC LIMIT 8""", user["id"], since, until)
+    top_stores = []
+    for r in ts_rows:
+        prev = float(await db.fetchval(
+            "SELECT COALESCE(SUM(e.total_amount),0) FROM expenses e "
+            "WHERE e.user_id=$1 AND e.purchase_date BETWEEN $2 AND $3 AND COALESCE(e.store_id,0)=$4",
+            user["id"], prev_since, prev_until, r["sid"]) or 0)
+        top_stores.append({"name": r["name"], "color": r["color"], "icon": r["icon"],
+                            "total": float(r["total"] or 0), "visits": int(r["visits"]),
+                            "prev_total": prev,
+                            "avg_per_visit": float(r["total"] or 0) / int(r["visits"]) if int(r["visits"]) else 0})
+
+    tc_rows = await db.fetch(
+        """SELECT COALESCE(c.id,0) AS cid, COALESCE(c.name,'Unkategorisiert') AS name,
+                  COALESCE(c.color,'#9ca3af') AS color, COALESCE(c.icon,'❓') AS icon,
+                  SUM(ei.total_price) AS total, COUNT(*) AS items
+           FROM expense_items ei JOIN expenses e ON e.id=ei.expense_id
+           LEFT JOIN expense_categories c ON c.id=ei.category_id
+           WHERE ei.user_id=$1 AND e.purchase_date BETWEEN $2 AND $3
+           GROUP BY c.id, c.name, c.color, c.icon
+           ORDER BY total DESC LIMIT 10""", user["id"], since, until)
+    top_categories = []
+    for r in tc_rows:
+        prev = float(await db.fetchval(
+            """SELECT COALESCE(SUM(ei.total_price),0) FROM expense_items ei
+               JOIN expenses e ON e.id=ei.expense_id
+               WHERE ei.user_id=$1 AND e.purchase_date BETWEEN $2 AND $3
+                 AND COALESCE(ei.category_id,0)=$4""",
+            user["id"], prev_since, prev_until, r["cid"]) or 0)
+        top_categories.append({"name": r["name"], "color": r["color"], "icon": r["icon"],
+                                "total": float(r["total"] or 0), "items": int(r["items"]),
+                                "prev_total": prev})
+    return top_stores, top_categories
+
+
 @router.get("/api/expenses/stats/monthly")
-async def stats_monthly(db=Depends(get_db), user=Depends(get_current_user), months: int = 12):
-    months = max(1, min(months, 60))
-    since = date.today().replace(day=1)
-    y, m = since.year, since.month
-    for _ in range(months - 1):
-        m -= 1
-        if m == 0:
-            m = 12; y -= 1
-    since = date(y, m, 1)
+async def stats_monthly(db=Depends(get_db), user=Depends(get_current_user),
+                         months: int = 12,
+                         date_from: Optional[str] = Query(None, alias="from"),
+                         date_to: Optional[str] = Query(None, alias="to")):
+    """Ausgaben pro Monat. v1.18.0: optionaler ISO-Datumsbereich."""
+    if date_from or date_to:
+        since, until = _resolve_range(date_from, date_to, 365)
+        since = since.replace(day=1)
+    else:
+        months = max(1, min(months, 60))
+        today = date.today()
+        since = today.replace(day=1)
+        y, m = since.year, since.month
+        for _ in range(months - 1):
+            m -= 1
+            if m == 0:
+                m = 12; y -= 1
+        since = date(y, m, 1)
+        until = today
     rows = await db.fetch(
         """SELECT TO_CHAR(purchase_date, 'YYYY-MM') AS month,
                   SUM(total_amount) AS total, COUNT(*) AS count
-           FROM expenses WHERE user_id=$1 AND purchase_date >= $2
+           FROM expenses WHERE user_id=$1 AND purchase_date >= $2 AND purchase_date <= $3
            GROUP BY month ORDER BY month""",
-        user["id"], since)
+        user["id"], since, until)
     return [{"month": r["month"], "total": float(r["total"] or 0),
              "count": int(r["count"])} for r in rows]
 
 @router.get("/api/expenses/stats/weekly")
-async def stats_weekly(db=Depends(get_db), user=Depends(get_current_user), weeks: int = 12):
-    """Ausgaben pro ISO-Kalenderwoche (letzte N Wochen)."""
-    weeks = max(1, min(weeks, 52))
-    since = date.today() - timedelta(days=7 * (weeks - 1) + date.today().weekday())
+async def stats_weekly(db=Depends(get_db), user=Depends(get_current_user),
+                         weeks: int = 12,
+                         date_from: Optional[str] = Query(None, alias="from"),
+                         date_to: Optional[str] = Query(None, alias="to")):
+    """Ausgaben pro ISO-Kalenderwoche. v1.18.0: from/to."""
+    if date_from or date_to:
+        since, until = _resolve_range(date_from, date_to, 90)
+    else:
+        weeks = max(1, min(weeks, 52))
+        today = date.today()
+        since = today - timedelta(days=7 * (weeks - 1) + today.weekday())
+        until = today
     rows = await db.fetch(
         """SELECT TO_CHAR(purchase_date, 'IYYY-"KW"IW') AS week,
                   DATE_TRUNC('week', purchase_date)::date AS week_start,
                   SUM(total_amount) AS total, COUNT(*) AS count
-           FROM expenses WHERE user_id=$1 AND purchase_date >= $2
+           FROM expenses WHERE user_id=$1 AND purchase_date >= $2 AND purchase_date <= $3
            GROUP BY week, week_start ORDER BY week_start""",
-        user["id"], since)
+        user["id"], since, until)
     return [{"week": r["week"], "week_start": r["week_start"].isoformat() if r["week_start"] else None,
              "total": float(r["total"] or 0), "count": int(r["count"])} for r in rows]
 
 
 @router.get("/api/expenses/stats/daily")
-async def stats_daily(db=Depends(get_db), user=Depends(get_current_user), days: int = 30):
-    """Ausgaben pro Tag (letzte N Tage, mit Lücken als 0)."""
-    days = max(1, min(days, 365))
-    since = date.today() - timedelta(days=days - 1)
+async def stats_daily(db=Depends(get_db), user=Depends(get_current_user),
+                        days: int = 30,
+                        date_from: Optional[str] = Query(None, alias="from"),
+                        date_to: Optional[str] = Query(None, alias="to")):
+    """Ausgaben pro Tag (Lücken als 0). v1.18.0: from/to."""
+    if date_from or date_to:
+        since, until = _resolve_range(date_from, date_to, 30)
+    else:
+        days = max(1, min(days, 730))
+        until = date.today()
+        since = until - timedelta(days=days - 1)
+    if (until - since).days > 730:
+        since = until - timedelta(days=730)
     rows = await db.fetch(
         """SELECT purchase_date AS d, SUM(total_amount) AS total, COUNT(*) AS count
-           FROM expenses WHERE user_id=$1 AND purchase_date >= $2
+           FROM expenses WHERE user_id=$1 AND purchase_date >= $2 AND purchase_date <= $3
            GROUP BY purchase_date ORDER BY purchase_date""",
-        user["id"], since)
+        user["id"], since, until)
     by_day = {r["d"].isoformat(): (float(r["total"] or 0), int(r["count"])) for r in rows}
     out = []
     cur = since
-    end = date.today()
-    while cur <= end:
+    while cur <= until:
         key = cur.isoformat()
         total, count = by_day.get(key, (0.0, 0))
         out.append({"date": key, "total": total, "count": count})
         cur += timedelta(days=1)
     return out
+
+
+@router.get("/api/expenses/stats/insights")
+async def stats_insights(db=Depends(get_db), user=Depends(get_current_user),
+                          date_from: Optional[str] = Query(None, alias="from"),
+                          date_to: Optional[str] = Query(None, alias="to")):
+    """Insights (v1.18.0): KPIs, Vorperiode-Vergleich, Wochentag-Verteilung,
+    Top-Artikel/Läden/Kategorien."""
+    since, until = _resolve_range(date_from, date_to, 30)
+    span = (until - since).days + 1
+    prev_until = since - timedelta(days=1)
+    prev_since = prev_until - timedelta(days=span - 1)
+
+    async def sum_range(a, b):
+        return float(await db.fetchval(
+            "SELECT COALESCE(SUM(total_amount),0) FROM expenses WHERE user_id=$1 "
+            "AND purchase_date BETWEEN $2 AND $3", user["id"], a, b) or 0)
+
+    total = await sum_range(since, until)
+    prev_total = await sum_range(prev_since, prev_until)
+    tx_count = int(await db.fetchval(
+        "SELECT COUNT(*) FROM expenses WHERE user_id=$1 AND purchase_date BETWEEN $2 AND $3",
+        user["id"], since, until) or 0)
+    avg_tx = (total / tx_count) if tx_count else 0.0
+
+    biggest = await db.fetchrow(
+        "SELECT id, total_amount, purchase_date, store_id FROM expenses "
+        "WHERE user_id=$1 AND purchase_date BETWEEN $2 AND $3 "
+        "ORDER BY total_amount DESC LIMIT 1", user["id"], since, until)
+    biggest_tx = None
+    if biggest:
+        store_name = await db.fetchval(
+            "SELECT name FROM stores WHERE id=$1", biggest["store_id"]) if biggest["store_id"] else None
+        biggest_tx = {"id": biggest["id"], "amount": float(biggest["total_amount"] or 0),
+                       "date": biggest["purchase_date"].isoformat(), "store_name": store_name}
+
+    wd_rows = await db.fetch(
+        """SELECT EXTRACT(ISODOW FROM purchase_date)::int AS dow,
+                  SUM(total_amount) AS total, COUNT(*) AS c
+           FROM expenses WHERE user_id=$1 AND purchase_date BETWEEN $2 AND $3
+           GROUP BY dow ORDER BY dow""", user["id"], since, until)
+    by_weekday = [{"dow": i, "total": 0.0, "count": 0} for i in range(7)]
+    for r in wd_rows:
+        idx = int(r["dow"]) - 1
+        by_weekday[idx] = {"dow": idx, "total": float(r["total"] or 0), "count": int(r["c"])}
+
+    ti_rows = await db.fetch(
+        """SELECT LOWER(TRIM(ei.description)) AS key, MIN(ei.description) AS name,
+                  SUM(ei.total_price) AS total, COUNT(*) AS n,
+                  MAX(e.purchase_date) AS last_date
+           FROM expense_items ei JOIN expenses e ON e.id = ei.expense_id
+           WHERE ei.user_id=$1 AND e.purchase_date BETWEEN $2 AND $3
+             AND ei.description IS NOT NULL AND TRIM(ei.description) <> ''
+           GROUP BY key ORDER BY total DESC LIMIT 12""", user["id"], since, until)
+    top_items = [{"name": r["name"], "total": float(r["total"] or 0), "count": int(r["n"]),
+                   "avg": float(r["total"] or 0) / int(r["n"]) if int(r["n"]) else 0,
+                   "last_date": r["last_date"].isoformat() if r["last_date"] else None} for r in ti_rows]
+
+    top_stores, top_categories = await _insights_tops(db, user, since, until, prev_since, prev_until)
+    return {
+        "range": {"from": since.isoformat(), "to": until.isoformat(), "days": span},
+        "kpi": {"total": total, "tx_count": tx_count, "avg_tx": avg_tx,
+                 "avg_per_day": total / span if span else 0, "biggest_tx": biggest_tx},
+        "compare_prev": {"total": prev_total, "diff_abs": total - prev_total,
+                          "diff_pct": ((total - prev_total) / prev_total * 100.0) if prev_total > 0 else None,
+                          "range": {"from": prev_since.isoformat(), "to": prev_until.isoformat()}},
+        "by_weekday": by_weekday, "top_items": top_items,
+        "top_stores": top_stores, "top_categories": top_categories,
+    }
 
 
 @router.get("/api/expenses/heatmap")

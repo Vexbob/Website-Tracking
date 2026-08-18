@@ -100,8 +100,101 @@ async def startup():
             logger.info(f"Brand-seed nachgezogen fuer {len(user_ids)} User")
     except Exception as e:
         logger.warning(f"Brand-seed at startup failed: {e}")
+
+    # v1.18.0: Achievement-Meilenstein-Repair — trägt fehlende Meilenstein-
+    # Auszahlungen nach (z.B. nach früherem strikt-drunter-Bug oder
+    # Edit-Sequenzen, die credited_milestones inkonsistent gelassen haben).
+    try:
+        if db_module._pool is None:
+            db_module._pool = await asyncpg.create_pool(
+                db_module.DATABASE_URL, ssl="require", min_size=1, max_size=10)
+        async with db_module._pool.acquire() as conn:
+            repaired = await _repair_achievement_milestones(conn)
+        if repaired:
+            logger.info(f"Achievement-Repair: {repaired} fehlende Meilensteine nachgetragen")
+    except Exception as e:
+        logger.warning(f"Achievement-Repair at startup failed: {e}")
+
     logger.info(f"Startup complete. CORS origins: {CORS_ORIGINS}")
     asyncio.create_task(_auto_backup_loop())
+
+
+async def _repair_achievement_milestones(conn) -> int:
+    """Traegt fehlende Meilenstein-Auszahlungen nach.
+
+    Fuer jedes Achievement wird ``_milestones_at(sv, cv, inc, dir)`` neu
+    berechnet. Wenn diese Zahl groesser ist als ``credited_milestones`` und
+    groesser als die bereits vorhandenen ``savings_transactions``, werden
+    die fehlenden Meilensteine mit Note ``"Nachtrag v1.18: Meilenstein-Reparatur"``
+    nachgetragen (achievement_logs + savings_transactions) und
+    ``credited_milestones`` aktualisiert.
+
+    Rueckgabewert: Anzahl nachgetragener Meilensteine (ueber alle User).
+    """
+    achs = await conn.fetch(
+        "SELECT id, user_id, title, unit, start_value, current_value, "
+        "threshold_increment, reward_amount, direction, credited_milestones, target_value "
+        "FROM achievements")
+    total_added = 0
+    for a in achs:
+        try:
+            sv = float(a["start_value"] or 0)
+            cv = float(a["current_value"] or 0)
+            inc = float(a["threshold_increment"] or 0)
+            if inc <= 0:
+                continue
+            dirn = a["direction"] or "increase"
+            rew = float(a["reward_amount"] or 0)
+            cred = int(a["credited_milestones"] or 0)
+            tm = _milestones_at(sv, cv, inc, dirn)
+            # Bereits ausgezahlte Meilensteine anhand tatsächlicher Transaktionen zählen
+            paid = int(await conn.fetchval(
+                "SELECT COUNT(*) FROM savings_transactions "
+                "WHERE user_id=$1 AND source_type='achievement' AND source_id=$2",
+                a["user_id"], a["id"]) or 0)
+            baseline = max(cred, paid)
+            if tm <= baseline:
+                # Nur credited_milestones konsistent zu paid halten
+                if cred != baseline:
+                    await conn.execute(
+                        "UPDATE achievements SET credited_milestones=$1 WHERE id=$2",
+                        baseline, a["id"])
+                continue
+            # aktives Sparziel fuer diesen User (falls vorhanden)
+            sg_id = await conn.fetchval(
+                "SELECT id FROM savings_goals WHERE user_id=$1 AND is_active=TRUE "
+                "ORDER BY id DESC LIMIT 1", a["user_id"])
+            note = "Nachtrag v1.18: Meilenstein-Reparatur"
+            for step in range(baseline + 1, tm + 1):
+                milestone_value = sv + step * inc if dirn == "increase" else sv - step * inc
+                desc = f"Meilenstein: {a['title']} ({fmt_de_num(milestone_value)} {a['unit'] or ''})"
+                await conn.execute(
+                    "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount,note) "
+                    "VALUES ($1,$2,$3,$4,$5)",
+                    a["user_id"], a["id"], milestone_value, rew, note)
+                await conn.execute(
+                    "INSERT INTO savings_transactions "
+                    "(user_id,amount,source_type,source_id,description,note,savings_goal_id) "
+                    "VALUES ($1,$2,$3,$4,$5,$6,$7)",
+                    a["user_id"], rew, "achievement", a["id"], desc, note, sg_id)
+                total_added += 1
+            # is_completed neu evaluieren
+            tv = a["target_value"]
+            comp = False
+            if tv is not None:
+                if dirn == "increase" and cv >= float(tv):
+                    comp = True
+                elif dirn == "decrease" and cv <= float(tv):
+                    comp = True
+            await conn.execute(
+                "UPDATE achievements SET credited_milestones=$1, is_completed=$2 WHERE id=$3",
+                tm, comp, a["id"])
+            logger.info(
+                f"Repair: Achievement {a['id']} ('{a['title']}', user {a['user_id']}): "
+                f"{tm - baseline} Meilenstein(e) nachgetragen (baseline={baseline}→{tm})")
+        except Exception as e:
+            logger.warning(f"Repair fehlgeschlagen fuer Achievement {a['id']}: {e}")
+    return total_added
 
 # Pydantic-Models leben in ``schemas.py`` (ausgelagert v1.15.1)
 # Utility-Funktionen (``ser``, ``fmt_de_num``, ``_milestones_at``,
@@ -421,6 +514,10 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
     note_val = (b.note or "").strip() or None
     sg_id = await _active_goal_id(db, user["id"])
     tm = _milestones_at(sv, nv, inc, dirn)
+    logger.info(
+        f"upd_ach: aid={aid} user={user['id']} title='{a['title']}' "
+        f"dir={dirn} sv={sv} cv_old={a['current_value']} cv_new={nv} inc={inc} "
+        f"cred_old={cred} tm={tm} → {'MILESTONE' if tm > cred else 'no-op'}")
     if tm > cred:
         # Notiz nur an den zuletzt erreichten Meilenstein hängen
         # (falls mehrere in einem Rutsch erreicht werden)
@@ -845,7 +942,14 @@ async def del_progress_log(request: Request, log_id: int, db=Depends(get_db), us
     return {"status": "deleted", "period_still_fulfilled": cnt >= tgt, "payout_removed": payout_removed}
 
 @app.get("/api/progress-goals/{gid}/history")
-async def pg_history(gid: int, limit: int = 8, db=Depends(get_db), user=Depends(get_current_user)):
+async def pg_history(gid: int, limit: int = 12, db=Depends(get_db), user=Depends(get_current_user)):
+    """Verlauf der letzten N Perioden (Wochen / Monate) für ein Progress-Goal.
+
+    v1.18.0: Limit auf max. 52 erhöht (1 Jahr Wochen bzw. >4 Jahre Monate),
+    liefert zusätzlich ``log_dates`` (Datumsliste der Check-ins) pro Periode
+    für die Detail-Anzeige im Frontend.
+    """
+    limit = max(1, min(int(limit or 12), 52))
     pg = await db.fetchrow("SELECT * FROM progress_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
     if not pg:
         raise HTTPException(404, "Not found")
@@ -866,15 +970,17 @@ async def pg_history(gid: int, limit: int = 8, db=Depends(get_db), user=Depends(
             start = cur - timedelta(days=cur.weekday())
             end = start + timedelta(days=6)
             col = "week_key"
-        cnt = int(await db.fetchval(
-            f"SELECT COUNT(*) FROM progress_logs WHERE progress_goal_id=$1 AND user_id=$2 AND {col}=$3",
-            gid, user["id"], pk))
+        logs = await db.fetch(
+            f"SELECT log_date FROM progress_logs WHERE progress_goal_id=$1 AND user_id=$2 AND {col}=$3 ORDER BY log_date",
+            gid, user["id"], pk)
+        cnt = len(logs)
         paid = int(await db.fetchval(
             "SELECT COUNT(*) FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
             user["id"], gid, pk))
         periods.append({"period_key": pk, "start": start.isoformat(), "end": end.isoformat(),
             "current_count": cnt, "target_count": target, "fulfilled": cnt >= target,
-            "paid_out": paid > 0, "is_current": pk == period_key(rhythm, today)})
+            "paid_out": paid > 0, "is_current": pk == period_key(rhythm, today),
+            "log_dates": [l["log_date"].isoformat() for l in logs]})
         cur = prev_period(rhythm, cur)
     return periods
 
@@ -1322,3 +1428,9 @@ app.include_router(brands_router)
 # ==========================================================================
 from routers.notes_router import router as notes_router
 app.include_router(notes_router)
+
+# ==========================================================================
+# Blog-Modul (v1.18.0) — öffentliches Blog, Admin-Editor
+# --------------------------------------------------------------------------
+from routers.blog_router import router as blog_router
+app.include_router(blog_router)

@@ -557,15 +557,19 @@ async function togglePgExpand(id){
     el.classList.toggle('open');
     if(el.classList.contains('open')) await loadPgHistory(id);
 }
-async function loadPgHistory(id){
+// pro Wochenziel: aktuell geladene Limit-Anzahl merken (Standard 12)
+const pgHistLimit = {};
+async function loadPgHistory(id, limit){
+    if(limit==null) limit=pgHistLimit[id]||12;
+    pgHistLimit[id]=limit;
     try{
-        const rows=await apiCall('/api/progress-goals/'+id+'/history?limit=8')||[];
+        const rows=await apiCall('/api/progress-goals/'+id+'/history?limit='+limit)||[];
         const box=document.getElementById('pgHist_'+id);
         if(!box)return;
         const g=pgData.find(x=>x.id==id);
         const isMonthly=g&&g.rhythm_type==='monthly';
         if(!rows.length){box.innerHTML='<h4>Vergangene Perioden</h4><div class="muted" style="font-size:0.75rem;padding:0.375rem 0">Noch keine.</div>';return;}
-        box.innerHTML='<h4>Vergangene Perioden</h4>'+rows.map(r=>{
+        const rowsHtml=rows.map(r=>{
             let label;
             if(isMonthly){
                 const dt=new Date(r.start);
@@ -575,16 +579,36 @@ async function loadPgHistory(id){
                 const w=r.period_key.split('-W')[1];
                 label=`KW ${parseInt(w,10)} · ${s} – ${e}`;
             }
-            const countCls=r.fulfilled?'done':'';
+            const countCls=r.fulfilled?'done':(r.current_count>0?'partial':'');
             const canBackdate=!r.is_current;
-            const paid=r.paid_out?'<span class="pg-hist-paid">✓ €</span>':'';
-            return `<div class="pg-hist-row${r.is_current?' current':''}">
-                <span class="pg-hist-period">${label}${r.is_current?' <span class="muted">(aktuell)</span>':''}</span>
-                <span class="pg-hist-count ${countCls}">${r.current_count} / ${r.target_count}</span>
-                ${paid}
-                ${canBackdate?`<button class="pg-hist-add" onclick="backdateToPeriod(${id},'${r.start}')">+1</button>`:''}
+            const paid=r.paid_out?'<span class="pg-hist-paid" title="Belohnung wurde ausgezahlt">💰 €</span>':'';
+            const statusChip=r.fulfilled
+                ? '<span class="pg-hist-chip ok" title="Ziel erfüllt">✓</span>'
+                : (r.is_current ? '<span class="pg-hist-chip cur" title="Läuft noch">⏳</span>'
+                   : (r.current_count>0 ? '<span class="pg-hist-chip mid" title="Teilweise erfüllt">◐</span>'
+                      : '<span class="pg-hist-chip miss" title="Nicht erfüllt">✕</span>'));
+            const dotList=r.log_dates&&r.log_dates.length
+                ? `<div class="pg-hist-dates" title="${r.log_dates.map(d=>fmtShortDate(d)).join(', ')}">${r.log_dates.length} Check-in${r.log_dates.length===1?'':'s'}</div>`
+                : '';
+            return `<div class="pg-hist-row${r.is_current?' current':''}${r.fulfilled?' done':''}">
+                <div class="pg-hist-main">
+                    <div class="pg-hist-top">
+                        ${statusChip}
+                        <span class="pg-hist-period">${label}${r.is_current?' <span class="muted">(aktuell)</span>':''}</span>
+                        <span class="pg-hist-count ${countCls}">${r.current_count}/${r.target_count}</span>
+                        ${paid}
+                    </div>
+                    ${dotList}
+                </div>
+                ${canBackdate?`<button class="pg-hist-add" onclick="backdateToPeriod(${id},'${r.start}')" title="Check-in nachtragen">+1</button>`:''}
             </div>`;
         }).join('');
+        // "Mehr laden"-Button falls Server evtl. mehr Perioden zurueckgibt
+        const canMore=rows.length>=limit&&limit<52;
+        const moreBtn=canMore
+            ? `<div class="pg-hist-more"><button onclick="loadPgHistory(${id},${Math.min(limit+12,52)})">Mehr laden ↓</button></div>`
+            : '';
+        box.innerHTML=`<h4>Verlauf (${rows.length} Perioden)</h4>${rowsHtml}${moreBtn}`;
     }catch(e){const box=document.getElementById('pgHist_'+id);if(box)box.innerHTML='<h4>Vergangene Perioden</h4><div class="muted">Fehler beim Laden.</div>';}
 }
 async function backdateToPeriod(id,startDate){

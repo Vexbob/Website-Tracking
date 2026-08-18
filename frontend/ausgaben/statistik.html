@@ -9,22 +9,12 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/ausgaben/statistik.css">
 <script src="/js/config.js"></script>
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-body{visibility:hidden}body.ready{visibility:visible}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
-.card h3{font-size:1rem;margin-bottom:0.75rem;font-weight:600}
-.chart-wrap{position:relative;height:260px}
-.chart-wrap.small{height:220px}
-.split{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-@media(max-width:700px){.split{grid-template-columns:1fr}}
-.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
-.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-</style>
 </head>
 <body>
 <nav class="navbar">
@@ -37,12 +27,77 @@ body{visibility:hidden}body.ready{visibility:visible}
 </nav>
 <main class="wide">
     <div id="subnav" data-active="statistik"></div>
-    <div class="card"><h3>Monatstrend (12 Monate)</h3><div class="chart-wrap"><canvas id="chartMonthly"></canvas></div></div>
-    <div class="card"><h3>Wochentrend (12 Wochen)</h3><div class="chart-wrap"><canvas id="chartWeekly"></canvas></div></div>
-    <div class="card"><h3>Tagestrend (30 Tage)</h3><div class="chart-wrap"><canvas id="chartDaily"></canvas></div></div>
-    <div class="split">
-        <div class="card"><h3>Nach Kategorie</h3><div class="chart-wrap small"><canvas id="chartCategory"></canvas></div></div>
-        <div class="card"><h3>Nach Laden</h3><div class="chart-wrap small"><canvas id="chartStore"></canvas></div></div>
+
+    <div class="stat-filterbar">
+        <div class="stat-preset-chips" id="statPresets">
+            <button class="stat-chip" data-preset="7">7 Tage</button>
+            <button class="stat-chip active" data-preset="30">30 Tage</button>
+            <button class="stat-chip" data-preset="90">90 Tage</button>
+            <button class="stat-chip" data-preset="365">12 Monate</button>
+            <button class="stat-chip" data-preset="all">Alle</button>
+        </div>
+        <div class="stat-custom">
+            <label>von <input type="date" id="statFrom"></label>
+            <label>bis <input type="date" id="statTo"></label>
+        </div>
+    </div>
+
+    <div class="stat-kpi-grid" id="statKpiGrid">
+        <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
+        <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
+        <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
+        <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
+    </div>
+
+    <div class="stat-insights" id="statInsights"></div>
+
+    <div class="stat-card">
+        <div class="stat-card-head">
+            <h3>📈 Zeitverlauf <span id="statSeriesRange" class="stat-range-lbl"></span></h3>
+            <div class="stat-mini-toggle" id="statGranularity">
+                <button data-gran="daily" class="active">Tag</button>
+                <button data-gran="weekly">Woche</button>
+                <button data-gran="monthly">Monat</button>
+            </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartSeries"></canvas></div>
+    </div>
+
+    <div class="split-2">
+        <div class="stat-card">
+            <h3>🥧 Nach Kategorie</h3>
+            <div class="chart-wrap"><canvas id="chartCategory"></canvas></div>
+            <div id="tableCategory"></div>
+        </div>
+        <div class="stat-card">
+            <h3>🏪 Nach Laden</h3>
+            <div class="chart-wrap"><canvas id="chartStore"></canvas></div>
+            <div id="tableStore"></div>
+        </div>
+    </div>
+
+    <div class="split-3-2">
+        <div class="stat-card">
+            <h3>📅 Ausgaben nach Wochentag</h3>
+            <div class="chart-wrap"><canvas id="chartWeekday"></canvas></div>
+        </div>
+        <div class="stat-card">
+            <h3>🏆 Top-Artikel</h3>
+            <div id="tableItems" class="stat-scroll-y"></div>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <h3>🔥 365-Tage-Heatmap</h3>
+        <div class="stat-heatmap" id="statHeatmap"></div>
+        <div class="stat-heatmap-legend">
+            <span>weniger</span>
+            <div class="stat-hm-cell l1"></div>
+            <div class="stat-hm-cell l2"></div>
+            <div class="stat-hm-cell l3"></div>
+            <div class="stat-hm-cell l4"></div>
+            <span>mehr</span>
+        </div>
     </div>
 </main>
 <div class="version-tag"></div>

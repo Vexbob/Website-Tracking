@@ -58,45 +58,35 @@
             <div class="nz-d-head">
                 <button class="nz-back" id="nzBack" type="button">← Liste</button>
                 <input class="nz-d-title" id="nzDTitle" type="text" placeholder="Titel">
-                <div class="nz-d-mode" role="group" aria-label="Ansicht">
-                    <button class="nz-mode-btn active" data-mode="edit" title="Editor (Cmd/Ctrl+E)">✎ Editor</button>
-                    <button class="nz-mode-btn" data-mode="preview" title="Vorschau (Cmd/Ctrl+E)">👁 Vorschau</button>
-                </div>
+                <span class="nz-d-status" id="nzDStatus" title="Speicherstatus"><span class="dot"></span><span class="txt"></span></span>
             </div>
             <div class="nz-toolbar" id="nzToolbar">
-                <button class="nz-tb" data-md="bold"     title="Fett (Cmd/Ctrl+B)"><b>B</b></button>
-                <button class="nz-tb" data-md="italic"   title="Kursiv (Cmd/Ctrl+I)"><i>I</i></button>
-                <button class="nz-tb" data-md="code"     title="Inline-Code"><code>{ }</code></button>
+                <button class="nz-tb" data-cmd="bold"      title="Fett (Cmd/Ctrl+B)"><b>B</b></button>
+                <button class="nz-tb" data-cmd="italic"    title="Kursiv (Cmd/Ctrl+I)"><i>I</i></button>
+                <button class="nz-tb" data-cmd="underline" title="Unterstrichen"><u>U</u></button>
+                <button class="nz-tb" data-cmd="strike"    title="Durchgestrichen"><s>S</s></button>
+                <button class="nz-tb" data-cmd="code"      title="Inline-Code"><code>{ }</code></button>
                 <span class="nz-tb-sep"></span>
-                <button class="nz-tb" data-md="h1"       title="Überschrift 1">H1</button>
-                <button class="nz-tb" data-md="h2"       title="Überschrift 2">H2</button>
-                <button class="nz-tb" data-md="h3"       title="Überschrift 3">H3</button>
+                <button class="nz-tb" data-cmd="h1"        title="Überschrift 1">H1</button>
+                <button class="nz-tb" data-cmd="h2"        title="Überschrift 2">H2</button>
+                <button class="nz-tb" data-cmd="h3"        title="Überschrift 3">H3</button>
                 <span class="nz-tb-sep"></span>
-                <button class="nz-tb" data-md="ul"       title="Aufzählung">• Liste</button>
-                <button class="nz-tb" data-md="ol"       title="Nummerierung">1. Liste</button>
-                <button class="nz-tb accent" data-md="task" title="Aufgabe (Cmd/Ctrl+Shift+7)">☐ Aufgabe</button>
+                <button class="nz-tb" data-cmd="ul"        title="Aufzählung">• Liste</button>
+                <button class="nz-tb" data-cmd="ol"        title="Nummerierung">1. Liste</button>
+                <button class="nz-tb accent" data-cmd="task" title="Aufgabe (Cmd/Ctrl+Shift+7)">☐ Aufgabe</button>
                 <span class="nz-tb-sep"></span>
-                <button class="nz-tb" data-md="quote"    title="Zitat">❝ Zitat</button>
-                <button class="nz-tb" data-md="link"     title="Link (Cmd/Ctrl+K)">🔗 Link</button>
-                <button class="nz-tb" data-md="hr"       title="Trennlinie">— HR</button>
+                <button class="nz-tb" data-cmd="quote"     title="Zitat">❝ Zitat</button>
+                <button class="nz-tb" data-cmd="link"      title="Link (Cmd/Ctrl+K)">🔗 Link</button>
+                <button class="nz-tb" data-cmd="hr"        title="Trennlinie">— HR</button>
             </div>
             <div class="nz-d-body">
-                <textarea class="nz-d-editor" id="nzDEditor" spellcheck="true" placeholder="Schreib was… ✨
-
-Markdown funktioniert:
-  **fett**, *kursiv*, `code`, [Link](url)
-  # Überschrift, > Zitat, --- Trennlinie
-  - [ ] Aufgabe (in der Vorschau klickbar)
-  - Aufzählungspunkt
-  1. Nummerierung"></textarea>
-                <div class="nz-d-preview" id="nzDPreview"></div>
+                <div class="nz-editor" id="nzDEditor" contenteditable="true" spellcheck="true" data-placeholder="Schreib was… ✨"></div>
             </div>
             <div class="nz-detail-foot">
                 <div class="nz-d-color" id="nzDColor"></div>
                 <button class="nz-d-act" id="nzDPin" type="button">📍 Pin</button>
                 <button class="nz-d-act" id="nzDArchive" type="button">🗄️ Archiv</button>
                 <button class="nz-d-act danger" id="nzDDelete" type="button">🗑️ Löschen</button>
-                <span class="nz-d-status" id="nzDStatus"><span class="dot"></span><span class="txt"></span></span>
             </div>
         </div>
     </section>
