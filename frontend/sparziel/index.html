@@ -82,6 +82,7 @@
                 <div><label>Ziel-Anzahl</label><input id="pgTarget" type="number" placeholder="7"></div>
                 <div><label>Streak-Bonus alle N (0=aus)</label><input id="pgStreakN" type="number" min="0" placeholder="4"></div>
                 <div><label>Streak-Bonus €</label><input id="pgStreakAmt" type="number" step="0.01" placeholder="10"></div>
+                <div><label>Belohnung geht an</label><select id="pgRewardGoal" title="Wenn leer: Auto-Routing"><option value="">Automatisch</option></select></div>
             </div>
             <button class="if-btn" onclick="createProgressGoal()">Erstellen</button>
         </div>
@@ -104,6 +105,7 @@
                 <div><label>Klick-Schritt</label><input id="achStep" type="number" step="0.01" placeholder="1" title="Wert, den der grüne +Button hinzufügt (leer = wie Meilenstein-Schwelle)"></div>
                 <div><label>Zielwert (optional)</label><input id="achTarget" type="number" step="0.01" placeholder="leer=offen"></div>
                 <div><label>Richtung</label><select id="achDir"><option value="increase">Steigend</option><option value="decrease">Fallend</option></select></div>
+                <div><label>Belohnung geht an</label><select id="achRewardGoal" title="Wenn leer: Auto-Routing (aktives Ziel oder Puffer)"><option value="">Automatisch</option></select></div>
             </div>
             <button class="if-btn" onclick="createAchievement()">Erstellen</button>
         </div>

@@ -72,6 +72,85 @@ async def _active_goal_id(db, user_id: int) -> Optional[int]:
         user_id)
 
 
+async def _general_goal_id(db, user_id: int) -> Optional[int]:
+    """ID des ``Allgemein``-Kontos fuer einen User (v1.18.2).
+
+    Wird beim ersten Aufruf idempotent nachgezogen, falls die Migration
+    das Konto (aus welchem Grund auch immer) noch nicht angelegt hat.
+    """
+    gid = await db.fetchval(
+        "SELECT id FROM savings_goals WHERE user_id=$1 AND is_general=TRUE LIMIT 1",
+        user_id)
+    if gid:
+        return gid
+    try:
+        return await db.fetchval(
+            "INSERT INTO savings_goals (user_id, name, target_amount, is_active, is_general) "
+            "VALUES ($1, 'Allgemein', 0, FALSE, TRUE) RETURNING id",
+            user_id)
+    except Exception:
+        return None
+
+
+async def _reward_goal_for(db, user_id: int, preferred_goal_id: Optional[int],
+                             reward_amount: float) -> Optional[int]:
+    """Entscheidet, in welches Sparziel eine Meilenstein-/Streak-Belohnung
+    verbucht wird (v1.18.2 Reward-Routing).
+
+    Prioritaeten:
+      1. Explizit zugeordnetes Ziel (``preferred_goal_id`` z.B. aus
+         ``achievements.reward_goal_id``) — sofern es existiert, dem User
+         gehoert, nicht abgeschlossen ist und noch Platz hat.
+      2. Aktives Sparziel — sofern es noch nicht ueberzogen wird
+         (``saved + reward <= target * 1.001`` mit kleiner Toleranz).
+         Wenn die Belohnung das aktive Ziel „ueberzahlen" wuerde, faellt
+         die Auszahlung auf das Allgemein-Konto.
+      3. Allgemein-Konto (``is_general=TRUE``) — Puffer, dahin gehen alle
+         Belohnungen, die sonst nirgends passen. Wird bei Bedarf angelegt.
+
+    Wichtig: Diese Funktion garantiert, dass IMMER eine goal_id zurueckkommt
+    (oder None nur, wenn selbst das Allgemein-Konto nicht erstellt werden
+    konnte — dann bleibt savings_transactions.savings_goal_id = NULL, was
+    aber weiterhin ein gueltiger Zustand ist).
+    """
+    async def _room_left(goal_id: int) -> Optional[float]:
+        row = await db.fetchrow(
+            "SELECT target_amount FROM savings_goals "
+            "WHERE id=$1 AND user_id=$2 AND is_general=FALSE",
+            goal_id, user_id)
+        if not row:
+            return None
+        target = float(row["target_amount"] or 0)
+        if target <= 0:
+            return float("inf")
+        saved = float(await db.fetchval(
+            "SELECT COALESCE(SUM(amount),0) FROM savings_transactions "
+            "WHERE user_id=$1 AND savings_goal_id=$2",
+            user_id, goal_id) or 0)
+        return max(0.0, target - saved)
+
+    reward = float(reward_amount or 0)
+    tol = 0.005  # kleine Toleranz gegen Float-Rauschen
+
+    # 1) explizit zugeordnetes Ziel
+    if preferred_goal_id:
+        room = await _room_left(preferred_goal_id)
+        if room is not None and room + tol >= reward:
+            return preferred_goal_id
+        # Wenn zugewiesenes Ziel voll ist, wandert die Belohnung zum Allgemein-Konto
+
+    # 2) aktives Sparziel — nur wenn genug Platz
+    active = await _active_goal_id(db, user_id)
+    if active:
+        room = await _room_left(active)
+        if room is not None and room + tol >= reward:
+            return active
+
+    # 3) Allgemein-Konto (Puffer, immer aufnahmefaehig)
+    gen = await _general_goal_id(db, user_id)
+    return gen
+
+
 # ---------- Progress-Goals: Streak-Berechnung ----------
 async def _streak(db, gid: int, user_id: int, rhythm: str, target: int) -> int:
     """Zaehlt die Anzahl aufeinanderfolgender erfolgreicher Perioden.

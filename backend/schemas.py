@@ -35,6 +35,8 @@ class AchCreate(BaseModel):
     step_amount: Optional[float] = None
     target_value: Optional[float] = None
     direction: str = "increase"
+    # v1.18.2: optionale Zuweisung an ein Sparziel (sonst Auto-Routing)
+    reward_goal_id: Optional[int] = None
 
 
 class AchUpd(BaseModel):
@@ -53,6 +55,7 @@ class AchEdit(BaseModel):
     step_amount: Optional[float] = None
     target_value: Optional[float] = None
     direction: Optional[str] = None
+    reward_goal_id: Optional[int] = None  # v1.18.2
 
 
 # ---------- Progress-/Wochen-/Monatsziele ----------
@@ -63,6 +66,7 @@ class PGCreate(BaseModel):
     target_count: int
     streak_bonus_amount: float = 0
     streak_bonus_threshold: int = 0
+    reward_goal_id: Optional[int] = None  # v1.18.2
 
 
 class PGUpd(BaseModel):
@@ -72,6 +76,7 @@ class PGUpd(BaseModel):
     rhythm_type: Optional[str] = None
     streak_bonus_amount: Optional[float] = None
     streak_bonus_threshold: Optional[int] = None
+    reward_goal_id: Optional[int] = None  # v1.18.2
 
 
 class CheckinBody(BaseModel):

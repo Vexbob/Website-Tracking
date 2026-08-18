@@ -37,6 +37,7 @@ from schemas import (
 # Ausgelagerte Utility-Funktionen (v1.15.1)
 from helpers import (
     ser, fmt_de_num, _milestones_at, _active_goal_id, _streak,
+    _general_goal_id, _reward_goal_for,
     _build_export_header, _build_export_metadata,
 )
 
@@ -133,7 +134,8 @@ async def _repair_achievement_milestones(conn) -> int:
     """
     achs = await conn.fetch(
         "SELECT id, user_id, title, unit, start_value, current_value, "
-        "threshold_increment, reward_amount, direction, credited_milestones, target_value "
+        "threshold_increment, reward_amount, direction, credited_milestones, target_value, "
+        "reward_goal_id "
         "FROM achievements")
     total_added = 0
     for a in achs:
@@ -160,14 +162,16 @@ async def _repair_achievement_milestones(conn) -> int:
                         "UPDATE achievements SET credited_milestones=$1 WHERE id=$2",
                         baseline, a["id"])
                 continue
-            # aktives Sparziel fuer diesen User (falls vorhanden)
-            sg_id = await conn.fetchval(
-                "SELECT id FROM savings_goals WHERE user_id=$1 AND is_active=TRUE "
-                "ORDER BY id DESC LIMIT 1", a["user_id"])
+            # Explicit-preferred Ziel aus reward_goal_id (falls Spalte existiert)
+            try:
+                pref_goal = a["reward_goal_id"]
+            except (KeyError, IndexError):
+                pref_goal = None
             note = "Nachtrag v1.18: Meilenstein-Reparatur"
             for step in range(baseline + 1, tm + 1):
                 milestone_value = sv + step * inc if dirn == "increase" else sv - step * inc
                 desc = f"Meilenstein: {a['title']} ({fmt_de_num(milestone_value)} {a['unit'] or ''})"
+                sg_id = await _reward_goal_for(conn, a["user_id"], pref_goal, rew)
                 await conn.execute(
                     "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount,note) "
                     "VALUES ($1,$2,$3,$4,$5)",
@@ -409,10 +413,12 @@ async def create_sg(request: Request, b: SavGoalCreate, db=Depends(get_db), user
 @app.post("/api/savings-goals/{gid}/activate")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def activate_sg(request: Request, gid: int, db=Depends(get_db), user=Depends(get_current_user)):
-    owned = await db.fetchval(
-        "SELECT 1 FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
-    if not owned:
+    row = await db.fetchrow(
+        "SELECT is_general FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+    if not row:
         raise HTTPException(404, "Sparziel nicht gefunden")
+    if bool(row["is_general"]):
+        raise HTTPException(400, "Das Allgemein-Konto kann nicht als Sparziel aktiviert werden")
     async with db.transaction():
         await db.execute(
             "UPDATE savings_goals SET is_active=FALSE WHERE user_id=$1", user["id"])
@@ -428,8 +434,11 @@ async def del_sg(request: Request, gid: int, db=Depends(get_db), user=Depends(ge
     row = await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
     if not row:
         raise HTTPException(404, "Sparziel nicht gefunden")
+    if bool(row["is_general"]):
+        raise HTTPException(400, "Das Allgemein-Konto kann nicht gelöscht werden")
     other = await db.fetchval(
-        "SELECT COUNT(*) FROM savings_goals WHERE user_id=$1 AND id<>$2", user["id"], gid)
+        "SELECT COUNT(*) FROM savings_goals WHERE user_id=$1 AND id<>$2 AND is_general=FALSE",
+        user["id"], gid)
     if int(other) == 0:
         raise HTTPException(400, "Das letzte Sparziel kann nicht gelöscht werden")
     was_active = bool(row["is_active"])
@@ -480,12 +489,21 @@ async def create_ach(request: Request, b: AchCreate, db=Depends(get_db), user=De
     step = float(b.step_amount) if b.step_amount is not None else float(b.threshold_increment)
     if step <= 0:
         raise HTTPException(400, "Schrittweite pro Klick muss > 0 sein")
+    # v1.18.2: reward_goal_id validieren (muss dem User gehören, falls gesetzt)
+    rgid = None
+    if b.reward_goal_id is not None:
+        ok = await db.fetchval(
+            "SELECT 1 FROM savings_goals WHERE id=$1 AND user_id=$2",
+            b.reward_goal_id, user["id"])
+        if not ok:
+            raise HTTPException(400, "reward_goal_id gehört nicht zum User")
+        rgid = b.reward_goal_id
     return ser(await db.fetchrow(
         "INSERT INTO achievements "
-        "(user_id,title,reward_amount,unit,current_value,start_value,threshold_increment,step_amount,target_value,direction) "
-        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
+        "(user_id,title,reward_amount,unit,current_value,start_value,threshold_increment,step_amount,target_value,direction,reward_goal_id) "
+        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *",
         user["id"], b.title, b.reward_amount, b.unit, b.start_value, b.start_value,
-        b.threshold_increment, step, b.target_value, b.direction))
+        b.threshold_increment, step, b.target_value, b.direction, rgid))
 
 @app.put("/api/achievements/{aid}")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
@@ -512,7 +530,6 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
             raise HTTPException(400, "achieved_at darf nicht in der Zukunft liegen")
 
     note_val = (b.note or "").strip() or None
-    sg_id = await _active_goal_id(db, user["id"])
     tm = _milestones_at(sv, nv, inc, dirn)
     logger.info(
         f"upd_ach: aid={aid} user={user['id']} title='{a['title']}' "
@@ -522,10 +539,15 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
         # Notiz nur an den zuletzt erreichten Meilenstein hängen
         # (falls mehrere in einem Rutsch erreicht werden)
         last_step = tm
+        # v1.18.2: Ziel-Routing pro Meilenstein — jede Auszahlung landet
+        # entweder im zugewiesenen Ziel, im aktiven Ziel (falls Platz) oder
+        # im Allgemein-Konto (Puffer).
+        pref_goal = a["reward_goal_id"] if "reward_goal_id" in a.keys() else None
         for step in range(cred + 1, tm + 1):
             milestone_value = sv + step * inc if dirn == "increase" else sv - step * inc
             desc = f"Meilenstein: {a['title']} ({fmt_de_num(milestone_value)} {a['unit']})"
             step_note = note_val if step == last_step else None
+            sg_id = await _reward_goal_for(db, user["id"], pref_goal, rew)
             if when:
                 await db.execute(
                     "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount,date_achieved,note) "
@@ -572,13 +594,13 @@ async def edit_ach(request: Request, aid: int, b: AchEdit, db=Depends(get_db), u
     # ``null`` zu loeschen. Wir unterscheiden jetzt "Feld nicht mitgeschickt"
     # (via ``model_fields_set``) von "Feld explizit auf None gesetzt".
     provided = b.model_fields_set
-    for field in ["title","reward_amount","unit","start_value","threshold_increment","step_amount","target_value","direction"]:
+    for field in ["title","reward_amount","unit","start_value","threshold_increment","step_amount","target_value","direction","reward_goal_id"]:
         if field not in provided:
             continue
         val = getattr(b, field)
-        # Nur target_value darf via null geleert werden, alle anderen
-        # Felder bleiben Pflichtwerte (also weiter "None ignorieren").
-        if val is None and field != "target_value":
+        # target_value + reward_goal_id duerfen via null geleert werden;
+        # alle anderen bleiben Pflichtwerte (weiter "None ignorieren").
+        if val is None and field not in ("target_value", "reward_goal_id"):
             continue
         if val is not None:
             if field == "threshold_increment" and float(val) <= 0:
@@ -719,11 +741,19 @@ async def create_pg(request: Request, b: PGCreate, db=Depends(get_db), user=Depe
         raise HTTPException(400, "target_count muss > 0 sein")
     if b.streak_bonus_threshold < 0 or b.streak_bonus_amount < 0:
         raise HTTPException(400, "Streak-Bonus-Werte müssen >= 0 sein")
+    rgid = None
+    if b.reward_goal_id is not None:
+        ok = await db.fetchval(
+            "SELECT 1 FROM savings_goals WHERE id=$1 AND user_id=$2",
+            b.reward_goal_id, user["id"])
+        if not ok:
+            raise HTTPException(400, "reward_goal_id gehört nicht zum User")
+        rgid = b.reward_goal_id
     return ser(await db.fetchrow(
-        "INSERT INTO progress_goals (user_id,title,reward_amount,rhythm_type,target_count,streak_bonus_amount,streak_bonus_threshold) "
-        "VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+        "INSERT INTO progress_goals (user_id,title,reward_amount,rhythm_type,target_count,streak_bonus_amount,streak_bonus_threshold,reward_goal_id) "
+        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
         user["id"], b.title, b.reward_amount, b.rhythm_type, b.target_count,
-        b.streak_bonus_amount, b.streak_bonus_threshold))
+        b.streak_bonus_amount, b.streak_bonus_threshold, rgid))
 
 @app.put("/api/progress-goals/{gid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
@@ -751,6 +781,18 @@ async def upd_pg(request: Request, gid: int, b: PGUpd, db=Depends(get_db), user=
         if b.streak_bonus_threshold < 0:
             raise HTTPException(400, "streak_bonus_threshold muss >= 0 sein")
         await db.execute("UPDATE progress_goals SET streak_bonus_threshold=$1 WHERE id=$2", b.streak_bonus_threshold, gid)
+    # v1.18.2: reward_goal_id via null-Setz-Semantik behandeln
+    if "reward_goal_id" in b.model_fields_set:
+        if b.reward_goal_id is None:
+            await db.execute("UPDATE progress_goals SET reward_goal_id=NULL WHERE id=$1", gid)
+        else:
+            ok = await db.fetchval(
+                "SELECT 1 FROM savings_goals WHERE id=$1 AND user_id=$2",
+                b.reward_goal_id, user["id"])
+            if not ok:
+                raise HTTPException(400, "reward_goal_id gehört nicht zum User")
+            await db.execute("UPDATE progress_goals SET reward_goal_id=$1 WHERE id=$2",
+                              b.reward_goal_id, gid)
     return ser(await db.fetchrow("SELECT * FROM progress_goals WHERE id=$1", gid))
 
 @app.put("/api/reorder/achievements")
@@ -822,16 +864,19 @@ async def checkin(request: Request, gid: int, body: Optional[CheckinBody] = None
 
     paid = False; bonus_paid = False; streak = 0
     if fulfilled:
-        sg_id = await _active_goal_id(db, user["id"])
+        # v1.18.2: Belohnung ins zugewiesene Ziel oder Puffer routen
+        pref_goal = pg["reward_goal_id"] if "reward_goal_id" in pg.keys() else None
+        reward = float(pg["reward_amount"] or 0)
         ex = await db.fetchval(
             "SELECT COUNT(*) FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
             user["id"], gid, pk)
-        if ex == 0 and float(pg["reward_amount"]) > 0:
+        if ex == 0 and reward > 0:
+            sg_id = await _reward_goal_for(db, user["id"], pref_goal, reward)
             await db.execute(
                 "INSERT INTO savings_transactions "
                 "(user_id,amount,source_type,source_id,description,period_key,savings_goal_id) "
                 "VALUES ($1,$2,$3,$4,$5,$6,$7)",
-                user["id"], float(pg["reward_amount"]), "progress", gid, f"{pg['title']} ({pk})", pk, sg_id)
+                user["id"], reward, "progress", gid, f"{pg['title']} ({pk})", pk, sg_id)
             paid = True
         bonus_amount = float(pg["streak_bonus_amount"] or 0)
         bonus_threshold = int(pg["streak_bonus_threshold"] or 0)
@@ -843,12 +888,13 @@ async def checkin(request: Request, gid: int, body: Optional[CheckinBody] = None
                     "SELECT COUNT(*) FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
                     user["id"], gid, bonus_pk)
                 if bonus_ex == 0:
+                    bonus_sg_id = await _reward_goal_for(db, user["id"], pref_goal, bonus_amount)
                     await db.execute(
                         "INSERT INTO savings_transactions "
                         "(user_id,amount,source_type,source_id,description,period_key,savings_goal_id) "
                         "VALUES ($1,$2,$3,$4,$5,$6,$7)",
                         user["id"], bonus_amount, "progress", gid,
-                        f"Streak-Bonus {streak}×: {pg['title']}", bonus_pk, sg_id)
+                        f"Streak-Bonus {streak}×: {pg['title']}", bonus_pk, bonus_sg_id)
                     bonus_paid = True
     return {"current_count": cnt, "target_count": tgt, "fulfilled": fulfilled,
             "period_key": pk, "paid_out": paid, "streak_bonus_paid": bonus_paid, "streak": streak}

@@ -180,7 +180,20 @@ function activateTab(t){
     if(t==='trophies') loadTrophies();
     if(t==='ideen'){loadSavingsGoals();loadPotentialGoals();loadFutureIdeas();}
 }
-function toggleForm(id){document.getElementById(id).classList.toggle('open');}
+function toggleForm(id){
+    const el = document.getElementById(id);
+    el.classList.toggle('open');
+    // v1.18.2: Reward-Goal-Dropdowns beim Öffnen befüllen
+    if (el.classList.contains('open')) {
+        if (id === 'achForm') {
+            const sel = document.getElementById('achRewardGoal');
+            if (sel) sel.innerHTML = rewardGoalOptionsHTML(null);
+        } else if (id === 'pgForm') {
+            const sel = document.getElementById('pgRewardGoal');
+            if (sel) sel.innerHTML = rewardGoalOptionsHTML(null);
+        }
+    }
+}
 function toggleHeroEdit(){
     const e=document.getElementById('heroEdit');e.classList.toggle('open');
     if(e.classList.contains('open')){
@@ -188,7 +201,7 @@ function toggleHeroEdit(){
         document.getElementById('sgTarget').value=glTarget;
     }
 }
-async function loadAll(){await Promise.all([loadSparziel(),loadAchievements(),loadProgressGoals()]);updatePeriodLabel();}
+async function loadAll(){await Promise.all([loadSparziel(),loadAchievements(),loadProgressGoals(),loadSavingsGoals()]);updatePeriodLabel();}
 
 async function loadSparziel(){
     try{
@@ -359,11 +372,23 @@ function editFormHTML(a){
         <div class="grid2"><div><label>Belohnung (€)</label><input id="ef_reward_${a.id}" type="number" step="0.01" value="${a.reward_amount||''}"></div><div><label>Einheit</label><input id="ef_unit_${a.id}" value="${esc(a.unit||'')}"></div></div>
         <div class="grid2"><div><label>Startwert</label><input id="ef_start_${a.id}" type="number" step="0.01" value="${a.start_value||''}"></div><div><label>Meilenstein alle</label><input id="ef_incr_${a.id}" type="number" step="0.01" value="${a.threshold_increment||''}" title="Auszahlung nach jeder x-ten Einheit"></div></div>
         <div class="grid2"><div><label>Klick-Schritt</label><input id="ef_step_${a.id}" type="number" step="0.01" value="${stepVal||''}" title="Wert, den der grüne +Button hinzufügt"></div><div><label>Zielwert</label><input id="ef_target_${a.id}" type="number" step="0.01" value="${a.target_value==null?'':a.target_value}"></div></div>
-        <div class="grid2"><div><label>Richtung</label><select id="ef_dir_${a.id}"><option value="increase" ${a.direction==='increase'?'selected':''}>Steigend</option><option value="decrease" ${a.direction==='decrease'?'selected':''}>Fallend</option></select></div><div></div></div>
+        <div class="grid2"><div><label>Richtung</label><select id="ef_dir_${a.id}"><option value="increase" ${a.direction==='increase'?'selected':''}>Steigend</option><option value="decrease" ${a.direction==='decrease'?'selected':''}>Fallend</option></select></div><div><label>Belohnung geht an</label><select id="ef_rgid_${a.id}">${rewardGoalOptionsHTML(a.reward_goal_id)}</select></div></div>
         <div class="save-btns"><button class="save" onclick="saveAchEdit(${a.id})">Speichern</button><button class="cancel" onclick="toggleAchEdit(${a.id})">Abbrechen</button></div>`;
 }
 function toggleAchExpand(id){document.getElementById('achExpand_'+id).classList.toggle('open');}
 function toggleAchEdit(id){document.getElementById('achEdit_'+id).classList.toggle('open');}
+
+// v1.18.2: Reward-Goal-Dropdown-HTML — Auswahl wohin die Belohnung fließt
+function rewardGoalOptionsHTML(selectedId){
+    const goals = savingsGoalsCache || [];
+    const opts = ['<option value="">Automatisch (aktives Ziel → Puffer)</option>'];
+    goals.forEach(g => {
+        const sel = (selectedId != null && Number(selectedId) === g.id) ? ' selected' : '';
+        const label = g.is_general ? `🪙 ${g.name} (Puffer)` : (g.is_active ? `⭐ ${g.name}` : g.name);
+        opts.push(`<option value="${g.id}"${sel}>${esc(label)}</option>`);
+    });
+    return opts.join('');
+}
 
 async function saveAchEdit(id){
     const b={title:document.getElementById('ef_title_'+id).value.trim(),reward_amount:parseFloat(document.getElementById('ef_reward_'+id).value),unit:document.getElementById('ef_unit_'+id).value.trim(),start_value:parseFloat(document.getElementById('ef_start_'+id).value),threshold_increment:parseFloat(document.getElementById('ef_incr_'+id).value),direction:document.getElementById('ef_dir_'+id).value};
@@ -373,7 +398,10 @@ async function saveAchEdit(id){
         if(!isNaN(sv) && sv>0) b.step_amount=sv;
     }
     const tv=document.getElementById('ef_target_'+id).value;b.target_value=tv===''?null:parseFloat(tv);
-    try{await apiCall('/api/achievements/'+id+'/edit',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});haptic('success');showToast('Aktualisiert');await Promise.all([loadAchievements(),loadSparziel()]);}
+    // v1.18.2: Reward-Goal-Zuweisung
+    const rgEl=document.getElementById('ef_rgid_'+id);
+    if(rgEl){ b.reward_goal_id = rgEl.value === '' ? null : parseInt(rgEl.value,10); }
+    try{await apiCall('/api/achievements/'+id+'/edit',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});haptic('success');showToast('Aktualisiert');await Promise.all([loadAchievements(),loadSparziel(),loadSavingsGoals()]);}
     catch(e){haptic('error');showToast(e.message||'Bearbeiten fehlgeschlagen',true);}
 }
 async function milestonePlus(id){
@@ -457,6 +485,9 @@ async function createAchievement(){
     if(stepVal!==null && (isNaN(stepVal)||stepVal<=0)){showToast('Klick-Schritt muss > 0 sein (oder leer lassen)',true);haptic('error');return;}
     const body={title:t,reward_amount:r,unit:u,start_value:s,threshold_increment:inc,target_value:tg,direction:d};
     if(stepVal!==null) body.step_amount=stepVal;
+    // v1.18.2: Reward-Goal (optional)
+    const rgEl=document.getElementById('achRewardGoal');
+    if(rgEl && rgEl.value){ body.reward_goal_id = parseInt(rgEl.value,10); }
     try{
         await apiCall('/api/achievements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         ['achTitle','achReward','achUnit','achStart','achIncr','achStep','achTarget'].forEach(x=>document.getElementById(x).value='');
@@ -536,7 +567,7 @@ function renderProgressGoals(){
                 </div>
                 <div class="grid2">
                     <div><label>Rhythmus</label><select id="pge_rhythm_${g.id}"><option value="weekly" ${g.rhythm_type!=='monthly'?'selected':''}>Wöchentlich</option><option value="monthly" ${g.rhythm_type==='monthly'?'selected':''}>Monatlich</option></select></div>
-                    <div></div>
+                    <div><label>Belohnung geht an</label><select id="pge_rgid_${g.id}">${rewardGoalOptionsHTML(g.reward_goal_id)}</select></div>
                 </div>
                 <div class="grid2">
                     <div><label>Streak-Bonus alle N (0=aus)</label><input id="pge_streakN_${g.id}" type="number" min="0" value="${bonusN||''}"></div>
@@ -628,7 +659,10 @@ async function savePgEdit(id){
         streak_bonus_threshold:parseInt(document.getElementById('pge_streakN_'+id).value,10)||0,
         streak_bonus_amount:parseFloat(document.getElementById('pge_streakAmt_'+id).value)||0
     };
-    try{await apiCall('/api/progress-goals/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});haptic('success');showToast('Aktualisiert');await loadProgressGoals();}
+    // v1.18.2: Reward-Goal-Zuweisung
+    const rgEl=document.getElementById('pge_rgid_'+id);
+    if(rgEl){ b.reward_goal_id = rgEl.value === '' ? null : parseInt(rgEl.value,10); }
+    try{await apiCall('/api/progress-goals/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});haptic('success');showToast('Aktualisiert');await Promise.all([loadProgressGoals(),loadSavingsGoals()]);}
     catch(e){haptic('error');showToast('Fehler',true);}
 }
 async function checkinProgress(id){
@@ -654,8 +688,12 @@ async function createProgressGoal(){
     const sn=parseInt(document.getElementById('pgStreakN').value,10)||0;
     const sa=parseFloat(document.getElementById('pgStreakAmt').value)||0;
     if(!t||isNaN(r)||!tg){showToast('Felder ausfüllen',true);haptic('error');return;}
+    const body={title:t,reward_amount:r,rhythm_type:rt,target_count:tg,streak_bonus_amount:sa,streak_bonus_threshold:sn};
+    // v1.18.2: Reward-Goal-Zuweisung
+    const rgEl=document.getElementById('pgRewardGoal');
+    if(rgEl && rgEl.value){ body.reward_goal_id = parseInt(rgEl.value,10); }
     try{
-        await apiCall('/api/progress-goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,reward_amount:r,rhythm_type:rt,target_count:tg,streak_bonus_amount:sa,streak_bonus_threshold:sn})});
+        await apiCall('/api/progress-goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         ['pgTitle','pgReward','pgTarget','pgStreakN','pgStreakAmt'].forEach(x=>document.getElementById(x).value='');
         document.getElementById('pgForm').classList.remove('open');
         haptic('success');
@@ -680,17 +718,35 @@ function deleteProgress(id){
     );
 }
 
+// Cache aller Sparziele des Users (fuer Reward-Goal-Dropdowns), v1.18.2
+let savingsGoalsCache = [];
+
 async function loadSavingsGoals(){
     try{
         const list=await apiCall('/api/savings-goals')||[];
+        savingsGoalsCache = list;
         const box=document.getElementById('sgList');
         if(!box)return;
         if(!list.length){box.innerHTML='<div class="muted" style="padding:0.5rem;font-size:0.8125rem">Noch keine Sparziele.</div>';return;}
-        box.innerHTML=list.map(g=>{
+        // Allgemein-Konto zuerst (nicht aktivierbar/löschbar)
+        const general = list.filter(g => g.is_general);
+        const normal  = list.filter(g => !g.is_general);
+        const renderCard = (g) => {
             const saved=Number(g.saved_amount||0);
             const target=Number(g.target_amount||0);
             const p=target>0?Math.min(100,(saved/target)*100):0;
             const active=!!g.is_active;
+            const isGen = !!g.is_general;
+            if(isGen){
+                return `<div class="ach-card" style="border-color:#a78bfa;background:linear-gradient(135deg,rgba(139,92,246,0.06),transparent)">
+                    <div class="ach-head">
+                        <div class="ach-title">🪙 ${esc(g.name)}</div>
+                        <div class="ach-reward-pill" style="background:#a78bfa;color:#fff">Puffer</div>
+                    </div>
+                    <div class="ach-value">${fmtEur(saved)}</div>
+                    <div class="muted" style="font-size:0.75rem;margin-top:0.25rem;line-height:1.4">Hier landen alle Meilenstein-Belohnungen, die sonst dein aktives Sparziel überschreiten würden.</div>
+                </div>`;
+            }
             return `<div class="ach-card" style="${active?'border-color:var(--green);background:var(--green-bg)':''}">
                 <div class="ach-head">
                     <div class="ach-title">${active?'⭐ ':''}${esc(g.name)}</div>
@@ -700,10 +756,11 @@ async function loadSavingsGoals(){
                 <div class="ach-bar"><div class="ach-bar-fill" style="width:${p}%;background:linear-gradient(90deg,#16a34a,#22c55e)"></div></div>
                 <div style="display:flex;gap:6px;margin-top:0.375rem;flex-wrap:wrap">
                     ${active?'':`<button onclick="activateSavingsGoal(${g.id})" style="flex:1;padding:0.4375rem;font-size:0.75rem;background:var(--green);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;margin:0">Aktivieren</button>`}
-                    <button onclick="deleteSavingsGoal(${g.id},'${esc(g.name).replace(/'/g,"\\'")}')" style="padding:0.4375rem 0.75rem;font-size:0.75rem;background:var(--red-bg);color:var(--red);border:none;border-radius:6px;font-weight:600;cursor:pointer;margin:0" ${active&&list.length===1?'disabled':''}>Löschen</button>
+                    <button onclick="deleteSavingsGoal(${g.id},'${esc(g.name).replace(/'/g,"\\'")}')" style="padding:0.4375rem 0.75rem;font-size:0.75rem;background:var(--red-bg);color:var(--red);border:none;border-radius:6px;font-weight:600;cursor:pointer;margin:0" ${active&&normal.length===1?'disabled':''}>Löschen</button>
                 </div>
             </div>`;
-        }).join('');
+        };
+        box.innerHTML = general.map(renderCard).join('') + normal.map(renderCard).join('');
     }catch(e){console.error(e);}
 }
 async function createSavingsGoal(){

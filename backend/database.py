@@ -24,6 +24,17 @@ async def _seed_empty_user(conn, user_id: int):
         await conn.execute(
             "INSERT INTO savings_goals (user_id,name,target_amount,is_active) VALUES ($1,'Mein Sparziel',100,TRUE)",
             user_id)
+    # v1.18.2: Allgemein-Konto sicherstellen (Puffer fuer Meilenstein-Belohnungen)
+    has_general = await conn.fetchval(
+        "SELECT 1 FROM savings_goals WHERE user_id=$1 AND is_general=TRUE LIMIT 1", user_id)
+    if not has_general:
+        try:
+            await conn.execute(
+                "INSERT INTO savings_goals (user_id,name,target_amount,is_active,is_general) "
+                "VALUES ($1,'Allgemein',0,FALSE,TRUE)",
+                user_id)
+        except Exception:
+            pass  # Migration hat's evtl. schon erledigt
     # Default-Kategorien fuer Ausgaben (idempotent per uniq-Index)
     has_cats = await conn.fetchval(
         "SELECT 1 FROM expense_categories WHERE user_id=$1 LIMIT 1", user_id)

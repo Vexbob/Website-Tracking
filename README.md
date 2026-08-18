@@ -19,6 +19,7 @@
 - Fallende Achievements: Meilenstein zählt erst bei **strikt unter** der Schwelle (v1.15.1)
 - **v1.18.0 Repair-Job**: beim Backend-Startup werden verpasste Meilenstein-Auszahlungen automatisch nachgetragen (Log + Savings-Transaktion mit Note „Nachtrag v1.18: Meilenstein-Reparatur"), `credited_milestones` neu synchronisiert.
 - **Wochenziel-Historie erweitert** (v1.18.0): pro Wochenziel wird der Verlauf der letzten 12–52 Perioden mit Status-Chips (✓/◐/✕/⏳), Check-in-Anzahl und Auszahlungs-Marker gezeigt; nachträglicher Check-in in vergangene Wochen per +1-Button möglich.
+- **🪙 Allgemein-Konto / Puffer** (v1.18.2): jeder User hat automatisch ein „Allgemein"-Konto, das keine Zielgrenze hat. Meilenstein- und Streak-Belohnungen werden intelligent geroutet — wenn das aktive Sparziel nicht mehr genug Platz für die Belohnung hat (bzw. abgeschlossen ist), wandert die Auszahlung automatisch ins Allgemein-Konto **und wird trotzdem verbucht**. Fixt das Problem, dass Meilensteine „verpuffen", wenn der Rest-Betrag des Sparziels kleiner ist als die Belohnung. Achievements & Wochenziele bekommen optional ein **Reward-Goal-Dropdown** („Belohnung geht an: …") um manuell ein festes Zielkonto zu wählen.
 - **JSON-Backup & Restore**, automatische tägliche Snapshots
 
 ### 📝 Notizen (komplett überarbeitet in v1.18.0 → WYSIWYG)
