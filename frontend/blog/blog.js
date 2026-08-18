@@ -43,7 +43,7 @@ function sanitizeHtml(html) {
                 return;
             }
             const keep = child.tagName === 'A' ? ['href','target','rel']
-                : child.tagName === 'IMG' ? ['src','alt']
+                : child.tagName === 'IMG' ? ['src','alt','title']
                 : child.tagName === 'DIV' ? ['class','data-done']
                 : child.tagName === 'SPAN' ? ['class','contenteditable']
                 : [];

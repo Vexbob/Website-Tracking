@@ -45,6 +45,22 @@ function bindUI() {
         btn.addEventListener('mousedown', (e) => e.preventDefault());
         btn.addEventListener('click', (e) => { e.preventDefault(); applyToolbarCmd(btn.dataset.cmd); });
     });
+    // Bild-Upload (v1.18.1)
+    const imgInput = document.getElementById('baImageInput');
+    document.getElementById('baImageBtn').onclick = () => imgInput.click();
+    imgInput.addEventListener('change', () => {
+        Array.from(imgInput.files || []).forEach(f => uploadAndInsertImage(f));
+        imgInput.value = '';
+    });
+    // Drag & Drop + Paste von Bildern direkt im Editor
+    const editor = document.getElementById('baContent');
+    editor.addEventListener('dragover', (e) => { e.preventDefault(); editor.classList.add('img-drop-active'); });
+    editor.addEventListener('dragleave', () => editor.classList.remove('img-drop-active'));
+    editor.addEventListener('drop', (e) => {
+        e.preventDefault(); editor.classList.remove('img-drop-active');
+        const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
+        files.forEach(f => uploadAndInsertImage(f));
+    });
     document.getElementById('baPublish').onclick = async () => {
         await flushSave();
         const p = await BLOG_ADMIN_API.publish(S.selectedId);
@@ -249,12 +265,24 @@ function closestBlock(node, boundary) {
 
 function onEditorClick(e) {
     const box = e.target.closest('.nz-task-box');
-    if (!box) return;
-    e.preventDefault();
-    const task = box.closest('.nz-task');
-    if (!task) return;
-    task.dataset.done = task.dataset.done === 'true' ? 'false' : 'true';
-    scheduleSave();
+    if (box) {
+        e.preventDefault();
+        const task = box.closest('.nz-task');
+        if (!task) return;
+        task.dataset.done = task.dataset.done === 'true' ? 'false' : 'true';
+        scheduleSave();
+        return;
+    }
+    // Bild angeklickt → Alt-Text bearbeiten (v1.18.1)
+    const img = e.target.closest('img');
+    if (img) {
+        const newAlt = prompt('Beschreibung/Alt-Text für das Bild:', img.alt || '');
+        if (newAlt != null) {
+            img.alt = newAlt;
+            img.title = newAlt || 'Bild';
+            scheduleSave();
+        }
+    }
 }
 
 function onEditorBeforeInput(e) {
@@ -334,6 +362,18 @@ function convertBlockToTask(block, done) {
 }
 
 function onEditorPaste(e) {
+    // Bilder aus der Zwischenablage hochladen (v1.18.1)
+    const items = e.clipboardData?.items || [];
+    const imageItems = Array.from(items).filter(it => it.type.startsWith('image/'));
+    if (imageItems.length) {
+        e.preventDefault();
+        imageItems.forEach(it => {
+            const f = it.getAsFile();
+            if (f) uploadAndInsertImage(f);
+        });
+        return;
+    }
+    // Sonst: als Plaintext einfügen (kein Style-Chaos)
     e.preventDefault();
     const text = (e.clipboardData || window.clipboardData).getData('text/plain');
     if (text) document.execCommand('insertText', false, text);
@@ -360,8 +400,67 @@ function applyToolbarCmd(cmd) {
             if (url) document.execCommand('createLink', false, url);
             break;
         }
+        case 'image': {
+            // Wird über den dedizierten Button+Input abgehandelt; hier nur Fallback
+            document.getElementById('baImageInput').click();
+            break;
+        }
     }
     scheduleSave();
+}
+
+// ==========================================================
+// Bild-Upload & -Einfügen (v1.18.1)
+// ==========================================================
+async function uploadAndInsertImage(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const editor = document.getElementById('baContent');
+    editor.focus();
+    // Placeholder an Cursor-Position einfügen
+    const placeholder = document.createElement('div');
+    placeholder.className = 'img-drop-zone';
+    placeholder.textContent = `⏳ Lade „${file.name || 'Bild'}“ hoch …`;
+    insertNodeAtCursor(placeholder);
+    try {
+        const fd = new FormData();
+        fd.append('file', file);
+        if (S.selectedId) fd.append('post_id', S.selectedId);
+        const res = await fetch(API_BASE + '/api/blog/upload-image' + (S.selectedId ? '?post_id=' + S.selectedId : ''), {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('vexbob_token') },
+            body: fd,
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const img = document.createElement('img');
+        img.src = data.url;
+        img.alt = file.name || 'Bild';
+        img.dataset.mediaId = data.id;
+        img.title = 'Klick: Alt-Text bearbeiten · Rechtsklick: Löschen';
+        placeholder.replaceWith(img);
+        // Bild anklickbar für Alt-Text-Bearbeitung
+        scheduleSave();
+    } catch (e) {
+        placeholder.textContent = '⚠️ Upload fehlgeschlagen: ' + e.message;
+        placeholder.style.borderColor = 'var(--red)';
+        setTimeout(() => placeholder.remove(), 3000);
+    }
+}
+
+function insertNodeAtCursor(node) {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) {
+        document.getElementById('baContent').appendChild(node);
+        return;
+    }
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(node);
+    // Cursor hinter den Node setzen
+    range.setStartAfter(node);
+    range.setEndAfter(node);
+    sel.removeAllRanges();
+    sel.addRange(range);
 }
 
 function wrapInlineTag(tag) {

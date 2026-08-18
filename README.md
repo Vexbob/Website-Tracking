@@ -37,14 +37,18 @@ Notiz-Ablage im **Apple-Notes-Stil** (Master-Detail): Sidebar-Liste + inline for
 - Leere Neue Notizen werden beim Verlassen automatisch gelöscht, **Undo** beim Löschen/Archivieren.
 - responsiv (mobil einspaltig mit Back-Button), Dark-Mode, PWA.
 
-### 📰 Blog (neu in v1.18.0)
+### 📰 Blog (neu in v1.18.0, Bilder seit v1.18.1)
 Öffentlich lesbares Blog-Modul — die einzige nach außen sichtbare Fläche der App.
 - **Öffentliche API** (`/api/public/blog/*`, kein Auth, Rate-Limit `120/min`).
 - **URL-Struktur**: `/blog/` (Übersicht) und `/blog/#<slug>` (Detail).
 - **Login-Seite** zeigt die 5 neuesten Beiträge rechts als Teaser.
 - **Admin-Editor** (`/blog/admin/`, nur `is_admin`) mit **gleicher WYSIWYG-Logik** wie Notizen, Auto-Save, Publish/Unpublish, Slug editierbar (auto aus Titel), Cover-URL, Tag-Chips.
+- **Bild-Einbindung** (v1.18.1): Bilder via Toolbar-Button „🖼️ Bild", **Drag & Drop** direkt in den Editor oder **Paste** aus der Zwischenablage. Bilder werden komprimiert (`process_image`, max 1600px, JPEG 82%) und in der DB (`blog_media`-Tabelle, bytea) gespeichert. Öffentlicher Lese-Endpoint `/api/public/blog/media/{id}` mit 24h-Cache. Klick auf Bild im Editor → Alt-Text bearbeiten.
 - **Tag-Filter** in der Übersicht, **Lesezeit-Schätzung** (200 Wörter/min), **View-Counter**.
-- **XSS-Schutz** via Whitelist-Sanitizer im Frontend (nur `p, h1-h6, ul, ol, li, blockquote, pre, code, strong/b, em/i, u, s, a, br, hr, img, div, span` + gefilterte Attribute).
+- **XSS-Schutz** via Whitelist-Sanitizer im Frontend (erlaubt `img[src,alt,title]`, `a[href,target,rel]` etc., filtert alle Inline-Styles und unsichere URLs).
+
+### 🧭 Globaler Modul-Switcher (v1.18.1)
+Jede Modul-Seite hat oben in der Navbar ein **Dropdown „⊞ Module"**, das direkten Wechsel zwischen Sparziel, Ausgaben, Notizen, Blog und Admin erlaubt — **ohne** den Umweg über das Dashboard. Aktives Modul wird hervorgehoben. Login- und Admin-Status werden berücksichtigt (öffentliche Seiten wie Blog sind immer sichtbar, geschützte nur eingeloggt, Admin-Bereiche nur für Admins).
 
 ### 🍳 Rezeptbuch
 Persönliche Rezepte mit Zutaten, Schritten und Kategorien.

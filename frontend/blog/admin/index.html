@@ -13,7 +13,8 @@
 <script src="/js/config.js"></script>
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
-</head>
+<script src="/js/nav-switcher.js" defer></script>
+    </head>
 <body style="visibility:hidden">
 <nav class="navbar">
     <a href="/" class="nav-title">← Blog-Admin</a>
@@ -63,6 +64,9 @@
                 <button class="nz-tb" data-cmd="quote">❝ Zitat</button>
                 <button class="nz-tb" data-cmd="link">🔗 Link</button>
                 <button class="nz-tb" data-cmd="hr">— HR</button>
+                <span class="nz-tb-sep"></span>
+                <button class="nz-tb accent" data-cmd="image" id="baImageBtn" title="Bild einfügen (auch Drag & Drop oder Paste)">🖼️ Bild</button>
+                <input type="file" id="baImageInput" accept="image/*" style="display:none" multiple>
             </div>
             <div class="nz-d-body">
                 <div class="nz-editor" id="baContent" contenteditable="true" spellcheck="true" data-placeholder="Inhalt … Markdown-Shortcuts (# ## ### - > 1. - [ ]) und Cmd/Ctrl+B/I funktionieren."></div>

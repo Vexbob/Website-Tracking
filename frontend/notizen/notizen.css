@@ -146,6 +146,15 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .nz-d-act.danger{color:var(--red);border-color:transparent;background:var(--red-bg)}
 
 /* Mobile */
+/* Editor-Bild-Stile (v1.18.1) */
+.nz-editor img,.ba-detail .nz-editor img,.blog-post .content img{max-width:100%;height:auto;border-radius:10px;margin:0.75rem 0;display:block;box-shadow:var(--shadow-sm)}
+.nz-editor img.bselected,.ba-detail .nz-editor img.bselected{outline:3px solid var(--accent,#3b82f6);outline-offset:2px}
+.nz-editor figure{margin:1rem 0;text-align:center}
+.nz-editor figcaption{font-size:0.8rem;color:var(--text-muted);margin-top:0.35rem;font-style:italic}
+.nz-editor .img-drop-zone{border:2px dashed var(--accent,#3b82f6);border-radius:10px;padding:1.5rem;text-align:center;color:var(--text-muted);background:var(--surface-2);margin:0.75rem 0;cursor:pointer}
+.nz-editor .img-drop-zone.dragover{background:rgba(59,130,246,0.08);border-style:solid}
+.nz-editor.img-drop-active{outline:2px dashed var(--accent,#3b82f6);outline-offset:-4px;border-radius:8px}
+
 @media(max-width:768px){
     .nz-app{position:relative}
     .nz-sidebar{width:100%}

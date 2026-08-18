@@ -1,4 +1,4 @@
-"""Blog-Router (v1.18.0).
+"""Blog-Router (v1.18.0 / v1.18.1: Blog-Media).
 
 Öffentliche Read-Endpoints unter ``/api/public/blog/*`` (kein Auth).
 Admin-Write-Endpoints unter ``/api/blog/*`` (require_admin).
@@ -7,12 +7,16 @@ import re
 import unicodedata
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, UploadFile, File
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from database import get_db
 from auth import require_admin
 from deps import limiter, LIMIT_WRITE_STANDARD
+from services.expenses import process_image
+
+MAX_BLOG_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB Rohupload
 
 router = APIRouter()
 
@@ -219,5 +223,82 @@ async def admin_delete(request: Request, pid: int, db=Depends(get_db),
     if not row:
         raise HTTPException(404, "Nicht gefunden")
     await db.execute("DELETE FROM blog_posts WHERE id=$1", pid)
+    return {"status": "deleted"}
+
+
+
+# ---------- BLOG-MEDIA (v1.18.1) ----------
+# Bilder werden in der DB (bytea) gespeichert, analog zu receipt_images.
+# Upload = admin-only, Lese-Zugriff = öffentlich (Blog ist öffentlich).
+
+@router.post("/api/blog/upload-image")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def admin_upload_image(request: Request,
+                              file: UploadFile = File(...),
+                              post_id: Optional[int] = None,
+                              db=Depends(get_db), admin=Depends(require_admin)):
+    """Lädt ein Bild hoch, gibt ``{id, url}`` zurück. Die URL ist öffentlich
+    lesbar und kann direkt als ``<img src="...">`` in den Post-Content eingebaut
+    werden. Optional ``post_id`` als Query-Param für Zuordnung."""
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "Leere Datei")
+    if len(raw) > MAX_BLOG_IMAGE_BYTES:
+        raise HTTPException(400, f"Datei zu groß (max {MAX_BLOG_IMAGE_BYTES // 1024 // 1024} MB)")
+    try:
+        main_bytes, thumb_bytes, mime, size = process_image(raw)
+    except Exception as e:
+        raise HTTPException(400, f"Bild konnte nicht verarbeitet werden: {e}")
+    row = await db.fetchrow(
+        """INSERT INTO blog_media (post_id, filename, mime_type, size_bytes, image_data, thumbnail_data)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, filename, mime_type, size_bytes""",
+        post_id, file.filename or "image.jpg", mime, size, main_bytes, thumb_bytes)
+    return {
+        "id": row["id"],
+        "url": f"/api/public/blog/media/{row['id']}",
+        "thumb_url": f"/api/public/blog/media/{row['id']}/thumb",
+        "filename": row["filename"],
+        "mime_type": row["mime_type"],
+        "size_bytes": row["size_bytes"],
+    }
+
+
+@router.get("/api/public/blog/media/{mid}")
+@limiter.limit("120/minute")
+async def public_media(request: Request, mid: int, db=Depends(get_db)):
+    """Öffentliche Bild-Auslieferung (Full-Size)."""
+    row = await db.fetchrow(
+        "SELECT image_data, mime_type FROM blog_media WHERE id=$1", mid)
+    if not row or not row["image_data"]:
+        raise HTTPException(404, "Bild nicht gefunden")
+    return Response(content=bytes(row["image_data"]),
+                     media_type=row["mime_type"] or "image/jpeg",
+                     headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.get("/api/public/blog/media/{mid}/thumb")
+@limiter.limit("120/minute")
+async def public_media_thumb(request: Request, mid: int, db=Depends(get_db)):
+    """Öffentliche Thumbnail-Auslieferung."""
+    row = await db.fetchrow(
+        "SELECT thumbnail_data, image_data, mime_type FROM blog_media WHERE id=$1", mid)
+    if not row:
+        raise HTTPException(404, "Bild nicht gefunden")
+    data = row["thumbnail_data"] or row["image_data"]
+    if not data:
+        raise HTTPException(404, "Bild-Daten fehlen")
+    return Response(content=bytes(data),
+                     media_type="image/jpeg",
+                     headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.delete("/api/blog/media/{mid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def admin_delete_media(request: Request, mid: int, db=Depends(get_db),
+                              admin=Depends(require_admin)):
+    row = await db.fetchval("SELECT id FROM blog_media WHERE id=$1", mid)
+    if not row:
+        raise HTTPException(404, "Nicht gefunden")
+    await db.execute("DELETE FROM blog_media WHERE id=$1", mid)
     return {"status": "deleted"}
 
