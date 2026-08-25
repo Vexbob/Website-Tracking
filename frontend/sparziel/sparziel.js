@@ -283,7 +283,42 @@ async function loadSparziel(){
 
         chartData=await apiCall('/api/stats/savings-progress')||[];
         renderSparzielChart();
+        renderSavingsForecast(newTotal, newTarget);
     }catch(e){showToast('Sparziel laden fehlgeschlagen',true);console.error(e);}
+}
+
+// v1.20.0: Sparziel-Prognose — "Bei aktuellem Tempo erreichst du dein Ziel am …"
+// Berechnet die durchschnittliche Sparrate der letzten 60 Tage (aus chartData,
+// kumulative Werte) und projiziert daraus, wann der fehlende Betrag erspart ist.
+function renderSavingsForecast(total, target){
+    const wrap = document.getElementById('stForecastWrap');
+    const el = document.getElementById('stForecast');
+    if(!wrap || !el) return;
+    const missing = target - total;
+    if(!target || missing <= 0 || !Array.isArray(chartData) || chartData.length < 2){
+        wrap.style.display = 'none';
+        return;
+    }
+    const sorted = chartData.slice().sort((a,b)=> new Date(a.date) - new Date(b.date));
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
+    const windowed = sorted.filter(p => new Date(p.date) >= cutoff);
+    const usable = windowed.length >= 2 ? windowed : sorted;
+    const first = usable[0], last = usable[usable.length-1];
+    const days = Math.max(1, (new Date(last.date) - new Date(first.date)) / 86400000);
+    const gained = Number(last.cumulative||0) - Number(first.cumulative||0);
+    const perDay = gained / days;
+    if(perDay <= 0){
+        wrap.style.display = '';
+        el.textContent = 'Kein Fortschritt';
+        el.classList.add('muted');
+        return;
+    }
+    el.classList.remove('muted');
+    const daysLeft = Math.ceil(missing / perDay);
+    const eta = new Date(); eta.setDate(eta.getDate() + daysLeft);
+    wrap.style.display = '';
+    el.textContent = eta.toLocaleDateString('de-DE', { day:'2-digit', month:'short', year:'numeric' });
+    el.title = `Bei ~${fmtEur(perDay*30)}/Monat erreichst du dein Ziel in ${daysLeft} Tagen.`;
 }
 async function saveSparziel(){
     const n=document.getElementById('sgName').value.trim();

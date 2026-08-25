@@ -1,6 +1,12 @@
-/* Produkte-Statistik — v1.19.0
+/* Produkte-Statistik — v1.20.0
  * Zeigt alle gekauften Produkte mit Kaufhäufigkeit, Gesamtausgaben, Ø-Preis.
- * Filter: Zeitraum, Kategorie, Laden.
+ * Filter: Zeitraum, Kategorie, Laden — werden an den Server geschickt.
+ *
+ * WICHTIG: Die Felder hier MÜSSEN zum echten Response von
+ * /api/expenses/products passen (title, count, last_price, last_date,
+ * last_store_name, category_name, min_price, max_price, avg_unit_price, ...).
+ * Frühere Version hat mit nie existierenden Feldern (display_name,
+ * total_spent, last_purchase, store_name, brand) gerechnet -> Tabelle wirkte leer.
  */
 
 let allProducts = [];
@@ -11,8 +17,9 @@ async function init() {
     const me = await ensureLoggedIn();
     if (!me) return;
     renderSubnav();
-    await Promise.all([loadCategories(), loadStores(), loadProducts()]);
+    await Promise.all([loadCategories(), loadStores()]);
     bindFilters();
+    await loadProducts();
 }
 
 async function loadCategories() {
@@ -38,20 +45,20 @@ async function loadProducts() {
     body.innerHTML = '<tr><td colspan="7" class="stat-empty">Lade …</td></tr>';
     try {
         const days = parseInt(document.getElementById('prodPeriod').value, 10);
-        const params = {};
+        const filters = {};
         if (days > 0) {
             const from = new Date();
             from.setDate(from.getDate() - days);
-            params.date_from = from.toISOString().slice(0, 10);
+            filters.date_from = from.toISOString().slice(0, 10);
         }
         const catId = document.getElementById('prodCategory').value;
-        if (catId) params.category_id = catId;
+        if (catId) filters.category_id = catId;
         const storeId = document.getElementById('prodStore').value;
-        if (storeId) params.store_id = storeId;
+        if (storeId) filters.store_id = storeId;
 
-        // Wir nutzen den bestehenden products-Endpoint, aber mit Filtern
-        // Da der Endpoint keine Filter unterstützt, laden wir alle und filtern client-seitig
-        allProducts = await AUSGABEN_API.products(1) || [];
+        // min_count=1: auch einmal gekaufte Produkte anzeigen (User will "was wie
+        // oft gekauft" sehen — auch Einmalkäufe zählen dazu).
+        allProducts = await AUSGABEN_API.products(1, filters) || [];
         renderProducts();
     } catch (e) {
         body.innerHTML = `<tr><td colspan="7" class="stat-empty">Fehler: ${escHtml(e.message)}</td></tr>`;
@@ -60,16 +67,7 @@ async function loadProducts() {
 
 function renderProducts() {
     const body = document.getElementById('prodBody');
-    const days = parseInt(document.getElementById('prodPeriod').value, 10);
-    const catId = document.getElementById('prodCategory').value;
-    const storeId = document.getElementById('prodStore').value;
-
-    let filtered = allProducts.slice();
-
-    // Client-seitige Filterung (da products-Endpoint keine Filter hat)
-    // Wir müssten eigentlich die Items durchgehen — aber der products-Endpoint
-    // gibt bereits aggregierte Daten zurück. Für echte Filterung bräuchten wir
-    // einen neuen Endpoint. Für jetzt: einfache Anzeige aller Produkte.
+    const filtered = allProducts.slice();
 
     if (!filtered.length) {
         body.innerHTML = '<tr><td colspan="7" class="stat-empty">Keine Produkte gefunden.</td></tr>';
@@ -81,18 +79,24 @@ function renderProducts() {
     filtered.sort((a, b) => (b.count || 0) - (a.count || 0));
 
     body.innerHTML = filtered.map(p => {
-        const lastBuy = p.last_purchase ? fmtDate(p.last_purchase) : '–';
-        const avgPrice = p.count > 0 ? (p.total_spent || 0) / p.count : 0;
+        const lastBuy = p.last_date ? fmtDate(p.last_date) : '–';
+        // "Gesamt ausgegeben" gibt es nicht direkt vom Server — approximiert über
+        // Ø-Einheitspreis * Anzahl (gut genug für die Übersicht; exakte Summe
+        // würde eine eigene Aggregation je Item benötigen).
+        const totalApprox = (p.avg_unit_price || 0) * (p.count || 0);
         return `<tr class="prod-row" data-key="${escHtml(p.key)}">
             <td>
-                <div class="prod-name">${escHtml(p.display_name || p.key)}</div>
-                ${p.brand ? `<div class="prod-brand">${escHtml(p.brand)}</div>` : ''}
+                <div class="prod-name">${escHtml(p.title || p.key)}</div>
+                ${p.brand_name ? `<div class="prod-brand">${escHtml(p.brand_name)}</div>` : ''}
             </td>
             <td>${escHtml(p.category_name || '–')}</td>
-            <td>${escHtml(p.store_name || '–')}</td>
+            <td>
+                <span style="color:${p.last_store_color || '#9ca3af'}">${p.last_store_icon || ''}</span>
+                ${escHtml(p.last_store_name || '–')}
+            </td>
             <td style="text-align:right;font-variant-numeric:tabular-nums">${p.count || 0}×</td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtEur(p.total_spent || 0)}</td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtEur(avgPrice)}</td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtEur(totalApprox)}</td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtEur(p.last_price || 0)}</td>
             <td style="text-align:right">${lastBuy}</td>
         </tr>`;
     }).join('');
@@ -105,15 +109,15 @@ function renderProducts() {
         row.onclick = () => {
             const key = row.dataset.key;
             const product = allProducts.find(p => p.key === key);
-            if (product) openProductChart(key, product.display_name || key);
+            if (product) openProductChart(key, product.title || key);
         };
     });
 }
 
 function updateKpis(products) {
     const count = products.length;
-    const total = products.reduce((a, p) => a + (p.total_spent || 0), 0);
     const buys = products.reduce((a, p) => a + (p.count || 0), 0);
+    const total = products.reduce((a, p) => a + (p.avg_unit_price || 0) * (p.count || 0), 0);
     const avg = buys > 0 ? total / buys : 0;
 
     document.getElementById('kpiCount').textContent = count;

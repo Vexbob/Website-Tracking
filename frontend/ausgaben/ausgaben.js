@@ -55,7 +55,19 @@ const AUSGABEN_API = {
     statsDaily:      (p={}) => { const q = new URLSearchParams(typeof p==='object'?p:{days:p}).toString(); return apiCall('/api/expenses/stats/daily' + (q ? '?' + q : '')); },
     statsInsights:   (p={}) => { const q = new URLSearchParams(p).toString(); return apiCall('/api/expenses/stats/insights' + (q ? '?' + q : '')); },
     heatmap:         () => apiCall('/api/expenses/heatmap'),
-    products:        (minCount) => apiCall('/api/expenses/products' + (minCount ? ('?min_count=' + minCount) : '')),
+    products:        (minCount, filters) => {
+        const params = new URLSearchParams();
+        if (minCount) params.set('min_count', minCount);
+        if (filters) {
+            if (filters.date_from) params.set('date_from', filters.date_from);
+            if (filters.date_to) params.set('date_to', filters.date_to);
+            if (filters.category_id) params.set('category_id', filters.category_id);
+            if (filters.store_id) params.set('store_id', filters.store_id);
+        }
+        const qs = params.toString();
+        return apiCall('/api/expenses/products' + (qs ? ('?' + qs) : ''));
+    },
+
     productHistory:  (key) => apiCall('/api/expenses/products/history?key=' + encodeURIComponent(key)),
     priceHistory:    (q) => apiCall('/api/expenses/price-history?q=' + encodeURIComponent(q)),
     mergeCategory:   (srcId, targetId) => apiCall(`/api/expense-categories/${srcId}/merge-into/${targetId}`, { method: 'POST' }),

@@ -1351,9 +1351,14 @@ async def check_duplicate(
 @router.get("/api/expenses/products")
 async def list_products(
     min_count: int = 2,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    category_id: Optional[int] = None,
+    store_id: Optional[int] = None,
     db=Depends(get_db), user=Depends(get_current_user),
 ):
-    """Aggregierte Produktliste über alle Bons — fuer den Preisverlauf-Tab.
+    """Aggregierte Produktliste über alle Bons — fuer den Preisverlauf-Tab
+    und die Produkt-Statistik-Seite.
 
     Gruppiert nach normalisierter Beschreibung (Basisname vor "(").
     Fuer jedes Produkt: letzter Preis + Rabatt-/Preiserhoehung ggue. vorherigem Kauf,
@@ -1363,13 +1368,36 @@ async def list_products(
     mindestens N Kaeufen zurueckgeben — die Standard-Ansicht zeigt nur Produkte,
     die man mehrmals gekauft hat (Einmal-Kaeufe sind fuer Preisverlauf
     uninteressant). ``min_count=1`` gibt alle Produkte zurueck.
+
+    Optionale Filter (v1.20.0) fuer die Produkt-Statistik-Seite: ``date_from``/
+    ``date_to`` (ISO-Datum, beschraenkt auf einzelne Kaeufe im Zeitraum),
+    ``category_id`` und ``store_id`` (beschraenken auf Kaeufe der letzten
+    Kategorie/Laden). Die Aggregation (Anzahl, Gesamtsumme etc.) bezieht sich
+    dann nur auf die gefilterten Kaeufe.
     """
+    conds = ["ei.user_id=$1", "COALESCE(ei.price_comparable, TRUE)=TRUE",
+             "(ei.base_name IS NOT NULL OR (ei.description IS NOT NULL AND ei.description != ''))",
+             "ei.total_price > 0"]
+    params = [user["id"]]
+    if date_from:
+        params.append(date_from)
+        conds.append(f"e.purchase_date >= ${len(params)}")
+    if date_to:
+        params.append(date_to)
+        conds.append(f"e.purchase_date <= ${len(params)}")
+    if category_id:
+        params.append(category_id)
+        conds.append(f"ei.category_id = ${len(params)}")
+    if store_id:
+        params.append(store_id)
+        conds.append(f"e.store_id = ${len(params)}")
+
     # Nur Artikel die als vergleichbar markiert sind (KI-Flag price_comparable=true)
     rows = await db.fetch(
-        """SELECT ei.description, ei.base_name, ei.original_text,
+        f"""SELECT ei.description, ei.base_name, ei.original_text,
                   ei.total_price, ei.quantity, ei.quantity_unit,
                   ei.original_price, ei.is_reduced, ei.product_group,
-                  ei.brand_id,
+                  ei.brand_id, ei.category_id,
                   e.purchase_date, e.store_id,
                   s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
                   c.name AS category_name,
@@ -1379,12 +1407,10 @@ async def list_products(
            LEFT JOIN stores s ON s.id=e.store_id
            LEFT JOIN expense_categories c ON c.id=ei.category_id
            LEFT JOIN brands b ON b.id=ei.brand_id
-           WHERE ei.user_id=$1
-             AND COALESCE(ei.price_comparable, TRUE)=TRUE
-             AND (ei.base_name IS NOT NULL OR (ei.description IS NOT NULL AND ei.description != ''))
-             AND ei.total_price > 0
+           WHERE {' AND '.join(conds)}
            ORDER BY e.purchase_date DESC, ei.id DESC""",
-        user["id"])
+        *params)
+
 
     from collections import defaultdict
     import re
