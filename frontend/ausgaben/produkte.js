@@ -13,6 +13,18 @@ let allProducts = [];
 let allCategories = [];
 let allStores = [];
 
+// v1.20.1: escHtml war nirgends global definiert, wenn diese Seite ohne
+// preisverlauf.js geladen wird (produkte.html laedt es nicht) -> ReferenceError
+// beim ersten renderProducts()-Aufruf -> Seite blieb bei "Lade …" haengen und
+// wirkte komplett leer. Fix: escHtml lokal definieren statt sich auf ein
+// zufaellig vorher geladenes Script zu verlassen.
+if (typeof escHtml === 'undefined') {
+    window.escHtml = function escHtml(s) {
+        if (!s) return '';
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    };
+}
+
 async function init() {
     const me = await ensureLoggedIn();
     if (!me) return;
