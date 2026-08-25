@@ -73,7 +73,15 @@
             <div class="hero-chart"><canvas id="chartSavings"></canvas></div>
         </div>
 
-        <div class="sh"><h2>Wochenziele <span class="period-lbl" id="pgPeriodLbl"></span></h2><button class="sh-add" onclick="toggleForm('pgForm')">+ Neu</button></div>
+        <div class="sh">
+            <h2>Wochenziele <span class="period-lbl" id="pgPeriodLbl"></span></h2>
+            <div class="pg-week-nav">
+                <button class="pg-week-btn" id="pgWeekPrev" onclick="navigateWeek(-1)" title="Vorherige Woche">←</button>
+                <span class="pg-week-label" id="pgWeekNavLabel"></span>
+                <button class="pg-week-btn" id="pgWeekNext" onclick="navigateWeek(1)" title="Nächste Woche" disabled>→</button>
+            </div>
+            <button class="sh-add" onclick="toggleForm('pgForm')">+ Neu</button>
+        </div>
         <div id="pgForm" class="iform">
             <div class="if-grid">
                 <div><label>Titel</label><input id="pgTitle" placeholder="z.B. Meditieren"></div>

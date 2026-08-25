@@ -1,0 +1,14 @@
+/* Produkte-Statistik — v1.19.0 */
+.prod-name{font-weight:600;color:var(--text)}
+.prod-brand{font-size:0.75rem;color:var(--text-faint);margin-top:2px}
+.prod-row:hover{background:var(--surface-2)}
+.pv-chart-wrap{position:relative;height:200px;margin-bottom:1rem}
+.pv-hist-list{max-height:300px;overflow-y:auto}
+.pv-hist-item{display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--border);font-size:0.8125rem}
+.pv-hist-item:last-child{border-bottom:none}
+.pv-hist-date{color:var(--text-faint);font-size:0.75rem;min-width:70px}
+.pv-hist-body{flex:1;min-width:0}
+.pv-hist-desc{font-weight:500;color:var(--text)}
+.pv-hist-store{font-size:0.75rem;color:var(--text-muted)}
+.pv-hist-price{font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pv-empty{padding:2rem;text-align:center;color:var(--text-muted);font-size:0.875rem}

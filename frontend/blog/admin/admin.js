@@ -35,6 +35,9 @@ function bindUI() {
     ['baTitle','baSubtitle','baSlug','baCover','baTags'].forEach(id => {
         document.getElementById(id).addEventListener('input', scheduleSave);
     });
+    ['baIsPublic','baShowOnLogin'].forEach(id => {
+        document.getElementById(id).addEventListener('change', scheduleSave);
+    });
     const editor = document.getElementById('baContent');
     editor.addEventListener('input', scheduleSave);
     editor.addEventListener('keydown', onEditorKeydown);
@@ -53,11 +56,11 @@ function bindUI() {
         imgInput.value = '';
     });
     // Drag & Drop + Paste von Bildern direkt im Editor
-    const editor = document.getElementById('baContent');
-    editor.addEventListener('dragover', (e) => { e.preventDefault(); editor.classList.add('img-drop-active'); });
-    editor.addEventListener('dragleave', () => editor.classList.remove('img-drop-active'));
-    editor.addEventListener('drop', (e) => {
-        e.preventDefault(); editor.classList.remove('img-drop-active');
+    const editorEl = document.getElementById('baContent');
+    editorEl.addEventListener('dragover', (e) => { e.preventDefault(); editorEl.classList.add('img-drop-active'); });
+    editorEl.addEventListener('dragleave', () => editorEl.classList.remove('img-drop-active'));
+    editorEl.addEventListener('drop', (e) => {
+        e.preventDefault(); editorEl.classList.remove('img-drop-active');
         const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
         files.forEach(f => uploadAndInsertImage(f));
     });
@@ -98,6 +101,8 @@ function renderList() {
             <div class="ba-item-title">${escapeHtml(p.title || '(Ohne Titel)')}</div>
             <div class="ba-item-meta">
                 <span class="ba-item-badge ${p.published_at ? 'pub' : 'draft'}">${p.published_at ? 'Live' : 'Entwurf'}</span>
+                ${p.is_public ? '<span class="ba-item-badge pub" title="Öffentlich sichtbar">🌐</span>' : ''}
+                ${p.show_on_login ? '<span class="ba-item-badge pub" title="Auf Login-Seite">🔑</span>' : ''}
                 <span>${fmtDate(p.updated_at)}</span>
             </div>
         </div>
@@ -128,6 +133,8 @@ function renderDetail() {
     document.getElementById('baSlug').value = p.slug || '';
     document.getElementById('baCover').value = p.cover_url || '';
     document.getElementById('baTags').value = (p.tags || []).join(', ');
+    document.getElementById('baIsPublic').checked = !!p.is_public;
+    document.getElementById('baShowOnLogin').checked = !!p.show_on_login;
     document.getElementById('baContent').innerHTML = p.content_html || '';
     normalizeTasks(document.getElementById('baContent'));
     renderState();
@@ -178,6 +185,8 @@ async function flushSave() {
         content_html: document.getElementById('baContent').innerHTML || '',
         cover_url: document.getElementById('baCover').value || null,
         tags,
+        is_public: document.getElementById('baIsPublic').checked,
+        show_on_login: document.getElementById('baShowOnLogin').checked,
     };
     const slug = document.getElementById('baSlug').value.trim();
     if (slug && slug !== p.slug) body.slug = slug;

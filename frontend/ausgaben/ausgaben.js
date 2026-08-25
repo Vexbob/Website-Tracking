@@ -235,6 +235,7 @@ function renderSubnav() {
         { key: 'dashboard',    href: '/ausgaben/',                   label: '📋 Übersicht' },
         { key: 'statistik',    href: '/ausgaben/statistik.html',     label: '📊 Statistik' },
         { key: 'preisverlauf', href: '/ausgaben/preisverlauf.html',  label: '💶 Preisverlauf' },
+        { key: 'produkte',     href: '/ausgaben/produkte.html',      label: '🛒 Produkte' },
         { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
         { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },
         { key: 'marken',       href: '/ausgaben/marken.html',        label: '🏭 Marken' },
@@ -244,5 +245,5 @@ function renderSubnav() {
         `<a href="${l.href}"${l.key === active ? ' class="primary"' : ''}>${l.label}</a>`
     ).join('') + '<a href="#" id="exportCsvLink">⬇ CSV</a>';
     const csv = document.getElementById('exportCsvLink');
-    if (csv) csv.onclick = (e) => { e.preventDefault(); downloadFile(AUSGABEN_API.exportCsv(), 'ausgaben.csv'); };
+    if (csv) csv.onclick = (e) => { e.preventDefault(); downloadFile(AUSGABEN_API.exportCsv(), 'ausgaben_' + todayISO() + '.csv'); };
 }

@@ -11,6 +11,11 @@
 .blog-tag:hover{border-color:var(--accent);color:var(--text)}
 .blog-tag.active{background:var(--text);color:var(--surface);border-color:var(--text)}
 
+.blog-search-wrap{display:flex;justify-content:center;margin-bottom:1.5rem}
+.blog-search{width:100%;max-width:400px;padding:0.6rem 1rem;font-size:0.875rem;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+.blog-search:focus{border-color:var(--accent)}
+.blog-search::placeholder{color:var(--text-faint)}
+
 .blog-post-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1rem;box-shadow:var(--shadow-sm);cursor:pointer;transition:transform .15s,box-shadow .15s;text-decoration:none;color:inherit;display:block}
 .blog-post-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
 .blog-post-card h2{margin:0 0 0.35rem;font-size:1.35rem;font-weight:700;color:var(--text);letter-spacing:-0.01em;line-height:1.3}

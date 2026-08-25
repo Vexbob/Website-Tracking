@@ -92,6 +92,9 @@ async function renderList() {
             <p>Test</p>
         </div>
         <div class="blog-tags" id="blogTags"></div>
+        <div class="blog-search-wrap">
+            <input type="text" id="blogSearch" class="blog-search" placeholder="Beiträge durchsuchen …">
+        </div>
         <div id="blogList"><div class="blog-loading">Lade …</div></div>`;
     try {
         const tags = await BLOG_API.tags();
@@ -112,19 +115,37 @@ async function renderList() {
             list.innerHTML = '<div class="blog-empty">Noch keine Beiträge veröffentlicht.</div>';
             return;
         }
-        list.innerHTML = posts.map(p => `
-            <a class="blog-post-card" href="#${escapeHtml(p.slug)}">
-                <h2>${escapeHtml(p.title)}</h2>
-                ${p.subtitle ? `<p class="subtitle">${escapeHtml(p.subtitle)}</p>` : ''}
-                <div class="meta">
-                    <span>${fmtDate(p.published_at)}</span>
-                    <span class="dot"></span>
-                    <span>${escapeHtml(p.author_name || 'Anonym')}</span>
-                    ${p.view_count ? `<span class="dot"></span><span>${p.view_count} Aufrufe</span>` : ''}
-                </div>
-                ${p.tags && p.tags.length ? `<div class="tags-inline">${p.tags.map(t => `<span class="t">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-            </a>
-        `).join('');
+        // Client-seitige Suche
+        const searchInput = document.getElementById('blogSearch');
+        const renderFiltered = (query) => {
+            const q = (query || '').toLowerCase().trim();
+            const filtered = q ? posts.filter(p =>
+                (p.title || '').toLowerCase().includes(q) ||
+                (p.subtitle || '').toLowerCase().includes(q) ||
+                (p.tags || []).some(t => t.toLowerCase().includes(q))
+            ) : posts;
+            if (!filtered.length) {
+                list.innerHTML = '<div class="blog-empty">Keine Beiträge gefunden.</div>';
+                return;
+            }
+            list.innerHTML = filtered.map(p => `
+                <a class="blog-post-card" href="#${escapeHtml(p.slug)}">
+                    <h2>${escapeHtml(p.title)}</h2>
+                    ${p.subtitle ? `<p class="subtitle">${escapeHtml(p.subtitle)}</p>` : ''}
+                    <div class="meta">
+                        <span>${fmtDate(p.published_at)}</span>
+                        <span class="dot"></span>
+                        <span>${escapeHtml(p.author_name || 'Anonym')}</span>
+                        ${p.view_count ? `<span class="dot"></span><span>${p.view_count} Aufrufe</span>` : ''}
+                    </div>
+                    ${p.tags && p.tags.length ? `<div class="tags-inline">${p.tags.map(t => `<span class="t">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+                </a>
+            `).join('');
+        };
+        renderFiltered('');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => renderFiltered(e.target.value));
+        }
     } catch (e) {
         document.getElementById('blogList').innerHTML = '<div class="blog-empty">Fehler beim Laden.</div>';
     }

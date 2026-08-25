@@ -28,6 +28,8 @@ class BlogCreate(BaseModel):
     slug: Optional[str] = Field(None, max_length=200)
     cover_url: Optional[str] = Field(None, max_length=500)
     tags: List[str] = Field(default_factory=list)
+    is_public: bool = False
+    show_on_login: bool = False
 
 
 class BlogUpdate(BaseModel):
@@ -37,6 +39,8 @@ class BlogUpdate(BaseModel):
     slug: Optional[str] = None
     cover_url: Optional[str] = None
     tags: Optional[List[str]] = None
+    is_public: Optional[bool] = None
+    show_on_login: Optional[bool] = None
 
 
 def _slugify(text: str) -> str:
@@ -85,12 +89,15 @@ def _serialize_public(r) -> dict:
 async def public_list(request: Request, db=Depends(get_db),
                        limit: int = Query(10, ge=1, le=50),
                        offset: int = Query(0, ge=0),
-                       tag: Optional[str] = None):
-    conds = ["published_at IS NOT NULL", "published_at <= NOW()"]
+                       tag: Optional[str] = None,
+                       login_teaser: bool = False):
+    conds = ["published_at IS NOT NULL", "published_at <= NOW()", "is_public = true"]
     params: list = []
     if tag:
         params.append(tag)
         conds.append("$1 = ANY(tags)")
+    if login_teaser:
+        conds.append("show_on_login = true")
     where = " AND ".join(conds)
     rows = await db.fetch(
         f"""SELECT id, slug, title, subtitle, author_name, cover_url, tags,
@@ -108,7 +115,7 @@ async def public_list(request: Request, db=Depends(get_db),
 async def public_detail(request: Request, slug: str, db=Depends(get_db)):
     row = await db.fetchrow(
         "SELECT * FROM blog_posts WHERE slug=$1 AND published_at IS NOT NULL "
-        "AND published_at <= NOW()", slug)
+        "AND published_at <= NOW() AND is_public = true", slug)
     if not row:
         raise HTTPException(404, "Post nicht gefunden")
     try:
@@ -124,7 +131,7 @@ async def public_tags(request: Request, db=Depends(get_db)):
     rows = await db.fetch(
         """SELECT tag, COUNT(*) AS n
            FROM (SELECT unnest(tags) AS tag FROM blog_posts
-                 WHERE published_at IS NOT NULL AND published_at <= NOW()) t
+                 WHERE published_at IS NOT NULL AND published_at <= NOW() AND is_public = true) t
            GROUP BY tag ORDER BY n DESC""")
     return [{"tag": r["tag"], "count": int(r["n"])} for r in rows]
 
@@ -153,10 +160,11 @@ async def admin_create(request: Request, b: BlogCreate, db=Depends(get_db),
     tags = [t.strip() for t in (b.tags or []) if t.strip()]
     row = await db.fetchrow(
         """INSERT INTO blog_posts (slug, title, subtitle, content_html, author_id, author_name,
-                                     cover_url, tags)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *""",
+                                     cover_url, tags, is_public, show_on_login)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *""",
         slug, b.title, b.subtitle, b.content_html or "",
-        admin["id"], admin["username"], b.cover_url, tags)
+        admin["id"], admin["username"], b.cover_url, tags,
+        b.is_public, b.show_on_login)
     return _ser_post(row)
 
 
@@ -182,6 +190,10 @@ async def admin_update(request: Request, pid: int, b: BlogUpdate, db=Depends(get
     if b.slug is not None:
         new_slug = await _unique_slug(db, _slugify(b.slug), exclude_id=pid)
         sets.append(f"slug=${idx}"); vals.append(new_slug); idx += 1
+    if b.is_public is not None:
+        sets.append(f"is_public=${idx}"); vals.append(b.is_public); idx += 1
+    if b.show_on_login is not None:
+        sets.append(f"show_on_login=${idx}"); vals.append(b.show_on_login); idx += 1
     if not sets:
         return _ser_post(row)
     sets.append("updated_at=NOW()")
