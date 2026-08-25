@@ -79,6 +79,11 @@ const AUSGABEN_API = {
         const q = new URLSearchParams({ date, total }); if (store_id) q.append('store_id', store_id);
         return apiCall('/api/expenses/duplicates/check?' + q.toString());
     },
+    duplicateGroups: () => apiCall('/api/expenses/duplicates'),
+    mergeDuplicates: (keep_id, remove_ids) => apiCall('/api/expenses/duplicates/merge', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ keep_id, remove_ids }),
+    }),
     exportCsv:  () => `${API_BASE}/api/expenses/export`,
 };
 

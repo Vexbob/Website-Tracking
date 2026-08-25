@@ -75,6 +75,12 @@ body{visibility:hidden}body.ready{visibility:visible}
 .ausg-toast-error{background:var(--red-dark)}
 .rec-item{display:flex;align-items:center;gap:0.5rem;padding:0.5rem;background:var(--surface-2);border-radius:8px;font-size:0.8125rem;margin-bottom:0.375rem}
 .rec-item .dot{width:6px;height:6px;border-radius:50%;background:var(--orange);flex-shrink:0}
+.dup-group{border:1px solid var(--border);border-radius:10px;padding:0.625rem;margin-bottom:0.625rem;background:var(--surface-2)}
+.dup-row{display:flex;align-items:center;gap:0.5rem;padding:0.375rem 0;font-size:0.8125rem;flex-wrap:wrap}
+.dup-row .dot{width:6px;height:6px;border-radius:50%;background:var(--red);flex-shrink:0}
+.dup-row.dup-keep{font-weight:600}
+.dup-group .btn-merge{margin-top:0.5rem;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:0.5rem 0.875rem;font-size:0.8125rem;font-weight:600;cursor:pointer}
+.dup-group .btn-merge:disabled{opacity:0.6;cursor:default}
 </style>
 </head>
 <body>
@@ -119,6 +125,10 @@ body{visibility:hidden}body.ready{visibility:visible}
     <div class="card" id="recurringCard" style="display:none">
         <h3>🔁 Wiederkehrende Ausgaben (erkannt)</h3>
         <div id="recurringList"></div>
+    </div>
+    <div class="card" id="duplicatesCard" style="display:none">
+        <h3>♻️ Mögliche Duplikate gefunden</h3>
+        <div id="duplicatesList"></div>
     </div>
 </main>
 <div class="version-tag"></div>

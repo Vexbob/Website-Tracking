@@ -1347,6 +1347,115 @@ async def check_duplicate(
     return [_ser_exp(r) for r in rows]
 
 
+# ---------- Duplikat-Erkennung & automatische Zusammenfuehrung (v1.21.0) ----------
+@router.get("/api/expenses/duplicates")
+async def list_duplicate_groups(db=Depends(get_db), user=Depends(get_current_user)):
+    """Findet bereits bestehende Duplikat-Kandidaten im gesamten Bestand:
+    gleicher Laden (oder beide ohne Laden), gleiches Kaufdatum, Betrag
+    innerhalb von 1 Euro Differenz. Gruppiert die betroffenen Bons, damit das
+    Frontend sie dem User zur Bestaetigung anzeigen kann, statt sie blind
+    automatisch zu loeschen.
+    """
+    rows = await db.fetch(
+        """SELECT e.id, e.purchase_date, e.total_amount, e.store_id, e.expense_type,
+                  e.receipt_image_id, e.note,
+                  s.name AS store_name, s.icon AS store_icon,
+                  (SELECT COUNT(*) FROM expense_items ei WHERE ei.expense_id=e.id) AS item_count
+           FROM expenses e
+           LEFT JOIN stores s ON s.id=e.store_id
+           WHERE e.user_id=$1
+           ORDER BY e.purchase_date DESC, e.id DESC""",
+        user["id"])
+
+    groups = []
+    used = set()
+    rows_list = list(rows)
+    for i, a in enumerate(rows_list):
+        if a["id"] in used:
+            continue
+        cluster = [a]
+        for b in rows_list[i+1:]:
+            if b["id"] in used:
+                continue
+            if a["purchase_date"] != b["purchase_date"]:
+                continue
+            if a["store_id"] != b["store_id"]:
+                continue
+            if abs(float(a["total_amount"]) - float(b["total_amount"])) >= 1.0:
+                continue
+            cluster.append(b)
+        if len(cluster) > 1:
+            for c in cluster:
+                used.add(c["id"])
+            # Bevorzugt den Bon mit Beleg-Bild und mehr Positionen als "Original"
+            cluster.sort(key=lambda r: (r["receipt_image_id"] is not None, r["item_count"] or 0), reverse=True)
+            groups.append({
+                "keep_id": cluster[0]["id"],
+                "items": [{
+                    "id": r["id"],
+                    "purchase_date": r["purchase_date"].isoformat() if r["purchase_date"] else None,
+                    "total_amount": float(r["total_amount"]),
+                    "store_name": r["store_name"] or "Ohne Laden",
+                    "store_icon": r["store_icon"] or "🏪",
+                    "expense_type": r["expense_type"],
+                    "has_image": r["receipt_image_id"] is not None,
+                    "item_count": int(r["item_count"] or 0),
+                    "note": r["note"],
+                } for r in cluster],
+            })
+    return {"groups": groups, "count": len(groups)}
+
+
+@router.post("/api/expenses/duplicates/merge")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def merge_duplicate_expenses(request: Request, body: dict,
+                                    db=Depends(get_db), user=Depends(get_current_user)):
+    """Fuehrt mehrere Duplikat-Bons zu einem zusammen.
+    Body: {keep_id: int, remove_ids: [int, ...]}
+    - Positionen (expense_items) der zu entfernenden Bons werden auf den
+      behaltenen Bon umgehaengt (keine Daten gehen verloren).
+    - Ist der behaltene Bon ohne Beleg-Bild, aber einer der zu entfernenden
+      Bons hat eines, wird das Bild uebernommen.
+    - Die zu entfernenden Bons werden anschliessend geloescht.
+    """
+    keep_id = body.get("keep_id")
+    remove_ids = [i for i in (body.get("remove_ids") or []) if i != keep_id]
+    if not keep_id or not remove_ids:
+        raise HTTPException(400, "keep_id und remove_ids erforderlich")
+
+    keep = await db.fetchrow(
+        "SELECT id, receipt_image_id FROM expenses WHERE id=$1 AND user_id=$2", keep_id, user["id"])
+    if not keep:
+        raise HTTPException(404, "Ziel-Bon nicht gefunden")
+    owned_removes = await db.fetch(
+        "SELECT id, receipt_image_id FROM expenses WHERE id = ANY($1) AND user_id=$2",
+        remove_ids, user["id"])
+    owned_ids = [r["id"] for r in owned_removes]
+    if not owned_ids:
+        raise HTTPException(404, "Keine der Duplikat-IDs gehoert dem User")
+
+    moved_items = 0
+    async with db.transaction():
+        r = await db.execute(
+            "UPDATE expense_items SET expense_id=$1 WHERE expense_id = ANY($2) AND user_id=$3",
+            keep_id, owned_ids, user["id"])
+        try: moved_items = int(r.split()[-1])
+        except (ValueError, IndexError): pass
+
+        if not keep["receipt_image_id"]:
+            donor = next((r for r in owned_removes if r["receipt_image_id"]), None)
+            if donor:
+                await db.execute(
+                    "UPDATE expenses SET receipt_image_id=$1 WHERE id=$2 AND user_id=$3",
+                    donor["receipt_image_id"], keep_id, user["id"])
+
+        await db.execute(
+            "DELETE FROM expenses WHERE id = ANY($1) AND user_id=$2", owned_ids, user["id"])
+
+    logger.info(f"User {user['id']} merged duplicate expenses {owned_ids} into {keep_id}: {moved_items} items moved")
+    return {"status": "merged", "keep_id": keep_id, "removed_ids": owned_ids, "moved_items": moved_items}
+
+
 # ---------- Produkt-Preisverlauf (Aggregation aller gekauften Artikel) ----------
 @router.get("/api/expenses/products")
 async def list_products(

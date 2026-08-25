@@ -1,3 +1,11 @@
+// SW_VERSION: v1.21.0 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
+// werden. Browser erkennen Service-Worker-Updates NUR anhand eines Byte-Diffs
+// der sw.js-Datei selbst — was sw.js per importScripts() nachlaedt (version.js)
+// wird dabei NICHT verglichen. Ohne diese Zeile bleibt der Service Worker also
+// ewig "installiert", der Cache-Name aendert sich nie, und Nutzer bekommen
+// alte, laengst reparierte JS-Dateien (z.B. produkte.js) fuer immer aus dem
+// Cache statt vom Server. Das war die eigentliche Ursache dafuer, dass die
+// Produkte-Seite trotz Backend-/Frontend-Fixes weiterhin leer blieb.
 importScripts('/js/version.js');
 const CACHE = 'vexbob-' + APP_VERSION;
 const SHELL = ['/', '/index.html', '/css/style.css', '/js/version.js', '/js/api.js', '/icon.svg', '/manifest.webmanifest',
