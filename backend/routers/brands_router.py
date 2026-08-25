@@ -45,10 +45,15 @@ async def list_brands(
     store_id: Optional[int] = None,
     private_only: bool = False,
     limit: int = 5000,
+    sort: str = "name",  # "name" | "purchases" (v1.21.0: Rangliste nach Kaufhaeufigkeit)
     db=Depends(get_db), user=Depends(get_current_user)
 ):
     """Liste aller Marken des Users. Optionaler Filter per ``q`` (case-insensitive
     Substring auf Name) und ``store_id`` (nur Eigenmarken von einem Laden).
+
+    ``sort=purchases`` (v1.21.0) liefert zusaetzlich ``purchase_count`` (Anzahl
+    Positionen, die dieser Marke zugeordnet sind) und sortiert absteigend danach
+    — fuer die "meistgekaufte Marke"-Ansicht in der Marken-Verwaltung.
 
     Bei ~800 Seed-Marken pro User ist der Default-Limit 5000 groesszuegig genug
     (Client filtert clientseitig fuer Autocomplete).
@@ -68,11 +73,14 @@ async def list_brands(
     if private_only:
         conds.append("b.is_private_label=TRUE")
     params.append(max(1, min(limit, 10000)))
+    order_by = "purchase_count DESC, LOWER(b.name)" if sort == "purchases" else "LOWER(b.name)"
     rows = await db.fetch(
-        f"""SELECT b.*, s.name AS store_name, s.color AS store_color, s.icon AS store_icon
+        f"""SELECT b.*, s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
+                   COALESCE((SELECT COUNT(*) FROM expense_items ei
+                             WHERE ei.brand_id=b.id AND ei.user_id=b.user_id), 0) AS purchase_count
             FROM brands b LEFT JOIN stores s ON s.id=b.store_id
             WHERE {' AND '.join(conds)}
-            ORDER BY LOWER(b.name)
+            ORDER BY {order_by}
             LIMIT ${len(params)}""",
         *params)
     return [_ser_exp(r) for r in rows]

@@ -8,8 +8,10 @@ async function init() {
     const me = await ensureLoggedIn(); if (!me) return;
     renderSubnav();
     try {
+        // v1.21.0: standardmaessig nach Kaufhaeufigkeit sortiert laden
+        // (liefert purchase_count pro Marke mit).
         [allBrands, allStores] = await Promise.all([
-            AUSGABEN_API.brands(),
+            AUSGABEN_API.brands('purchases'),
             AUSGABEN_API.stores(),
         ]);
     } catch (e) {
@@ -54,7 +56,10 @@ function render() {
         wrap.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-faint);font-size:0.875rem">Keine Marken gefunden.</div>';
         return;
     }
-    list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de'));
+    // v1.21.0: Standard-Ranking nach Kaufhaeufigkeit (meistgekaufte Marke oben),
+    // bei Gleichstand alphabetisch als Tiebreaker.
+    list.sort((a, b) => (b.purchase_count || 0) - (a.purchase_count || 0)
+        || (a.name || '').localeCompare(b.name || '', 'de'));
     wrap.innerHTML = list.map(renderBrandRow).join('');
     wrap.querySelectorAll('.brand-row').forEach(row => {
         const id = +row.dataset.id;
@@ -103,6 +108,11 @@ function renderBrandRow(b) {
     const storeInfo = b.store_name
         ? `<span style="color:${b.store_color || 'inherit'}">${b.store_icon || '🏪'} ${escHtml(b.store_name)}</span>`
         : '';
+    // v1.21.0: Kaufhaeufigkeit anzeigen
+    const count = b.purchase_count || 0;
+    const purchaseBadge = count > 0
+        ? `<span class="brand-purchases" title="${count}× gekauft">🛒 ${count}×</span>`
+        : `<span class="brand-purchases muted" title="Noch nie gekauft">🛒 0×</span>`;
     const storeOpts = ['<option value="">— kein Laden (Hersteller-Marke) —</option>']
         .concat(allStores.map(s =>
             `<option value="${s.id}"${b.store_id === s.id ? ' selected' : ''}>${escHtml((s.icon || '') + ' ' + s.name)}</option>`
@@ -110,7 +120,7 @@ function renderBrandRow(b) {
     return `<div class="brand-row${isSystem ? ' system' : ''}" data-id="${b.id}">
         <div style="min-width:0">
             <div class="brand-name">${escHtml(b.name)}</div>
-            <div class="brand-meta">${badge} ${storeInfo} ${parent} ${isSystem ? '<span title="Vom System vorbelegt">📦 System</span>' : '<span title="Von dir angelegt">👤 Eigen</span>'}</div>
+            <div class="brand-meta">${purchaseBadge} ${badge} ${storeInfo} ${parent} ${isSystem ? '<span title="Vom System vorbelegt">📦 System</span>' : '<span title="Von dir angelegt">👤 Eigen</span>'}</div>
         </div>
         <div></div>
         <select class="store" title="Ladenzuordnung ändern (Eigenmarke / Hersteller)">${storeOpts}</select>

@@ -10,7 +10,6 @@ async function loadInit() {
     await Promise.all([loadKpis(), loadExpenses(), loadRecurring(), loadDuplicates()]);
     document.body.classList.add('ready');
     document.body.style.visibility = 'visible';
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 }
 
 function populateFilters() {

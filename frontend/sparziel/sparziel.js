@@ -1287,7 +1287,6 @@ function initSortables(){
 (async function boot(){
     if(!isLoggedIn()){location.href='/private/login.html';return;}
     document.body.classList.add('ready');
-    if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
     try{
         const me=await fetchMe(false);
         document.getElementById('userLabel').textContent='👤 '+me.username;

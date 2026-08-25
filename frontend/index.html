@@ -13,6 +13,7 @@
     <script src="/js/version.js"></script>
     <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js" defer></script>
+<script src="/js/sw-update.js"></script>
     </head>
 <body style="visibility: hidden;">
     <nav class="navbar">
@@ -57,10 +58,6 @@
                     <div class="tile-icon purple">A</div>
                     <div class="tile-text"><div class="tile-title">User-Verwaltung</div><div class="tile-sub">Accounts anlegen &amp; verwalten</div></div>
                 </a>
-                <a href="/blog/admin/" class="tile">
-                    <div class="tile-icon orange">📝</div>
-                    <div class="tile-text"><div class="tile-title">Blog verwalten</div><div class="tile-sub">Posts erstellen &amp; veröffentlichen</div></div>
-                </a>
             </div>
         </section>
     </main>
@@ -78,7 +75,6 @@
             document.body.style.visibility = 'visible';
             document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
             document.getElementById('themeBtn').onclick = toggleTheme;
-            if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
         })();
     </script>
 </body>

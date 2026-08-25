@@ -5,6 +5,7 @@ from datetime import date, timedelta, datetime, timezone
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, Request, status, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from slowapi import _rate_limit_exceeded_handler
@@ -55,6 +56,12 @@ CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()]
 app.add_middleware(CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# v1.21.1: GZip-Kompression fuer alle Responses ab 1 KB. JSON-Listen (z.B.
+# /api/expenses/products, /api/brands) sind hochgradig repetitiv und schrumpfen
+# damit typischerweise auf 20-30% ihrer Rohgroesse -> spuerbar schnellere
+# Ladezeiten, vor allem auf Mobilfunk.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 async def _auto_backup_loop():
     while True:

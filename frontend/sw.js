@@ -1,4 +1,4 @@
-// SW_VERSION: v1.21.0 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
+// SW_VERSION: v1.21.1 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
 // werden. Browser erkennen Service-Worker-Updates NUR anhand eines Byte-Diffs
 // der sw.js-Datei selbst — was sw.js per importScripts() nachlaedt (version.js)
 // wird dabei NICHT verglichen. Ohne diese Zeile bleibt der Service Worker also
@@ -8,7 +8,8 @@
 // Produkte-Seite trotz Backend-/Frontend-Fixes weiterhin leer blieb.
 importScripts('/js/version.js');
 const CACHE = 'vexbob-' + APP_VERSION;
-const SHELL = ['/', '/index.html', '/css/style.css', '/js/version.js', '/js/api.js', '/icon.svg', '/manifest.webmanifest',
+const SHELL = ['/', '/index.html', '/css/style.css', '/js/version.js', '/js/api.js',
+               '/js/nav-switcher.js', '/js/sw-update.js', '/icon.svg', '/manifest.webmanifest',
                '/private/login.html', '/private/activate.html',
                '/ausgaben/', '/ausgaben/index.html',
                '/ausgaben/neu.html', '/ausgaben/bon.html',
@@ -72,20 +73,35 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // Statische Assets: cache-first
+    // Statische Assets: stale-while-revalidate statt cache-first.
+    // v1.21.1: Vorher wurde bei einem Cache-Hit NIE nachgeschaut, ob es eine
+    // neue Version gibt — das JS blieb im aktiven Tab quasi fuer immer alt,
+    // bis der User manuell den Cache leerte. Jetzt wird die gecachte Version
+    // sofort ausgeliefert (schnell!), aber PARALLEL im Hintergrund vom Server
+    // geholt und der Cache aktualisiert — der naechste Seitenaufruf ist dann
+    // automatisch aktuell, ganz ohne manuelles Eingreifen.
     e.respondWith((async () => {
         const cached = await caches.match(req);
-        if (cached) return stripRedirect(cached);
-        try {
-            const resp = await fetch(req, { redirect: 'follow' });
+        const network = fetch(req, { redirect: 'follow' }).then(resp => {
             if (resp.ok && resp.type === 'basic') {
-                const clone = resp.clone();
-                caches.open(CACHE).then(c => c.put(req, clone)).catch(()=>{});
+                caches.open(CACHE).then(c => c.put(req, resp.clone())).catch(()=>{});
             }
             return resp;
-        } catch (e) {
-            const fallback = await caches.match('/');
-            return fallback ? stripRedirect(fallback) : new Response('offline', { status: 503 });
+        }).catch(() => null);
+        if (cached) {
+            // Cache sofort liefern, Netzwerk-Update laeuft nebenher weiter.
+            network.catch(()=>{});
+            return stripRedirect(cached);
         }
+        const fresh = await network;
+        if (fresh) return fresh;
+        const fallback = await caches.match('/');
+        return fallback ? stripRedirect(fallback) : new Response('offline', { status: 503 });
     })());
+});
+
+// v1.21.1: Erlaubt der Seite, den Service Worker aktiv "SKIP_WAITING" zu
+// schicken, sobald ein Update erkannt wurde -> siehe sw-update.js.
+self.addEventListener('message', e => {
+    if (e.data === 'SKIP_WAITING') self.skipWaiting();
 });

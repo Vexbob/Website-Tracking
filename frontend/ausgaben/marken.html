@@ -13,6 +13,7 @@
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js" defer></script>
+<script src="/js/sw-update.js"></script>
     <script src="/ausgaben/ausgaben.js"></script>
 <style>
 body{visibility:hidden}body.ready{visibility:visible}
@@ -39,6 +40,8 @@ body{visibility:hidden}body.ready{visibility:visible}
 .brand-row button.del{background:transparent;border:none;color:var(--red);cursor:pointer;padding:0.25rem 0.375rem;width:auto;margin:0;font-size:0.9375rem}
 .brand-row.system{opacity:0.85}
 .brand-count{color:var(--text-muted);font-size:0.8125rem;font-weight:500;margin-bottom:0.5rem}
+.brand-purchases{padding:1px 6px;border-radius:6px;font-size:0.6875rem;font-weight:700;background:var(--teal);color:#fff}
+.brand-purchases.muted{background:var(--surface);color:var(--text-faint);border:1px solid var(--border)}
 .ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
 .ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .ausg-toast-success{background:var(--green-dark)}.ausg-toast-error{background:var(--red-dark)}

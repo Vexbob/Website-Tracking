@@ -8,14 +8,19 @@
  */
 
 (function () {
+    // v1.21.1: Blog hatte zwei separate Eintraege (öffentliche Ansicht +
+    // "Blog-Admin"). Fuer Admins gibt es jetzt nur noch EINEN Blog-Eintrag,
+    // der direkt in den Editor fuehrt (die öffentliche Ansicht ist von dort
+    // per "Live-Ansicht"-Link erreichbar). Nicht-Admins sehen weiterhin nur
+    // die öffentliche Ansicht.
     const MODULES = [
         { href: '/',            label: '🏠 Dashboard',      public: false },
         { href: '/sparziel/',   label: '💰 Sparziel',       public: false },
         { href: '/ausgaben/',   label: '💶 Ausgaben',       public: false },
         { href: '/notizen/',    label: '📝 Notizen',        public: false },
-        { href: '/blog/',       label: '📰 Blog',           public: true  },
+        { href: '/blog/',       label: '📰 Blog',           public: true, hideForAdmin: true },
+        { href: '/blog/admin/', label: '📰 Blog',           public: false, admin: true },
         { href: '/admin/',      label: '👥 User-Verwaltung', public: false, admin: true },
-        { href: '/blog/admin/', label: '✍️ Blog-Admin',     public: false, admin: true },
     ];
 
     function currentPath() {
@@ -47,6 +52,7 @@
         } catch (e) { /* nicht eingeloggter Zustand */ }
 
         const visible = MODULES.filter(m => {
+            if (m.hideForAdmin && loggedIn && isAdmin) return false;
             if (m.public) return true;
             if (!loggedIn) return false;
             if (m.admin) return isAdmin;

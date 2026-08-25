@@ -11,7 +11,7 @@ const AUSGABEN_API = {
     updateCategory:  (id, b) => apiCall(`/api/expense-categories/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     deleteCategory:  (id) => apiCall(`/api/expense-categories/${id}`, { method: 'DELETE' }),
 
-    brands:      () => apiCall('/api/brands'),
+    brands:      (sort) => apiCall('/api/brands' + (sort ? ('?sort=' + sort) : '')),
     createBrand: (b) => apiCall('/api/brands', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     updateBrand: (id, b) => apiCall(`/api/brands/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     deleteBrand: (id) => apiCall(`/api/brands/${id}`, { method: 'DELETE' }),
