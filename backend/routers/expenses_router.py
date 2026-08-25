@@ -1488,11 +1488,18 @@ async def list_products(
              "(ei.base_name IS NOT NULL OR (ei.description IS NOT NULL AND ei.description != ''))",
              "ei.total_price > 0"]
     params = [user["id"]]
-    if date_from:
-        params.append(date_from)
+    # Bugfix (war Ursache fuer HTTP 500 auf der Produkt-Seite): date_from/
+    # date_to kamen als rohe Strings an und wurden ungecastet gegen die
+    # ``date``-Spalte ``purchase_date`` verglichen -> asyncpg/Postgres wirft
+    # "operator does not exist: date >= text". Muessen zuerst in echte
+    # date-Objekte geparst werden, wie es der Rest des Moduls auch macht.
+    df = _parse_iso_date(date_from) if date_from else None
+    dt = _parse_iso_date(date_to) if date_to else None
+    if df:
+        params.append(df)
         conds.append(f"e.purchase_date >= ${len(params)}")
-    if date_to:
-        params.append(date_to)
+    if dt:
+        params.append(dt)
         conds.append(f"e.purchase_date <= ${len(params)}")
     if category_id:
         params.append(category_id)
