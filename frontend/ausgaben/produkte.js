@@ -26,12 +26,23 @@ if (typeof escHtml === 'undefined') {
 }
 
 async function init() {
-    const me = await ensureLoggedIn();
-    if (!me) return;
-    renderSubnav();
-    await Promise.all([loadCategories(), loadStores()]);
-    bindFilters();
-    await loadProducts();
+    // v1.21.3: statistik.css (von dieser Seite mitgeladen) setzt
+    // body{visibility:hidden} und erwartet, dass JS nach dem Laden die Klasse
+    // 'ready' hinzufuegt (body.ready{visibility:visible}). Das fehlte hier
+    // komplett -> die Seite blieb UNSICHTBAR obwohl Navbar, Tabelle und alle
+    // Daten laengst korrekt im DOM standen ("nur Hintergrundfarbe" sichtbar).
+    // finally stellt sicher, dass die Seite auch bei einem Fehler irgendwo
+    // in init() sichtbar wird, statt fuer immer leer zu bleiben.
+    try {
+        const me = await ensureLoggedIn();
+        if (!me) return;
+        renderSubnav();
+        await Promise.all([loadCategories(), loadStores()]);
+        bindFilters();
+        await loadProducts();
+    } finally {
+        document.body.classList.add('ready');
+    }
 }
 
 async function loadCategories() {
