@@ -22,7 +22,6 @@ const HEALTH_API = {
     apiKeys:       () => apiCall('/api/health/api-keys'),
     createKey:     (label) => apiCall('/api/health/api-keys', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ label }) }),
     revokeKey:     (id) => apiCall(`/api/health/api-keys/${id}`, { method: 'DELETE' }),
-    rescaleLegacy: () => apiCall('/api/health/rescale-legacy', { method: 'POST' }),
     // v1.28.0: Datensaetze loeschen
     deleteWorkout: (id) => apiCall(`/api/health/workouts/${id}`, { method: 'DELETE' }),
     deleteSleep:   (id) => apiCall(`/api/health/sleep/${id}`, { method: 'DELETE' }),
@@ -247,14 +246,8 @@ async function loadDashboard() {
 function renderInsights(s, extras) {
     const box = document.getElementById('hDashInsights');
     const items = [];
-    // Warnung, wenn Werte verdaechtig klein sind (alter CSV-Bug vor v1.25.0)
-    const stepsRows = (state.dashSeries && state.dashSeries.steps) || [];
-    const legacyBug = stepsRows.length >= 3 && stepsRows.every(r => (Number(r.qty) || 0) < 200);
-    if (legacyBug) {
-        items.push({ icon:'⚠️', txt:`Schritte sehen zu klein aus (Import-Bug vor v1.25.0). Reparieren: <a href="#" onclick="activateTab('einstellungen');return false;" style="color:var(--accent);font-weight:700">Einstellungen → Altdaten reparieren</a>.` });
-    }
     if (extras.stepsSum >= 70000) items.push({ icon:'🎯', txt:`Starke Woche — <strong>${fmt0(extras.stepsSum)}</strong> Schritte in 7 Tagen.` });
-    else if (extras.stepsSum > 200 && extras.stepsSum < 20000) items.push({ icon:'💡', txt:`Wenig Aktivität diese Woche (<strong>${fmt0(extras.stepsSum)}</strong> Schritte).` });
+    else if (extras.stepsSum > 0 && extras.stepsSum < 20000) items.push({ icon:'💡', txt:`Wenig Aktivität diese Woche (<strong>${fmt0(extras.stepsSum)}</strong> Schritte).` });
     if (extras.restAvg != null && extras.restPrev != null && (extras.restAvg - extras.restPrev) <= -2)
         items.push({ icon:'💚', txt:`Ruhepuls <strong>${fmt0(extras.restAvg)}</strong> bpm — ${fmt0(extras.restPrev - extras.restAvg)} bpm besser als Vorwoche.` });
     if (extras.restAvg != null && extras.restAvg >= 80)
@@ -944,29 +937,6 @@ async function bulkDeleteHealth() {
     } catch (e) {
         resultEl.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
         showToast('Löschen fehlgeschlagen', true);
-    }
-}
-
-async function rescaleLegacy() {
-    const resultEl = document.getElementById('hRescaleResult');
-    if (!confirm('Falsch skalierte Alt-Werte in der Datenbank reparieren?\n\nNur Werte unter 200 in Schritten, aktiver Energie und Schwimmdistanz werden um Faktor 1000 hochskaliert. Idempotent — Werte über 200 bleiben unverändert.'))
-        return;
-    resultEl.innerHTML = '<div class="stat-loading">Repariere Werte …</div>';
-    try {
-        const res = await HEALTH_API.rescaleLegacy();
-        const r = res.rescaled || {};
-        resultEl.innerHTML = `
-            <div class="h-hint" style="margin:0">
-                ✅ Fertig — <strong>${fmt0(res.total)}</strong> Werte korrigiert:
-                ${fmt0(r.steps || 0)} Schritte-Einträge,
-                ${fmt0(r.active_energy || 0)} Kalorien-Einträge,
-                ${fmt0(r.swim_distance || 0)} Schwimmdistanz-Einträge.
-            </div>`;
-        showToast('Werte repariert ✓');
-        loadDashboard();
-    } catch (e) {
-        resultEl.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
-        showToast('Fehler beim Reparieren', true);
     }
 }
 

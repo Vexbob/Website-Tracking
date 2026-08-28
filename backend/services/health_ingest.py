@@ -488,30 +488,27 @@ async def _ingest_health_metrics_csv(db, user_id: int, header: list, rows: list)
             stats["skipped"].append(f"health_metrics_csv:invalid_date:{row[0]}")
             continue
 
-        # Der CSV-Tagesexport von Auto Health Export liefert Schritte, aktive
-        # Energie und Schwimmdistanz in TAUSENDER-Einheiten (z.B. "1.59" =
-        # 1590 Schritte, "0.131" = 131 kcal, "0.628" = 628 m). Der Header
-        # nennt trotzdem "(Schritte)"/"(kcal)"/"(m)" und ist damit
-        # irrefuehrend — ohne Skalierung landen als Ergebnis nur ~2 Schritte
-        # und ~0 kcal in der Datenbank. Rohwerte werden fuer diese Metriken
-        # daher hier um Faktor 1000 skaliert. Andere Metriken (Puls, HRV,
-        # Gewicht, VO2max ...) sind bereits korrekt skaliert.
+        # v1.29.0: Werte werden 1:1 aus der CSV uebernommen (frueher wurden
+        # Schritte/Aktive Energie/Schwimmdistanz um Faktor 1000 skaliert,
+        # weil eine fruehere fehlerhafte Beispiel-CSV das nahegelegt hat —
+        # aktuelle Auto-Health-Export-Versionen liefern die Rohwerte
+        # bereits korrekt, siehe User-Feedback).
         simple_cols = [
-            ("active_energy", "active_energy", 1000.0),
-            ("walking_hr", "walking_hr_avg", 1.0),
-            ("weight", "weight", 1.0),
-            ("hrv", "hrv", 1.0),
-            ("cardio_recovery", "cardio_recovery", 1.0),
-            ("resting_hr", "resting_hr", 1.0),
-            ("steps", "steps", 1000.0),
-            ("swim_distance", "swim_distance", 1000.0),
-            ("vo2_max", "vo2_max", 1.0),
+            ("active_energy", "active_energy"),
+            ("walking_hr", "walking_hr_avg"),
+            ("weight", "weight"),
+            ("hrv", "hrv"),
+            ("cardio_recovery", "cardio_recovery"),
+            ("resting_hr", "resting_hr"),
+            ("steps", "steps"),
+            ("swim_distance", "swim_distance"),
+            ("vo2_max", "vo2_max"),
         ]
-        for col_key, metric_type, scale in simple_cols:
+        for col_key, metric_type in simple_cols:
             val = _row_num(row, col.get(col_key))
             if val is None:
                 continue
-            p = {"date": date_str, "qty": val * scale}
+            p = {"date": date_str, "qty": val}
             if await _ingest_metric_point(db, user_id, metric_type, p, None):
                 stats["metrics_imported"] += 1
             else:

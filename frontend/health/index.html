@@ -252,19 +252,6 @@
             <div id="hDelResult" style="margin-top:0.75rem"></div>
         </div>
 
-        <div class="stat-card">
-            <h3>🛠️ Altdaten reparieren</h3>
-            <p class="h-hint">Falls du CSV-Daten <strong>vor v1.25.0</strong> importiert
-                hast, sind Schritte, aktive Energie und Schwimmdistanz <strong>1000×
-                zu klein</strong> in der Datenbank gelandet (z.B. „2 Schritte"
-                statt „2000"). Dieser Button korrigiert alle betroffenen Werte
-                idempotent — nur Werte unter 200 werden hochskaliert, richtige
-                Werte bleiben unverändert.</p>
-            <div class="h-form-row">
-                <button class="primary" onclick="rescaleLegacy()">🛠️ Werte reparieren</button>
-            </div>
-            <div id="hRescaleResult" style="margin-top:0.75rem"></div>
-        </div>
     </div>
 </main>
 <div class="version-tag"></div>

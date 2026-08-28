@@ -109,41 +109,6 @@ async def export_health_csv(db=Depends(get_db), user=Depends(get_current_user)):
     )
 
 
-# ---------- Rescale-Fix fuer alten CSV-Import-Bug ----------
-@router.post("/api/health/rescale-legacy")
-@limiter.limit(LIMIT_WRITE_RARE)
-async def rescale_legacy_csv_values(request: Request, db=Depends(get_db),
-                                     user=Depends(get_current_user)):
-    """Repariert Werte, die vor dem CSV-Skalierungs-Fix (v1.25.0) mit dem
-    Auto-Health-Export-Tages-CSV importiert wurden. Die App liefert Schritte,
-    aktive Energie und Schwimmdistanz in Tausender-Einheiten, was frueher
-    unskaliert in die DB geschrieben wurde (z.B. 1,59 statt 1590 Schritte).
-
-    Sicherheitshalber werden nur Werte < 200 skaliert (echte Werte fuer diese
-    Metriken liegen im 3- bis 5-stelligen Bereich, kleine Werte sind fast
-    sicher der alte Bug). Idempotent: mehrfacher Aufruf richtet keinen
-    Schaden an, weil skalierte Werte oberhalb der Schwelle liegen."""
-    metrics = ("steps", "active_energy", "swim_distance")
-    updated = {}
-    for m in metrics:
-        # asyncpg gibt bei execute() den command tag zurueck (z.B. "UPDATE 42")
-        tag = await db.execute(
-            "UPDATE health_metric_samples SET qty = qty * 1000, "
-            "avg_value = CASE WHEN avg_value IS NULL THEN NULL ELSE avg_value * 1000 END, "
-            "min_value = CASE WHEN min_value IS NULL THEN NULL ELSE min_value * 1000 END, "
-            "max_value = CASE WHEN max_value IS NULL THEN NULL ELSE max_value * 1000 END "
-            "WHERE user_id=$1 AND metric_type=$2 AND qty IS NOT NULL AND qty > 0 AND qty < 200",
-            user["id"], m)
-        try:
-            updated[m] = int(tag.rsplit(" ", 1)[-1])
-        except (ValueError, AttributeError):
-            updated[m] = 0
-    logger.info("Health-Rescale fuer user_id=%s: %s", user["id"], updated)
-    total = sum(updated.values())
-    return {"rescaled": updated, "total": total,
-            "note": "Werte < 200 wurden um Faktor 1000 skaliert."}
-
-
 # ---------- Datensaetze loeschen (v1.28.0) ----------
 # Erlaubte Bereiche fuer den Bulk-Delete-Endpoint. Werte mappen auf
 # (Tabelle, Zeitspalte). ``all`` loescht in allen Tabellen.
