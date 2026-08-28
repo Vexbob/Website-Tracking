@@ -18,8 +18,13 @@ async def export_all(db=Depends(get_db), user=Depends(get_current_user)):
     inkl. erklärender Kommentarzeilen vor jeder Sektion (siehe
     services/full_export.py)."""
     csv = await build_full_export_csv(db, user)
+    # UTF-8 mit BOM, damit Excel Umlaute (ä/ö/ü/ß) korrekt darstellt
+    content = ("\ufeff" + csv).encode("utf-8")
     return Response(
-        content=csv,
+        content=content,
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=vexbob-gesamt-export.csv"},
+        headers={
+            "Content-Disposition": 'attachment; filename="vexbob-gesamt-export.csv"',
+            "Cache-Control": "no-store",
+        },
     )

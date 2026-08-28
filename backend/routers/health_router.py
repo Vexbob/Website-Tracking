@@ -102,10 +102,15 @@ async def export_health_csv(db=Depends(get_db), user=Depends(get_current_user)):
     Workouts inkl. Zusatzmetriken). Selbe Sektions-Struktur wie im
     Gesamt-Export ``/api/export/all``, aber nur der Health-Anteil."""
     csv = await build_health_export_csv(db, user)
+    # UTF-8 mit BOM, damit Excel Umlaute (ä/ö/ü/ß) korrekt darstellt
+    content = ("\ufeff" + csv).encode("utf-8")
     return Response(
-        content=csv,
+        content=content,
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=vexbob-health-export.csv"},
+        headers={
+            "Content-Disposition": 'attachment; filename="vexbob-health-export.csv"',
+            "Cache-Control": "no-store",
+        },
     )
 
 

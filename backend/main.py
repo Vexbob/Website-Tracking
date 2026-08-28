@@ -1222,8 +1222,11 @@ async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
     lines.append("Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz")
     lines.extend(await _sparziel_protocol_lines(db, user["id"]))
     csv = "\n".join(lines) + "\n"
-    return Response(content=csv, media_type="text/csv; charset=utf-8",
-                    headers={"Content-Disposition": "attachment; filename=vexbob-log.csv"})
+    # UTF-8 mit BOM, damit Excel Umlaute (ä/ö/ü/ß) korrekt darstellt
+    content = ("\ufeff" + csv).encode("utf-8")
+    return Response(content=content, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="vexbob-log.csv"',
+                             "Cache-Control": "no-store"})
 
 # ---------- Activity Log ----------
 @app.get("/api/activity-log")
