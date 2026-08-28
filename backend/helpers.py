@@ -194,6 +194,68 @@ def _export_amt(v) -> str:
         return ""
 
 
+async def _sparziel_protocol_lines(db, user_id: int) -> list[str]:
+    """Baut die Protokoll-Zeilen (Check-ins, Meilensteine, Transaktionen)
+    fuer den Sparziel-Export. Ausgelagert (v1.23.0), damit sowohl der
+    einzelne Sparziel-Export (``/api/savings-transactions/export``) als
+    auch der kombinierte Gesamt-Export (``services/full_export.py``)
+    dieselbe Logik ohne Duplikation nutzen."""
+    log_body: list[str] = []
+
+    ci_rows = await db.fetch(
+        """SELECT pl.log_date, pl.week_key, pl.month_key, pl.created_at, pl.note,
+                  pg.title, pg.reward_amount, pg.rhythm_type, pg.target_count, pl.progress_goal_id, pl.id
+           FROM progress_logs pl JOIN progress_goals pg ON pg.id = pl.progress_goal_id
+           WHERE pl.user_id=$1
+           ORDER BY pl.created_at""",
+        user_id)
+    for r in ci_rows:
+        rhythm = r["rhythm_type"] or "weekly"
+        pk = r["month_key"] if rhythm == "monthly" else r["week_key"]
+        col = "month_key" if rhythm == "monthly" else "week_key"
+        cnt_upto = int(await db.fetchval(
+            f"SELECT COUNT(*) FROM progress_logs WHERE progress_goal_id=$1 AND user_id=$2 AND {col}=$3 AND id <= $4",
+            r["progress_goal_id"], user_id, pk, r["id"]))
+        target = int(r["target_count"])
+        just_fulfilled = cnt_upto == target
+        amt = float(r["reward_amount"]) if just_fulfilled else 0.0
+        d = r["created_at"].isoformat() if r["created_at"] else ""
+        desc = f"{cnt_upto}/{target}"
+        log_body.append(f'{d};checkin;{_export_csv_field(r["title"])};{_export_csv_field(desc)};{pk or ""};{amt:.2f};{_export_csv_field(r["note"] or "")}')
+
+    ml_rows = await db.fetch(
+        """SELECT al.achieved_value, al.reward_amount, al.date_achieved, al.note, a.title, a.unit
+           FROM achievement_logs al JOIN achievements a ON a.id = al.achievement_id
+           WHERE al.user_id=$1
+           ORDER BY al.date_achieved""",
+        user_id)
+    for r in ml_rows:
+        d = r["date_achieved"].isoformat() if r["date_achieved"] else ""
+        unit = r["unit"] or ""
+        desc = f"Bei {fmt_de_num(r['achieved_value'])} {unit}".strip()
+        log_body.append(f'{d};milestone;{_export_csv_field(r["title"])};{_export_csv_field(desc)};;{float(r["reward_amount"]):.2f};{_export_csv_field(r["note"] or "")}')
+
+    tx_rows = await db.fetch(
+        """SELECT created_at, amount, source_type, source_id, description, period_key, note
+           FROM savings_transactions WHERE user_id=$1 ORDER BY created_at""",
+        user_id)
+    for r in tx_rows:
+        st = r["source_type"]
+        pk = r["period_key"] or ""
+        is_streak_bonus = st == "progress" and "-streak-" in pk
+        if st == "progress" and not is_streak_bonus:
+            continue
+        if st == "achievement":
+            continue
+        d = r["created_at"].isoformat() if r["created_at"] else ""
+        row_type = "streak_bonus" if is_streak_bonus else st
+        desc = r["description"] or ""
+        title = "Anfangsbestand" if st == "initial" else (desc[:40] or st)
+        log_body.append(f'{d};{row_type};{_export_csv_field(title)};{_export_csv_field(desc)};{pk};{float(r["amount"]):.2f};{_export_csv_field(r["note"] or "")}')
+
+    return sorted(log_body)
+
+
 def _build_export_header(user) -> list[str]:
     export_dt = datetime.now(timezone.utc).isoformat()
     return [

@@ -55,6 +55,15 @@
                 </a>
             </div>
         </section>
+        <section class="section">
+            <h2 style="margin-bottom:1rem">Daten-Export</h2>
+            <div class="tile-grid">
+                <a href="#" class="tile" id="exportAllTile" onclick="exportAll();return false;">
+                    <div class="tile-icon purple">⬇</div>
+                    <div class="tile-text"><div class="tile-title">Alles exportieren</div><div class="tile-sub">Sparziel, Ausgaben &amp; Gesundheit in einer CSV</div></div>
+                </a>
+            </div>
+        </section>
         <section class="section" id="adminSection" style="display:none">
             <h2 style="margin-bottom:1rem">Administration</h2>
             <div class="tile-grid">
@@ -67,6 +76,18 @@
     </main>
     <div class="version-tag"></div>
     <script>
+        async function exportAll() {
+            try {
+                const res = await apiCall('/api/export/all', { raw: true });
+                if (!res || !res.ok) { alert('Export fehlgeschlagen'); return; }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'vexbob-gesamt-export.csv';
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(url);
+            } catch (e) { alert('Export fehlgeschlagen: ' + e.message); }
+        }
         (async function() {
             if (!isLoggedIn()) { window.location.href = '/private/login.html'; return; }
             try {

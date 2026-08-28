@@ -39,7 +39,7 @@ from schemas import (
 from helpers import (
     ser, fmt_de_num, _milestones_at, _active_goal_id, _streak,
     _general_goal_id, _reward_goal_for,
-    _build_export_header, _build_export_metadata,
+    _build_export_header, _build_export_metadata, _sparziel_protocol_lines,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
@@ -1110,81 +1110,18 @@ async def del_st(request: Request, tid: int, db=Depends(get_db), user=Depends(ge
 
 @app.get("/api/savings-transactions/export")
 async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
-    # ---------- CSV-Helfer ----------
-    def _csv_field(s: str) -> str:
-        s = (s or "").replace('"', '""').replace(';', ',').replace('\n', ' ').replace('\r', ' ')
-        return f'"{s}"'
-
-    def _amt(v) -> str:
-        try:
-            return f"{float(v):.2f}"
-        except Exception:
-            return ""
-
     # Bugfix v1.15.0: Der Export enthaelt jetzt vorab einen Metadaten-
     # Block mit allen Sparzielen, Achievements, Wochen-/Monatszielen,
     # Wunsch-Anschaffungen, Zukunftsideen und Trophaeen. Danach folgt
     # das eigentliche Protokoll wie bisher. Jede Sektion beginnt mit
     # einer Kommentarzeile ``# SEKTION: ...`` und ihrem eigenen Header.
+    # Protokoll-Aufbau ausgelagert nach ``helpers._sparziel_protocol_lines``
+    # (v1.23.0), damit der kombinierte Gesamt-Export dieselbe Logik nutzt.
     lines: list[str] = _build_export_header(user)
     lines.extend(await _build_export_metadata(db, user["id"]))
     lines.append("# SEKTION: Protokoll")
-    log_header = "Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz"
-    lines.append(log_header)
-    log_body: list[str] = []
-
-    ci_rows = await db.fetch(
-        """SELECT pl.log_date, pl.week_key, pl.month_key, pl.created_at, pl.note,
-                  pg.title, pg.reward_amount, pg.rhythm_type, pg.target_count, pl.progress_goal_id, pl.id
-           FROM progress_logs pl JOIN progress_goals pg ON pg.id = pl.progress_goal_id
-           WHERE pl.user_id=$1
-           ORDER BY pl.created_at""",
-        user["id"])
-    for r in ci_rows:
-        rhythm = r["rhythm_type"] or "weekly"
-        pk = r["month_key"] if rhythm == "monthly" else r["week_key"]
-        col = "month_key" if rhythm == "monthly" else "week_key"
-        cnt_upto = int(await db.fetchval(
-            f"SELECT COUNT(*) FROM progress_logs WHERE progress_goal_id=$1 AND user_id=$2 AND {col}=$3 AND id <= $4",
-            r["progress_goal_id"], user["id"], pk, r["id"]))
-        target = int(r["target_count"])
-        just_fulfilled = cnt_upto == target
-        amt = float(r["reward_amount"]) if just_fulfilled else 0.0
-        d = r["created_at"].isoformat() if r["created_at"] else ""
-        desc = f"{cnt_upto}/{target}"
-        log_body.append(f'{d};checkin;{_csv_field(r["title"])};{_csv_field(desc)};{pk or ""};{amt:.2f};{_csv_field(r["note"] or "")}')
-
-    ml_rows = await db.fetch(
-        """SELECT al.achieved_value, al.reward_amount, al.date_achieved, al.note, a.title, a.unit
-           FROM achievement_logs al JOIN achievements a ON a.id = al.achievement_id
-           WHERE al.user_id=$1
-           ORDER BY al.date_achieved""",
-        user["id"])
-    for r in ml_rows:
-        d = r["date_achieved"].isoformat() if r["date_achieved"] else ""
-        unit = r["unit"] or ""
-        desc = f"Bei {fmt_de_num(r['achieved_value'])} {unit}".strip()
-        log_body.append(f'{d};milestone;{_csv_field(r["title"])};{_csv_field(desc)};;{float(r["reward_amount"]):.2f};{_csv_field(r["note"] or "")}')
-
-    tx_rows = await db.fetch(
-        """SELECT created_at, amount, source_type, source_id, description, period_key, note
-           FROM savings_transactions WHERE user_id=$1 ORDER BY created_at""",
-        user["id"])
-    for r in tx_rows:
-        st = r["source_type"]
-        pk = r["period_key"] or ""
-        is_streak_bonus = st == "progress" and "-streak-" in pk
-        if st == "progress" and not is_streak_bonus:
-            continue
-        if st == "achievement":
-            continue
-        d = r["created_at"].isoformat() if r["created_at"] else ""
-        row_type = "streak_bonus" if is_streak_bonus else st
-        desc = r["description"] or ""
-        title = "Anfangsbestand" if st == "initial" else (desc[:40] or st)
-        log_body.append(f'{d};{row_type};{_csv_field(title)};{_csv_field(desc)};{pk};{float(r["amount"]):.2f};{_csv_field(r["note"] or "")}')
-
-    lines.extend(sorted(log_body))
+    lines.append("Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz")
+    lines.extend(await _sparziel_protocol_lines(db, user["id"]))
     csv = "\n".join(lines) + "\n"
     return Response(content=csv, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": "attachment; filename=vexbob-log.csv"})
@@ -1475,3 +1412,9 @@ app.include_router(blog_router)
 # --------------------------------------------------------------------------
 from routers.health_router import router as health_router
 app.include_router(health_router)
+
+# ==========================================================================
+# Gesamt-Export (v1.23.0) — Sparziel + Ausgaben + Gesundheit in einer CSV
+# --------------------------------------------------------------------------
+from routers.export_router import router as export_router
+app.include_router(export_router)

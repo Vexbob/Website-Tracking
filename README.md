@@ -18,7 +18,7 @@
 - **CSV-Export** mit Metadaten-Vorspann (Sparziele, Achievements, Wochen-/Monatsziele, Wunsch-Anschaffungen, Zukunftsideen, Trophäen) + Protokoll (v1.15.0)
 - Fallende Achievements: Meilenstein zählt erst bei **strikt unter** der Schwelle (v1.15.1)
 - **v1.18.0 Repair-Job**: beim Backend-Startup werden verpasste Meilenstein-Auszahlungen automatisch nachgetragen (Log + Savings-Transaktion mit Note „Nachtrag v1.18: Meilenstein-Reparatur"), `credited_milestones` neu synchronisiert.
-- **Wochenziel-Historie erweitert** (v1.18.0): pro Wochenziel wird der Verlauf der letzten 12–52 Perioden mit Status-Chips (✓/◐/✕/⏳), Check-in-Anzahl und Auszahlungs-Marker gezeigt; nachträglicher Check-in in vergangene Wochen per +1-Button möglich.
+- **Wochenziel-Historie erweitert** (v1.18.0): pro Wochenziel wird der Verlauf der letzten 12–52 Perioden mit Status-Chips (✓/◐/✕/⏳), Check-in-Anzahl und Auszahlungs-Marker gezeigt; nachträglicher Check-in in vergangene Wochen per +1-Button möglich — erreichbar über „⋮ Bearbeiten" → „Vergangene Perioden" am jeweiligen Wochenziel (die separate, funktionslose Wochen-Navigation über der Liste wurde in v1.23.0 entfernt).
 - **🪙 Allgemein-Konto / Puffer** (v1.18.2): jeder User hat automatisch ein „Allgemein"-Konto, das keine Zielgrenze hat. Meilenstein- und Streak-Belohnungen werden intelligent geroutet — wenn das aktive Sparziel nicht mehr genug Platz für die Belohnung hat (bzw. abgeschlossen ist), wandert die Auszahlung automatisch ins Allgemein-Konto **und wird trotzdem verbucht**. Fixt das Problem, dass Meilensteine „verpuffen", wenn der Rest-Betrag des Sparziels kleiner ist als die Belohnung. Achievements & Wochenziele bekommen optional ein **Reward-Goal-Dropdown** („Belohnung geht an: …") um manuell ein festes Zielkonto zu wählen.
 - **JSON-Backup & Restore**, automatische tägliche Snapshots
 
@@ -99,6 +99,17 @@ Sync-Ziel für die iPhone-App **Auto Health Export** (REST-API-Automation).
 - **Frontend** (`/health/`) mit Tabs Dashboard, Vitalwerte (Charts pro
   Metrik + Blutdruck/Blutzucker), Schlaf (gestapeltes Phasen-Chart),
   Workouts (Liste + Detail) und Einstellungen (API-Key-Verwaltung).
+
+### ⬇️ Gesamt-Export (neu in v1.23.0)
+Dashboard-Kachel „Alles exportieren" (`GET /api/export/all`) liefert **eine
+einzige CSV** mit allen Modulen gleichzeitig: Sparziele, Achievements,
+Wochen-/Monatsziele, Wunsch-Anschaffungen, Zukunftsideen, Trophäen,
+Sparziel-Protokoll, Ausgaben (Bons + Positionen) und Gesundheit
+(Vitalwerte, Blutdruck, Blutzucker, Schlaf, Workouts). Jede Sektion beginnt
+mit einer erklärenden Kommentarzeile `# SEKTION: ...` und ihrem eigenen
+Spalten-Header — die Spaltenanzahl unterscheidet sich bewusst zwischen den
+Sektionen (unterschiedliche Datentypen). Baut auf denselben Zeilen-Helfern
+wie die einzelnen Modul-Exports auf (`helpers.py`, `services/full_export.py`).
 
 ### 👤 User- & Admin-System
 - Login mit JWT

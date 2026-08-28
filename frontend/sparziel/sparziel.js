@@ -168,33 +168,6 @@ function updatePeriodLabel(){
     document.getElementById('pgPeriodLbl').textContent=`· KW ${w.week} (${s} – ${e})`;
 }
 
-// Wochen-Navigation für vergangene Wochen
-let pgWeekOffset = 0; // 0 = aktuelle Woche, -1 = letzte Woche, etc.
-function getWeekInfo(offset){
-    const now=new Date();
-    const monday=new Date(now);monday.setDate(now.getDate()-((now.getDay()||7)-1)+offset*7);
-    const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
-    const {week,year}=isoWeek(monday);
-    return{week,year,start:monday,end:sunday};
-}
-function updateWeekNavLabel(){
-    const w=getWeekInfo(pgWeekOffset);
-    const s=w.start.toLocaleDateString('de-DE',{day:'2-digit',month:'short'});
-    const e=w.end.toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'});
-    const lbl=document.getElementById('pgWeekNavLabel');
-    if(lbl) lbl.textContent=`KW ${w.week} (${s} – ${e})`;
-    const prevBtn=document.getElementById('pgWeekPrev');
-    const nextBtn=document.getElementById('pgWeekNext');
-    if(prevBtn) prevBtn.disabled=false;
-    if(nextBtn) nextBtn.disabled=(pgWeekOffset>=0);
-}
-function navigateWeek(dir){
-    pgWeekOffset+=dir;
-    if(pgWeekOffset>0) pgWeekOffset=0;
-    updateWeekNavLabel();
-    renderProgressGoals();
-}
-
 function activateTab(t){
     document.querySelectorAll('.tab-btn').forEach(x=>x.classList.toggle('active',x.dataset.tab===t));
     ['dashboard','log','heatmap','trophies','ideen'].forEach(id=>{
@@ -1294,6 +1267,5 @@ function initSortables(){
     const initialTab=(location.hash||'#dashboard').slice(1);
     if(['dashboard','log','heatmap','trophies','ideen'].includes(initialTab))activateTab(initialTab);
     try{await loadAll();}catch(e){showToast('Laden fehlgeschlagen',true);console.error(e);}
-    updateWeekNavLabel();
     initSortables();
 })();
