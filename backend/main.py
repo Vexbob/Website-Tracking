@@ -29,7 +29,7 @@ from deps import (
 
 # Ausgelagerte Pydantic-Models (v1.15.1)
 from schemas import (
-    SavGoalUpd, SavGoalCreate, AchCreate, AchUpd, AchEdit,
+    SavGoalUpd, SavGoalCreate, SavGoalTransfer, AchCreate, AchUpd, AchEdit,
     PGCreate, PGUpd, CheckinBody, NoteBody,
     PotCreate, FICreate, ReorderBody, RestoreBody,
     UserCreate, UserPasswordReset, UserCreateInvite, ActivateBody, TrophyCreate,
@@ -434,6 +434,87 @@ async def activate_sg(request: Request, gid: int, db=Depends(get_db), user=Depen
             gid, user["id"])
     logger.info(f"User {user['id']} activated savings_goal {gid}")
     return ser(await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid))
+
+@app.post("/api/savings-goals/{gid}/transfer-from-buffer")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def transfer_from_buffer(request: Request, gid: int, b: SavGoalTransfer,
+                                db=Depends(get_db), user=Depends(get_current_user)):
+    """v1.26.0: Ueberweist Geld vom Allgemein-Konto (Puffer) auf das
+    angegebene Sparziel. Erzeugt atomar zwei ``savings_transactions``-Zeilen
+    (-amount vom Puffer, +amount aufs Ziel), gemeinsame ``source_id`` haelt
+    das Paar zusammen (fuer eine spaetere Rueckbuchung/Loeschung).
+
+    Validierung:
+      * ``amount`` > 0
+      * Zielziel existiert, gehoert dem User, ist kein Puffer und nicht bereits
+        ueberzahlt (Restweg > 0 wenn ``target_amount`` gesetzt).
+      * Puffer hat genug Deckung.
+    """
+    if b.amount is None or b.amount <= 0:
+        raise HTTPException(400, "Betrag muss > 0 sein")
+    amount = round(float(b.amount), 2)
+    # Zielziel laden
+    target = await db.fetchrow(
+        "SELECT id, name, target_amount, is_general FROM savings_goals "
+        "WHERE id=$1 AND user_id=$2", gid, user["id"])
+    if not target:
+        raise HTTPException(404, "Sparziel nicht gefunden")
+    if bool(target["is_general"]):
+        raise HTTPException(400, "Ziel-Konto darf nicht das Allgemein-Konto sein")
+    # Puffer-Konto ermitteln
+    buffer_id = await db.fetchval(
+        "SELECT id FROM savings_goals WHERE user_id=$1 AND is_general=TRUE LIMIT 1",
+        user["id"])
+    if buffer_id is None:
+        raise HTTPException(400, "Kein Puffer-Konto vorhanden")
+    if buffer_id == gid:
+        raise HTTPException(400, "Quelle und Ziel duerfen nicht identisch sein")
+    # Deckung pruefen
+    buffer_balance = float(await db.fetchval(
+        "SELECT COALESCE(SUM(amount),0) FROM savings_transactions "
+        "WHERE user_id=$1 AND savings_goal_id=$2", user["id"], buffer_id) or 0)
+    if amount > buffer_balance + 1e-9:
+        raise HTTPException(400,
+            f"Nicht genug im Puffer (verfuegbar: {buffer_balance:.2f} €)")
+    # Ueberzahlung verhindern
+    target_saved = float(await db.fetchval(
+        "SELECT COALESCE(SUM(amount),0) FROM savings_transactions "
+        "WHERE user_id=$1 AND savings_goal_id=$2", user["id"], gid) or 0)
+    tgt_amt = float(target["target_amount"] or 0)
+    if tgt_amt > 0 and target_saved + amount > tgt_amt + 1e-9:
+        remaining = max(0.0, tgt_amt - target_saved)
+        raise HTTPException(400,
+            f"Betrag ueberschreitet Zielrest ({remaining:.2f} € frei)")
+
+    note = (b.note or "").strip() or None
+    desc = f"Übertrag Puffer → {target['name']}"
+    async with db.transaction():
+        # 1) Abbuchung vom Puffer, RETURNING id als Paar-ID
+        pair_id = await db.fetchval(
+            "INSERT INTO savings_transactions "
+            "(user_id, amount, source_type, source_id, description, note, savings_goal_id) "
+            "VALUES ($1, $2, 'transfer', NULL, $3, $4, $5) RETURNING id",
+            user["id"], -amount, desc, note, buffer_id)
+        # 2) Zubuchung aufs Ziel, source_id = pair_id -> paart die Zeilen
+        await db.execute(
+            "INSERT INTO savings_transactions "
+            "(user_id, amount, source_type, source_id, description, note, savings_goal_id) "
+            "VALUES ($1, $2, 'transfer', $3, $4, $5, $6)",
+            user["id"], amount, pair_id, desc, note, gid)
+        # 3) Puffer-Seite: source_id auf sich selbst setzen (Marker "ist Quelle des Paares")
+        await db.execute(
+            "UPDATE savings_transactions SET source_id=$1 WHERE id=$1",
+            pair_id)
+    logger.info("User %s transferred %.2f from buffer %s to goal %s",
+                user["id"], amount, buffer_id, gid)
+    return {
+        "status": "ok",
+        "amount": amount,
+        "buffer_id": buffer_id,
+        "target_id": gid,
+        "pair_id": pair_id,
+    }
+
 
 @app.delete("/api/savings-goals/{gid}")
 @limiter.limit(LIMIT_WRITE_RARE)
@@ -1102,6 +1183,24 @@ async def list_st(source_type: Optional[str] = None, from_date: Optional[str] = 
 @app.delete("/api/savings-transactions/{tid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def del_st(request: Request, tid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    # v1.26.0: Bei Transfers (source_type='transfer') haengt die Gegenseite
+    # ueber ``source_id`` an der Puffer-Zeile (deren source_id == eigene id).
+    # Beide Zeilen des Paares muessen zusammen weg, sonst gibt es eine
+    # unbalancierte Bewegung im Log.
+    row = await db.fetchrow(
+        "SELECT id, source_type, source_id FROM savings_transactions "
+        "WHERE id=$1 AND user_id=$2", tid, user["id"])
+    if not row:
+        return {"status": "deleted"}
+    if row["source_type"] == "transfer" and row["source_id"] is not None:
+        pair_id = int(row["source_id"])
+        # pair_id == id der Puffer-Zeile; loesche beide (Puffer + Ziel).
+        async with db.transaction():
+            await db.execute(
+                "DELETE FROM savings_transactions "
+                "WHERE user_id=$1 AND (id=$2 OR source_id=$2)",
+                user["id"], pair_id)
+        return {"status": "deleted", "pair_deleted": True}
     await db.execute("DELETE FROM savings_transactions WHERE id=$1 AND user_id=$2", tid, user["id"])
     return {"status": "deleted"}
 
@@ -1180,6 +1279,29 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
         events.append({"type": "initial", "date": r["created_at"].isoformat(), "title": "Anfangsbestand",
             "description": r["description"] or "", "amount": float(r["amount"]),
             "log_id": r["id"], "note": r["note"] or "", "deletable": True})
+
+    # v1.26.0: Ueberweisungen Puffer → Sparziel als eigener Event-Typ.
+    # Wir zeigen nur die POSITIVE (Ziel-)Seite; die passende negative
+    # Puffer-Seite wird beim Loeschen automatisch mit entfernt (siehe
+    # DELETE-Endpoint).
+    tr_rows = await db.fetch(
+        """SELECT st.id, st.amount, st.description, st.created_at, st.source_id,
+                  st.note, st.savings_goal_id, sg.name AS goal_name
+             FROM savings_transactions st
+             JOIN savings_goals sg ON sg.id = st.savings_goal_id
+            WHERE st.user_id=$1 AND st.source_type='transfer' AND st.amount > 0
+            ORDER BY st.created_at DESC LIMIT $2""",
+        user["id"], limit)
+    for r in tr_rows:
+        events.append({
+            "type": "transfer",
+            "date": r["created_at"].isoformat(),
+            "title": r["description"] or "Übertrag",
+            "description": f"Auf „{r['goal_name']}\"",
+            "amount": float(r["amount"]),
+            "log_id": r["id"], "source_id": r["source_id"],
+            "note": r["note"] or "", "deletable": True,
+        })
 
     sb_rows = await db.fetch(
         """SELECT st.id, st.amount, st.description, st.created_at, st.source_id, st.period_key, st.note, pg.title

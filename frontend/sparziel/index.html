@@ -246,6 +246,25 @@
 </div>
 
 
+<!-- Transfer aus Puffer Modal (v1.26.0) -->
+<div class="vex-modal" id="transferModal">
+    <div class="vex-modal-card">
+        <h3>🔄 Vom Puffer übertragen</h3>
+        <p class="vex-modal-sub" id="tfModalSub">–</p>
+        <label>Ziel-Sparziel</label>
+        <select id="tfGoal"></select>
+        <label>Betrag (€)</label>
+        <input type="number" step="0.01" min="0.01" id="tfAmount" placeholder="z.B. 25.00">
+        <div class="vex-modal-quick" id="tfQuickBtns" style="display:flex;gap:0.375rem;flex-wrap:wrap;margin-top:0.375rem"></div>
+        <label>Notiz (optional)</label>
+        <input type="text" id="tfNote" placeholder="z.B. Für neues Sparziel angespart">
+        <div class="vex-modal-actions">
+            <button class="cancel" onclick="closeTransferModal()">Abbrechen</button>
+            <button class="primary" onclick="submitTransfer()">Übertragen</button>
+        </div>
+    </div>
+</div>
+
 <!-- Complete Savings Goal Modal -->
 <div class="vex-modal" id="completeModal">
     <div class="vex-modal-card">

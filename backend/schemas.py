@@ -24,6 +24,12 @@ class SavGoalCreate(BaseModel):
     activate: bool = True
 
 
+class SavGoalTransfer(BaseModel):
+    """v1.26.0: Ueberweisung vom Allgemein-Konto (Puffer) auf ein Sparziel."""
+    amount: float
+    note: Optional[str] = None
+
+
 # ---------- Achievements ----------
 class AchCreate(BaseModel):
     title: str

@@ -738,6 +738,7 @@ async function loadSavingsGoals(){
             const active=!!g.is_active;
             const isGen = !!g.is_general;
             if(isGen){
+                const canTransfer = saved > 0 && normal.length > 0;
                 return `<div class="ach-card" style="border-color:#a78bfa;background:linear-gradient(135deg,rgba(139,92,246,0.06),transparent)">
                     <div class="ach-head">
                         <div class="ach-title">🪙 ${esc(g.name)}</div>
@@ -745,6 +746,13 @@ async function loadSavingsGoals(){
                     </div>
                     <div class="ach-value">${fmtEur(saved)}</div>
                     <div class="muted" style="font-size:0.75rem;margin-top:0.25rem;line-height:1.4">Hier landen alle Meilenstein-Belohnungen, die sonst dein aktives Sparziel überschreiten würden.</div>
+                    <div style="display:flex;gap:6px;margin-top:0.5rem;flex-wrap:wrap">
+                        <button onclick="openTransferModal()" ${canTransfer?'':'disabled'}
+                            style="flex:1;padding:0.4375rem;font-size:0.75rem;background:#8b5cf6;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:${canTransfer?'pointer':'not-allowed'};margin:0;opacity:${canTransfer?1:0.5}"
+                            title="${canTransfer?'Geld vom Puffer auf ein Sparziel übertragen':(saved<=0?'Puffer ist leer':'Kein Sparziel vorhanden')}">
+                            🔄 Auf Sparziel übertragen
+                        </button>
+                    </div>
                 </div>`;
             }
             return `<div class="ach-card" style="${active?'border-color:var(--green);background:var(--green-bg)':''}">
@@ -791,6 +799,83 @@ async function deleteSavingsGoal(id,name){
         showToast('Gelöscht'+(r&&r.removed_sum?` (${fmtEur(r.removed_sum)} entfernt)`:''));
         await Promise.all([loadSavingsGoals(),loadSparziel()]);
     }catch(e){haptic('error');showToast(e.message||'Löschen fehlgeschlagen',true);}
+}
+
+// v1.26.0: Transfer vom Puffer aufs Sparziel
+function openTransferModal(){
+    const goals = (savingsGoalsCache||[]).filter(g => !g.is_general);
+    const buffer = (savingsGoalsCache||[]).find(g => g.is_general);
+    if(!goals.length){ showToast('Kein Sparziel vorhanden',true); return; }
+    if(!buffer || Number(buffer.saved_amount||0) <= 0){ showToast('Puffer ist leer',true); return; }
+    const bufAmt = Number(buffer.saved_amount||0);
+    // Ziel-Dropdown befuellen, aktives Sparziel vorauswaehlen
+    const sel = document.getElementById('tfGoal');
+    const active = goals.find(g => g.is_active);
+    sel.innerHTML = goals.map(g => {
+        const saved = Number(g.saved_amount||0), tgt = Number(g.target_amount||0);
+        const remaining = tgt > 0 ? Math.max(0, tgt - saved) : null;
+        const label = (g.is_active?'⭐ ':'') + g.name +
+            (remaining != null ? ` — noch ${fmtEur(remaining)}` : '');
+        const dis = remaining != null && remaining <= 0.005 ? ' disabled' : '';
+        const selAttr = (active && g.id === active.id) ? ' selected' : '';
+        return `<option value="${g.id}"${selAttr}${dis}>${esc(label)}</option>`;
+    }).join('');
+    document.getElementById('tfModalSub').textContent =
+        `Verfügbar im Puffer: ${fmtEur(bufAmt)}`;
+    document.getElementById('tfAmount').value = '';
+    document.getElementById('tfAmount').max = bufAmt.toFixed(2);
+    document.getElementById('tfNote').value = '';
+    // Schnellwahl-Buttons: 25%, 50%, 100% + Zielrest
+    renderTransferQuickButtons();
+    sel.onchange = renderTransferQuickButtons;
+    document.getElementById('transferModal').classList.add('open');
+    setTimeout(()=>document.getElementById('tfAmount').focus(), 50);
+}
+function renderTransferQuickButtons(){
+    const buffer = (savingsGoalsCache||[]).find(g => g.is_general);
+    const bufAmt = Number((buffer && buffer.saved_amount) || 0);
+    const sel = document.getElementById('tfGoal');
+    const gid = parseInt(sel.value,10);
+    const g = (savingsGoalsCache||[]).find(x => x.id === gid);
+    const saved = Number((g && g.saved_amount) || 0), tgt = Number((g && g.target_amount) || 0);
+    const remaining = tgt > 0 ? Math.max(0, tgt - saved) : null;
+    const options = [
+        { lbl: '25%', val: bufAmt * 0.25 },
+        { lbl: '50%', val: bufAmt * 0.5 },
+        { lbl: 'Alles', val: bufAmt },
+    ];
+    if (remaining != null && remaining > 0 && remaining < bufAmt) {
+        options.push({ lbl: 'Zielrest', val: remaining });
+    }
+    document.getElementById('tfQuickBtns').innerHTML = options.map(o => `
+        <button type="button" onclick="document.getElementById('tfAmount').value=${o.val.toFixed(2)}"
+            style="padding:0.3rem 0.6rem;font-size:0.75rem;background:var(--surface-2, #f4f4f5);color:var(--text);border:1px solid var(--border,#e4e4e7);border-radius:5px;font-weight:600;cursor:pointer;margin:0;width:auto">
+            ${o.lbl} · ${fmtEur(o.val)}
+        </button>`).join('');
+}
+function closeTransferModal(){
+    document.getElementById('transferModal').classList.remove('open');
+}
+async function submitTransfer(){
+    const gid = parseInt(document.getElementById('tfGoal').value,10);
+    const amount = parseFloat(document.getElementById('tfAmount').value);
+    const note = (document.getElementById('tfNote').value||'').trim();
+    if(!gid){ showToast('Ziel wählen',true); haptic('error'); return; }
+    if(!(amount > 0)){ showToast('Betrag > 0 eingeben',true); haptic('error'); return; }
+    try{
+        const res = await apiCall('/api/savings-goals/'+gid+'/transfer-from-buffer',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ amount, note: note||null })
+        });
+        haptic('success');
+        showToast(`${fmtEur(res.amount)} übertragen ✓`);
+        closeTransferModal();
+        await Promise.all([loadSavingsGoals(),loadSparziel(),loadLog?.(),loadAchievements?.()]);
+    }catch(e){
+        haptic('error');
+        showToast(e.message||'Übertrag fehlgeschlagen',true);
+    }
 }
 async function loadPotentialGoals(){
     try{const d=await apiCall('/api/potential-goals')||[];document.getElementById('potList').innerHTML=d.length?d.map(p=>`<div class="li" id="potLi_${p.id}"><span>${esc(p.name)}${p.estimated_price?' — <strong>'+fmtEur(p.estimated_price)+'</strong>':''}</span><button class="li-del" onclick="deletePotential(${p.id})" title="Löschen">×</button></div>`).join(''):'<div class="muted" style="padding:0.5rem;font-size:0.8125rem">Noch keine Einträge.</div>';}catch(e){}
@@ -852,7 +937,7 @@ function renderLog(){
     if(!rows.length){body.innerHTML='<div class="log-empty">Keine Einträge.</div>';return;}
     if(logView==='weekly') renderLogWeekly(rows,body); else renderLogFlat(rows,body);
 }
-const LOG_LABELS={initial:'Start',milestone:'Meilenstein',checkin:'Check-in',streak_bonus:'Bonus'};
+const LOG_LABELS={initial:'Start',milestone:'Meilenstein',checkin:'Check-in',streak_bonus:'Bonus',transfer:'Übertrag'};
 function logRowHtml(r){
     const t=r.type||'initial';
     const tagCls=t==='checkin'&&r.fulfilled?'checkin fulfilled':t;
@@ -934,11 +1019,11 @@ function deleteLogEntry(type,id){
                     haptic('success');
                     showToast(r&&r.payout_removed?'Gelöscht (inkl. Sparbeitrag)':'Gelöscht');
                     await Promise.all([loadLog(),loadAchievements(),loadSparziel()]);
-                } else if(type==='initial'||type==='streak_bonus'){
-                    await apiCall('/api/savings-transactions/'+id,{method:'DELETE'});
+                } else if(type==='initial'||type==='streak_bonus'||type==='transfer'){
+                    const r=await apiCall('/api/savings-transactions/'+id,{method:'DELETE'});
                     haptic('success');
-                    showToast('Gelöscht');
-                    await Promise.all([loadLog(),loadSparziel()]);
+                    showToast(r && r.pair_deleted ? 'Übertrag zurückgebucht' : 'Gelöscht');
+                    await Promise.all([loadLog(),loadSparziel(),loadSavingsGoals()]);
                 }
             }catch(e){haptic('error');showToast('Löschen fehlgeschlagen',true);await loadLog();}
         }
@@ -1187,7 +1272,7 @@ async function submitNote(){
 }
 
 // Modal-Backdrop-Click
-['milestoneModal','completeModal','noteModal'].forEach(id=>{
+['milestoneModal','completeModal','noteModal','transferModal'].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.addEventListener('click',e=>{if(e.target.id===id)el.classList.remove('open');});
 });
