@@ -10,6 +10,7 @@ const HEALTH_API = {
     workouts:     (type) => apiCall('/api/health/workouts' + (type ? `?workout_type=${encodeURIComponent(type)}` : '')),
     workoutDetail:(id) => apiCall(`/api/health/workouts/${id}`),
     importFile:   (file) => { const fd = new FormData(); fd.append('file', file); return apiCall('/api/health/import-file', { method: 'POST', body: fd }); },
+    importCsv:    (files) => { const fd = new FormData(); [...files].forEach(f => fd.append('files', f)); return apiCall('/api/health/import-csv', { method: 'POST', body: fd }); },
     apiKeys:      () => apiCall('/api/health/api-keys'),
     createKey:    (label) => apiCall('/api/health/api-keys', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ label }) }),
     revokeKey:    (id) => apiCall(`/api/health/api-keys/${id}`, { method: 'DELETE' }),
@@ -343,6 +344,34 @@ async function revokeApiKey(id) {
         showToast('Key widerrufen');
         loadApiKeys();
     } catch (e) { showToast('Fehler: ' + e.message, true); }
+}
+
+async function uploadHealthCsv() {
+    const input = document.getElementById('hImportCsvFiles');
+    const resultEl = document.getElementById('hImportCsvResult');
+    const files = input.files;
+    if (!files || !files.length) { showToast('Bitte zuerst CSV-Dateien auswählen', true); return; }
+    resultEl.innerHTML = `<div class="stat-loading">Importiere ${files.length} Datei(en) …</div>`;
+    try {
+        const stats = await HEALTH_API.importCsv(files);
+        const skipped = stats.skipped || [];
+        resultEl.innerHTML = `
+            <div class="h-hint" style="margin:0">
+                ✅ ${fmt0(stats.files_processed)} Dateien verarbeitet —
+                ${fmt0(stats.metrics_imported)} Vitalwerte,
+                ${fmt0(stats.bp_imported)} Blutdruck,
+                ${fmt0(stats.glucose_imported)} Blutzucker,
+                ${fmt0(stats.sleep_imported)} Nächte,
+                ${fmt0(stats.workouts_imported)} Workouts importiert.
+                ${skipped.length ? `${skipped.length} Punkte/Dateien übersprungen (z.B. unbekannte Einzelmetrik-CSVs).` : ''}
+            </div>`;
+        showToast('CSV-Import abgeschlossen ✓');
+        input.value = '';
+        loadDashboard();
+    } catch (e) {
+        resultEl.innerHTML = `<div class="stat-empty">Import fehlgeschlagen: ${e.message}</div>`;
+        showToast('Import fehlgeschlagen', true);
+    }
 }
 
 async function uploadHealthFile() {

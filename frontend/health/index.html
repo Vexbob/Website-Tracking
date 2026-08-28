@@ -119,12 +119,25 @@
             </div>
         </div>
         <div class="stat-card">
-            <h3>📁 Manueller Import (Backfill)</h3>
+            <h3>📁 Manueller Import (Backfill) — CSV, empfohlen</h3>
             <p class="h-hint">Für einen einmaligen Import vergangener Zeiträume (z.B. ein
-                ganzer Monat) ohne dafür eine Automation einzurichten: in Auto Health
-                Export unter <strong>Export → Quick Export</strong> den gewünschten
-                Zeitraum wählen, Format <strong>JSON</strong> speichern und die Datei hier
-                hochladen.</p>
+                ganzer Monat): in Auto Health Export unter <strong>Export → Quick Export</strong>
+                Format <strong>CSV</strong> wählen und den Zeitraum exportieren. Danach
+                <strong>alle</strong> CSV-Dateien aus dem Export-Ordner hier gleichzeitig
+                auswählen (Mehrfachauswahl) und hochladen — die Tages-Gesundheitswerte-CSV
+                und die Workouts-Übersicht werden automatisch erkannt, alle anderen
+                Dateien (Einzelmetriken pro Workout) werden ignoriert.</p>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                <input type="file" id="hImportCsvFiles" accept=".csv,text/csv" multiple style="margin:0;width:auto">
+                <button class="primary" onclick="uploadHealthCsv()" style="width:auto">⬆ CSV importieren</button>
+            </div>
+            <div id="hImportCsvResult" style="margin-top:0.75rem"></div>
+        </div>
+        <div class="stat-card">
+            <h3>📄 Manueller Import (Backfill) — JSON, Alternative</h3>
+            <p class="h-hint">Alternativ: Export-Format <strong>JSON</strong> wählen und die
+                eine erzeugte Datei hier hochladen. Enthält mehr Detail (z.B. minutengenau),
+                ist dafür aber deutlich größer als der CSV-Export.</p>
             <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
                 <input type="file" id="hImportFile" accept="application/json,.json" style="margin:0;width:auto">
                 <button class="primary" onclick="uploadHealthFile()" style="width:auto">⬆ Importieren</button>

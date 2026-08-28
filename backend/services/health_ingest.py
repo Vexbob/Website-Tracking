@@ -37,11 +37,19 @@ verwerfen.
 """
 from __future__ import annotations
 
+import csv
+import io
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger("vexbob.health_ingest")
+
+# Gemeinsamer Source-Wert fuer JSON-API-Sync UND manuellen CSV-Import: beide
+# stammen letztlich aus derselben App, nur unterschiedlich exportiert. Gleicher
+# Source-Wert sorgt dafuer, dass ein spaeterer automatisierter Sync denselben
+# Tag ueberschreibt statt einen doppelten Datenpunkt anzulegen.
+CSV_SOURCE = "auto_health_export"
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +342,332 @@ async def _ingest_workout(db, user_id: int, w: dict) -> bool:
         except Exception as e:
             logger.warning("Workout-Metric-Insert fehlgeschlagen (%s): %s", k, e)
     return True
+
+
+# ---------------------------------------------------------------------------
+# CSV-Import (manueller Backfill) — deutlich kompakter als JSON-Export.
+# Auto Health Export exportiert im CSV-Modus zwei relevante Dateitypen:
+#   1) Eine Tages-CSV mit allen einfachen Gesundheitsmetriken als Spalten
+#      (Header beginnt mit "Datum/Uhrzeit").
+#   2) Eine Workouts-Uebersichts-CSV mit einer Zeile pro Workout (Header
+#      beginnt mit "Workout Type").
+# Die vielen einzelnen Pro-Workout-Metrik-CSVs (Herzfrequenz/Aktive Energie
+# je Workout) werden bewusst NICHT eingelesen — ihre relevanten Aggregate
+# (Ø/Max-HF, Distanz, Energie, ...) stecken bereits in der Workouts-CSV.
+# ---------------------------------------------------------------------------
+def _parse_csv_dt(s: Optional[str]) -> Optional[datetime]:
+    """Wie _parse_dt, ergaenzt aber fehlende Zeitzone um UTC (CSV-Zeitstempel
+    sind lokale Geraetezeit ohne Offset; TIMESTAMPTZ-Spalten brauchen eine
+    tz-aware datetime, sonst lehnt asyncpg den Wert ab)."""
+    dt = _parse_dt(s)
+    if dt is not None and dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _csv_date_str(s: Optional[str]) -> Optional[str]:
+    """Haengt ein UTC-Offset an einen CSV-Zeitstempel an (der keine Zeitzone
+    enthaelt), damit die bestehenden Insert-Helfer (die intern ``_parse_dt``
+    nutzen, welches wiederum ein Offset erwartet) den Wert tz-aware
+    interpretieren. Ohne Offset wuerde asyncpg eine naive datetime an eine
+    TIMESTAMPTZ-Spalte fehlerhaft/uneindeutig weiterreichen."""
+    if not s:
+        return None
+    s = s.strip()
+    return s if not s else f"{s} +0000"
+
+
+def _find_col(header: list, *keywords: str) -> Optional[int]:
+    """Findet die Spalte, deren Header-Zelle ALLE Keywords enthaelt
+    (case-insensitive). Robust gegen leicht abweichende Einheiten-Suffixe."""
+    for i, cell in enumerate(header):
+        low = cell.lower()
+        if all(kw.lower() in low for kw in keywords):
+            return i
+    return None
+
+
+def _row_num(row: list, idx: Optional[int]) -> Optional[float]:
+    if idx is None or idx >= len(row):
+        return None
+    v = (row[idx] or "").strip()
+    if not v:
+        return None
+    try:
+        return float(v)
+    except ValueError:
+        return None
+
+
+def _row_str(row: list, idx: Optional[int]) -> Optional[str]:
+    if idx is None or idx >= len(row):
+        return None
+    v = (row[idx] or "").strip()
+    return v or None
+
+
+def detect_csv_kind(header: list) -> Optional[str]:
+    """Erkennt anhand der ersten Spalte, ob es sich um die Tages-Gesundheits-
+    CSV oder die Workouts-Uebersicht handelt. Gibt None zurueck, wenn keines
+    von beidem erkannt wird (Datei wird dann komplett uebersprungen)."""
+    if not header:
+        return None
+    first = header[0].strip().lower()
+    if "workout type" in first:
+        return "workouts"
+    if "datum" in first or "date" in first:
+        return "health_metrics"
+    return None
+
+
+async def ingest_csv_file(db, user_id: int, filename: str, raw: bytes) -> dict:
+    """Liest eine einzelne CSV-Datei ein und delegiert an den passenden
+    Parser. Gibt ein Statistik-Dict zurueck (gleiche Struktur wie
+    ``ingest_payload``, jeweils nur die relevanten Zaehler befuellt)."""
+    empty_stats = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
+                    "bp_imported": 0, "glucose_imported": 0, "skipped": []}
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("latin-1")
+        except Exception as e:
+            empty_stats["skipped"].append(f"{filename}:decode_error:{e}")
+            return empty_stats
+
+    reader = list(csv.reader(io.StringIO(text), delimiter=";"))
+    if not reader:
+        empty_stats["skipped"].append(f"{filename}:empty_file")
+        return empty_stats
+    header = [c.strip() for c in reader[0]]
+    kind = detect_csv_kind(header)
+    rows = reader[1:]
+
+    if kind == "health_metrics":
+        return await _ingest_health_metrics_csv(db, user_id, header, rows)
+    if kind == "workouts":
+        return await _ingest_workouts_csv(db, user_id, header, rows)
+    empty_stats["skipped"].append(f"{filename}:unrecognized_csv_format")
+    return empty_stats
+
+
+async def _ingest_health_metrics_csv(db, user_id: int, header: list, rows: list) -> dict:
+    stats = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
+              "bp_imported": 0, "glucose_imported": 0, "skipped": []}
+
+    col = {
+        "active_energy": _find_col(header, "Aktive Energie"),
+        "bp_sys": _find_col(header, "Blutdruck", "Systolisch"),
+        "bp_dia": _find_col(header, "Blutdruck", "Diastolisch"),
+        "glucose": _find_col(header, "Blutzucker"),
+        "walking_hr": _find_col(header, "Herzfrequenz beim Gehen"),
+        "weight": _find_col(header, "Gewicht"),
+        "hr_min": _find_col(header, "Herzfrequenz [Min]"),
+        "hr_max": _find_col(header, "Herzfrequenz [Max]"),
+        "hr_avg": _find_col(header, "Herzfrequenz [Durchschn"),
+        "hrv": _find_col(header, "Herzfrequenzvariabilität"),
+        "cardio_recovery": _find_col(header, "Kardiorespiratorische Erholung"),
+        "resting_hr": _find_col(header, "Ruhepuls"),
+        "sleep_asleep": _find_col(header, "Schlafanalyse [Schlafend]"),
+        "sleep_inbed": _find_col(header, "Schlafanalyse [Im Bett]"),
+        "sleep_core": _find_col(header, "Schlafanalyse [Kern]"),
+        "sleep_deep": _find_col(header, "Schlafanalyse [Tief]"),
+        "sleep_rem": _find_col(header, "Schlafanalyse [REM]"),
+        "sleep_awake": _find_col(header, "Schlafanalyse [Wach]"),
+        "steps": _find_col(header, "Schrittzählung"),
+        "swim_distance": _find_col(header, "Schwimmdistanz"),
+        "vo2_max": _find_col(header, "VO2 max"),
+    }
+
+    for row in rows:
+        if not row or not (row[0] or "").strip():
+            continue
+        date_str = _csv_date_str(row[0])
+        dt = _parse_csv_dt(row[0])
+        if not dt:
+            stats["skipped"].append(f"health_metrics_csv:invalid_date:{row[0]}")
+            continue
+
+        simple_cols = [
+            ("active_energy", "active_energy"), ("walking_hr", "walking_hr_avg"),
+            ("weight", "weight"), ("hrv", "hrv"), ("cardio_recovery", "cardio_recovery"),
+            ("resting_hr", "resting_hr"), ("steps", "steps"),
+            ("swim_distance", "swim_distance"), ("vo2_max", "vo2_max"),
+        ]
+        for col_key, metric_type in simple_cols:
+            val = _row_num(row, col.get(col_key))
+            if val is None:
+                continue
+            p = {"date": date_str, "qty": val}
+            if await _ingest_metric_point(db, user_id, metric_type, p, None):
+                stats["metrics_imported"] += 1
+            else:
+                stats["skipped"].append(f"{metric_type}:{row[0]}")
+
+        hr_min = _row_num(row, col.get("hr_min"))
+        hr_max = _row_num(row, col.get("hr_max"))
+        hr_avg = _row_num(row, col.get("hr_avg"))
+        if hr_min is not None or hr_max is not None or hr_avg is not None:
+            p = {"date": date_str, "qty": hr_avg, "Min": hr_min, "Max": hr_max, "Avg": hr_avg}
+            if await _ingest_metric_point(db, user_id, "heart_rate", p, None):
+                stats["metrics_imported"] += 1
+            else:
+                stats["skipped"].append(f"heart_rate:{row[0]}")
+
+        sys_v = _row_num(row, col.get("bp_sys"))
+        dia_v = _row_num(row, col.get("bp_dia"))
+        if sys_v is not None or dia_v is not None:
+            entry = {"recorded_at": dt, "systolic": sys_v, "diastolic": dia_v}
+            if await _ingest_bp_point(db, user_id, entry):
+                stats["bp_imported"] += 1
+            else:
+                stats["skipped"].append(f"blood_pressure:{row[0]}")
+
+        glucose_v = _row_num(row, col.get("glucose"))
+        if glucose_v is not None:
+            if await _ingest_glucose_point(db, user_id, {"date": date_str, "qty": glucose_v}, "mmol/L"):
+                stats["glucose_imported"] += 1
+            else:
+                stats["skipped"].append(f"blood_glucose:{row[0]}")
+
+        sleep_vals = {k: _row_num(row, col.get(f"sleep_{k}")) for k in
+                      ("asleep", "inbed", "core", "deep", "rem", "awake")}
+        if any(v is not None for v in sleep_vals.values()):
+            p = {
+                "date": date_str, "sleepStart": None, "sleepEnd": None,
+                "asleep": sleep_vals["asleep"], "inBed": sleep_vals["inbed"],
+                "core": sleep_vals["core"], "deep": sleep_vals["deep"],
+                "rem": sleep_vals["rem"], "awake": sleep_vals["awake"],
+            }
+            if await _ingest_sleep_point(db, user_id, p):
+                stats["sleep_imported"] += 1
+            else:
+                stats["skipped"].append(f"sleep:{row[0]}")
+
+    return stats
+
+
+def _parse_duration_hms(s: Optional[str]) -> Optional[float]:
+    """Wandelt 'HH:MM:SS' (Workouts-CSV) in Minuten (float) um."""
+    if not s:
+        return None
+    parts = s.strip().split(":")
+    try:
+        if len(parts) == 3:
+            h, m, sec = (float(p) for p in parts)
+            return round(h * 60 + m + sec / 60, 1)
+        if len(parts) == 2:
+            m, sec = (float(p) for p in parts)
+            return round(m + sec / 60, 1)
+    except ValueError:
+        return None
+    return None
+
+
+async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> dict:
+    stats = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
+              "bp_imported": 0, "glucose_imported": 0, "skipped": []}
+
+    col = {
+        "start": _find_col(header, "Start"),
+        "end": _find_col(header, "End"),
+        "duration": _find_col(header, "Duration"),
+        "active_energy": _find_col(header, "Aktive Energie"),
+        "resting_energy": _find_col(header, "Ruheeinträge"),
+        "intensity": _find_col(header, "Intensität"),
+        "max_hr": _find_col(header, "Max.", "Herzfrequenz"),
+        "avg_hr": _find_col(header, "Durchschn.", "Herzfrequenz"),
+        "distance_km": _find_col(header, "Distanz"),
+        "max_speed": _find_col(header, "Max. Geschwindigkeit"),
+        "avg_speed": _find_col(header, "Durchschnittsgeschwindigkeit"),
+        "flights": _find_col(header, "Etagen gestiegen"),
+        "elevation_up": _find_col(header, "Aufgestiegene Höhe"),
+        "elevation_down": _find_col(header, "Abgestiegene Höhe"),
+        "step_count": _find_col(header, "Schrittzählung"),
+        "cadence": _find_col(header, "Schrittfrequenz"),
+        "swim_strokes": _find_col(header, "Anzahl der Schwimmzüge"),
+        "swim_cadence": _find_col(header, "Schwimmkadenz"),
+        "lap_length": _find_col(header, "Rundenlänge"),
+        "swolf": _find_col(header, "SWOLF"),
+        "temperature": _find_col(header, "Temperatur"),
+        "humidity": _find_col(header, "Luftfeuchtigkeit"),
+    }
+
+    for row in rows:
+        if not row or not (row[0] or "").strip():
+            continue
+        workout_type = _row_str(row, 0)
+        start_at = _parse_csv_dt(_row_str(row, col.get("start")))
+        if not start_at:
+            stats["skipped"].append(f"workout_csv:invalid_start:{row[:2]}")
+            continue
+        end_at = _parse_csv_dt(_row_str(row, col.get("end")))
+        duration_min = _parse_duration_hms(_row_str(row, col.get("duration")))
+        active_kcal = _row_num(row, col.get("active_energy"))
+        resting_kcal = _row_num(row, col.get("resting_energy"))
+        total_kcal = None
+        if active_kcal is not None or resting_kcal is not None:
+            total_kcal = (active_kcal or 0) + (resting_kcal or 0)
+        distance_km = _row_num(row, col.get("distance_km"))
+        distance_m = None if distance_km is None else distance_km * 1000
+
+        external_id = f"{workout_type or 'workout'}:{start_at.isoformat()}"
+        try:
+            wid = await db.fetchval(
+                "INSERT INTO health_workouts "
+                "(user_id, external_id, workout_type, start_at, end_at, duration_min, "
+                "active_energy_kcal, total_energy_kcal, distance_m, avg_heart_rate, max_heart_rate, "
+                "elevation_m, source) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) "
+                "ON CONFLICT (user_id, external_id) DO UPDATE SET "
+                "end_at=EXCLUDED.end_at, duration_min=EXCLUDED.duration_min, "
+                "active_energy_kcal=EXCLUDED.active_energy_kcal, total_energy_kcal=EXCLUDED.total_energy_kcal, "
+                "distance_m=EXCLUDED.distance_m, avg_heart_rate=EXCLUDED.avg_heart_rate, "
+                "max_heart_rate=EXCLUDED.max_heart_rate, elevation_m=EXCLUDED.elevation_m "
+                "RETURNING id",
+                user_id, external_id, workout_type, start_at, end_at, duration_min,
+                active_kcal, total_kcal, distance_m,
+                _row_num(row, col.get("avg_hr")), _row_num(row, col.get("max_hr")),
+                _row_num(row, col.get("elevation_up")), CSV_SOURCE)
+        except Exception as e:
+            logger.warning("Workout-CSV-Insert fehlgeschlagen: %s", e)
+            stats["skipped"].append(f"workout:{external_id}")
+            continue
+
+        if not wid:
+            stats["skipped"].append(f"workout:{external_id}")
+            continue
+        stats["workouts_imported"] += 1
+
+        extra = {
+            "resting_energy_kcal": resting_kcal,
+            "intensity_kcal_h_kg": _row_num(row, col.get("intensity")),
+            "max_speed_kmh": _row_num(row, col.get("max_speed")),
+            "avg_speed_kmh": _row_num(row, col.get("avg_speed")),
+            "flights_climbed": _row_num(row, col.get("flights")),
+            "elevation_descended_m": _row_num(row, col.get("elevation_down")),
+            "step_count": _row_num(row, col.get("step_count")),
+            "cadence_spm": _row_num(row, col.get("cadence")),
+            "swim_stroke_count": _row_num(row, col.get("swim_strokes")),
+            "swim_cadence_spm": _row_num(row, col.get("swim_cadence")),
+            "lap_length_m": _row_num(row, col.get("lap_length")),
+            "swolf": _row_num(row, col.get("swolf")),
+            "temperature_c": _row_num(row, col.get("temperature")),
+            "humidity_pct": _row_num(row, col.get("humidity")),
+        }
+        for key, val in extra.items():
+            if not val:
+                continue
+            try:
+                await db.execute(
+                    "INSERT INTO health_workout_metrics (workout_id, metric_key, value, unit) "
+                    "VALUES ($1,$2,$3,NULL) "
+                    "ON CONFLICT (workout_id, metric_key) DO UPDATE SET value=EXCLUDED.value",
+                    wid, key, val)
+            except Exception as e:
+                logger.warning("Workout-CSV-Metric-Insert fehlgeschlagen (%s): %s", key, e)
+
+    return stats
 
 
 async def _resolve_unknown_metric(name: str) -> Optional[str]:

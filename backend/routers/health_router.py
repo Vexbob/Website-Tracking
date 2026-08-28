@@ -3,6 +3,7 @@
 Endpoints:
   POST   /api/health/import              — Ingest-Endpoint fuer die App (API-Key-Auth)
   POST   /api/health/import-file         — Manueller JSON-Upload im Frontend (JWT-Auth)
+  POST   /api/health/import-csv          — Manueller CSV-Multi-Upload im Frontend (JWT-Auth)
   GET    /api/health/api-keys            — eigene Keys auflisten (JWT-Auth)
   POST   /api/health/api-keys            — neuen Key erzeugen (Klartext nur hier sichtbar)
   DELETE /api/health/api-keys/{kid}      — Key widerrufen
@@ -21,14 +22,14 @@ die aus demselben Grund ebenfalls darauf verzichten.
 """
 import json
 from datetime import date, timedelta
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 
 from database import get_db
 from auth import get_current_user, get_user_from_health_api_key, generate_health_api_key
 from deps import logger, limiter, LIMIT_HEALTH_IMPORT, LIMIT_WRITE_RARE, LIMIT_WRITE_STANDARD, _ser_exp
-from services.health_ingest import ingest_payload, SIMPLE_METRIC_MAP
+from services.health_ingest import ingest_payload, ingest_csv_file, SIMPLE_METRIC_MAP
 
 router = APIRouter(tags=["health"])
 
@@ -65,6 +66,30 @@ async def import_health_file(request: Request, file: UploadFile = File(...),
     stats = await ingest_payload(db, user["id"], payload)
     logger.info("Health-Datei-Import fuer user_id=%s: %s", user["id"], stats)
     return stats
+
+
+@router.post("/api/health/import-csv")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def import_health_csv(request: Request, files: List[UploadFile] = File(...),
+                             db=Depends(get_db), user=Depends(get_current_user)):
+    """Nimmt eine oder mehrere per Hand exportierte Auto-Health-Export-CSV-
+    Dateien entgegen (Tages-Gesundheitsmetriken + Workouts-Uebersicht).
+    Deutlich kleiner als das JSON-Format, daher fuer groessere Backfills
+    (z.B. ein ganzer Monat) besser geeignet. Erkennt den Dateityp automatisch
+    am Header; nicht erkannte Dateien (z.B. die vielen Pro-Workout-Einzel-
+    metrik-CSVs) werden uebersprungen und im Ergebnis aufgelistet."""
+    total = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
+             "bp_imported": 0, "glucose_imported": 0, "skipped": [], "files_processed": 0}
+    for f in files:
+        raw = await f.read()
+        stats = await ingest_csv_file(db, user["id"], f.filename or "unknown.csv", raw)
+        for key in ("metrics_imported", "workouts_imported", "sleep_imported",
+                    "bp_imported", "glucose_imported"):
+            total[key] += stats.get(key, 0)
+        total["skipped"].extend(stats.get("skipped", []))
+        total["files_processed"] += 1
+    logger.info("Health-CSV-Import fuer user_id=%s: %s Dateien, %s", user["id"], total["files_processed"], total)
+    return total
 
 
 # ---------- API-Key-Verwaltung (JWT-Auth) ----------

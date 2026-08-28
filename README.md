@@ -99,12 +99,17 @@ Sync-Ziel für die iPhone-App **Auto Health Export** (REST-API-Automation).
 - **Frontend** (`/health/`) mit Tabs Dashboard, Vitalwerte (Charts pro
   Metrik + Blutdruck/Blutzucker), Schlaf (gestapeltes Phasen-Chart),
   Workouts (Liste + Detail) und Einstellungen (API-Key-Verwaltung).
-- **Manueller Import** (v1.23.1): unter „Einstellungen" → „Manueller Import
-  (Backfill)" kann eine per Hand exportierte JSON-Datei aus Auto Health
-  Export hochgeladen werden (`POST /api/health/import-file`, JWT-Auth,
-  nutzt denselben Ingest wie der automatisierte Sync) — praktisch für einen
-  einmaligen Nachimport vergangener Zeiträume ohne dafür eine Automation
-  einzurichten.
+- **Manueller Import** (v1.23.1/v1.24.0): unter „Einstellungen" → zwei
+  Wege für einen einmaligen Nachimport vergangener Zeiträume ohne dafür
+  eine Automation einzurichten:
+  - **CSV (empfohlen, v1.24.0)**: `POST /api/health/import-csv` — Multi-File-
+    Upload, verarbeitet die kompakte Tages-Gesundheitsmetriken-CSV und die
+    Workouts-Übersichts-CSV (Header-basierte Spaltenerkennung, robust gegen
+    leichte Formatabweichungen). Die vielen Pro-Workout-Einzelmetrik-CSVs
+    werden bewusst ignoriert. Deutlich kleinere Dateien als JSON.
+  - **JSON (Alternative)**: `POST /api/health/import-file` — eine Datei,
+    nutzt denselben Ingest wie der automatisierte Sync, aber detaillierter
+    (z.B. minutengenaue Herzfrequenz) und dafür deutlich größer.
 
 ### ⬇️ Gesamt-Export (neu in v1.23.0)
 Dashboard-Kachel „Alles exportieren" (`GET /api/export/all`) liefert **eine
