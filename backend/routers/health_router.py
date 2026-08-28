@@ -13,9 +13,12 @@ Endpoints:
   GET    /api/health/sleep               — Schlaf-Naechte
   GET    /api/health/workouts            — Workout-Liste (Filter nach Typ)
   GET    /api/health/workouts/{wid}      — Workout-Detail inkl. Zusatzmetriken
-"""
-from __future__ import annotations
 
+Hinweis: Bewusst OHNE ``from __future__ import annotations`` — FastAPI 0.109.0
+kann ``UploadFile = File(...)`` sonst nicht als Pydantic-Feld aufloesen
+(Forward-Ref-Fehler beim Start), siehe auch blog_router.py/expenses_router.py,
+die aus demselben Grund ebenfalls darauf verzichten.
+"""
 import json
 from datetime import date, timedelta
 from typing import Optional
