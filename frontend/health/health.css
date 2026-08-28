@@ -1,7 +1,9 @@
-/* Gesundheit-Modul (v1.22.0) — nutzt weitgehend die Ausgaben/Sparziel-Klassen
-   (.stat-kpi-grid, .stat-card, .tab-btn, .modal-*) aus dem globalen style.css. */
+/* Gesundheit-Modul (v1.25.0) — nutzt Statistik-Grundraster (.stat-kpi, .stat-card,
+   .split-2, .split-3-2, .chart-wrap, .stat-insights, .stat-mini-toggle) und
+   erweitert um Health-spezifische Elemente. */
 body{visibility:hidden}body.ready{visibility:visible}
-.tabs{display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid var(--border);overflow-x:auto}
+
+.tabs{display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch}
 .tab-btn{background:transparent;border:none;padding:0.75rem 1.25rem;font-size:0.9375rem;font-weight:600;cursor:pointer;color:var(--text-faint);border-bottom:3px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s;white-space:nowrap;width:auto;border-radius:0}
 .tab-btn.active{color:var(--text);border-bottom-color:var(--accent)}
 .tab-btn:hover{color:var(--text)}
@@ -10,51 +12,129 @@ body{visibility:hidden}body.ready{visibility:visible}
 .h-hint{font-size:0.8125rem;color:var(--text-muted);line-height:1.6;margin-bottom:0.875rem}
 .h-hint code{background:var(--surface-2);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.75rem}
 
-/* Dashboard: Sleep/BP-Kacheln im Split-Layout */
-.h-sleep-summary,.h-bp-summary{display:flex;align-items:baseline;gap:0.75rem;flex-wrap:wrap}
-.h-sleep-summary .h-big,.h-bp-summary .h-big{font-size:1.75rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
-.h-phase-bars{display:flex;height:10px;border-radius:6px;overflow:hidden;margin-top:0.625rem;background:var(--surface-2)}
+.stat-kpi{cursor:default}
+.stat-kpi.clickable{cursor:pointer}
+.stat-kpi.clickable:hover{border-color:var(--accent)}
+.stat-kpi.active-tile{border-color:var(--accent);box-shadow:0 0 0 2px rgba(233,69,96,0.12)}
+.h-kpi-spark{margin-top:0.5rem;height:32px;position:relative}
+.h-kpi-spark canvas{position:absolute;inset:0}
+
+/* Sleep-Zusammenfassung */
+.h-sleep-block{display:flex;flex-direction:column;gap:0.75rem}
+.h-sleep-head{display:flex;align-items:baseline;gap:0.6rem;flex-wrap:wrap}
+.h-sleep-head .h-big{font-size:2rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-0.02em;line-height:1}
+.h-sleep-head .h-sub{font-size:0.8125rem;color:var(--text-muted)}
+.h-sleep-eff{display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.5rem;border-radius:6px;font-size:0.75rem;font-weight:700;background:var(--surface-2);color:var(--text-muted)}
+.h-sleep-eff.good{background:rgba(34,197,94,0.14);color:var(--green-dark)}
+.h-sleep-eff.mid{background:rgba(245,158,11,0.14);color:var(--orange-dark)}
+.h-sleep-eff.low{background:var(--red-bg);color:var(--red)}
+:root[data-theme="dark"] .h-sleep-eff.good{background:rgba(34,197,94,0.2)}
+.h-phase-bars{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--surface-2)}
 .h-phase-bars span{height:100%}
 .h-phase-core{background:var(--blue)}
 .h-phase-deep{background:var(--purple)}
 .h-phase-rem{background:var(--teal)}
 .h-phase-awake{background:var(--orange)}
-.h-phase-legend{display:flex;gap:0.875rem;margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted);flex-wrap:wrap}
-.h-phase-legend span{display:inline-flex;align-items:center;gap:0.3rem}
-.h-phase-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.h-phase-legend{display:grid;grid-template-columns:repeat(2,1fr);gap:0.4rem 1rem;font-size:0.75rem;color:var(--text-muted)}
+.h-phase-legend span{display:inline-flex;align-items:center;gap:0.35rem;font-variant-numeric:tabular-nums}
+.h-phase-legend strong{color:var(--text);font-weight:700}
+.h-phase-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
+
+
+/* Blutdruck-Karte */
+.h-bp-block{display:flex;flex-direction:column;gap:0.75rem}
+.h-bp-head{display:flex;align-items:baseline;gap:0.75rem;flex-wrap:wrap}
+.h-bp-head .h-big{font-size:2.25rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-0.02em;line-height:1}
+.h-bp-head .h-sub{font-size:0.8125rem;color:var(--text-muted)}
+.h-bp-badge{display:inline-flex;align-items:center;gap:0.3rem;padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+.h-bp-badge.optimal{background:rgba(34,197,94,0.14);color:var(--green-dark)}
+.h-bp-badge.normal{background:rgba(59,130,246,0.14);color:var(--blue-dark)}
+.h-bp-badge.elevated{background:rgba(245,158,11,0.14);color:var(--orange-dark)}
+.h-bp-badge.stage1{background:rgba(245,158,11,0.2);color:var(--orange-dark)}
+.h-bp-badge.stage2{background:var(--red-bg);color:var(--red)}
+.h-bp-badge.crisis{background:var(--red);color:#fff}
+:root[data-theme="dark"] .h-bp-badge.optimal{background:rgba(34,197,94,0.22)}
+:root[data-theme="dark"] .h-bp-badge.normal{background:rgba(59,130,246,0.22)}
+
+/* Herz-Übersicht */
+.h-heart-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem 1.25rem}
+.h-heart-item{display:flex;flex-direction:column;gap:0.2rem}
+.h-heart-lbl{font-size:0.6875rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
+.h-heart-val{font-size:1.35rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+.h-heart-sub{font-size:0.75rem;color:var(--text-muted)}
 
 /* Workout-Liste */
-.h-workout-row{display:flex;align-items:center;gap:0.875rem;padding:0.75rem 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.h-workout-row{display:flex;align-items:center;gap:0.875rem;padding:0.875rem 0.25rem;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;border-radius:8px}
 .h-workout-row:hover{background:var(--surface-2)}
 .h-workout-row:last-child{border-bottom:none}
-.h-workout-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.125rem;background:linear-gradient(135deg,var(--teal),var(--teal-dark));color:#fff;flex-shrink:0}
+.h-workout-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;background:linear-gradient(135deg,var(--teal),var(--teal-dark));color:#fff;flex-shrink:0}
+.h-workout-icon.run{background:linear-gradient(135deg,#22c55e,#16a34a)}
+.h-workout-icon.bike{background:linear-gradient(135deg,#f59e0b,#d97706)}
+.h-workout-icon.swim{background:linear-gradient(135deg,#3b82f6,#2563eb)}
+.h-workout-icon.walk{background:linear-gradient(135deg,#14b8a6,#0d9488)}
+.h-workout-icon.strength{background:linear-gradient(135deg,#8b5cf6,#7c3aed)}
+.h-workout-icon.hike{background:linear-gradient(135deg,#a16207,#78350f)}
 .h-workout-main{flex:1;min-width:0}
-.h-workout-title{font-weight:600;font-size:0.9375rem;color:var(--text)}
-.h-workout-sub{font-size:0.8125rem;color:var(--text-muted)}
-.h-workout-stats{display:flex;gap:1rem;font-size:0.8125rem;color:var(--text-muted);text-align:right;flex-shrink:0}
-.h-workout-stats strong{color:var(--text);font-variant-numeric:tabular-nums}
+.h-workout-title{font-weight:700;font-size:0.9375rem;color:var(--text)}
+.h-workout-sub{font-size:0.8125rem;color:var(--text-muted);margin-top:0.15rem}
+.h-workout-stats{display:flex;gap:1.25rem;font-size:0.8125rem;color:var(--text-muted);text-align:right;flex-shrink:0}
+.h-workout-stats > div{display:flex;flex-direction:column;gap:0.1rem}
+.h-workout-stats strong{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums;font-size:0.9375rem}
+
+/* Workout-Detail-Modal */
+.h-workout-detail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.75rem;margin-bottom:1rem}
+.h-workout-detail-tile{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:0.75rem}
+.h-workout-detail-lbl{font-size:0.6875rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:0.25rem}
+.h-workout-detail-val{font-size:1.125rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+.h-workout-detail-val small{font-size:0.75rem;color:var(--text-muted);font-weight:500;margin-left:0.15rem}
+.h-workout-extras{font-size:0.8125rem;color:var(--text-muted)}
+.h-workout-extras table{width:100%;border-collapse:collapse}
+.h-workout-extras td{padding:0.35rem 0;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+.h-workout-extras td:last-child{text-align:right;color:var(--text);font-weight:600}
+.h-workout-extras tr:last-child td{border-bottom:none}
 
 /* API-Key-Liste */
-.h-key-row{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.625rem 0;border-bottom:1px solid var(--border)}
+.h-key-row{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.7rem 0;border-bottom:1px solid var(--border)}
 .h-key-row:last-child{border-bottom:none}
-.h-key-label{font-weight:600;font-size:0.875rem;color:var(--text)}
-.h-key-meta{font-size:0.75rem;color:var(--text-muted)}
+.h-key-label{font-weight:700;font-size:0.875rem;color:var(--text)}
+.h-key-meta{font-size:0.75rem;color:var(--text-muted);margin-top:0.15rem}
 .h-key-revoked{opacity:0.5}
-.h-key-row button.danger{background:transparent;color:var(--red);border:1px solid var(--red);border-radius:6px;padding:0.3rem 0.7rem;font-size:0.75rem;font-weight:600;width:auto;margin:0;cursor:pointer}
+.h-key-row button.danger{background:transparent;color:var(--red);border:1px solid var(--red);border-radius:6px;padding:0.35rem 0.75rem;font-size:0.75rem;font-weight:600;width:auto;margin:0;cursor:pointer;transition:background .12s}
 .h-key-row button.danger:hover{background:var(--red-bg)}
+.h-key-value{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:0.8125rem;width:100%;padding:0.5rem 0.65rem;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text)}
 
-@media (max-width: 600px) {
-    .h-workout-stats{flex-direction:column;gap:0.2rem;align-items:flex-end}
-}
+.h-form-row{display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.75rem}
+.h-form-row input{margin:0;flex:1;min-width:160px}
+.h-form-row button{width:auto;margin:0}
 
-.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:0.625rem 1.25rem;border-radius:8px;box-shadow:var(--shadow-lg);z-index:1000;opacity:0;transition:opacity .2s;font-size:0.875rem;max-width:90vw;text-align:center;pointer-events:none}
+/* Drag & Drop-Zone */
+.h-dropzone{border:2px dashed var(--border-strong);border-radius:12px;padding:1.5rem 1rem;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface-2)}
+.h-dropzone:hover{border-color:var(--accent);background:var(--surface)}
+.h-dropzone.drag{border-color:var(--accent);background:rgba(233,69,96,0.06)}
+.h-dropzone.has-files{border-style:solid;border-color:var(--green-dark);background:rgba(34,197,94,0.06)}
+.h-dropzone-icon{font-size:1.75rem;opacity:0.7;margin-bottom:0.25rem}
+.h-dropzone-title{font-weight:600;font-size:0.9375rem;color:var(--text)}
+.h-dropzone-sub{font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem}
+
+/* Toast */
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:0.625rem 1.25rem;border-radius:8px;box-shadow:var(--shadow-lg);z-index:2000;opacity:0;transition:opacity .2s;font-size:0.875rem;max-width:90vw;text-align:center;pointer-events:none}
 .toast.show{opacity:1;pointer-events:auto}
 .toast.err{background:var(--red);color:#fff}
 
-/* Bugfix: das globale .modal-overlay (style.css) setzt display:flex fest und
-   blendet nur per opacity aus -> ohne pointer-events:none blockiert das
-   statisch im HTML eingebettete #hKeyModal (im Gegensatz zu den dynamisch
-   per JS erzeugten Modals in anderen Modulen) unsichtbar die komplette
-   Seite inkl. aller Tab-Buttons. */
-#hKeyModal{display:none}
-#hKeyModal.show{display:flex}
+/* Bugfix: das globale .modal-overlay setzt display:flex fest — statische Modals
+   müssen daher initial display:none haben, sonst blockieren sie unsichtbar. */
+#hKeyModal,#hWorkoutModal{display:none}
+#hKeyModal.show,#hWorkoutModal.show{display:flex}
+
+/* Responsive */
+@media (max-width:900px){
+    .h-workout-stats{gap:0.75rem}
+}
+@media (max-width:600px){
+    .h-workout-stats{flex-direction:column;gap:0.15rem;align-items:flex-end;font-size:0.75rem}
+    .h-workout-stats strong{font-size:0.875rem}
+    .h-phase-legend{font-size:0.7rem}
+    .h-sleep-head .h-big,.h-bp-head .h-big{font-size:1.5rem}
+    .h-workout-icon{width:36px;height:36px;font-size:1rem}
+}
+

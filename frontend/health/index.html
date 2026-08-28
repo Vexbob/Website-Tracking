@@ -9,13 +9,14 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/ausgaben/statistik.css">
 <link rel="stylesheet" href="/health/health.css">
 <script src="/js/config.js"></script>
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js" defer></script>
 <script src="/js/sw-update.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 <nav class="navbar">
@@ -43,14 +44,34 @@
             <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
             <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
         </div>
-        <div class="split-2">
+
+        <div class="stat-insights" id="hDashInsights"></div>
+
+        <div class="split-3-2">
+            <div class="stat-card">
+                <div class="stat-card-head">
+                    <h3>👟 Aktivität <span class="stat-range-lbl">· 14 Tage</span></h3>
+                    <div class="stat-mini-toggle" id="hActivityToggle">
+                        <button class="active" data-mode="steps">Schritte</button>
+                        <button data-mode="active_energy">Kalorien</button>
+                    </div>
+                </div>
+                <div class="chart-wrap"><canvas id="hDashActivity"></canvas></div>
+            </div>
             <div class="stat-card">
                 <h3>😴 Letzte Nacht</h3>
                 <div id="hDashSleep" class="h-empty">Noch keine Daten synchronisiert.</div>
             </div>
+        </div>
+
+        <div class="split-2">
             <div class="stat-card">
-                <h3>🩺 Letzter Blutdruck</h3>
+                <h3>🩺 Blutdruck (letzter Wert)</h3>
                 <div id="hDashBp" class="h-empty">Noch keine Daten synchronisiert.</div>
+            </div>
+            <div class="stat-card">
+                <h3>❤️ Herz-Übersicht <span class="stat-range-lbl">· 7 Tage</span></h3>
+                <div id="hDashHeart" class="h-empty">Lade …</div>
             </div>
         </div>
     </div>
@@ -64,12 +85,18 @@
                 <button class="stat-chip" data-preset="90">90 Tage</button>
                 <button class="stat-chip" data-preset="365">12 Monate</button>
             </div>
-            <select id="hMetricSelect" style="width:auto;margin:0"></select>
         </div>
+
+        <div class="stat-kpi-grid" id="hMetricTiles"></div>
+
         <div class="stat-card">
-            <h3 id="hMetricTitle">📈 Verlauf</h3>
+            <div class="stat-card-head">
+                <h3 id="hMetricTitle">📈 Verlauf</h3>
+                <div class="stat-range-lbl" id="hMetricStats"></div>
+            </div>
             <div class="chart-wrap tall"><canvas id="hChartMetric"></canvas></div>
         </div>
+
         <div class="split-2">
             <div class="stat-card">
                 <h3>🩺 Blutdruck</h3>
@@ -82,27 +109,48 @@
         </div>
     </div>
 
+
     <!-- ---------- Schlaf ---------- -->
     <div id="tab-schlaf" style="display:none">
-        <div class="stat-card">
-            <h3>😴 Schlafphasen (letzte 30 Nächte)</h3>
-            <div class="chart-wrap tall"><canvas id="hChartSleep"></canvas></div>
+        <div class="stat-filterbar">
+            <div class="stat-preset-chips" id="hSleepPresets">
+                <button class="stat-chip" data-preset="14">14 Nächte</button>
+                <button class="stat-chip active" data-preset="30">30 Nächte</button>
+                <button class="stat-chip" data-preset="90">90 Nächte</button>
+            </div>
         </div>
         <div class="stat-kpi-grid" id="hSleepKpis"></div>
+        <div class="stat-card">
+            <h3>😴 Schlafphasen</h3>
+            <div class="chart-wrap tall"><canvas id="hChartSleep"></canvas></div>
+        </div>
+        <div class="stat-card">
+            <h3>🌙 Regelmäßigkeit — Zubettgeh- vs. Aufsteh-Zeit</h3>
+            <div class="chart-wrap"><canvas id="hChartSleepTimes"></canvas></div>
+            <div class="h-hint" style="margin:0.75rem 0 0">
+                Die Punkte zeigen deine Zubettgeh- (unten) und Aufsteh-Zeit (oben) pro Nacht.
+                Enge Bänder = regelmäßiger Rhythmus.
+            </div>
+        </div>
     </div>
 
     <!-- ---------- Workouts ---------- -->
     <div id="tab-workouts" style="display:none">
         <div class="stat-filterbar">
-            <select id="hWorkoutTypeFilter" style="width:auto;margin:0">
-                <option value="">Alle Sportarten</option>
-            </select>
+            <div class="stat-preset-chips" id="hWorkoutTypeChips">
+                <button class="stat-chip active" data-type="">Alle</button>
+            </div>
         </div>
+        <div class="stat-kpi-grid" id="hWorkoutKpis"></div>
         <div class="stat-card">
-            <h3>🏋️ Workouts</h3>
+            <div class="stat-card-head">
+                <h3>🏋️ Workouts</h3>
+                <div class="stat-range-lbl" id="hWorkoutCount"></div>
+            </div>
             <div id="hWorkoutList" class="h-empty">Lade …</div>
         </div>
     </div>
+
 
     <!-- ---------- Einstellungen ---------- -->
     <div id="tab-einstellungen" style="display:none">
@@ -113,54 +161,80 @@
                 <code>Authorization: Bearer &lt;Key&gt;</code> ein. Ziel-URL:
                 <code id="hImportUrl">–</code></p>
             <div id="hApiKeyList" class="h-empty">Lade …</div>
-            <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
-                <input id="hNewKeyLabel" placeholder="Bezeichnung (z.B. iPhone)" style="margin:0">
-                <button class="primary" onclick="createApiKey()" style="width:auto">+ Key erzeugen</button>
+            <div class="h-form-row">
+                <input id="hNewKeyLabel" placeholder="Bezeichnung (z.B. iPhone)">
+                <button class="primary" onclick="createApiKey()">+ Key erzeugen</button>
             </div>
         </div>
+
         <div class="stat-card">
-            <h3>📁 Manueller Import (Backfill) — CSV, empfohlen</h3>
-            <p class="h-hint">Für einen einmaligen Import vergangener Zeiträume (z.B. ein
-                ganzer Monat): in Auto Health Export unter <strong>Export → Quick Export</strong>
-                Format <strong>CSV</strong> wählen und den Zeitraum exportieren. Danach
-                <strong>alle</strong> CSV-Dateien aus dem Export-Ordner hier gleichzeitig
-                auswählen (Mehrfachauswahl) und hochladen — die Tages-Gesundheitswerte-CSV
-                und die Workouts-Übersicht werden automatisch erkannt, alle anderen
-                Dateien (Einzelmetriken pro Workout) werden ignoriert.</p>
-            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-                <input type="file" id="hImportCsvFiles" accept=".csv,text/csv" multiple style="margin:0;width:auto">
-                <button class="primary" onclick="uploadHealthCsv()" style="width:auto">⬆ CSV importieren</button>
+            <h3>📁 Manueller Import (Backfill)</h3>
+            <div class="stat-mini-toggle" id="hImportModeToggle" style="margin-bottom:0.875rem">
+                <button class="active" data-mode="csv">📊 CSV (empfohlen)</button>
+                <button data-mode="json">📄 JSON</button>
             </div>
-            <div id="hImportCsvResult" style="margin-top:0.75rem"></div>
-        </div>
-        <div class="stat-card">
-            <h3>📄 Manueller Import (Backfill) — JSON, Alternative</h3>
-            <p class="h-hint">Alternativ: Export-Format <strong>JSON</strong> wählen und die
-                eine erzeugte Datei hier hochladen. Enthält mehr Detail (z.B. minutengenau),
-                ist dafür aber deutlich größer als der CSV-Export.</p>
-            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-                <input type="file" id="hImportFile" accept="application/json,.json" style="margin:0;width:auto">
-                <button class="primary" onclick="uploadHealthFile()" style="width:auto">⬆ Importieren</button>
+
+            <div id="hImportCsvBox">
+                <p class="h-hint">In Auto Health Export unter <strong>Export → Quick Export</strong>
+                    Format <strong>CSV</strong> wählen. Danach <strong>alle</strong> CSV-Dateien
+                    aus dem Export-Ordner hier gleichzeitig hochladen — die Tages-CSV und die
+                    Workouts-CSV werden automatisch erkannt, alle anderen Dateien werden ignoriert.</p>
+                <div class="h-dropzone" id="hDropzoneCsv">
+                    <input type="file" id="hImportCsvFiles" accept=".csv,text/csv" multiple hidden>
+                    <div class="h-dropzone-icon">📊</div>
+                    <div class="h-dropzone-title">CSV-Dateien hier ablegen oder klicken</div>
+                    <div class="h-dropzone-sub" id="hDropzoneCsvSub">Mehrfachauswahl unterstützt</div>
+                </div>
+                <div class="h-form-row" style="margin-top:0.75rem">
+                    <button class="primary" onclick="uploadHealthCsv()">⬆ CSV importieren</button>
+                </div>
+                <div id="hImportCsvResult" style="margin-top:0.75rem"></div>
             </div>
-            <div id="hImportFileResult" style="margin-top:0.75rem"></div>
+
+            <div id="hImportJsonBox" style="display:none">
+                <p class="h-hint">Alternative: Export-Format <strong>JSON</strong>. Enthält mehr
+                    Detail (minutengenau), ist dafür aber deutlich größer.</p>
+                <div class="h-dropzone" id="hDropzoneJson">
+                    <input type="file" id="hImportFile" accept="application/json,.json" hidden>
+                    <div class="h-dropzone-icon">📄</div>
+                    <div class="h-dropzone-title">JSON-Datei hier ablegen oder klicken</div>
+                    <div class="h-dropzone-sub" id="hDropzoneJsonSub">Eine Datei</div>
+                </div>
+                <div class="h-form-row" style="margin-top:0.75rem">
+                    <button class="primary" onclick="uploadHealthFile()">⬆ Importieren</button>
+                </div>
+                <div id="hImportFileResult" style="margin-top:0.75rem"></div>
+            </div>
         </div>
     </div>
 </main>
 <div class="version-tag"></div>
 <div id="toast" class="toast"></div>
 
-<!-- Neuer-Key-Modal (zeigt Klartext einmalig) -->
+<!-- Neuer-Key-Modal -->
 <div class="modal-overlay" id="hKeyModal">
     <div class="modal-box">
         <div class="modal-head"><h3>🔑 Neuer API-Key</h3><button class="modal-close" onclick="closeKeyModal()">✕</button></div>
         <div class="modal-body">
             <p class="h-hint">Dieser Key wird nur <strong>jetzt</strong> angezeigt. Kopiere ihn sofort in Auto Health Export.</p>
-            <input id="hKeyModalValue" readonly style="font-family:monospace;font-size:0.8125rem">
-            <button onclick="copyNewKey()" style="width:auto">📋 Kopieren</button>
+            <input id="hKeyModalValue" readonly class="h-key-value">
+            <button onclick="copyNewKey()" class="primary" style="width:auto;margin-top:0.5rem">📋 Kopieren</button>
         </div>
+    </div>
+</div>
+
+<!-- Workout-Detail-Modal -->
+<div class="modal-overlay" id="hWorkoutModal">
+    <div class="modal-box wide">
+        <div class="modal-head">
+            <h3 id="hWorkoutModalTitle">Workout</h3>
+            <button class="modal-close" onclick="closeWorkoutModal()">✕</button>
+        </div>
+        <div class="modal-body" id="hWorkoutModalBody"></div>
     </div>
 </div>
 
 <script src="/health/health.js"></script>
 </body>
 </html>
+
