@@ -855,6 +855,24 @@ async function revokeApiKey(id) {
 
 
 
+// v1.27.0: CSV-Export der kompletten Gesundheitsdaten
+async function exportHealthCsv() {
+    try {
+        const res = await apiCall('/api/health/export', { raw: true });
+        if (!res || !res.ok) { showToast('Export fehlgeschlagen', true); return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dt = new Date().toISOString().slice(0, 10);
+        a.href = url; a.download = `vexbob-health-export_${dt}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        showToast('Export heruntergeladen ✓');
+    } catch (e) {
+        showToast('Export fehlgeschlagen: ' + e.message, true);
+    }
+}
+
 async function rescaleLegacy() {
     const resultEl = document.getElementById('hRescaleResult');
     if (!confirm('Falsch skalierte Alt-Werte in der Datenbank reparieren?\n\nNur Werte unter 200 in Schritten, aktiver Energie und Schwimmdistanz werden um Faktor 1000 hochskaliert. Idempotent — Werte über 200 bleiben unverändert.'))

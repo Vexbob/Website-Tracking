@@ -25,11 +25,13 @@ from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi.responses import Response
 
 from database import get_db
 from auth import get_current_user, get_user_from_health_api_key, generate_health_api_key
 from deps import logger, limiter, LIMIT_HEALTH_IMPORT, LIMIT_WRITE_RARE, LIMIT_WRITE_STANDARD, _ser_exp
 from services.health_ingest import ingest_payload, ingest_csv_file, SIMPLE_METRIC_MAP
+from services.full_export import build_health_export_csv
 
 router = APIRouter(tags=["health"])
 
@@ -90,6 +92,21 @@ async def import_health_csv(request: Request, files: List[UploadFile] = File(...
         total["files_processed"] += 1
     logger.info("Health-CSV-Import fuer user_id=%s: %s Dateien, %s", user["id"], total["files_processed"], total)
     return total
+
+
+# ---------- CSV-Export (v1.27.0) ----------
+@router.get("/api/health/export")
+async def export_health_csv(db=Depends(get_db), user=Depends(get_current_user)):
+    """Dediziertes CSV-Backup aller Gesundheitsdaten des eingeloggten Users
+    (Zusammenfassung, Vitalwerte-Zeitserien, Blutdruck, Blutzucker, Schlaf,
+    Workouts inkl. Zusatzmetriken). Selbe Sektions-Struktur wie im
+    Gesamt-Export ``/api/export/all``, aber nur der Health-Anteil."""
+    csv = await build_health_export_csv(db, user)
+    return Response(
+        content=csv,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=vexbob-health-export.csv"},
+    )
 
 
 # ---------- Rescale-Fix fuer alten CSV-Import-Bug ----------

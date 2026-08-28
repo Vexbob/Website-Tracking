@@ -70,6 +70,27 @@ async def build_full_export_csv(db, user) -> str:
     return "\n".join(lines) + "\n"
 
 
+async def build_health_export_csv(db, user) -> str:
+    """v1.27.0: Dedizierter Health-CSV-Export (nur Gesundheit, ohne die
+    anderen Module). Nutzt exakt dieselben Sektions-Helfer wie der
+    Gesamt-Export, damit beide konsistent bleiben."""
+    lines: list[str] = []
+    export_dt = datetime.now(timezone.utc).isoformat()
+    lines.append(
+        f"# Vexbob Gesundheits-Export;user={_f(user['username'])};generated_at={export_dt}")
+    lines.append(
+        "# Diese Datei enthaelt alle Gesundheitsdaten des Users: eine "
+        "Zusammenfassung (Kennzahlen), Vitalwerte-Zeitserien (Herzfrequenz, "
+        "Ruhepuls, HRV, Schritte, aktive Energie, Gewicht, VO2max, ...), "
+        "Blutdruck, Blutzucker, Schlaf-Naechte inkl. Phasen und Workouts "
+        "inkl. Zusatzmetriken. Jede Sektion beginnt mit einer "
+        "Kommentarzeile '# SEKTION: ...' und ihrem eigenen Spalten-Header - "
+        "die Spaltenanzahl unterscheidet sich bewusst zwischen den Sektionen.")
+    lines.append("")
+    lines.extend(await _health_section(db, user["id"]))
+    return "\n".join(lines) + "\n"
+
+
 async def _expenses_section(db, user_id: int) -> list[str]:
     out = [
         "# SEKTION: Ausgaben (ein Eintrag pro Position; Bons ohne Positionen "
@@ -117,8 +138,53 @@ async def _expenses_section(db, user_id: int) -> list[str]:
     return out
 
 
+async def _health_summary_section(db, user_id: int) -> list[str]:
+    """Kompakte Kennzahlen als eigene erste Sektion, damit man beim Oeffnen
+    der CSV sofort einen Ueberblick hat (Zeitraum, Anzahl Datenpunkte,
+    letzte Werte). Ausgelagert (v1.27.0), damit sowohl der dedizierte
+    Health-Export als auch der Gesamt-Export dieselbe Uebersicht zeigen."""
+    out: list[str] = ["# SEKTION: Gesundheit - Zusammenfassung",
+                       "Kennzahl;Wert"]
+    metric_cnt = int(await db.fetchval(
+        "SELECT COUNT(*) FROM health_metric_samples WHERE user_id=$1", user_id) or 0)
+    bp_cnt = int(await db.fetchval(
+        "SELECT COUNT(*) FROM health_blood_pressure WHERE user_id=$1", user_id) or 0)
+    gl_cnt = int(await db.fetchval(
+        "SELECT COUNT(*) FROM health_blood_glucose WHERE user_id=$1", user_id) or 0)
+    sl_cnt = int(await db.fetchval(
+        "SELECT COUNT(*) FROM health_sleep WHERE user_id=$1", user_id) or 0)
+    wk_cnt = int(await db.fetchval(
+        "SELECT COUNT(*) FROM health_workouts WHERE user_id=$1", user_id) or 0)
+    date_range = await db.fetchrow(
+        "SELECT MIN(sample_date) AS mn, MAX(sample_date) AS mx "
+        "FROM health_metric_samples WHERE user_id=$1", user_id)
+    mn = date_range["mn"].isoformat() if date_range and date_range["mn"] else ""
+    mx = date_range["mx"].isoformat() if date_range and date_range["mx"] else ""
+    out.append(f"Zeitraum Vitalwerte;{mn} bis {mx}" if mn else "Zeitraum Vitalwerte;(keine Daten)")
+    out.append(f"Vitalwert-Datenpunkte;{metric_cnt}")
+    out.append(f"Blutdruck-Messungen;{bp_cnt}")
+    out.append(f"Blutzucker-Messungen;{gl_cnt}")
+    out.append(f"Schlaf-Naechte;{sl_cnt}")
+    out.append(f"Workouts;{wk_cnt}")
+    # Letzte Werte pro Metrik-Typ
+    last_rows = await db.fetch(
+        """SELECT DISTINCT ON (metric_type)
+                  metric_type, recorded_at, qty, unit
+             FROM health_metric_samples
+            WHERE user_id=$1
+            ORDER BY metric_type, recorded_at DESC""", user_id)
+    for r in last_rows:
+        out.append(
+            f'Letzter Wert: {_f(r["metric_type"])};'
+            f'{_amt(r["qty"]) if r["qty"] is not None else ""} '
+            f'{_f(r["unit"] or "")} @ {r["recorded_at"].isoformat() if r["recorded_at"] else ""}'.strip(";"))
+    out.append("")
+    return out
+
+
 async def _health_section(db, user_id: int) -> list[str]:
     out: list[str] = []
+    out.extend(await _health_summary_section(db, user_id))
 
     out.append(
         "# SEKTION: Gesundheit - Vitalwerte (aktive Energie, Herzfrequenz, "
@@ -182,22 +248,41 @@ async def _health_section(db, user_id: int) -> list[str]:
     out.append("")
 
     out.append("# SEKTION: Gesundheit - Workouts (ohne Routendaten)")
-    out.append("Start;Ende;Typ;Dauer (min);Aktive Energie (kcal);Gesamt-Energie (kcal);"
-                "Distanz (m);Ø-Herzfrequenz;Max-Herzfrequenz")
+    out.append("ID;Start;Ende;Typ;Dauer (min);Aktive Energie (kcal);Gesamt-Energie (kcal);"
+                "Distanz (m);Hoehenmeter (m);Ø-Herzfrequenz;Max-Herzfrequenz")
+    workout_ids: list[int] = []
     for r in await db.fetch(
-        "SELECT start_at, end_at, workout_type, duration_min, active_energy_kcal, "
-        "total_energy_kcal, distance_m, avg_heart_rate, max_heart_rate "
+        "SELECT id, start_at, end_at, workout_type, duration_min, active_energy_kcal, "
+        "total_energy_kcal, distance_m, elevation_m, avg_heart_rate, max_heart_rate "
         "FROM health_workouts WHERE user_id=$1 ORDER BY start_at", user_id):
+        workout_ids.append(r["id"])
         out.append(
+            f'{r["id"]};'
             f'{r["start_at"].isoformat() if r["start_at"] else ""};'
             f'{r["end_at"].isoformat() if r["end_at"] else ""};{_f(r["workout_type"] or "")};'
             f'{_amt(r["duration_min"]) if r["duration_min"] is not None else ""};'
             f'{_amt(r["active_energy_kcal"]) if r["active_energy_kcal"] is not None else ""};'
             f'{_amt(r["total_energy_kcal"]) if r["total_energy_kcal"] is not None else ""};'
             f'{_amt(r["distance_m"]) if r["distance_m"] is not None else ""};'
+            f'{_amt(r["elevation_m"]) if r["elevation_m"] is not None else ""};'
             f'{_amt(r["avg_heart_rate"]) if r["avg_heart_rate"] is not None else ""};'
             f'{_amt(r["max_heart_rate"]) if r["max_heart_rate"] is not None else ""}'
         )
+    out.append("")
+
+    # Workout-Zusatzmetriken (v1.27.0): Kadenz, SWOLF, Temperatur, Schrittfrequenz usw.
+    out.append("# SEKTION: Gesundheit - Workout-Zusatzmetriken (Kadenz, Schwimmzuege, "
+               "Temperatur, ...); Workout-ID verweist auf die vorige Sektion")
+    out.append("Workout-ID;Metrik;Wert;Einheit")
+    if workout_ids:
+        for r in await db.fetch(
+            "SELECT workout_id, metric_key, value, unit FROM health_workout_metrics "
+            "WHERE workout_id = ANY($1::int[]) ORDER BY workout_id, metric_key",
+            workout_ids):
+            out.append(
+                f'{r["workout_id"]};{_f(r["metric_key"])};'
+                f'{_amt(r["value"]) if r["value"] is not None else ""};{_f(r["unit"] or "")}'
+            )
     out.append("")
 
     return out

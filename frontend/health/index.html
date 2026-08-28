@@ -168,6 +168,17 @@
         </div>
 
         <div class="stat-card">
+            <h3>💾 CSV-Export</h3>
+            <p class="h-hint">Lädt alle Gesundheitsdaten als eine einzige CSV herunter —
+                Zusammenfassung, Vitalwerte-Zeitserien, Blutdruck, Blutzucker, Schlaf-Nächte
+                und Workouts inkl. Zusatzmetriken. Excel/Sheets: als Text mit Trennzeichen
+                <code>;</code> importieren.</p>
+            <div class="h-form-row">
+                <button class="primary" onclick="exportHealthCsv()">⬇ Gesundheitsdaten exportieren</button>
+            </div>
+        </div>
+
+        <div class="stat-card">
             <h3>📁 Manueller Import (Backfill)</h3>
             <div class="stat-mini-toggle" id="hImportModeToggle" style="margin-bottom:0.875rem">
                 <button class="active" data-mode="csv">📊 CSV (empfohlen)</button>
