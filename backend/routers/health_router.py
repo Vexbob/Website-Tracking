@@ -225,7 +225,8 @@ async def bulk_delete_health(request: Request, body: dict,
 
 @router.delete("/api/health/workouts/{wid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
-async def delete_workout(wid: int, db=Depends(get_db), user=Depends(get_current_user)):
+async def delete_workout(request: Request, wid: int,
+                          db=Depends(get_db), user=Depends(get_current_user)):
     """Loescht ein einzelnes Workout inkl. seiner Zusatzmetriken (die per
     ON DELETE CASCADE oder via expliziter Zeile mitgeloescht werden)."""
     row = await db.fetchrow(
@@ -244,7 +245,8 @@ async def delete_workout(wid: int, db=Depends(get_db), user=Depends(get_current_
 
 @router.delete("/api/health/sleep/{sid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
-async def delete_sleep(sid: int, db=Depends(get_db), user=Depends(get_current_user)):
+async def delete_sleep(request: Request, sid: int,
+                        db=Depends(get_db), user=Depends(get_current_user)):
     """Loescht eine einzelne Schlaf-Nacht."""
     tag = await db.execute(
         "DELETE FROM health_sleep WHERE id=$1 AND user_id=$2", sid, user["id"])
@@ -255,7 +257,8 @@ async def delete_sleep(sid: int, db=Depends(get_db), user=Depends(get_current_us
 
 @router.delete("/api/health/blood-pressure/{bid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
-async def delete_blood_pressure(bid: int, db=Depends(get_db), user=Depends(get_current_user)):
+async def delete_blood_pressure(request: Request, bid: int,
+                                 db=Depends(get_db), user=Depends(get_current_user)):
     tag = await db.execute(
         "DELETE FROM health_blood_pressure WHERE id=$1 AND user_id=$2", bid, user["id"])
     if tag.endswith(" 0"):
@@ -265,7 +268,8 @@ async def delete_blood_pressure(bid: int, db=Depends(get_db), user=Depends(get_c
 
 @router.delete("/api/health/blood-glucose/{bid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
-async def delete_blood_glucose(bid: int, db=Depends(get_db), user=Depends(get_current_user)):
+async def delete_blood_glucose(request: Request, bid: int,
+                                db=Depends(get_db), user=Depends(get_current_user)):
     tag = await db.execute(
         "DELETE FROM health_blood_glucose WHERE id=$1 AND user_id=$2", bid, user["id"])
     if tag.endswith(" 0"):
