@@ -78,6 +78,28 @@ Privates Fotoalbum mit Upload und Galerie-Ansicht.
 - **Preisvergleich zweigeteilt** (v1.16.0) – im Detail-Modal zwei Tabs: „📊 Preisverlauf pro Laden" (mit Rabatt/Preissteigerung) und „🏪 Läden-Vergleich" (Tabellensicht wer billiger ist)
 - **Export** als CSV (Semikolon-getrennt, deutsche Zahlenformatierung) und JSON (inkl. Items)
 
+### 🏋️ Gesundheit (neu in v1.22.0)
+Sync-Ziel für die iPhone-App **Auto Health Export** (REST-API-Automation).
+- **API-Key-Auth** getrennt vom JWT-Login (`hae_<user_id>_<random>`), da die
+  App keinen Login-Flow durchführen kann. Keys werden pro User erzeugt,
+  einmalig im Klartext angezeigt und jederzeit widerrufbar
+  (`/api/health/api-keys`).
+- **Sync-Endpoint** `POST /api/health/import` nimmt den Original-JSON-Payload
+  der App entgegen (`services/health_ingest.py`) und ordnet ihn regelbasiert
+  typ-spezifischen Tabellen zu: einfache Zeitserien (aktive Energie,
+  Herzfrequenz, Ø-HF beim Gehen, Gewicht, HRV, Ruhepuls, kardiorespiratorische
+  Erholung, Schritte, Schwimmdistanz, VO2max), Blutdruck-Paare, Blutzucker,
+  Schlaf (mit Phasen Core/Deep/REM/Wach) und Workouts **ohne Routendaten**
+  (Kopf-Tabelle + flexible Zusatzmetriken je Sportart).
+- **Idempotent**: wiederholte/überlappende Syncs erzeugen keine Duplikate
+  (`ON CONFLICT DO UPDATE` auf User+Zeitstempel+Quelle).
+- **Optionaler AI-Fallback** (`services/ai_health_parser.py`, Gemini) für
+  unbekannte Metric-Namen — analog zum Kassenbon-Parser; schlägt er fehl,
+  wird der einzelne Datenpunkt übersprungen statt den ganzen Sync zu verwerfen.
+- **Frontend** (`/health/`) mit Tabs Dashboard, Vitalwerte (Charts pro
+  Metrik + Blutdruck/Blutzucker), Schlaf (gestapeltes Phasen-Chart),
+  Workouts (Liste + Detail) und Einstellungen (API-Key-Verwaltung).
+
 ### 👤 User- & Admin-System
 - Login mit JWT
 - Admin-Bereich mit **Invite-Tokens** (User-Erstellung ohne Passwort-Vergabe durch Admin)
@@ -207,6 +229,7 @@ Website/
     │   └── sparziel.js          # ausgelagerte Logik (v1.15.1)
     ├── ausgaben/                # Ausgaben-Tracker (bereits modular)
     ├── notizen/                 # Notizen
+    ├── health/                  # Gesundheit (Auto Health Export Sync)
     ├── rezeptbuch/              # Rezepte
     ├── photos/                  # Fotoalbum
     ├── admin/                   # Admin-Panel

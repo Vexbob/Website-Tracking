@@ -16,7 +16,6 @@ TABLES_ORDERED = [
     "achievement_logs",
     "progress_goals",
     "progress_logs",
-    "health_metrics",
     "savings_transactions",
     "potential_goals",
     "future_ideas",
@@ -28,6 +27,14 @@ TABLES_ORDERED = [
     "receipt_images",
     "expenses",
     "expense_items",
+    # Health-Modul (v1.22.0)
+    "health_api_keys",
+    "health_metric_samples",
+    "health_blood_pressure",
+    "health_blood_glucose",
+    "health_sleep",
+    "health_workouts",
+    "health_workout_metrics",
 ]
 
 # Tabellen mit binären BYTEA-Feldern, die im Backup base64-serialisiert werden

@@ -16,7 +16,6 @@ TABLES_ORDERED = [
     "achievement_logs",
     "progress_goals",
     "progress_logs",
-    "health_metrics",
     "savings_transactions",
     "potential_goals",
     "future_ideas",

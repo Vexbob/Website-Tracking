@@ -23,6 +23,9 @@ LIMIT_LOGIN = "5/minute"
 LIMIT_WRITE_FREQUENT = "60/minute"
 LIMIT_WRITE_STANDARD = "30/minute"
 LIMIT_WRITE_RARE = "10/minute"
+# Health-Sync (Auto Health Export synct typischerweise mehrmals taeglich
+# automatisiert, aber grosszuegig genug fuer manuelle Re-Syncs/Backfills).
+LIMIT_HEALTH_IMPORT = "20/hour"
 
 # Upload-Grenze für Belegbilder
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024

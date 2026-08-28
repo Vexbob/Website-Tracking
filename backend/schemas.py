@@ -89,12 +89,6 @@ class NoteBody(BaseModel):
     note: Optional[str] = None
 
 
-# ---------- Gesundheits-Metriken ----------
-class HMCreate(BaseModel):
-    metric_type: str
-    value: float
-
-
 # ---------- Wunsch-Anschaffungen / Ideen ----------
 class PotCreate(BaseModel):
     name: str

@@ -18,6 +18,7 @@
         { href: '/sparziel/',   label: '💰 Sparziel',       public: false },
         { href: '/ausgaben/',   label: '💶 Ausgaben',       public: false },
         { href: '/notizen/',    label: '📝 Notizen',        public: false },
+        { href: '/health/',     label: '🏋️ Gesundheit',     public: false },
         { href: '/blog/',       label: '📰 Blog',           public: true, hideForAdmin: true },
         { href: '/blog/admin/', label: '📰 Blog',           public: false, admin: true },
         { href: '/admin/',      label: '👥 User-Verwaltung', public: false, admin: true },

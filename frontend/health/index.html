@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Gesundheit — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/health/health.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav-switcher.js" defer></script>
+<script src="/js/sw-update.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/" style="text-decoration:none;color:inherit;font-weight:700;font-size:1.125rem;">← Vexbob</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn" title="Design umschalten">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main class="wide">
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="dashboard">🏠 Dashboard</button>
+        <button class="tab-btn" data-tab="vitalwerte">❤️ Vitalwerte</button>
+        <button class="tab-btn" data-tab="schlaf">😴 Schlaf</button>
+        <button class="tab-btn" data-tab="workouts">🏋️ Workouts</button>
+        <button class="tab-btn" data-tab="einstellungen">⚙️ Einstellungen</button>
+    </div>
+
+    <!-- ---------- Dashboard ---------- -->
+    <div id="tab-dashboard">
+        <div class="stat-kpi-grid" id="hDashKpis">
+            <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
+            <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
+            <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
+            <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
+        </div>
+        <div class="split-2">
+            <div class="stat-card">
+                <h3>😴 Letzte Nacht</h3>
+                <div id="hDashSleep" class="h-empty">Noch keine Daten synchronisiert.</div>
+            </div>
+            <div class="stat-card">
+                <h3>🩺 Letzter Blutdruck</h3>
+                <div id="hDashBp" class="h-empty">Noch keine Daten synchronisiert.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- Vitalwerte ---------- -->
+    <div id="tab-vitalwerte" style="display:none">
+        <div class="stat-filterbar">
+            <div class="stat-preset-chips" id="hMetricPresets">
+                <button class="stat-chip" data-preset="7">7 Tage</button>
+                <button class="stat-chip active" data-preset="30">30 Tage</button>
+                <button class="stat-chip" data-preset="90">90 Tage</button>
+                <button class="stat-chip" data-preset="365">12 Monate</button>
+            </div>
+            <select id="hMetricSelect" style="width:auto;margin:0"></select>
+        </div>
+        <div class="stat-card">
+            <h3 id="hMetricTitle">📈 Verlauf</h3>
+            <div class="chart-wrap tall"><canvas id="hChartMetric"></canvas></div>
+        </div>
+        <div class="split-2">
+            <div class="stat-card">
+                <h3>🩺 Blutdruck</h3>
+                <div class="chart-wrap"><canvas id="hChartBp"></canvas></div>
+            </div>
+            <div class="stat-card">
+                <h3>🩸 Blutzucker</h3>
+                <div class="chart-wrap"><canvas id="hChartGlucose"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- Schlaf ---------- -->
+    <div id="tab-schlaf" style="display:none">
+        <div class="stat-card">
+            <h3>😴 Schlafphasen (letzte 30 Nächte)</h3>
+            <div class="chart-wrap tall"><canvas id="hChartSleep"></canvas></div>
+        </div>
+        <div class="stat-kpi-grid" id="hSleepKpis"></div>
+    </div>
+
+    <!-- ---------- Workouts ---------- -->
+    <div id="tab-workouts" style="display:none">
+        <div class="stat-filterbar">
+            <select id="hWorkoutTypeFilter" style="width:auto;margin:0">
+                <option value="">Alle Sportarten</option>
+            </select>
+        </div>
+        <div class="stat-card">
+            <h3>🏋️ Workouts</h3>
+            <div id="hWorkoutList" class="h-empty">Lade …</div>
+        </div>
+    </div>
+
+    <!-- ---------- Einstellungen ---------- -->
+    <div id="tab-einstellungen" style="display:none">
+        <div class="stat-card">
+            <h3>🔑 API-Keys für Auto Health Export</h3>
+            <p class="h-hint">Erzeuge einen Key und trage ihn in der iPhone-App unter
+                <strong>Automations → REST API</strong> als Header
+                <code>Authorization: Bearer &lt;Key&gt;</code> ein. Ziel-URL:
+                <code id="hImportUrl">–</code></p>
+            <div id="hApiKeyList" class="h-empty">Lade …</div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
+                <input id="hNewKeyLabel" placeholder="Bezeichnung (z.B. iPhone)" style="margin:0">
+                <button class="primary" onclick="createApiKey()" style="width:auto">+ Key erzeugen</button>
+            </div>
+        </div>
+    </div>
+</main>
+<div class="version-tag"></div>
+<div id="toast" class="toast"></div>
+
+<!-- Neuer-Key-Modal (zeigt Klartext einmalig) -->
+<div class="modal-overlay" id="hKeyModal">
+    <div class="modal-box">
+        <div class="modal-head"><h3>🔑 Neuer API-Key</h3><button class="modal-close" onclick="closeKeyModal()">✕</button></div>
+        <div class="modal-body">
+            <p class="h-hint">Dieser Key wird nur <strong>jetzt</strong> angezeigt. Kopiere ihn sofort in Auto Health Export.</p>
+            <input id="hKeyModalValue" readonly style="font-family:monospace;font-size:0.8125rem">
+            <button onclick="copyNewKey()" style="width:auto">📋 Kopieren</button>
+        </div>
+    </div>
+</div>
+
+<script src="/health/health.js"></script>
+</body>
+</html>

@@ -30,7 +30,7 @@ from deps import (
 # Ausgelagerte Pydantic-Models (v1.15.1)
 from schemas import (
     SavGoalUpd, SavGoalCreate, AchCreate, AchUpd, AchEdit,
-    PGCreate, PGUpd, CheckinBody, NoteBody, HMCreate,
+    PGCreate, PGUpd, CheckinBody, NoteBody,
     PotCreate, FICreate, ReorderBody, RestoreBody,
     UserCreate, UserPasswordReset, UserCreateInvite, ActivateBody, TrophyCreate,
 )
@@ -1037,25 +1037,7 @@ async def pg_history(gid: int, limit: int = 12, db=Depends(get_db), user=Depends
         cur = prev_period(rhythm, cur)
     return periods
 
-# ---------- Health Metrics ----------
-@app.get("/api/health-metrics")
-async def list_hm(type: Optional[str] = None, db=Depends(get_db), user=Depends(get_current_user)):
-    if type:
-        return [ser(r) for r in await db.fetch(
-            "SELECT * FROM health_metrics WHERE user_id=$1 AND metric_type=$2 ORDER BY recorded_at",
-            user["id"], type)]
-    grouped = {}
-    for r in await db.fetch(
-        "SELECT * FROM health_metrics WHERE user_id=$1 ORDER BY recorded_at", user["id"]):
-        d = ser(r); grouped.setdefault(d["metric_type"], []).append(d)
-    return grouped
-
-@app.post("/api/health-metrics")
-@limiter.limit(LIMIT_WRITE_STANDARD)
-async def create_hm(request: Request, b: HMCreate, db=Depends(get_db), user=Depends(get_current_user)):
-    return ser(await db.fetchrow(
-        "INSERT INTO health_metrics (user_id,metric_type,value) VALUES ($1,$2,$3) RETURNING *",
-        user["id"], b.metric_type, b.value))
+# ---------- Health-Modul (v1.22.0) — ausgelagert in routers/health_router.py ----------
 
 # ---------- Potential Goals & Future Ideas ----------
 @app.get("/api/potential-goals")
@@ -1487,3 +1469,9 @@ app.include_router(notes_router)
 # --------------------------------------------------------------------------
 from routers.blog_router import router as blog_router
 app.include_router(blog_router)
+
+# ==========================================================================
+# Health-Modul (v1.22.0) — Sync via Auto Health Export (iPhone REST API)
+# --------------------------------------------------------------------------
+from routers.health_router import router as health_router
+app.include_router(health_router)
