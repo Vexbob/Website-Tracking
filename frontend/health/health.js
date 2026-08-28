@@ -22,6 +22,7 @@ const HEALTH_API = {
     apiKeys:       () => apiCall('/api/health/api-keys'),
     createKey:     (label) => apiCall('/api/health/api-keys', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ label }) }),
     revokeKey:     (id) => apiCall(`/api/health/api-keys/${id}`, { method: 'DELETE' }),
+    rescaleLegacy: () => apiCall('/api/health/rescale-legacy', { method: 'POST' }),
 };
 
 const METRIC_LABELS = {
@@ -236,8 +237,14 @@ async function loadDashboard() {
 function renderInsights(s, extras) {
     const box = document.getElementById('hDashInsights');
     const items = [];
+    // Warnung, wenn Werte verdaechtig klein sind (alter CSV-Bug vor v1.25.0)
+    const stepsRows = (state.dashSeries && state.dashSeries.steps) || [];
+    const legacyBug = stepsRows.length >= 3 && stepsRows.every(r => (Number(r.qty) || 0) < 200);
+    if (legacyBug) {
+        items.push({ icon:'⚠️', txt:`Schritte sehen zu klein aus (Import-Bug vor v1.25.0). Reparieren: <a href="#" onclick="activateTab('einstellungen');return false;" style="color:var(--accent);font-weight:700">Einstellungen → Altdaten reparieren</a>.` });
+    }
     if (extras.stepsSum >= 70000) items.push({ icon:'🎯', txt:`Starke Woche — <strong>${fmt0(extras.stepsSum)}</strong> Schritte in 7 Tagen.` });
-    else if (extras.stepsSum > 0 && extras.stepsSum < 20000) items.push({ icon:'💡', txt:`Wenig Aktivität diese Woche (<strong>${fmt0(extras.stepsSum)}</strong> Schritte).` });
+    else if (extras.stepsSum > 200 && extras.stepsSum < 20000) items.push({ icon:'💡', txt:`Wenig Aktivität diese Woche (<strong>${fmt0(extras.stepsSum)}</strong> Schritte).` });
     if (extras.restAvg != null && extras.restPrev != null && (extras.restAvg - extras.restPrev) <= -2)
         items.push({ icon:'💚', txt:`Ruhepuls <strong>${fmt0(extras.restAvg)}</strong> bpm — ${fmt0(extras.restPrev - extras.restAvg)} bpm besser als Vorwoche.` });
     if (extras.restAvg != null && extras.restAvg >= 80)
@@ -428,8 +435,9 @@ async function loadVitalTiles() {
             }
         }
         const isActive = k === state.vitalMetric;
+        const isEmpty = vals.length === 0;
         const tile = document.createElement('div');
-        tile.className = 'stat-kpi clickable' + (isActive ? ' active-tile' : '');
+        tile.className = 'stat-kpi clickable' + (isActive ? ' active-tile' : '') + (isEmpty ? ' empty-tile' : '');
         tile.innerHTML = `
             <div class="stat-kpi-icon">${meta.icon}</div>
             <div class="stat-kpi-label">${meta.label}</div>
@@ -461,7 +469,7 @@ async function loadMetricChart() {
                 ? `Σ ${fmt0(sum)} · Ø ${fmt0(av)} · Max ${fmt0(mx)}`
                 : `Ø ${(av>=100?fmt0(av):fmt1(av))} · Min ${(mn>=100?fmt0(mn):fmt1(mn))} · Max ${(mx>=100?fmt0(mx):fmt1(mx))} ${meta.unit || ''}`;
         }
-        document.getElementById('hMetricStats').textContent = stats;
+        document.getElementById('hMetricStats').textContent = stats || (rows.length ? '' : 'Keine Daten in diesem Zeitraum');
         state.chartMetric.data.labels = rows.map(r => fmtDate(r.sample_date || r.recorded_at));
         const ds = state.chartMetric.data.datasets[0];
         ds.label = `${meta.label} (${meta.unit || '–'})`;
@@ -540,6 +548,21 @@ function initSchlaf() {
 async function loadSleepChart() {
     try {
         const rows = await HEALTH_API.sleep(state.sleepDays);
+        const kpiBox = document.getElementById('hSleepKpis');
+        if (!rows.length) {
+            kpiBox.innerHTML = `<div class="stat-empty" style="grid-column:1/-1">
+                Keine Schlaf-Daten für diesen Zeitraum. Auto Health Export exportiert
+                Schlaf nur, wenn Apple Watch getragen wurde (oder ein anderer Tracker
+                die Schlafphasen liefert).
+            </div>`;
+            state.chartSleep.data.labels = [];
+            state.chartSleep.data.datasets.forEach(d => d.data = []);
+            state.chartSleep.update();
+            state.chartSleepTimes.data.labels = [];
+            state.chartSleepTimes.data.datasets.forEach(d => d.data = []);
+            state.chartSleepTimes.update();
+            return;
+        }
         state.chartSleep.data.labels = rows.map(r => fmtDate(r.sleep_date));
         state.chartSleep.data.datasets[0].data = rows.map(r => (r.core_minutes || 0) / 60);
         state.chartSleep.data.datasets[1].data = rows.map(r => (r.deep_minutes || 0) / 60);
@@ -573,7 +596,7 @@ async function loadSleepChart() {
             { icon: '🌊', label: 'Ø Tiefschlaf', value: fmt1(avg('deep_minutes')) + ' h' },
             { icon: '✨', label: 'Ø Effizienz', value: avgEff != null ? fmt0(avgEff) + ' %' : '–' },
         ];
-        document.getElementById('hSleepKpis').innerHTML = kpis.map(k => `
+        kpiBox.innerHTML = kpis.map(k => `
             <div class="stat-kpi"><div class="stat-kpi-icon">${k.icon}</div>
                 <div class="stat-kpi-label">${k.label}</div>
                 <div class="stat-kpi-value">${k.value}</div></div>`).join('');
@@ -637,81 +660,103 @@ function renderWorkouts() {
             <div class="stat-kpi-label">${k.lbl}</div>
             <div class="stat-kpi-value">${k.val}</div></div>`).join('');
     list.className = '';
-    list.innerHTML = rows.map(w => {
-        const m = wMeta(w.workout_type);
-        const dist = Number(w.distance_m);
-        const distStr = Number.isFinite(dist) && dist > 0
-            ? (dist >= 1000 ? fmt1(dist/1000) + ' km' : fmt0(dist) + ' m') : null;
-        return `
-        <div class="h-workout-row" onclick="openWorkoutDetail(${w.id})">
-            <div class="h-workout-icon ${m.cls}">${m.icon}</div>
-            <div class="h-workout-main">
-                <div class="h-workout-title">${escHtml(m.de)}</div>
-                <div class="h-workout-sub">${fmtDateTime(w.start_at)} · ${fmtDuration(w.duration_min)}${distStr ? ' · ' + distStr : ''}</div>
-            </div>
-            <div class="h-workout-stats">
-                <div><span>Kcal</span><strong>${fmt0(w.active_energy_kcal)}</strong></div>
-                <div><span>Puls</span><strong>${fmt0(w.avg_heart_rate)}</strong></div>
-            </div>
-        </div>`;
-    }).join('');
+    list.innerHTML = rows.map(w => renderWorkoutCard(w)).join('');
 }
 
-async function openWorkoutDetail(id) {
-    const modal = document.getElementById('hWorkoutModal');
-    const body = document.getElementById('hWorkoutModalBody');
-    const titleEl = document.getElementById('hWorkoutModalTitle');
-    body.innerHTML = '<div class="stat-loading">Lade …</div>';
-    modal.classList.add('show');
-    try {
-        const w = await HEALTH_API.workoutDetail(id);
-        const m = wMeta(w.workout_type);
-        titleEl.innerHTML = `${m.icon} ${escHtml(m.de)}`;
-        const dist = Number(w.distance_m);
-        const distStr = Number.isFinite(dist) && dist > 0
-            ? (dist >= 1000 ? fmt1(dist/1000) + ' <small>km</small>' : fmt0(dist) + ' <small>m</small>') : '–';
-        const tiles = [
-            { lbl:'Start', val: fmtDateTime(w.start_at) },
-            { lbl:'Dauer', val: fmtDuration(w.duration_min) },
-            { lbl:'Aktive Energie', val: fmt0(w.active_energy_kcal) + ' <small>kcal</small>' },
-            { lbl:'Gesamt-Energie', val: fmt0(w.total_energy_kcal) + ' <small>kcal</small>' },
-            { lbl:'Distanz', val: distStr },
-            { lbl:'Ø Puls', val: fmt0(w.avg_heart_rate) + ' <small>bpm</small>' },
-            { lbl:'Max Puls', val: fmt0(w.max_heart_rate) + ' <small>bpm</small>' },
-            { lbl:'Höhenmeter', val: fmt0(w.elevation_m) + ' <small>m</small>' },
-        ];
-        const extraLabels = {
-            resting_energy_kcal: 'Ruhe-Energie (kcal)',
-            intensity_kcal_h_kg: 'Intensität (kcal/h·kg)',
-            max_speed_kmh: 'Max. Geschwindigkeit (km/h)',
-            avg_speed_kmh: 'Ø Geschwindigkeit (km/h)',
-            flights_climbed: 'Etagen gestiegen',
-            elevation_descended_m: 'Abstieg (m)',
-            step_count: 'Schritte', cadence_spm: 'Schrittfrequenz (spm)',
-            swim_stroke_count: 'Schwimmzüge', swim_cadence_spm: 'Schwimmkadenz (spm)',
-            lap_length_m: 'Rundenlänge (m)', swolf: 'SWOLF',
-            temperature_c: 'Temperatur (°C)', humidity_pct: 'Luftfeuchtigkeit (%)',
-        };
-        const extras = (w.extra_metrics || []).filter(x => x.value != null);
-        const extrasHtml = extras.length ? `
-            <h4 style="margin:0.5rem 0 0.5rem;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Zusatzdaten</h4>
-            <div class="h-workout-extras"><table>${extras.map(x => `
-                <tr><td>${escHtml(extraLabels[x.metric_key] || x.metric_key)}</td>
-                    <td>${fmt1(x.value)}${x.unit ? ' ' + escHtml(x.unit) : ''}</td></tr>`).join('')}
-            </table></div>` : '';
-        body.innerHTML = `
+function renderWorkoutCard(w) {
+    const m = wMeta(w.workout_type);
+    const dist = Number(w.distance_m);
+    const hasDist = Number.isFinite(dist) && dist > 0;
+    const distStr = hasDist
+        ? (dist >= 1000 ? fmt1(dist/1000) + ' <small>km</small>' : fmt0(dist) + ' <small>m</small>')
+        : null;
+    // Pace nur fuer Distanz-Sportarten
+    let paceStr = null;
+    if (hasDist && (w.duration_min > 0)) {
+        const paceMinPerKm = w.duration_min / (dist / 1000);
+        if (Number.isFinite(paceMinPerKm) && paceMinPerKm > 0 && paceMinPerKm < 60) {
+            const mm = Math.floor(paceMinPerKm);
+            const ss = Math.round((paceMinPerKm - mm) * 60);
+            paceStr = `${mm}:${String(ss).padStart(2,'0')} <small>min/km</small>`;
+        }
+    }
+    const tiles = [
+        { lbl:'Dauer', val: fmtDuration(w.duration_min) },
+        w.active_energy_kcal != null ? { lbl:'Aktive Energie', val: fmt0(w.active_energy_kcal) + ' <small>kcal</small>' } : null,
+        w.total_energy_kcal != null && w.total_energy_kcal !== w.active_energy_kcal
+            ? { lbl:'Gesamt-Energie', val: fmt0(w.total_energy_kcal) + ' <small>kcal</small>' } : null,
+        hasDist ? { lbl:'Distanz', val: distStr } : null,
+        paceStr ? { lbl:'Pace', val: paceStr } : null,
+        w.avg_heart_rate != null ? { lbl:'Ø Puls', val: fmt0(w.avg_heart_rate) + ' <small>bpm</small>' } : null,
+        w.max_heart_rate != null ? { lbl:'Max Puls', val: fmt0(w.max_heart_rate) + ' <small>bpm</small>' } : null,
+        w.elevation_m != null && w.elevation_m > 0
+            ? { lbl:'Aufstieg', val: fmt0(w.elevation_m) + ' <small>m</small>' } : null,
+    ].filter(Boolean);
+    return `
+        <div class="h-workout-card" data-wid="${w.id}">
+            <div class="h-workout-head">
+                <div class="h-workout-icon ${m.cls}">${m.icon}</div>
+                <div class="h-workout-main">
+                    <div class="h-workout-title">${escHtml(m.de)}</div>
+                    <div class="h-workout-sub">${fmtDateTime(w.start_at)}</div>
+                </div>
+                <button class="h-workout-more" onclick="toggleWorkoutExtras(${w.id})"
+                        aria-expanded="false" title="Zusatzdaten">＋</button>
+            </div>
             <div class="h-workout-detail-grid">
                 ${tiles.map(t => `<div class="h-workout-detail-tile">
                     <div class="h-workout-detail-lbl">${t.lbl}</div>
                     <div class="h-workout-detail-val">${t.val}</div>
                 </div>`).join('')}
             </div>
-            ${extrasHtml}`;
-    } catch (e) {
-        body.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
-    }
+            <div class="h-workout-extras-wrap" id="hwx-${w.id}" style="display:none"></div>
+        </div>`;
 }
-function closeWorkoutModal() { document.getElementById('hWorkoutModal').classList.remove('show'); }
+
+async function toggleWorkoutExtras(id) {
+    const card = document.querySelector(`.h-workout-card[data-wid="${id}"]`);
+    if (!card) return;
+    const wrap = document.getElementById('hwx-' + id);
+    const btn = card.querySelector('.h-workout-more');
+    if (wrap.style.display !== 'none') {
+        wrap.style.display = 'none';
+        btn.textContent = '＋'; btn.setAttribute('aria-expanded', 'false');
+        return;
+    }
+    if (!wrap.dataset.loaded) {
+        wrap.innerHTML = '<div class="stat-loading">Lade Zusatzdaten …</div>';
+        wrap.style.display = '';
+        try {
+            const w = await HEALTH_API.workoutDetail(id);
+            const extras = (w.extra_metrics || []).filter(x => x.value != null && Math.abs(x.value) > 0.0001);
+            const extraLabels = {
+                resting_energy_kcal: 'Ruhe-Energie (kcal)',
+                intensity_kcal_h_kg: 'Intensität (kcal/h·kg)',
+                max_speed_kmh: 'Max. Geschwindigkeit (km/h)',
+                avg_speed_kmh: 'Ø Geschwindigkeit (km/h)',
+                flights_climbed: 'Etagen gestiegen',
+                elevation_descended_m: 'Abstieg (m)',
+                step_count: 'Schritte', cadence_spm: 'Schrittfrequenz (spm)',
+                swim_stroke_count: 'Schwimmzüge', swim_cadence_spm: 'Schwimmkadenz (spm)',
+                lap_length_m: 'Rundenlänge (m)', swolf: 'SWOLF',
+                temperature_c: 'Temperatur (°C)', humidity_pct: 'Luftfeuchtigkeit (%)',
+            };
+            wrap.innerHTML = extras.length ? `
+                <div class="h-workout-extras"><table>${extras.map(x => `
+                    <tr><td>${escHtml(extraLabels[x.metric_key] || x.metric_key)}</td>
+                        <td>${fmt1(x.value)}${x.unit ? ' ' + escHtml(x.unit) : ''}</td></tr>`).join('')}
+                </table></div>` : '<div class="h-empty" style="padding:0.75rem">Keine Zusatzdaten.</div>';
+            wrap.dataset.loaded = '1';
+        } catch (e) {
+            wrap.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
+        }
+    } else {
+        wrap.style.display = '';
+    }
+    btn.textContent = '−'; btn.setAttribute('aria-expanded', 'true');
+}
+
+function closeWorkoutModal() { /* legacy no-op, Modal entfernt in v1.25.1 */ }
 
 // ---------- Einstellungen / API-Keys ----------
 function initEinstellungen() {
@@ -810,6 +855,29 @@ async function revokeApiKey(id) {
 
 
 
+async function rescaleLegacy() {
+    const resultEl = document.getElementById('hRescaleResult');
+    if (!confirm('Falsch skalierte Alt-Werte in der Datenbank reparieren?\n\nNur Werte unter 200 in Schritten, aktiver Energie und Schwimmdistanz werden um Faktor 1000 hochskaliert. Idempotent — Werte über 200 bleiben unverändert.'))
+        return;
+    resultEl.innerHTML = '<div class="stat-loading">Repariere Werte …</div>';
+    try {
+        const res = await HEALTH_API.rescaleLegacy();
+        const r = res.rescaled || {};
+        resultEl.innerHTML = `
+            <div class="h-hint" style="margin:0">
+                ✅ Fertig — <strong>${fmt0(res.total)}</strong> Werte korrigiert:
+                ${fmt0(r.steps || 0)} Schritte-Einträge,
+                ${fmt0(r.active_energy || 0)} Kalorien-Einträge,
+                ${fmt0(r.swim_distance || 0)} Schwimmdistanz-Einträge.
+            </div>`;
+        showToast('Werte repariert ✓');
+        loadDashboard();
+    } catch (e) {
+        resultEl.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
+        showToast('Fehler beim Reparieren', true);
+    }
+}
+
 async function uploadHealthCsv() {
     const input = document.getElementById('hImportCsvFiles');
     const resultEl = document.getElementById('hImportCsvResult');
@@ -899,12 +967,9 @@ async function uploadHealthFile() {
     // Modal-Overlay-Click schließt
     document.getElementById('hKeyModal').addEventListener('click',
         (e) => { if (e.target.id === 'hKeyModal') closeKeyModal(); });
-    document.getElementById('hWorkoutModal').addEventListener('click',
-        (e) => { if (e.target.id === 'hWorkoutModal') closeWorkoutModal(); });
-
     // ESC schließt Modals
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') { closeKeyModal(); closeWorkoutModal(); }
+        if (e.key === 'Escape') closeKeyModal();
     });
 
     loadDashboard();
