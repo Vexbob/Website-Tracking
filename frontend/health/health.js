@@ -9,6 +9,7 @@ const HEALTH_API = {
     sleep:        (days) => apiCall(`/api/health/sleep?days=${days}`),
     workouts:     (type) => apiCall('/api/health/workouts' + (type ? `?workout_type=${encodeURIComponent(type)}` : '')),
     workoutDetail:(id) => apiCall(`/api/health/workouts/${id}`),
+    importFile:   (file) => { const fd = new FormData(); fd.append('file', file); return apiCall('/api/health/import-file', { method: 'POST', body: fd }); },
     apiKeys:      () => apiCall('/api/health/api-keys'),
     createKey:    (label) => apiCall('/api/health/api-keys', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ label }) }),
     revokeKey:    (id) => apiCall(`/api/health/api-keys/${id}`, { method: 'DELETE' }),
@@ -342,6 +343,34 @@ async function revokeApiKey(id) {
         showToast('Key widerrufen');
         loadApiKeys();
     } catch (e) { showToast('Fehler: ' + e.message, true); }
+}
+
+async function uploadHealthFile() {
+    const input = document.getElementById('hImportFile');
+    const resultEl = document.getElementById('hImportFileResult');
+    const file = input.files && input.files[0];
+    if (!file) { showToast('Bitte zuerst eine Datei auswählen', true); return; }
+    resultEl.innerHTML = '<div class="stat-loading">Importiere …</div>';
+    try {
+        const stats = await HEALTH_API.importFile(file);
+        const skipped = stats.skipped || [];
+        resultEl.innerHTML = `
+            <div class="h-hint" style="margin:0">
+                ✅ Import abgeschlossen —
+                ${fmt0(stats.metrics_imported)} Vitalwerte,
+                ${fmt0(stats.bp_imported)} Blutdruck,
+                ${fmt0(stats.glucose_imported)} Blutzucker,
+                ${fmt0(stats.sleep_imported)} Nächte,
+                ${fmt0(stats.workouts_imported)} Workouts importiert.
+                ${skipped.length ? `${skipped.length} Punkte übersprungen (z.B. unbekanntes Format).` : ''}
+            </div>`;
+        showToast('Import abgeschlossen ✓');
+        input.value = '';
+        loadDashboard();
+    } catch (e) {
+        resultEl.innerHTML = `<div class="stat-empty">Import fehlgeschlagen: ${e.message}</div>`;
+        showToast('Import fehlgeschlagen', true);
+    }
 }
 
 // ---------- Bootstrap ----------

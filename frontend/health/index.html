@@ -118,6 +118,19 @@
                 <button class="primary" onclick="createApiKey()" style="width:auto">+ Key erzeugen</button>
             </div>
         </div>
+        <div class="stat-card">
+            <h3>📁 Manueller Import (Backfill)</h3>
+            <p class="h-hint">Für einen einmaligen Import vergangener Zeiträume (z.B. ein
+                ganzer Monat) ohne dafür eine Automation einzurichten: in Auto Health
+                Export unter <strong>Export → Quick Export</strong> den gewünschten
+                Zeitraum wählen, Format <strong>JSON</strong> speichern und die Datei hier
+                hochladen.</p>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                <input type="file" id="hImportFile" accept="application/json,.json" style="margin:0;width:auto">
+                <button class="primary" onclick="uploadHealthFile()" style="width:auto">⬆ Importieren</button>
+            </div>
+            <div id="hImportFileResult" style="margin-top:0.75rem"></div>
+        </div>
     </div>
 </main>
 <div class="version-tag"></div>

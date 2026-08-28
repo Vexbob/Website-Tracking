@@ -2,6 +2,7 @@
 
 Endpoints:
   POST   /api/health/import              — Ingest-Endpoint fuer die App (API-Key-Auth)
+  POST   /api/health/import-file         — Manueller JSON-Upload im Frontend (JWT-Auth)
   GET    /api/health/api-keys            — eigene Keys auflisten (JWT-Auth)
   POST   /api/health/api-keys            — neuen Key erzeugen (Klartext nur hier sichtbar)
   DELETE /api/health/api-keys/{kid}      — Key widerrufen
@@ -15,14 +16,15 @@ Endpoints:
 """
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 
 from database import get_db
 from auth import get_current_user, get_user_from_health_api_key, generate_health_api_key
-from deps import logger, limiter, LIMIT_HEALTH_IMPORT, LIMIT_WRITE_STANDARD, _ser_exp
+from deps import logger, limiter, LIMIT_HEALTH_IMPORT, LIMIT_WRITE_RARE, LIMIT_WRITE_STANDARD, _ser_exp
 from services.health_ingest import ingest_payload, SIMPLE_METRIC_MAP
 
 router = APIRouter(tags=["health"])
@@ -38,6 +40,27 @@ async def import_health_data(request: Request, body: dict,
                               user=Depends(get_user_from_health_api_key)):
     stats = await ingest_payload(db, user["id"], body)
     logger.info("Health-Import fuer user_id=%s: %s", user["id"], stats)
+    return stats
+
+
+# ---------- Manueller Datei-Upload (JWT-Auth, fuer Backfill/Nachimport) ----------
+@router.post("/api/health/import-file")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def import_health_file(request: Request, file: UploadFile = File(...),
+                              db=Depends(get_db), user=Depends(get_current_user)):
+    """Nimmt eine per Hand hochgeladene Auto-Health-Export-JSON-Datei entgegen
+    (z.B. fuer einen einmaligen Backfill vergangener Monate, ohne dafuer eine
+    Automation einzurichten). Nutzt denselben Ingest wie der automatisierte
+    Sync-Endpoint, aber mit normaler JWT-Auth statt API-Key."""
+    raw = await file.read()
+    try:
+        payload = json.loads(raw)
+    except Exception as e:
+        raise HTTPException(400, f"Datei ist kein valides JSON: {e}")
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "JSON-Root muss ein Objekt sein")
+    stats = await ingest_payload(db, user["id"], payload)
+    logger.info("Health-Datei-Import fuer user_id=%s: %s", user["id"], stats)
     return stats
 
 
