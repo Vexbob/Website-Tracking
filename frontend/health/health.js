@@ -265,10 +265,24 @@ function renderSleepBlock(elId, sl) {
     const el = document.getElementById(elId);
     if (!sl) { el.className = 'h-empty'; el.textContent = 'Noch keine Daten synchronisiert.'; return; }
     el.className = '';
-    const total = (sl.core_minutes||0) + (sl.deep_minutes||0) + (sl.rem_minutes||0) + (sl.awake_minutes||0);
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    // Fallback: fehlt asleep_minutes, nutze die Summe der Phasen
+    const phases = num(sl.core_minutes) + num(sl.deep_minutes) + num(sl.rem_minutes);
+    const asleepMin = num(sl.asleep_minutes) > 0 ? num(sl.asleep_minutes) : phases;
+    // Fallback fuer in_bed: sleep + awake oder Zeitspanne
+    let inBedMin = num(sl.in_bed_minutes);
+    if (inBedMin <= 0) {
+        const awake = num(sl.awake_minutes);
+        if (asleepMin + awake > 0) inBedMin = asleepMin + awake;
+        else if (sl.sleep_start && sl.sleep_end) {
+            const diff = (new Date(sl.sleep_end) - new Date(sl.sleep_start)) / 60000;
+            if (diff > 0) inBedMin = diff;
+        }
+    }
+    const total = phases + num(sl.awake_minutes);
     const pct = (v) => total ? (100 * (v||0) / total).toFixed(1) : 0;
-    const asleepH = (sl.asleep_minutes || 0) / 60;
-    const inBedH = (sl.in_bed_minutes || 0) / 60;
+    const asleepH = asleepMin / 60;
+    const inBedH  = inBedMin  / 60;
     const eff = inBedH > 0 ? (asleepH / inBedH) * 100 : null;
     const effCls = eff == null ? '' : eff >= 90 ? 'good' : eff >= 80 ? 'mid' : 'low';
     const effHtml = eff != null ? `<span class="h-sleep-eff ${effCls}">Effizienz ${fmt0(eff)} %</span>` : '';
@@ -586,18 +600,48 @@ async function loadSleepChart() {
         state.chartSleepTimes.data.datasets[1].data = rows.map(r => toOffset(r.sleep_end));
         state.chartSleepTimes.update();
 
-        const n = rows.length || 1;
-        const avg = (key) => rows.reduce((s, r) => s + (r[key] || 0), 0) / n / 60;
-        const avgEff = (() => {
-            const arr = rows.filter(r => (r.in_bed_minutes||0) > 0)
-                            .map(r => (r.asleep_minutes||0) / r.in_bed_minutes * 100);
+        // Ø nur ueber Naechte mit tatsaechlichem Wert; sonst verwaessern Null-
+        // Naechte (z.B. Tage ohne Apple-Watch) den Schnitt komplett. Zusaetzlich
+        // fallen wir auf die Phasen zurueck, wenn das Feld selbst leer ist,
+        // damit die KPIs mit dem Balken-Chart konsistent bleiben.
+        const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+        const asleepMin = (r) => {
+            const v = num(r.asleep_minutes);
+            if (v != null && v > 0) return v;
+            const phases = (num(r.core_minutes)||0) + (num(r.deep_minutes)||0) + (num(r.rem_minutes)||0);
+            return phases > 0 ? phases : null;
+        };
+        const inBedMin = (r) => {
+            const v = num(r.in_bed_minutes);
+            if (v != null && v > 0) return v;
+            const sleep = asleepMin(r) || 0;
+            const awake = num(r.awake_minutes) || 0;
+            if (sleep + awake > 0) return sleep + awake;
+            if (r.sleep_start && r.sleep_end) {
+                const diff = (new Date(r.sleep_end) - new Date(r.sleep_start)) / 60000;
+                return diff > 0 ? diff : null;
+            }
+            return null;
+        };
+        const meanOf = (extract) => {
+            const arr = rows.map(extract).filter(v => v != null && v > 0);
             return arr.length ? arr.reduce((s,v)=>s+v,0) / arr.length : null;
-        })();
+        };
+        const meanAsleepMin = meanOf(asleepMin);
+        const meanInBedMin  = meanOf(inBedMin);
+        const meanDeepMin   = meanOf(r => num(r.deep_minutes));
+        const effList = rows.map(r => {
+            const a = asleepMin(r), b = inBedMin(r);
+            return (a != null && b != null && b > 0) ? (a / b) * 100 : null;
+        }).filter(v => v != null);
+        const avgEff = effList.length ? effList.reduce((s,v)=>s+v,0) / effList.length : null;
+
+        const fmtH = (min) => min == null ? '–' : fmt1(min / 60) + ' h';
         const kpis = [
-            { icon: '😴', label: 'Ø Schlafdauer', value: fmt1(rows.reduce((s,r)=>s+(r.asleep_minutes||0),0)/n/60) + ' h' },
-            { icon: '🛏️', label: 'Ø Im Bett', value: fmt1(rows.reduce((s,r)=>s+(r.in_bed_minutes||0),0)/n/60) + ' h' },
-            { icon: '🌊', label: 'Ø Tiefschlaf', value: fmt1(avg('deep_minutes')) + ' h' },
-            { icon: '✨', label: 'Ø Effizienz', value: avgEff != null ? fmt0(avgEff) + ' %' : '–' },
+            { icon: '😴', label: 'Ø Schlafdauer', value: fmtH(meanAsleepMin) },
+            { icon: '🛏️', label: 'Ø Im Bett',    value: fmtH(meanInBedMin) },
+            { icon: '🌊', label: 'Ø Tiefschlaf', value: fmtH(meanDeepMin) },
+            { icon: '✨', label: 'Ø Effizienz',  value: avgEff != null ? fmt0(avgEff) + ' %' : '–' },
         ];
         kpiBox.innerHTML = kpis.map(k => `
             <div class="stat-kpi"><div class="stat-kpi-icon">${k.icon}</div>
