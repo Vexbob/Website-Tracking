@@ -218,6 +218,40 @@
             </div>
         </div>
 
+        <div class="stat-card" style="border-color:var(--red)">
+            <h3>🗑️ Datensätze löschen</h3>
+            <p class="h-hint">Löscht importierte Gesundheitsdaten aus der Datenbank —
+                <strong>endgültig</strong>, nicht wiederherstellbar (nutze vorher den
+                CSV-Export!). Standardmäßig für alle Zeit; optionaler Zeitraum grenzt
+                die Löschung ein.</p>
+            <div class="h-form-row" style="align-items:flex-end">
+                <div style="flex:1;min-width:180px">
+                    <label style="display:block;font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.25rem">Bereich</label>
+                    <select id="hDelScope" style="margin:0;width:100%">
+                        <option value="all">Alles (alle Kategorien)</option>
+                        <option value="metrics">Vitalwerte (Schritte, Puls, Gewicht, …)</option>
+                        <option value="blood_pressure">Blutdruck</option>
+                        <option value="blood_glucose">Blutzucker</option>
+                        <option value="sleep">Schlaf-Nächte</option>
+                        <option value="workouts">Workouts + Zusatzmetriken</option>
+                    </select>
+                </div>
+                <div style="min-width:130px">
+                    <label style="display:block;font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.25rem">Von (optional)</label>
+                    <input type="date" id="hDelFrom" style="margin:0;width:100%">
+                </div>
+                <div style="min-width:130px">
+                    <label style="display:block;font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.25rem">Bis (optional)</label>
+                    <input type="date" id="hDelTo" style="margin:0;width:100%">
+                </div>
+            </div>
+            <div class="h-form-row">
+                <button class="primary" onclick="bulkDeleteHealth()"
+                        style="background:var(--red);border-color:var(--red)">🗑️ Löschen</button>
+            </div>
+            <div id="hDelResult" style="margin-top:0.75rem"></div>
+        </div>
+
         <div class="stat-card">
             <h3>🛠️ Altdaten reparieren</h3>
             <p class="h-hint">Falls du CSV-Daten <strong>vor v1.25.0</strong> importiert

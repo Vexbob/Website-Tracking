@@ -144,6 +144,135 @@ async def rescale_legacy_csv_values(request: Request, db=Depends(get_db),
             "note": "Werte < 200 wurden um Faktor 1000 skaliert."}
 
 
+# ---------- Datensaetze loeschen (v1.28.0) ----------
+# Erlaubte Bereiche fuer den Bulk-Delete-Endpoint. Werte mappen auf
+# (Tabelle, Zeitspalte). ``all`` loescht in allen Tabellen.
+_HEALTH_DELETE_SCOPES = {
+    "metrics":         ("health_metric_samples", "sample_date"),
+    "blood_pressure":  ("health_blood_pressure", "recorded_at"),
+    "blood_glucose":   ("health_blood_glucose",  "recorded_at"),
+    "sleep":           ("health_sleep",          "sleep_date"),
+    "workouts":        ("health_workouts",       "start_at"),
+}
+
+
+def _parse_iso_date(s: Optional[str], field: str) -> Optional[date]:
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        raise HTTPException(400, f"{field}: ungueltiges Datum (erwartet YYYY-MM-DD)")
+
+
+@router.post("/api/health/delete")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def bulk_delete_health(request: Request, body: dict,
+                              db=Depends(get_db), user=Depends(get_current_user)):
+    """Bulk-Delete fuer Health-Datensaetze. Body:
+        {
+          "scope": "all" | "metrics" | "blood_pressure" | "blood_glucose"
+                    | "sleep" | "workouts",
+          "metric_type": "steps",           # nur bei scope=metrics (optional)
+          "workout_type": "Running",         # nur bei scope=workouts (optional)
+          "from_date": "YYYY-MM-DD",         # optional (inkl.)
+          "to_date":   "YYYY-MM-DD"          # optional (inkl.)
+        }
+
+    Antwort: pro Sektion die Anzahl geloeschter Zeilen und die Summe. Die
+    Loeschung ist idempotent — ist der Filter zu eng, werden 0 Zeilen
+    geloescht ohne Fehler.
+    """
+    scope = (body.get("scope") or "").strip()
+    if scope not in _HEALTH_DELETE_SCOPES and scope != "all":
+        raise HTTPException(400, f"Unbekannter scope: {scope}")
+
+    from_d = _parse_iso_date(body.get("from_date"), "from_date")
+    to_d   = _parse_iso_date(body.get("to_date"),   "to_date")
+    if from_d and to_d and from_d > to_d:
+        raise HTTPException(400, "from_date liegt hinter to_date")
+
+    metric_type  = (body.get("metric_type") or "").strip() or None
+    workout_type = (body.get("workout_type") or "").strip() or None
+    if metric_type and metric_type not in ALLOWED_METRIC_TYPES:
+        raise HTTPException(400, f"Unbekannter metric_type: {metric_type}")
+
+    scopes = list(_HEALTH_DELETE_SCOPES.keys()) if scope == "all" else [scope]
+    deleted: dict[str, int] = {}
+    async with db.transaction():
+        for s in scopes:
+            table, date_col = _HEALTH_DELETE_SCOPES[s]
+            params: list = [user["id"]]
+            where = "user_id=$1"
+            if from_d is not None:
+                params.append(from_d); where += f" AND {date_col} >= ${len(params)}"
+            if to_d is not None:
+                params.append(to_d);   where += f" AND {date_col} <= ${len(params)}"
+            if s == "metrics" and metric_type:
+                params.append(metric_type); where += f" AND metric_type = ${len(params)}"
+            if s == "workouts" and workout_type:
+                params.append(workout_type); where += f" AND workout_type = ${len(params)}"
+            tag = await db.execute(f"DELETE FROM {table} WHERE {where}", *params)
+            try:
+                deleted[s] = int(tag.rsplit(" ", 1)[-1])
+            except (ValueError, AttributeError):
+                deleted[s] = 0
+    total = sum(deleted.values())
+    logger.info("Health-Delete fuer user_id=%s scope=%s from=%s to=%s: %s",
+                user["id"], scope, from_d, to_d, deleted)
+    return {"deleted": deleted, "total": total}
+
+
+@router.delete("/api/health/workouts/{wid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def delete_workout(wid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    """Loescht ein einzelnes Workout inkl. seiner Zusatzmetriken (die per
+    ON DELETE CASCADE oder via expliziter Zeile mitgeloescht werden)."""
+    row = await db.fetchrow(
+        "SELECT id FROM health_workouts WHERE id=$1 AND user_id=$2", wid, user["id"])
+    if not row:
+        raise HTTPException(404, "Workout nicht gefunden")
+    async with db.transaction():
+        # Zusatzmetriken zuerst, falls die Tabelle keinen CASCADE hat
+        await db.execute(
+            "DELETE FROM health_workout_metrics WHERE workout_id=$1", wid)
+        await db.execute(
+            "DELETE FROM health_workouts WHERE id=$1 AND user_id=$2", wid, user["id"])
+    logger.info("User %s deleted workout %s", user["id"], wid)
+    return {"status": "deleted"}
+
+
+@router.delete("/api/health/sleep/{sid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def delete_sleep(sid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    """Loescht eine einzelne Schlaf-Nacht."""
+    tag = await db.execute(
+        "DELETE FROM health_sleep WHERE id=$1 AND user_id=$2", sid, user["id"])
+    if tag.endswith(" 0"):
+        raise HTTPException(404, "Schlaf-Eintrag nicht gefunden")
+    return {"status": "deleted"}
+
+
+@router.delete("/api/health/blood-pressure/{bid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def delete_blood_pressure(bid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    tag = await db.execute(
+        "DELETE FROM health_blood_pressure WHERE id=$1 AND user_id=$2", bid, user["id"])
+    if tag.endswith(" 0"):
+        raise HTTPException(404, "Blutdruck-Eintrag nicht gefunden")
+    return {"status": "deleted"}
+
+
+@router.delete("/api/health/blood-glucose/{bid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def delete_blood_glucose(bid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    tag = await db.execute(
+        "DELETE FROM health_blood_glucose WHERE id=$1 AND user_id=$2", bid, user["id"])
+    if tag.endswith(" 0"):
+        raise HTTPException(404, "Blutzucker-Eintrag nicht gefunden")
+    return {"status": "deleted"}
+
+
 # ---------- API-Key-Verwaltung (JWT-Auth) ----------
 @router.get("/api/health/api-keys")
 async def list_api_keys(db=Depends(get_db), user=Depends(get_current_user)):

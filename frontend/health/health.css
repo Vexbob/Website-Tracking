@@ -79,8 +79,10 @@ body{visibility:hidden}body.ready{visibility:visible}
 .h-workout-main{flex:1;min-width:0}
 .h-workout-title{font-weight:700;font-size:0.9375rem;color:var(--text)}
 .h-workout-sub{font-size:0.8125rem;color:var(--text-muted);margin-top:0.15rem}
-.h-workout-more{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);font-size:1.125rem;font-weight:700;cursor:pointer;line-height:1;padding:0;margin:0;flex-shrink:0;transition:all .12s}
+.h-workout-more,.h-workout-del{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);font-size:1.125rem;font-weight:700;cursor:pointer;line-height:1;padding:0;margin:0;flex-shrink:0;transition:all .12s}
 .h-workout-more:hover{border-color:var(--accent);color:var(--text)}
+.h-workout-del{font-size:0.875rem}
+.h-workout-del:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
 .h-workout-extras-wrap{margin-top:0.625rem;padding-top:0.625rem;border-top:1px dashed var(--border)}
 
 /* Workout-Detail-Modal */

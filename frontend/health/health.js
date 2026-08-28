@@ -23,6 +23,16 @@ const HEALTH_API = {
     createKey:     (label) => apiCall('/api/health/api-keys', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ label }) }),
     revokeKey:     (id) => apiCall(`/api/health/api-keys/${id}`, { method: 'DELETE' }),
     rescaleLegacy: () => apiCall('/api/health/rescale-legacy', { method: 'POST' }),
+    // v1.28.0: Datensaetze loeschen
+    deleteWorkout: (id) => apiCall(`/api/health/workouts/${id}`, { method: 'DELETE' }),
+    deleteSleep:   (id) => apiCall(`/api/health/sleep/${id}`, { method: 'DELETE' }),
+    deleteBp:      (id) => apiCall(`/api/health/blood-pressure/${id}`, { method: 'DELETE' }),
+    deleteGlucose: (id) => apiCall(`/api/health/blood-glucose/${id}`, { method: 'DELETE' }),
+    bulkDelete:    (body) => apiCall('/api/health/delete', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body || {}),
+    }),
 };
 
 const METRIC_LABELS = {
@@ -702,6 +712,8 @@ function renderWorkoutCard(w) {
                 </div>
                 <button class="h-workout-more" onclick="toggleWorkoutExtras(${w.id})"
                         aria-expanded="false" title="Zusatzdaten">＋</button>
+                <button class="h-workout-del" onclick="deleteWorkout(${w.id})"
+                        title="Workout löschen">✕</button>
             </div>
             <div class="h-workout-detail-grid">
                 ${tiles.map(t => `<div class="h-workout-detail-tile">
@@ -757,6 +769,23 @@ async function toggleWorkoutExtras(id) {
 }
 
 function closeWorkoutModal() { /* legacy no-op, Modal entfernt in v1.25.1 */ }
+
+// v1.28.0: einzelnes Workout löschen (nutzt confirm() — leichtgewichtig,
+// analog zu deleteSavingsGoal im Sparziel-Tracker)
+async function deleteWorkout(id) {
+    const w = state.workoutsAll.find(x => x.id === id);
+    const label = w ? wMeta(w.workout_type).de + ' vom ' + fmtDateTime(w.start_at) : 'Workout';
+    if (!confirm(`${label} wirklich löschen? Zusatzdaten (Kadenz, SWOLF, ...) werden mit entfernt.`))
+        return;
+    try {
+        await HEALTH_API.deleteWorkout(id);
+        state.workoutsAll = state.workoutsAll.filter(x => x.id !== id);
+        renderWorkouts();
+        showToast('Workout gelöscht ✓');
+    } catch (e) {
+        showToast('Löschen fehlgeschlagen: ' + e.message, true);
+    }
+}
 
 // ---------- Einstellungen / API-Keys ----------
 function initEinstellungen() {
@@ -870,6 +899,51 @@ async function exportHealthCsv() {
         showToast('Export heruntergeladen ✓');
     } catch (e) {
         showToast('Export fehlgeschlagen: ' + e.message, true);
+    }
+}
+
+// v1.28.0: Bulk-Delete
+const DELETE_SCOPE_LABELS = {
+    all: 'ALLE Gesundheitsdaten',
+    metrics: 'Vitalwerte',
+    blood_pressure: 'Blutdruck',
+    blood_glucose: 'Blutzucker',
+    sleep: 'Schlaf-Nächte',
+    workouts: 'Workouts',
+};
+async function bulkDeleteHealth() {
+    const scope = document.getElementById('hDelScope').value;
+    const from  = document.getElementById('hDelFrom').value || null;
+    const to    = document.getElementById('hDelTo').value || null;
+    const resultEl = document.getElementById('hDelResult');
+    const range = (from || to) ? ` (${from||'Anfang'} – ${to||'heute'})` : ' für ALLE Zeit';
+    const label = DELETE_SCOPE_LABELS[scope] || scope;
+    if (!confirm(`${label}${range} unwiderruflich löschen?\n\nDas kann nicht rückgängig gemacht werden. Falls noch nicht geschehen: vorher den CSV-Export nutzen!`))
+        return;
+    resultEl.innerHTML = '<div class="stat-loading">Lösche …</div>';
+    try {
+        const res = await HEALTH_API.bulkDelete({
+            scope,
+            from_date: from,
+            to_date: to,
+        });
+        const d = res.deleted || {};
+        const parts = Object.keys(d).filter(k => d[k] > 0).map(k =>
+            `${DELETE_SCOPE_LABELS[k] || k}: ${fmt0(d[k])}`);
+        resultEl.innerHTML = `
+            <div class="h-hint" style="margin:0">
+                ✅ <strong>${fmt0(res.total)}</strong> Einträge gelöscht${parts.length ? ' — ' + parts.join(', ') : ''}.
+            </div>`;
+        showToast(res.total > 0 ? `${fmt0(res.total)} Einträge gelöscht ✓` : 'Keine passenden Einträge');
+        // Alles neu laden
+        state.workoutsLoaded = false; state.sleepInit = false; state.vitalInit = false;
+        loadDashboard();
+        // Aktiven Tab neu laden, falls betroffen
+        const activeTab = document.querySelector('.tab-btn.active');
+        if (activeTab) activateTab(activeTab.dataset.tab);
+    } catch (e) {
+        resultEl.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
+        showToast('Löschen fehlgeschlagen', true);
     }
 }
 
