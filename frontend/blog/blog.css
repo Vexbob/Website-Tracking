@@ -40,15 +40,15 @@
 .blog-post .content p{margin:0.75rem 0}
 .blog-post .content ul,.blog-post .content ol{margin:0.75rem 0;padding-left:1.75rem}
 .blog-post .content li{margin:0.25rem 0}
-.blog-post .content blockquote{border-left:3px solid var(--accent,#3b82f6);margin:1.25rem 0;padding:0.5rem 1.25rem;background:var(--surface-2);border-radius:0 8px 8px 0;color:var(--text-muted);font-style:italic}
+.blog-post .content blockquote{border-left:3px solid var(--accent-blue);margin:1.25rem 0;padding:0.5rem 1.25rem;background:var(--surface-2);border-radius:0 8px 8px 0;color:var(--text-muted);font-style:italic}
 .blog-post .content code{font-family:"SF Mono",Monaco,Consolas,monospace;background:var(--surface-2);padding:0.1em 0.4em;border-radius:4px;font-size:0.9em;color:var(--accent)}
 .blog-post .content pre{background:var(--surface-2);padding:1rem 1.25rem;border-radius:10px;overflow-x:auto;margin:1rem 0;border:1px solid var(--border)}
 .blog-post .content pre code{background:none;padding:0;color:var(--text)}
-.blog-post .content a{color:var(--accent,#3b82f6);text-decoration:underline;text-underline-offset:2px}
+.blog-post .content a{color:var(--accent-blue);text-decoration:underline;text-underline-offset:2px}
 .blog-post .content hr{border:none;border-top:2px dashed var(--border);margin:2rem 0}
 .blog-post .content .nz-task{display:flex;align-items:flex-start;gap:0.6rem;margin:0.4rem 0}
 .blog-post .content .nz-task-box{width:20px;height:20px;border:2px solid var(--border);border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:transparent;flex-shrink:0;margin-top:0.15rem}
-.blog-post .content .nz-task[data-done="true"] .nz-task-box{background:var(--accent,#3b82f6);border-color:var(--accent,#3b82f6);color:#fff}
+.blog-post .content .nz-task[data-done="true"] .nz-task-box{background:var(--accent-blue);border-color:var(--accent-blue);color:#fff}
 .blog-post .content .nz-task[data-done="true"] .nz-task-box::before{content:"✓"}
 .blog-post .content .nz-task[data-done="true"] .nz-task-txt{text-decoration:line-through;color:var(--text-faint)}
 .blog-post .cover{width:100%;max-height:340px;object-fit:cover;border-radius:12px;margin-bottom:1.5rem}

@@ -91,7 +91,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     max-width:720px;margin:0 auto;padding:0 2.5rem 4rem;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;
     font-size:1rem;line-height:1.7;color:var(--text);
-    outline:none;caret-color:var(--accent,#3b82f6);
+    outline:none;caret-color:var(--accent-blue);
     min-height:100%;
 }
 .nz-editor:empty::before{content:attr(data-placeholder);color:var(--text-faint);font-style:italic;pointer-events:none}
@@ -101,12 +101,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .nz-editor p{margin:0.5rem 0}
 .nz-editor ul,.nz-editor ol{margin:0.5rem 0;padding-left:1.75rem}
 .nz-editor ul li,.nz-editor ol li{margin:0.2rem 0}
-.nz-editor blockquote{border-left:3px solid var(--accent,#3b82f6);margin:1rem 0;padding:0.35rem 1rem;background:var(--surface-2);border-radius:0 8px 8px 0;color:var(--text-muted);font-style:italic}
+.nz-editor blockquote{border-left:3px solid var(--accent-blue);margin:1rem 0;padding:0.35rem 1rem;background:var(--surface-2);border-radius:0 8px 8px 0;color:var(--text-muted);font-style:italic}
 .nz-editor code{font-family:"SF Mono",Monaco,Consolas,"Liberation Mono",monospace;background:var(--surface-2);padding:0.1em 0.4em;border-radius:4px;font-size:0.9em;color:var(--accent)}
 .nz-editor pre{background:var(--surface-2);padding:0.75rem 1rem;border-radius:8px;overflow-x:auto;margin:0.75rem 0;border:1px solid var(--border)}
 .nz-editor pre code{background:none;padding:0;color:var(--text)}
 .nz-editor hr{border:none;border-top:2px dashed var(--border);margin:1.5rem 0}
-.nz-editor a{color:var(--accent,#3b82f6);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
+.nz-editor a{color:var(--accent-blue);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
 .nz-editor strong{font-weight:700;color:var(--text)}
 .nz-editor em{font-style:italic}
 .nz-editor u{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
@@ -126,8 +126,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     transition:all .15s;
     font-size:14px;color:transparent;font-weight:900;line-height:1;
 }
-.nz-task-box:hover{border-color:var(--accent,#3b82f6)}
-.nz-task[data-done="true"] .nz-task-box{background:var(--accent,#3b82f6);border-color:var(--accent,#3b82f6);color:#fff;transform:scale(1.02)}
+.nz-task-box:hover{border-color:var(--accent-blue)}
+.nz-task[data-done="true"] .nz-task-box{background:var(--accent-blue);border-color:var(--accent-blue);color:#fff;transform:scale(1.02)}
 .nz-task[data-done="true"] .nz-task-box::before{content:"✓"}
 .nz-task-txt{flex:1;min-width:0;outline:none;transition:color .2s,opacity .2s}
 .nz-task[data-done="true"] .nz-task-txt{text-decoration:line-through;color:var(--text-faint);opacity:0.65}
@@ -148,12 +148,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 /* Mobile */
 /* Editor-Bild-Stile (v1.18.1) */
 .nz-editor img,.ba-detail .nz-editor img,.blog-post .content img{max-width:100%;height:auto;border-radius:10px;margin:0.75rem 0;display:block;box-shadow:var(--shadow-sm)}
-.nz-editor img.bselected,.ba-detail .nz-editor img.bselected{outline:3px solid var(--accent,#3b82f6);outline-offset:2px}
+.nz-editor img.bselected,.ba-detail .nz-editor img.bselected{outline:3px solid var(--accent-blue);outline-offset:2px}
 .nz-editor figure{margin:1rem 0;text-align:center}
 .nz-editor figcaption{font-size:0.8rem;color:var(--text-muted);margin-top:0.35rem;font-style:italic}
-.nz-editor .img-drop-zone{border:2px dashed var(--accent,#3b82f6);border-radius:10px;padding:1.5rem;text-align:center;color:var(--text-muted);background:var(--surface-2);margin:0.75rem 0;cursor:pointer}
+.nz-editor .img-drop-zone{border:2px dashed var(--accent-blue);border-radius:10px;padding:1.5rem;text-align:center;color:var(--text-muted);background:var(--surface-2);margin:0.75rem 0;cursor:pointer}
 .nz-editor .img-drop-zone.dragover{background:rgba(59,130,246,0.08);border-style:solid}
-.nz-editor.img-drop-active{outline:2px dashed var(--accent,#3b82f6);outline-offset:-4px;border-radius:8px}
+.nz-editor.img-drop-active{outline:2px dashed var(--accent-blue);outline-offset:-4px;border-radius:8px}
 
 @media(max-width:768px){
     .nz-app{position:relative}

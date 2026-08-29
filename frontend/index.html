@@ -9,18 +9,25 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/css/style.css">
+    <meta name="description" content="Vexbob — persönliches Dashboard für Sparziele, Ausgaben, Notizen und Gesundheit.">
     <script src="/js/config.js"></script>
     <script src="/js/version.js"></script>
     <script src="/js/api.js"></script>
-<script src="/js/nav-switcher.js" defer></script>
-<script src="/js/sw-update.js"></script>
+    <script src="/js/nav-switcher.js"></script>
+    <script src="/js/sw-update.js"></script>
     </head>
 <body style="visibility: hidden;">
+    <noscript>
+        <div class="boot-error"><div class="box">
+            <h2>JavaScript benötigt</h2>
+            <p>Diese Anwendung benötigt aktiviertes JavaScript. Bitte aktiviere es in deinem Browser und lade die Seite neu.</p>
+        </div></div>
+    </noscript>
     <nav class="navbar">
         <span class="nav-title">Vexbob</span>
         <div class="nav-right">
             <span class="nav-btn" id="userLabel" style="cursor:default"></span>
-            <button class="nav-btn" id="themeBtn" title="Design umschalten">🌓</button>
+            <button class="nav-btn" id="themeBtn" title="Design umschalten" aria-label="Design umschalten">🌓</button>
             <button class="nav-btn" id="logoutBtn">Logout</button>
         </div>
     </nav>
@@ -88,6 +95,19 @@
                 URL.revokeObjectURL(url);
             } catch (e) { alert('Export fehlgeschlagen: ' + e.message); }
         }
+        // FOUC-Timeout: wenn Init in 4s nicht durchläuft, zeige Fehler-UI
+        // statt die Seite dauerhaft unsichtbar zu lassen.
+        const bootTimeout = setTimeout(() => {
+            if (document.body.style.visibility === 'hidden') {
+                document.body.style.visibility = 'visible';
+                const err = document.createElement('div');
+                err.className = 'boot-error';
+                err.innerHTML = '<div class="box"><h2>Verbindung fehlgeschlagen</h2>'
+                    + '<p>Die Anwendung konnte nicht geladen werden. Bitte prüfe deine Verbindung und versuche es erneut.</p>'
+                    + '<button onclick="location.reload()">Neu laden</button></div>';
+                document.body.appendChild(err);
+            }
+        }, 4000);
         (async function() {
             if (!isLoggedIn()) { window.location.href = '/private/login.html'; return; }
             try {
@@ -96,7 +116,18 @@
                 if (me.is_admin) {
                     document.getElementById('adminSection').style.display = '';
                 }
-            } catch (e) { return; }
+            } catch (e) {
+                clearTimeout(bootTimeout);
+                document.body.style.visibility = 'visible';
+                const err = document.createElement('div');
+                err.className = 'boot-error';
+                err.innerHTML = '<div class="box"><h2>Anmeldung fehlgeschlagen</h2>'
+                    + '<p>' + (e && e.message ? String(e.message).replace(/[<>&]/g, '') : 'Unbekannter Fehler') + '</p>'
+                    + '<button onclick="clearToken();location.href=\'/private/login.html\'">Zum Login</button></div>';
+                document.body.appendChild(err);
+                return;
+            }
+            clearTimeout(bootTimeout);
             document.body.style.visibility = 'visible';
             document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
             document.getElementById('themeBtn').onclick = toggleTheme;
