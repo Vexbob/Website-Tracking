@@ -1,4 +1,4 @@
-// SW_VERSION: v1.32.0 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
+// SW_VERSION: v1.33.0 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
 // werden. Browser erkennen Service-Worker-Updates NUR anhand eines Byte-Diffs
 // der sw.js-Datei selbst — was sw.js per importScripts() nachlaedt (version.js)
 // wird dabei NICHT verglichen. Ohne diese Zeile bleibt der Service Worker also
@@ -7,6 +7,18 @@
 // Cache statt vom Server. Das war die eigentliche Ursache dafuer, dass die
 // Produkte-Seite trotz Backend-/Frontend-Fixes weiterhin leer blieb.
 importScripts('/js/version.js');
+// v1.33.0: API_BASE aus config.js im SW verfuegbar machen, damit der
+// API-Bypass unten nicht mehr auf den Hostnamen 'railway.app' fest
+// verdrahtet ist. Umzug auf eigene Domain funktioniert damit ohne
+// SW-Code-Aenderung. importScripts wirft, wenn die Datei fehlt -- daher
+// try/catch, damit ein defekter Deploy nicht den ganzen SW killt.
+let API_ORIGIN = '';
+try {
+    importScripts('/js/config.js');
+    if (self.VEXBOB_CONFIG && self.VEXBOB_CONFIG.API_BASE) {
+        API_ORIGIN = new URL(self.VEXBOB_CONFIG.API_BASE).origin;
+    }
+} catch (e) { /* config optional */ }
 const CACHE = 'vexbob-' + APP_VERSION;
 const SHELL = ['/', '/index.html', '/css/style.css', '/js/version.js', '/js/api.js',
                '/js/nav-switcher.js', '/js/sw-update.js', '/icon.svg', '/manifest.webmanifest',
@@ -54,8 +66,12 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
     const req = e.request;
     const url = new URL(req.url);
-    // API/Backend nie anfassen
-    if (url.hostname.includes('railway.app') || url.pathname.startsWith('/api/') || url.pathname === '/token') return;
+    // API/Backend nie anfassen. v1.33.0: statt hardgecodeten 'railway.app'-Match
+    // pruefen wir den echten API-Origin aus config.js -- funktioniert 1:1 nach
+    // einem Custom-Domain-Umzug ohne SW-Aenderung.
+    if ((API_ORIGIN && url.origin === API_ORIGIN)
+        || url.pathname.startsWith('/api/')
+        || url.pathname === '/token') return;
     if (req.method !== 'GET' || url.origin !== self.location.origin) return;
 
     // Navigation-Requests: network-first, redirected Response neu bauen

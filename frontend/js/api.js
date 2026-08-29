@@ -9,12 +9,36 @@ async function apiCall(path, options = {}) {
     const token = getToken();
     const headers = { ...(options.headers || {}) };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    if (options.body && !headers['Content-Type'] && !(options.body instanceof FormData)) {
-        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+
+    // v1.33.0: Content-Type + Body-Serialisierung intelligent ableiten.
+    // Alt: Body wurde immer als form-urlencoded verschickt, egal was drinsteht
+    // -- neue Aufrufe mit Plain-Objekten landeten still in 422-Fehlern.
+    // Neu:
+    //   - FormData / Blob / URLSearchParams / string -> unveraendert lassen
+    //     (Browser setzt Content-Type mit Boundary etc. selbst korrekt),
+    //   - Plain-Object -> JSON.stringify + application/json,
+    //   - Content-Type vom Aufrufer wird IMMER respektiert.
+    let body = options.body;
+    if (body != null && !headers['Content-Type']) {
+        const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+        const isBlob = typeof Blob !== 'undefined' && body instanceof Blob;
+        const isUsp = typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams;
+        const isString = typeof body === 'string';
+        if (isFormData || isBlob) {
+            // Browser setzt Content-Type selbst -> nichts tun.
+        } else if (isUsp) {
+            headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        } else if (isString) {
+            headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        } else if (typeof body === 'object') {
+            body = JSON.stringify(body);
+            headers['Content-Type'] = 'application/json';
+        }
     }
+
     let res;
     try {
-        res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+        res = await fetch(`${API_BASE}${path}`, { ...options, body, headers });
     } catch (e) {
         throw new Error('Netzwerkfehler');
     }

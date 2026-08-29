@@ -185,7 +185,17 @@ export GOOGLE_APPLICATION_CREDENTIALS_JSON='{"type":"service_account", ...}'
 ```bash
 uvicorn main:app --reload --port 8000
 ```
-Beim ersten Start werden Schema & Migrationen automatisch angewendet und ein Admin-User angelegt (Anmeldedaten stehen im Log).
+Beim ersten Start werden Schema & Migrationen automatisch angewendet.
+
+**Admin-Account anlegen** (kein Auto-Seed mehr — Doku-Diskrepanz seit v1.33.0 behoben):
+Entweder per SQL direkt in der DB einen User mit `is_admin=TRUE` und einem bcrypt-Passwort-Hash anlegen, ODER die Bootstrap-Variante nutzen. Wenn die ENV-Vars `ADMIN_BOOTSTRAP_USERNAME` und `ADMIN_BOOTSTRAP_PASSWORD` gesetzt sind **und** die `users`-Tabelle noch komplett leer ist, legt das Backend beim Startup automatisch einen Admin an — bei einer bereits bestückten DB passiert nichts (kein Overwrite-Risiko).
+
+```bash
+export ADMIN_BOOTSTRAP_USERNAME="admin"
+export ADMIN_BOOTSTRAP_PASSWORD="ein-gutes-passwort-mit-mindestens-10-zeichen"
+uvicorn main:app --port 8000
+# Nach dem ersten Start die beiden ENVs wieder entfernen.
+```
 
 ### 4. Frontend ausliefern
 ```bash
@@ -206,8 +216,9 @@ cd Website/backend
 docker build -t vexbob-backend .
 docker run -d --name vexbob \
     -e DATABASE_URL="postgresql://..." \
-    -e JWT_SECRET="..." \
+    -e SECRET_KEY="..." \
     -e CORS_ORIGINS="https://deine-domain.tld" \
+    -e JWT_EXPIRE_HOURS="24" \
     -p 8000:8000 vexbob-backend
 ```
 

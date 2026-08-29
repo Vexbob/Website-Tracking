@@ -1,16 +1,51 @@
 import os
+import asyncio
 import asyncpg
 from datetime import date
 from migrations.runner import apply_migrations
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 _pool = None
+# v1.33.0: Lock verhindert die Race Condition beim Kalt-Start. Vorher konnten
+# parallel eintreffende Requests jeweils "pool is None" sehen und alle einen
+# eigenen Pool erzeugen -- alle bis auf einen wurden geleakt (Connections
+# blieben offen bis der Prozess starb). Auf Railway mit einem einzelnen
+# Worker-Prozess reproduzierbar, sobald direkt nach dem Deploy mehrere Clients
+# gleichzeitig requesteten.
+_pool_lock = asyncio.Lock()
+
+
+async def get_pool() -> asyncpg.Pool:
+    """Zentrale Pool-Fabrik. Idempotent, race-safe.
+
+    Alle anderen Module (auth, routers, backup-loop, ...) MUESSEN diese Funktion
+    nutzen statt selbst ``asyncpg.create_pool`` aufzurufen -- sonst kommt der
+    Race-Bug zurueck. Das ``if _pool is None`` innerhalb des Locks ist der
+    klassische Double-Checked-Locking-Idiom fuer asyncio.
+    """
+    global _pool
+    if _pool is not None:
+        return _pool
+    async with _pool_lock:
+        if _pool is None:
+            _pool = await asyncpg.create_pool(
+                DATABASE_URL, ssl="require", min_size=1, max_size=10)
+    return _pool
+
+
+async def close_pool() -> None:
+    """Sauberes Herunterfahren beim Lifespan-Shutdown."""
+    global _pool
+    if _pool is not None:
+        try:
+            await _pool.close()
+        finally:
+            _pool = None
+
 
 async def get_db():
-    global _pool
-    if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, ssl="require", min_size=1, max_size=10)
-    async with _pool.acquire() as conn:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
         yield conn
 
 

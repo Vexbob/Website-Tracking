@@ -733,18 +733,16 @@ async def reparse_all_receipts(request: Request,
     """
     from fastapi.responses import StreamingResponse
     import json as _json
-    import database as db_module
+    from database import get_pool
 
     user_id = user["id"]
     uid_key = user["username"]  # nur für Log
 
     async def stream():
-        # Connection FÜR die gesamte Stream-Dauer halten
-        if db_module._pool is None:
-            import asyncpg as _apg
-            db_module._pool = await _apg.create_pool(
-                db_module.DATABASE_URL, ssl="require", min_size=1, max_size=10)
-        conn = await db_module._pool.acquire()
+        # v1.33.0: race-safe Pool-Zugriff. Connection FUER die gesamte Stream-
+        # Dauer halten -- Depends(get_db) wuerde sie zu frueh freigeben.
+        pool = await get_pool()
+        conn = await pool.acquire()
         try:
             rows = await conn.fetch(
                 """SELECT e.id AS expense_id, e.store_id, r.ocr_raw_text
@@ -855,8 +853,11 @@ async def reparse_all_receipts(request: Request,
                 "total": total, "updated_items": updated_items, "errors": errors,
             }) + "\n"
         finally:
+            # v1.33.0: Pool ueber die zentrale Fabrik statt direkt auf
+            # db_module._pool zugreifen (Race-Fix). ``pool`` kommt aus dem
+            # umschliessenden Scope oben.
             try:
-                await db_module._pool.release(conn)
+                await pool.release(conn)
             except Exception:
                 pass
 

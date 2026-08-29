@@ -1,6 +1,7 @@
 import os
 import logging
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import date, timedelta, datetime, timezone
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, Request, status, UploadFile, File, Form, Query
@@ -15,10 +16,14 @@ import secrets
 
 import database as db_module
 from database import (
-    get_db, init_db, week_key_for, month_key_for, period_key, prev_period,
+    get_db, get_pool, close_pool, init_db,
+    week_key_for, month_key_for, period_key, prev_period,
     _seed_empty_user,
 )
-from auth import authenticate, create_token, get_current_user, require_admin, pwd_context
+from auth import (
+    authenticate, create_token, get_current_user, require_admin, pwd_context,
+    _invalidate_user_cache, verify_password_ct,
+)
 from services.backup import create_snapshot, restore_snapshot, prune_snapshots
 
 # Zentrale Utilities & Konstanten (auch von routers/* genutzt)
@@ -44,7 +49,86 @@ from helpers import (
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """v1.33.0: sauberer Startup/Shutdown ohne @app.on_event (deprecated).
+
+    - init_db() (Migrationen anwenden)
+    - Bootstrap-Admin per ENV, falls die users-Tabelle leer ist
+    - Brand-Seed fuer alle User idempotent nachziehen
+    - Achievement-Meilenstein-Repair (v1.18.0)
+    - Auto-Backup-Task starten
+    Beim Shutdown wird der Pool sauber geschlossen.
+    """
+    logger.info("Startup: initializing DB")
+    await init_db()
+
+    # ---- Bootstrap-Admin (v1.33.0) ----
+    # Wird NUR angelegt, wenn (a) beide ENVs gesetzt sind UND (b) noch kein
+    # einziger User in der DB existiert. Damit ist Neu-Deployen mit einem
+    # frischen Postgres reproduzierbar, ohne dass wir bei einer bestehenden
+    # Installation etwas ueberschreiben. Doku dazu im README.
+    try:
+        adm_user = os.getenv("ADMIN_BOOTSTRAP_USERNAME", "").strip()
+        adm_pw = os.getenv("ADMIN_BOOTSTRAP_PASSWORD", "")
+        if adm_user and adm_pw:
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                any_user = await conn.fetchval("SELECT 1 FROM users LIMIT 1")
+                if not any_user:
+                    hash_ = pwd_context.hash(adm_pw)
+                    row = await conn.fetchrow(
+                        "INSERT INTO users (username, password_hash, is_admin) "
+                        "VALUES ($1, $2, TRUE) RETURNING id",
+                        adm_user, hash_)
+                    await _seed_empty_user(conn, row["id"])
+                    logger.info(
+                        f"Bootstrap-Admin '{adm_user}' angelegt "
+                        "(users-Tabelle war leer)")
+    except Exception as e:
+        logger.warning(f"Bootstrap-Admin fehlgeschlagen: {e}")
+
+    # v1.16.0: Marken-Seed fuer alle vorhandenen User nachziehen (idempotent).
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            user_ids = [r["id"] for r in await conn.fetch("SELECT id FROM users")]
+            for uid in user_ids:
+                try:
+                    await _seed_empty_user(conn, uid)
+                except Exception as e:
+                    logger.warning(f"Brand-seed for user {uid} failed: {e}")
+        if user_ids:
+            logger.info(f"Brand-seed nachgezogen fuer {len(user_ids)} User")
+    except Exception as e:
+        logger.warning(f"Brand-seed at startup failed: {e}")
+
+    # v1.18.0: Achievement-Meilenstein-Repair
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            repaired = await _repair_achievement_milestones(conn)
+        if repaired:
+            logger.info(f"Achievement-Repair: {repaired} fehlende Meilensteine nachgetragen")
+    except Exception as e:
+        logger.warning(f"Achievement-Repair at startup failed: {e}")
+
+    logger.info(f"Startup complete. CORS origins: {CORS_ORIGINS}")
+    backup_task = asyncio.create_task(_auto_backup_loop())
+    try:
+        yield
+    finally:
+        backup_task.cancel()
+        try:
+            await backup_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        await close_pool()
+        logger.info("Shutdown complete")
+
+
+app = FastAPI(lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -73,10 +157,8 @@ async def _auto_backup_loop():
             sleep_s = (target - now).total_seconds()
             logger.info(f"Next auto-backup in {int(sleep_s/60)} min")
             await asyncio.sleep(sleep_s)
-            if db_module._pool is None:
-                db_module._pool = await asyncpg.create_pool(
-                    db_module.DATABASE_URL, ssl="require", min_size=1, max_size=10)
-            async with db_module._pool.acquire() as conn:
+            pool = await get_pool()
+            async with pool.acquire() as conn:
                 # Global-Snapshot (user_id NULL) — nur Admin kann drauf zugreifen
                 await create_snapshot(conn, trigger_type="auto_daily", user_id=None)
                 if datetime.now(timezone.utc).weekday() == 6:
@@ -86,45 +168,9 @@ async def _auto_backup_loop():
             logger.exception(f"Auto-backup failed: {e}")
             await asyncio.sleep(3600)
 
-@app.on_event("startup")
-async def startup():
-    logger.info("Startup: initializing DB")
-    await init_db()
-    # v1.16.0: Marken-Seed fuer alle vorhandenen User nachziehen (idempotent).
-    # Neu-angelegte User bekommen ihn automatisch via ``_seed_empty_user``,
-    # bestehende User beim ersten Backend-Start nach dem Update.
-    try:
-        if db_module._pool is None:
-            db_module._pool = await asyncpg.create_pool(
-                db_module.DATABASE_URL, ssl="require", min_size=1, max_size=10)
-        async with db_module._pool.acquire() as conn:
-            user_ids = [r["id"] for r in await conn.fetch("SELECT id FROM users")]
-            for uid in user_ids:
-                try:
-                    await _seed_empty_user(conn, uid)
-                except Exception as e:
-                    logger.warning(f"Brand-seed for user {uid} failed: {e}")
-        if user_ids:
-            logger.info(f"Brand-seed nachgezogen fuer {len(user_ids)} User")
-    except Exception as e:
-        logger.warning(f"Brand-seed at startup failed: {e}")
-
-    # v1.18.0: Achievement-Meilenstein-Repair — trägt fehlende Meilenstein-
-    # Auszahlungen nach (z.B. nach früherem strikt-drunter-Bug oder
-    # Edit-Sequenzen, die credited_milestones inkonsistent gelassen haben).
-    try:
-        if db_module._pool is None:
-            db_module._pool = await asyncpg.create_pool(
-                db_module.DATABASE_URL, ssl="require", min_size=1, max_size=10)
-        async with db_module._pool.acquire() as conn:
-            repaired = await _repair_achievement_milestones(conn)
-        if repaired:
-            logger.info(f"Achievement-Repair: {repaired} fehlende Meilensteine nachgetragen")
-    except Exception as e:
-        logger.warning(f"Achievement-Repair at startup failed: {e}")
-
-    logger.info(f"Startup complete. CORS origins: {CORS_ORIGINS}")
-    asyncio.create_task(_auto_backup_loop())
+# v1.33.0: Der frueher hier stehende @app.on_event("startup")-Handler ist auf
+# den ``lifespan``-Context-Manager oben umgezogen (FastAPI 0.109+ deprecated
+# on_event). Init-Logik, Backup-Task und Repair-Job laufen jetzt dort.
 
 
 async def _repair_achievement_milestones(conn) -> int:
@@ -217,8 +263,10 @@ async def _repair_achievement_milestones(conn) -> int:
 async def login(request: Request,
                 form: OAuth2PasswordRequestForm = Depends(),
                 conn: asyncpg.Connection = Depends(get_db)):
+    # v1.33.0: constant-time Password-Check gegen User-Enumeration (Timing-Attack).
     row = await conn.fetchrow("SELECT * FROM users WHERE username = $1", form.username)
-    if not row or row["password_hash"] is None or not pwd_context.verify(form.password, row["password_hash"]):
+    pw_hash = row["password_hash"] if row else None
+    if not verify_password_ct(form.password, pw_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Falsche Credentials")
     return {"access_token": create_token(row["username"]), "token_type": "bearer"}
 
@@ -226,7 +274,7 @@ async def login(request: Request,
 async def me(user=Depends(get_current_user)):
     return {"username": user["username"], "is_admin": user["is_admin"], "id": user["id"]}
 
-BACKEND_VERSION = "1.17.0"
+BACKEND_VERSION = "1.33.0"
 
 
 @app.get("/api/health")
@@ -303,13 +351,17 @@ async def admin_regenerate_invite(request: Request, uid: int, db=Depends(get_db)
 @app.post("/api/admin/users/{uid}/password")
 @limiter.limit(LIMIT_WRITE_RARE)
 async def admin_reset_password(request: Request, uid: int, b: UserPasswordReset, db=Depends(get_db), admin=Depends(require_admin)):
-    if not b.password or len(b.password) < 6:
-        raise HTTPException(400, "Passwort mindestens 6 Zeichen")
+    # v1.33.0: Mindestlaenge von 6 -> 10 angehoben. Bestehende (kuerzere)
+    # Passwoerter bleiben gueltig, nur ein aktives Setzen erzwingt die Regel.
+    if not b.password or len(b.password) < 10:
+        raise HTTPException(400, "Passwort mindestens 10 Zeichen")
     target = await db.fetchrow("SELECT id, username FROM users WHERE id=$1", uid)
     if not target:
         raise HTTPException(404, "User nicht gefunden")
     hash_ = pwd_context.hash(b.password)
     await db.execute("UPDATE users SET password_hash=$1 WHERE id=$2", hash_, uid)
+    # Cache-Invalidation: neuer Passwort-Hash wuerde erst nach TTL greifen.
+    _invalidate_user_cache(target["username"])
     logger.info(f"Admin {admin['username']} reset password for {target['username']}")
     return {"status": "ok"}
 
@@ -324,6 +376,7 @@ async def admin_delete_user(request: Request, uid: int, db=Depends(get_db), admi
     if target["is_admin"]:
         raise HTTPException(400, "Admin-Accounts können nicht gelöscht werden")
     await db.execute("DELETE FROM users WHERE id=$1", uid)
+    _invalidate_user_cache(target["username"])
     logger.info(f"Admin {admin['username']} deleted user {target['username']}")
     return {"status": "deleted"}
 
@@ -346,8 +399,9 @@ async def invite_info(request: Request, token: str, db=Depends(get_db)):
 @app.post("/api/invite/activate")
 @limiter.limit("5/minute")
 async def invite_activate(request: Request, b: ActivateBody, db=Depends(get_db)):
-    if not b.password or len(b.password) < 6:
-        raise HTTPException(400, "Passwort mindestens 6 Zeichen")
+    # v1.33.0: Mindestlaenge 6 -> 10.
+    if not b.password or len(b.password) < 10:
+        raise HTTPException(400, "Passwort mindestens 10 Zeichen")
     row = await db.fetchrow(
         "SELECT user_id, expires_at, used_at FROM invite_tokens WHERE token=$1", b.token)
     if not row:
