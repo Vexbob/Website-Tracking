@@ -1,4 +1,11 @@
-/* Ausgaben-Statistik — v1.18.0 Redesign */
+/* Shared Statistics — v1.31.0
+ * Basisgrid + Bausteine (.stat-kpi, .stat-card, .split-2, .split-3-2,
+ * .chart-wrap, .stat-insights, .stat-mini-toggle, .stat-heatmap …), die
+ * sowohl vom Ausgaben-Modul als auch vom Health-Modul genutzt werden.
+ * Vorher lag diese Datei unter /ausgaben/statistik.css, wodurch das
+ * Health-Modul implizit vom Ausgaben-Pfad abhaengig war (versteckte
+ * Kopplung). Ab v1.31.0 wird sie explizit aus /css/statistics.css
+ * geladen und kann von beiden Modulen sauber referenziert werden. */
 body{visibility:hidden}body.ready{visibility:visible}
 
 .stat-filterbar{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:0.875rem 1rem;margin-bottom:1.25rem;box-shadow:var(--shadow-sm);display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap}

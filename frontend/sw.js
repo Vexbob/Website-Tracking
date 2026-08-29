@@ -1,4 +1,4 @@
-// SW_VERSION: v1.30.0 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
+// SW_VERSION: v1.31.0 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
 // werden. Browser erkennen Service-Worker-Updates NUR anhand eines Byte-Diffs
 // der sw.js-Datei selbst — was sw.js per importScripts() nachlaedt (version.js)
 // wird dabei NICHT verglichen. Ohne diese Zeile bleibt der Service Worker also
@@ -18,7 +18,9 @@ const SHELL = ['/', '/index.html', '/css/style.css', '/js/version.js', '/js/api.
                '/ausgaben/ausgaben.js', '/ausgaben/dashboard.js', '/ausgaben/neu.js',
                '/ausgaben/bon.js', '/ausgaben/laeden.js', '/ausgaben/kategorien.js',
                '/ausgaben/statistik.js',
-               '/health/', '/health/index.html', '/health/health.css', '/health/health.js'];
+               '/health/', '/health/index.html', '/health/health.css', '/health/health.js',
+               '/css/statistics.css', '/admin/', '/admin/index.html', '/admin/admin.css',
+               '/ausgaben/dashboard.css'];
 
 // Baut aus einer möglicherweise redirected Response eine "saubere" Response.
 // Safari/iOS lehnt Responses mit .redirected=true bei Navigation-Requests
