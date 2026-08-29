@@ -340,6 +340,6 @@ body{visibility:hidden}body.ready{visibility:visible}
     .hero-stats{grid-template-columns:1fr 1fr 1fr;gap:0.5rem 0.75rem}
     .ach-edit-form .grid2{grid-template-columns:1fr}
     .if-grid{grid-template-columns:1fr}
-    .tab-btn{padding:0.625rem 0.875rem;font-size:0.875rem}
+    /* v1.36.0: Tab-Overrides entfernt — .tabs/.tab-btn wird vollstaendig aus style.css bezogen */
     .log-desc{display:none}
 }

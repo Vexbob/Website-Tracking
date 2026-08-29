@@ -17,9 +17,7 @@
     <script src="/ausgaben/ausgaben.js"></script>
 <style>
 body{visibility:hidden}body.ready{visibility:visible}
-.tabs{display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid var(--border);overflow-x:auto}
-.tab-btn{background:transparent;border:none;padding:0.75rem 1.25rem;font-size:0.9375rem;font-weight:600;cursor:pointer;color:var(--text-faint);border-bottom:3px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s;white-space:nowrap;width:auto;border-radius:0}
-.tab-btn.active{color:var(--text);border-bottom-color:var(--accent)}
+/* v1.36.0: .tabs / .tab-btn Overrides entfernt — nutzen jetzt globalen Segmented-Style aus css/style.css */
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;box-shadow:var(--shadow-sm)}

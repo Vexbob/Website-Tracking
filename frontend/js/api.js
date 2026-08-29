@@ -88,7 +88,10 @@ function applyTheme(t) {
     localStorage.setItem('theme', t);
 }
 function currentTheme() {
-    return localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    // v1.36.0: Standard ist jetzt Dark-Mode (auch wenn OS auf hell steht).
+    // Nutzer koennen ueber den Theme-Toggle weiterhin manuell wechseln;
+    // die Praeferenz wird in localStorage persistiert.
+    return localStorage.getItem('theme') || 'dark';
 }
 function toggleTheme() {
     applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');

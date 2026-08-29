@@ -10,32 +10,80 @@
     <script src="/js/version.js"></script>
     <script src="/js/api.js"></script>
     <style>
-        body { min-height: 100vh; }
-        .lp-wrap { max-width: 1000px; margin: 3rem auto; padding: 0 1rem; display: grid; grid-template-columns: 380px 1fr; gap: 2.5rem; align-items: start; }
-        @media(max-width: 800px) { .lp-wrap { grid-template-columns: 1fr; margin: 1.5rem auto; gap: 1.5rem; } }
-        .lp-login { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; box-shadow: var(--shadow); }
-        .lp-login h1 { text-align: center; font-size: 1.5rem; margin: 0 0 1.5rem; letter-spacing: -0.02em; }
-        .lp-login input { padding: 0.75rem; font-size: 1rem; }
-        .lp-login button { padding: 0.75rem; margin-top: 0.5rem; background: var(--accent); color: #fff; font-weight: 600; }
+        body { min-height: 100vh; display: flex; flex-direction: column; }
+        .lp-wrap {
+            max-width: 1040px; width: 100%;
+            margin: auto; padding: 3rem 1.25rem;
+            display: grid; grid-template-columns: 400px 1fr;
+            gap: 3rem; align-items: center;
+        }
+        @media(max-width: 800px) {
+            .lp-wrap { grid-template-columns: 1fr; padding: 1.5rem 1rem; gap: 1.5rem; align-items: start; }
+        }
+        .lp-login {
+            background: var(--glass-bg);
+            -webkit-backdrop-filter: saturate(180%) blur(24px);
+            backdrop-filter: saturate(180%) blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            padding: 2.25rem 2rem;
+            box-shadow: var(--shadow-lg);
+        }
+        @supports not ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) {
+            .lp-login { background: var(--surface); }
+        }
+        .lp-brand { display: flex; align-items: center; justify-content: center; gap: 0.6rem; margin-bottom: 0.35rem; }
+        .lp-brand-badge {
+            width: 44px; height: 44px; border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent), #b91c47);
+            color: #fff; display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 1.25rem; letter-spacing: -0.03em;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 8px 20px rgba(233,69,96,0.35);
+        }
+        .lp-login h1 { text-align: center; font-size: 1.5rem; margin: 0 0 1.5rem; letter-spacing: -0.03em; font-weight: 700; }
+        .lp-login .lp-tag { display: block; text-align: center; color: var(--text-muted); font-size: 0.85rem; margin: -1.25rem 0 1.5rem; }
+        .lp-login input { padding: 0.8rem 0.9rem; font-size: 0.95rem; border-radius: 10px; }
+        .lp-login button {
+            padding: 0.8rem; margin-top: 0.5rem;
+            background: var(--accent); color: #fff; font-weight: 600;
+            border-radius: 10px; letter-spacing: 0.01em;
+            box-shadow: 0 8px 20px rgba(233,69,96,0.28);
+            transition: transform .1s, box-shadow .2s, opacity .15s;
+        }
+        .lp-login button:hover { opacity: 1; box-shadow: 0 12px 28px rgba(233,69,96,0.35); }
+        .lp-login button:active { transform: scale(0.98); }
         .lp-error { text-align: center; min-height: 1.25rem; }
         .lp-blog-teaser { min-width: 0; }
         .lp-blog-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; }
-        .lp-blog-header h2 { margin: 0; font-size: 1.25rem; letter-spacing: -0.01em; }
+        .lp-blog-header h2 { margin: 0; font-size: 1.25rem; letter-spacing: -0.02em; font-weight: 700; }
         .lp-blog-header .lp-blog-all { font-size: 0.8125rem; color: var(--accent); text-decoration: none; font-weight: 600; }
         .lp-blog-header .lp-blog-all:hover { text-decoration: underline; }
-        .lp-post { display: block; padding: 1rem 1.125rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 0.65rem; text-decoration: none; color: inherit; transition: transform .12s, box-shadow .15s; }
-        .lp-post:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-        .lp-post-title { font-weight: 700; margin-bottom: 0.2rem; color: var(--text); font-size: 0.95rem; line-height: 1.35; }
-        .lp-post-sub { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.45; margin-bottom: 0.4rem; }
-        .lp-post-meta { font-size: 0.7rem; color: var(--text-faint); display: flex; gap: 0.5rem; align-items: center; }
+        .lp-post {
+            display: block; padding: 1rem 1.125rem;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); margin-bottom: 0.75rem;
+            text-decoration: none; color: inherit;
+            box-shadow: var(--shadow-sm);
+            transition: transform .2s cubic-bezier(.2,.7,.2,1), box-shadow .2s, border-color .2s;
+        }
+        .lp-post:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: var(--border-strong); text-decoration: none; }
+        .lp-post-title { font-weight: 700; margin-bottom: 0.25rem; color: var(--text); font-size: 0.975rem; line-height: 1.35; letter-spacing: -0.01em; }
+        .lp-post-sub { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.45; margin-bottom: 0.5rem; }
+        .lp-post-meta { font-size: 0.7rem; color: var(--text-faint); display: flex; gap: 0.5rem; align-items: center; text-transform: uppercase; letter-spacing: 0.05em; }
         .lp-post-meta .dot { width: 3px; height: 3px; background: var(--text-faint); border-radius: 50%; }
-        .lp-blog-empty { padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.8125rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; }
+        .lp-blog-empty {
+            padding: 2rem 1rem; text-align: center; color: var(--text-muted);
+            font-size: 0.8125rem; background: var(--surface);
+            border: 1px dashed var(--border); border-radius: var(--radius-lg);
+        }
     </style>
 </head>
 <body>
     <div class="lp-wrap">
         <div class="lp-login">
+            <div class="lp-brand"><div class="lp-brand-badge">V</div></div>
             <h1>Vexbob</h1>
+            <span class="lp-tag">Melde dich an, um fortzufahren</span>
             <form id="login-form">
                 <input type="text" id="username" placeholder="Benutzername" required autocomplete="username" autofocus>
                 <input type="password" id="password" placeholder="Passwort" required autocomplete="current-password">

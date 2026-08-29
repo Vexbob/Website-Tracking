@@ -32,8 +32,17 @@
         </div>
     </nav>
     <main>
+        <div class="dash-hero">
+            <div>
+                <h1 id="dashGreeting">Willkommen zurück</h1>
+                <div class="sub" id="dashSubtitle">Dein persönliches Dashboard</div>
+            </div>
+        </div>
         <section class="section">
-            <h2 style="margin-bottom:1rem">Tools</h2>
+            <div class="section-header">
+                <span class="eyebrow">Meine Tools</span>
+                <h2>Tracking &amp; Analyse</h2>
+            </div>
             <div class="tile-grid" id="tileGrid">
                 <a href="/sparziel/" class="tile">
                     <div class="tile-icon green">€</div>
@@ -54,7 +63,10 @@
             </div>
         </section>
         <section class="section">
-            <h2 style="margin-bottom:1rem">Öffentlich</h2>
+            <div class="section-header">
+                <span class="eyebrow">Öffentlich</span>
+                <h2>Blog</h2>
+            </div>
             <div class="tile-grid">
                 <a href="/blog/" class="tile">
                     <div class="tile-icon orange">📰</div>
@@ -63,7 +75,10 @@
             </div>
         </section>
         <section class="section">
-            <h2 style="margin-bottom:1rem">Daten-Export</h2>
+            <div class="section-header">
+                <span class="eyebrow">Daten</span>
+                <h2>Export</h2>
+            </div>
             <div class="tile-grid">
                 <a href="#" class="tile" id="exportAllTile" onclick="exportAll();return false;">
                     <div class="tile-icon purple">⬇</div>
@@ -72,7 +87,10 @@
             </div>
         </section>
         <section class="section" id="adminSection" style="display:none">
-            <h2 style="margin-bottom:1rem">Administration</h2>
+            <div class="section-header">
+                <span class="eyebrow">Administration</span>
+                <h2>Verwaltung</h2>
+            </div>
             <div class="tile-grid">
                 <a href="/admin/" class="tile">
                     <div class="tile-icon purple">A</div>
@@ -113,6 +131,10 @@
             try {
                 const me = await fetchMe(true);
                 document.getElementById('userLabel').textContent = '👤 ' + me.username;
+                // v1.36.0 — dynamisches Greeting je nach Tageszeit
+                const h = new Date().getHours();
+                const greet = h < 5 ? 'Gute Nacht' : h < 11 ? 'Guten Morgen' : h < 18 ? 'Hallo' : h < 22 ? 'Guten Abend' : 'Späten Abend';
+                document.getElementById('dashGreeting').textContent = `${greet}, ${me.username} 👋`;
                 if (me.is_admin) {
                     document.getElementById('adminSection').style.display = '';
                 }

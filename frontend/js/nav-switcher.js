@@ -106,9 +106,25 @@
         });
     }
 
+    // v1.36.0 — Navbar bekommt beim Scrollen eine dezente Schatten-Kante,
+    // damit sich die Glass-Bar sauber vom Content abhebt.
+    function attachScrollShadow() {
+        const nav = document.querySelector('.navbar');
+        if (!nav) return;
+        let ticking = false;
+        const update = () => {
+            nav.classList.toggle('scrolled', window.scrollY > 4);
+            ticking = false;
+        };
+        window.addEventListener('scroll', () => {
+            if (!ticking) { requestAnimationFrame(update); ticking = true; }
+        }, { passive: true });
+        update();
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', build);
+        document.addEventListener('DOMContentLoaded', () => { build(); attachScrollShadow(); });
     } else {
-        build();
+        build(); attachScrollShadow();
     }
 })();
