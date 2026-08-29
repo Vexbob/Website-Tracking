@@ -21,12 +21,23 @@ from database import period_key, prev_period
 
 
 # ---------- Row-Serialisierung / Formatierung ----------
-def ser(row) -> dict:
-    """Serialisiert eine asyncpg-Row zu dict mit ISO-Datumsformat."""
+def ser(row, decimals_as_float: bool = False) -> dict:
+    """Serialisiert eine asyncpg-Row zu dict mit ISO-Datumsformat.
+
+    v1.34.0: Konsolidiert die frueheren drei fast-identischen Implementierungen
+    (helpers.ser, deps._ser_exp, notes_router._ser) in eine einzige Funktion.
+    Alle Aufrufer teilen sich damit denselben Bug-Fix-Ort. Mit
+    ``decimals_as_float=True`` werden zusaetzlich Decimal-Felder (NUMERIC-Spalten
+    aus Postgres) in floats umgewandelt -- das war frueher das einzige Delta
+    zwischen ``ser`` und ``_ser_exp``.
+    """
+    from decimal import Decimal
     d = dict(row)
     for k, v in d.items():
         if hasattr(v, "isoformat"):
             d[k] = v.isoformat()
+        elif decimals_as_float and isinstance(v, Decimal):
+            d[k] = float(v)
     return d
 
 

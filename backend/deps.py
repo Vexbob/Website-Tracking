@@ -4,6 +4,7 @@ Bewusst schlank gehalten: nur was von >=2 Modulen gebraucht wird.
 Alles was nur ein Router braucht, bleibt in dessen Datei.
 """
 import logging
+from contextvars import ContextVar
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -11,6 +12,27 @@ from typing import Optional
 from fastapi import HTTPException
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+
+
+# ---------------------------------------------------------------------------
+# Structured Logging (v1.34.0)
+# ---------------------------------------------------------------------------
+# ContextVar wird per Middleware pro Request gesetzt und automatisch an jedes
+# Log-Record angehaengt. Anderer Code muss NICHTS aendern -- ``logger.info(...)``
+# bekommt die request_id via LogFilter mitgeliefert. Praktisch, um in einem
+# Multi-User-Setup auf Railway einzelne fehlgeschlagene Requests von der ersten
+# bis zur letzten Log-Zeile durchzugreppen.
+request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
+
+
+class RequestIdFilter(logging.Filter):
+    """Fuegt jedem LogRecord ein Attribut ``request_id`` hinzu. Ohne diesen
+    Filter wuerde ``%(request_id)s`` im Log-Format zu KeyError fuehren, sobald
+    ein Log ausserhalb eines Requests emittiert wird (z.B. beim Startup)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        record.request_id = request_id_ctx.get()
+        return True
 
 
 logger = logging.getLogger("vexbob")
@@ -42,14 +64,14 @@ def _num(v):
 
 
 def _ser_exp(row) -> dict:
-    """Serialisiert eine asyncpg-Row zu dict mit ISO-Dates & Float-Decimals."""
-    d = dict(row)
-    for k, v in d.items():
-        if hasattr(v, "isoformat"):
-            d[k] = v.isoformat()
-        elif isinstance(v, Decimal):
-            d[k] = float(v)
-    return d
+    """Serialisiert eine asyncpg-Row zu dict mit ISO-Dates & Float-Decimals.
+
+    v1.34.0: Ist nur noch ein duenner Wrapper um ``helpers.ser`` mit
+    ``decimals_as_float=True``. Damit bleiben alte Router-Imports
+    (``from deps import _ser_exp``) kompatibel, ohne Logik-Duplikat.
+    """
+    from helpers import ser
+    return ser(row, decimals_as_float=True)
 
 
 def _parse_iso_date(s: Optional[str]):

@@ -226,6 +226,14 @@ Das Frontend kann parallel z.B. hinter nginx/Caddy als Static-Site ausgeliefert 
 
 ---
 
+## 🩺 Monitoring & Debugging (v1.34.0)
+
+- **`GET /api/health`** – Liveness-Probe, kein DB-Zugriff. Für Railway/Uptime-Robot: reagiert der Worker überhaupt noch?
+- **`GET /api/readiness`** – Readiness-Probe, macht einen `SELECT 1` gegen die DB und liefert die Anzahl angewendeter Migrationen. Antwortet mit HTTP 503, wenn die DB nicht erreichbar ist – ideal als Deploy-Health-Check.
+- **`X-Request-ID`-Header** – jede Response spiegelt eine 12-stellige Request-ID. Alle Log-Zeilen enthalten diese ID in eckigen Klammern, sodass sich ein fehlgeschlagener Request in Railway-Logs Ende-zu-Ende durchgreppen lässt. Der Client darf einen eigenen Wert mitschicken (`X-Request-ID: eigene-id`) – nützlich, wenn du auf Frontend-Seite Sentry/Datadog anbindest.
+
+---
+
 ## 🔐 Sicherheit
 
 - Passwörter werden mit **bcrypt** gehasht

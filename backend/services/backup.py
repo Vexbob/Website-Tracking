@@ -140,7 +140,14 @@ async def restore_snapshot(conn: asyncpg.Connection, payload: dict,
     if not isinstance(data, dict):
         raise ValueError("Ungültiges Backup-Format: 'data' muss ein Objekt sein")
 
-    stats = {"restored": {}, "skipped": {}, "wiped": wipe}
+    # v1.34.0: ``skipped_conflict`` traegt jetzt separat auf, wie viele Zeilen
+    # NUR wegen einer bereits belegten ID uebersprungen wurden. Vorher landete
+    # das im generischen ``skipped``-Bucket und war fuer den User im Frontend
+    # nicht von "Format-Fehler" / "Tabelle fehlt" zu unterscheiden. Bei einem
+    # User-Restore auf einer DB, die zwischenzeitlich fremde Zeilen mit
+    # ueberschneidenden IDs bekommen hat, konnten so komplette Sparziele
+    # "verschwinden" ohne Fehlermeldung.
+    stats = {"restored": {}, "skipped": {}, "skipped_conflict": {}, "wiped": wipe}
 
     async with conn.transaction():
         if wipe:
@@ -186,15 +193,21 @@ async def restore_snapshot(conn: asyncpg.Connection, payload: dict,
                     existing = await conn.fetch(f"SELECT id FROM {t}")
                 existing_ids = {r["id"] for r in existing}
 
-            restored = 0; skipped = 0
+            restored = 0
+            skipped = 0
+            skipped_conflict = 0
             for row in rows:
                 if not isinstance(row, dict):
-                    skipped += 1; continue
+                    skipped += 1
+                    continue
                 # Bei User-Restore: user_id im Row überschreiben
                 if user_id is not None and has_user_col:
                     row = {**row, "user_id": user_id}
                 if not wipe and row.get("id") in existing_ids:
-                    skipped += 1; continue
+                    # v1.34.0: eigener Bucket -- Konflikt heisst hier "ID war
+                    # schon belegt", nicht "Datei kaputt".
+                    skipped_conflict += 1
+                    continue
                 cols = list(row.keys())
                 placeholders = [f"${i+1}" for i in range(len(cols))]
                 vals = [row[c] for c in cols]
@@ -204,13 +217,23 @@ async def restore_snapshot(conn: asyncpg.Connection, payload: dict,
                     f'ON CONFLICT (id) DO NOTHING'
                 )
                 try:
-                    await conn.execute(sql, *vals)
-                    restored += 1
+                    # cmd-Tag prueft, ob wirklich eingefuegt wurde. Bei
+                    # ON CONFLICT DO NOTHING liefert Postgres 'INSERT 0 0'.
+                    tag = await conn.execute(sql, *vals)
+                    if isinstance(tag, str) and tag.endswith(" 0"):
+                        skipped_conflict += 1
+                    else:
+                        restored += 1
                 except Exception as e:
                     logger.warning(f"Restore skip {t}.{row.get('id')}: {e}")
                     skipped += 1
             stats["restored"][t] = restored
             stats["skipped"][t] = skipped
+            stats["skipped_conflict"][t] = skipped_conflict
+            if skipped_conflict:
+                logger.info(
+                    f"Restore {t}: {skipped_conflict} Zeile(n) wegen "
+                    f"ID-Konflikt uebersprungen (user_id={user_id})")
 
             if rows and any(isinstance(r, dict) and "id" in r for r in rows):
                 try:

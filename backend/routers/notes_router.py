@@ -13,6 +13,8 @@ from deps import (
     logger, limiter,
     LIMIT_WRITE_FREQUENT, LIMIT_WRITE_STANDARD,
 )
+# v1.34.0: konsolidierte ser() (frueher lokal dupliziert)
+from helpers import ser as _ser
 
 
 router = APIRouter(tags=["notes"])
@@ -48,13 +50,8 @@ class ReorderBody(BaseModel):
     order: list[int]
 
 
-def _ser(row) -> dict:
-    """asyncpg-Row -> dict mit ISO-Datumsstrings."""
-    d = dict(row)
-    for k, v in d.items():
-        if hasattr(v, "isoformat"):
-            d[k] = v.isoformat()
-    return d
+# v1.34.0: _ser() aus helpers.ser importiert (siehe oben) statt lokal
+# dupliziert -- alle drei Serialisier-Implementierungen wurden konsolidiert.
 
 
 # ---------- Endpoints ----------

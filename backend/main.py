@@ -30,6 +30,7 @@ from services.backup import create_snapshot, restore_snapshot, prune_snapshots
 from deps import (
     logger, limiter,
     LIMIT_LOGIN, LIMIT_WRITE_FREQUENT, LIMIT_WRITE_STANDARD, LIMIT_WRITE_RARE,
+    RequestIdFilter, request_id_ctx,
 )
 
 # Ausgelagerte Pydantic-Models (v1.15.1)
@@ -47,7 +48,21 @@ from helpers import (
     _build_export_header, _build_export_metadata, _sparziel_protocol_lines,
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+# v1.34.0: Log-Format enthaelt jetzt die per Middleware gesetzte request_id.
+# Bei Log-Zeilen ausserhalb eines Requests (Startup, Backup-Loop, ...) steht
+# dort einfach ``-`` -- der Filter unten sorgt dafuer.
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s',
+)
+_req_filter = RequestIdFilter()
+for _h in logging.getLogger().handlers:
+    _h.addFilter(_req_filter)
+# Auch uvicorn.access / uvicorn.error explizit einhaengen -- die haben nach
+# uvicorn --reload eigene Handler, die sonst weiter das Default-Format nutzen.
+for _name in ("uvicorn", "uvicorn.error", "uvicorn.access", "vexbob", "vexbob.backup", "vexbob.migrations"):
+    for _h in logging.getLogger(_name).handlers:
+        _h.addFilter(_req_filter)
 
 
 @asynccontextmanager
@@ -146,6 +161,26 @@ app.add_middleware(CORSMiddleware,
 # damit typischerweise auf 20-30% ihrer Rohgroesse -> spuerbar schnellere
 # Ladezeiten, vor allem auf Mobilfunk.
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+# v1.34.0: Request-ID-Middleware. Setzt fuer jeden Request eine ContextVar,
+# damit ``logger.info(...)``-Aufrufe automatisch die ID im Log-Format
+# ausgeben. Falls der Client selbst ``X-Request-ID`` mitschickt (nuetzlich
+# fuer Frontend->Backend-Correlation), respektieren wir sie -- sonst
+# generieren wir eine kurze zufaellige. Response spiegelt sie im Header
+# zurueck, damit man sie im Browser-Devtools sofort greifen kann.
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    rid = request.headers.get("x-request-id", "").strip()
+    if not rid or len(rid) > 64:
+        rid = secrets.token_hex(6)  # 12-Zeichen-Hex, kompakt fuer Logs
+    token = request_id_ctx.set(rid)
+    try:
+        response = await call_next(request)
+    finally:
+        request_id_ctx.reset(token)
+    response.headers["X-Request-ID"] = rid
+    return response
 
 async def _auto_backup_loop():
     while True:
@@ -274,12 +309,15 @@ async def login(request: Request,
 async def me(user=Depends(get_current_user)):
     return {"username": user["username"], "is_admin": user["is_admin"], "id": user["id"]}
 
-BACKEND_VERSION = "1.33.0"
+BACKEND_VERSION = "1.34.0"
 
 
 @app.get("/api/health")
 async def health():
-    """Health-Check + Info welches Backend läuft (nützlich nach Deploy-Rollouts)."""
+    """Liveness-Probe: bewusst OHNE DB-Zugriff. Wird von Railway/Uptime-Robot
+    aufgerufen um zu wissen, ob der Uvicorn-Worker ueberhaupt Requests
+    annimmt. Fuer "kann das Backend die DB erreichen?" gibt es seit v1.34.0
+    den separaten ``/api/readiness``-Endpoint."""
     return {
         "status": "ok",
         "backend_version": BACKEND_VERSION,
@@ -287,6 +325,42 @@ async def health():
         "expenses_router": True,
         "notes_router": True,
     }
+
+
+@app.get("/api/readiness")
+async def readiness():
+    """Readiness-Probe (v1.34.0): pruft ob die DB erreichbar ist und wie viele
+    Migrationen angewendet wurden. Antwortet mit HTTP 503, wenn der DB-Ping
+    fehlschlaegt -- so kann Railway einen unhealthy Container automatisch
+    neu starten, statt Traffic auf einen halbtoten Worker zu routen.
+
+    Der Endpoint ist bewusst unauthentifiziert (kein PII), aber liefert
+    keine Details ueber Tabellen-Inhalte -- nur harte Infrastruktur-Signale.
+    """
+    from fastapi.responses import JSONResponse
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+            migrations = await conn.fetchval(
+                "SELECT COUNT(*) FROM schema_migrations")
+        return {
+            "status": "ready",
+            "backend_version": BACKEND_VERSION,
+            "db": "ok",
+            "migrations_applied": int(migrations or 0),
+        }
+    except Exception as e:
+        logger.warning(f"Readiness check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not-ready",
+                "backend_version": BACKEND_VERSION,
+                "db": "error",
+                "error": str(e)[:200],
+            },
+        )
 
 # ---------- Admin: User-Management (Invite-Flow) ----------
 INVITE_EXPIRES_HOURS = 24 * 7  # 7 Tage
