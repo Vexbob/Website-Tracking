@@ -69,40 +69,58 @@
         btn.className = 'nav-switcher-btn';
         btn.type = 'button';
         btn.title = 'Module wechseln';
-        const active = visible.find(m => isActive(m.href));
-        btn.innerHTML = `<span class="nav-switcher-ico">⊞</span><span class="nav-switcher-lbl">${active ? active.label.split(' ').slice(1).join(' ') : 'Module'}</span><span class="nav-switcher-arrow">▾</span>`;
+        btn.setAttribute('aria-label', 'Module wechseln');
+        btn.setAttribute('aria-haspopup', 'true');
+        btn.setAttribute('aria-expanded', 'false');
+        // v1.36.1: Icon-only-Button (9-Punkte-Grid, Apple-style App-Switcher).
+        // Kein Emoji + Label mehr -- der Button ist auf jeder Unterseite
+        // gleich schlicht und wirkt wie ein "App-Grid"-Symbol.
+        btn.innerHTML = `
+            <svg class="nav-switcher-ico" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+                <circle cx="4" cy="4" r="1.6"/><circle cx="10" cy="4" r="1.6"/><circle cx="16" cy="4" r="1.6"/>
+                <circle cx="4" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="16" cy="10" r="1.6"/>
+                <circle cx="4" cy="16" r="1.6"/><circle cx="10" cy="16" r="1.6"/><circle cx="16" cy="16" r="1.6"/>
+            </svg>`;
 
         const menu = document.createElement('div');
         menu.className = 'nav-switcher-menu';
-        menu.innerHTML = visible.map(m => {
+        menu.setAttribute('role', 'menu');
+        menu.innerHTML = `<div class="nav-switcher-head">Module</div>` + visible.map(m => {
             const cls = isActive(m.href) ? 'active' : '';
-            return `<a href="${m.href}" class="nav-switcher-item ${cls}">${m.label}</a>`;
+            // Label ist "<Emoji> Text" -- wir splitten in Icon + Text
+            const parts = m.label.split(' ');
+            const icon = parts.shift() || '';
+            const text = parts.join(' ');
+            return `<a href="${m.href}" class="nav-switcher-item ${cls}" role="menuitem">
+                <span class="nsi-icon">${icon}</span>
+                <span class="nsi-text">${text}</span>
+                ${cls ? '<span class="nsi-dot" aria-hidden="true"></span>' : ''}
+            </a>`;
         }).join('');
 
         wrapper.appendChild(btn);
         wrapper.appendChild(menu);
         navbar.appendChild(wrapper);
 
+        const closeMenu = () => {
+            menu.classList.remove('open');
+            menu.style.display = '';
+            btn.setAttribute('aria-expanded', 'false');
+        };
         // Toggle
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const open = menu.classList.toggle('open');
-            if (open) menu.style.display = 'flex';
-            else menu.style.display = '';
+            if (open) { menu.style.display = 'flex'; btn.setAttribute('aria-expanded', 'true'); }
+            else closeMenu();
         });
         // Außen-Klick schließt
         document.addEventListener('click', (e) => {
-            if (!wrapper.contains(e.target)) {
-                menu.classList.remove('open');
-                menu.style.display = '';
-            }
+            if (!wrapper.contains(e.target)) closeMenu();
         });
         // ESC schließt
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                menu.classList.remove('open');
-                menu.style.display = '';
-            }
+            if (e.key === 'Escape') closeMenu();
         });
     }
 

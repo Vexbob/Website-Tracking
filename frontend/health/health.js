@@ -268,7 +268,14 @@ function renderSleepBlock(elId, sl) {
     const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
     // Fallback: fehlt asleep_minutes, nutze die Summe der Phasen
     const phases = num(sl.core_minutes) + num(sl.deep_minutes) + num(sl.rem_minutes);
-    const asleepMin = num(sl.asleep_minutes) > 0 ? num(sl.asleep_minutes) : phases;
+    const rawAsleep = num(sl.asleep_minutes);
+    // v1.36.1 Bugfix: Apple's `asleep_minutes` zaehlt oft nur den
+    // "asleep unspecified"-Anteil und ignoriert Core/Deep/REM. Wenn Phasen
+    // vorhanden sind, ist deren Summe die verlaessliche geschlafene Zeit.
+    // Vorher hat der Header teils weniger angezeigt als die einzelne
+    // Phasen-Legende (z. B. Core 4 h + Tief 1,5 h + REM 1 h = 6,5 h, Header
+    // aber "5 h") -- genau das ist der vom User gemeldete Fall.
+    const asleepMin = phases > 0 ? Math.max(phases, rawAsleep) : rawAsleep;
     // Fallback fuer in_bed: sleep + awake oder Zeitspanne
     let inBedMin = num(sl.in_bed_minutes);
     if (inBedMin <= 0) {
@@ -281,6 +288,7 @@ function renderSleepBlock(elId, sl) {
     }
     const total = phases + num(sl.awake_minutes);
     const pct = (v) => total ? (100 * (v||0) / total).toFixed(1) : 0;
+    const pctInt = (v) => total ? Math.round(100 * (v||0) / total) : 0;
     const asleepH = asleepMin / 60;
     const inBedH  = inBedMin  / 60;
     const eff = inBedH > 0 ? (asleepH / inBedH) * 100 : null;
@@ -301,10 +309,10 @@ function renderSleepBlock(elId, sl) {
                 <span class="h-phase-awake" style="width:${pct(sl.awake_minutes)}%"></span>
             </div>
             <div class="h-phase-legend">
-                <span><span class="h-phase-dot" style="background:var(--blue)"></span>Core <strong>${fmt1((sl.core_minutes||0)/60)} h</strong></span>
-                <span><span class="h-phase-dot" style="background:var(--purple)"></span>Tief <strong>${fmt1((sl.deep_minutes||0)/60)} h</strong></span>
-                <span><span class="h-phase-dot" style="background:var(--teal)"></span>REM <strong>${fmt1((sl.rem_minutes||0)/60)} h</strong></span>
-                <span><span class="h-phase-dot" style="background:var(--orange)"></span>Wach <strong>${fmt1((sl.awake_minutes||0)/60)} h</strong></span>
+                <span><span class="h-phase-dot" style="background:var(--blue)"></span>Core <strong>${fmt1((sl.core_minutes||0)/60)} h</strong> <em>${pctInt(sl.core_minutes)} %</em></span>
+                <span><span class="h-phase-dot" style="background:var(--purple)"></span>Tief <strong>${fmt1((sl.deep_minutes||0)/60)} h</strong> <em>${pctInt(sl.deep_minutes)} %</em></span>
+                <span><span class="h-phase-dot" style="background:var(--teal)"></span>REM <strong>${fmt1((sl.rem_minutes||0)/60)} h</strong> <em>${pctInt(sl.rem_minutes)} %</em></span>
+                <span><span class="h-phase-dot" style="background:var(--orange)"></span>Wach <strong>${fmt1((sl.awake_minutes||0)/60)} h</strong> <em>${pctInt(sl.awake_minutes)} %</em></span>
             </div>` : ''}
         </div>`;
 }

@@ -36,6 +36,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .h-phase-legend{display:grid;grid-template-columns:repeat(2,1fr);gap:0.4rem 1rem;font-size:0.75rem;color:var(--text-muted)}
 .h-phase-legend span{display:inline-flex;align-items:center;gap:0.35rem;font-variant-numeric:tabular-nums}
 .h-phase-legend strong{color:var(--text);font-weight:700}
+.h-phase-legend em{color:var(--text-faint);font-style:normal;font-size:0.7rem;margin-left:0.15rem;font-variant-numeric:tabular-nums}
 .h-phase-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
 
 
