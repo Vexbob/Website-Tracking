@@ -226,6 +226,27 @@ Das Frontend kann parallel z.B. hinter nginx/Caddy als Static-Site ausgeliefert 
 
 ---
 
+## 🧬 Migrationen (v1.35.0)
+
+- SQL-Dateien in `backend/migrations/sql/`, aufsteigend nummeriert.
+- Jede angewendete Migration bekommt einen **SHA256-Checksum** in `schema_migrations.checksum` gespeichert.
+- Wird eine bereits deployte Migration nachträglich editiert, **wirft das Backend beim nächsten Startup einen harten `RuntimeError`** – statt still ein inkonsistentes Schema zu tolerieren. Korrekte Vorgehensweise: neue Migration `NNN_fix_xyz.sql` schreiben, alte unverändert lassen.
+- Alt-Einträge ohne Checksum werden beim ersten Post-Upgrade-Start opportunistisch mit dem aktuellen Wert nachgezogen – bestehende Deploys bleiben lauffähig.
+- `MIGRATIONS_DRY_RUN=1` als ENV setzt den Runner in Read-only-Modus (loggt nur, was angewendet würde). Nützlich für Deploy-Preview.
+
+---
+
+## 📡 Optional: Sentry (v1.35.0)
+
+Setz `SENTRY_DSN` als ENV **und** installier `sentry-sdk[fastapi]>=1.40.0` (Zeile in `requirements.txt` auskommentieren) – dann werden nicht abgefangene Exceptions automatisch nach Sentry gemeldet, mit `X-Request-ID` als Tag. Ohne DSN wird `sentry_sdk` gar nicht erst importiert.
+
+Weitere ENVs:
+- `SENTRY_TRACES_SAMPLE_RATE` (Default `0.0`) – 0.0…1.0 für Performance-Tracing.
+- `SENTRY_ENVIRONMENT` (Default `production`).
+- `SENTRY_RELEASE` – z.B. `v1.35.0`, damit Fehler pro Release gruppiert werden.
+
+---
+
 ## 🩺 Monitoring & Debugging (v1.34.0)
 
 - **`GET /api/health`** – Liveness-Probe, kein DB-Zugriff. Für Railway/Uptime-Robot: reagiert der Worker überhaupt noch?

@@ -12,3 +12,7 @@ pytest-asyncio==0.23.5
 Pillow==10.2.0
 google-cloud-vision==3.7.4
 google-genai>=1.0.0
+# v1.35.0: optional -- nur ziehen, wenn SENTRY_DSN gesetzt werden soll.
+# Ohne installiertes sentry_sdk laeuft alles weiter, main.py fangt den
+# ImportError still ab.
+# sentry-sdk[fastapi]>=1.40.0

@@ -51,6 +51,33 @@ from helpers import (
 # v1.34.0: Log-Format enthaelt jetzt die per Middleware gesetzte request_id.
 # Bei Log-Zeilen ausserhalb eines Requests (Startup, Backup-Loop, ...) steht
 # dort einfach ``-`` -- der Filter unten sorgt dafuer.
+# v1.35.0: optionaler Sentry-Hook. Nur wenn SENTRY_DSN gesetzt UND sentry_sdk
+# installiert ist -- ohne DSN passiert absolut nichts, sentry_sdk wird nicht
+# einmal importiert. So bleibt es eine reine Opt-In-Abhaengigkeit ohne
+# Impact auf bestehende Deploys.
+_SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
+if _SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.asyncio import AsyncioIntegration
+
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+            environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+            release=os.getenv("SENTRY_RELEASE") or None,
+            integrations=[FastApiIntegration(), AsyncioIntegration()],
+            # PII (User-Emails, IPs) NICHT senden -- ist eine private App.
+            send_default_pii=False,
+        )
+    except ImportError:
+        # sentry_sdk nicht installiert -- OK, wird bewusst optional gehalten.
+        pass
+    except Exception as _e:
+        # Sentry-Init darf niemals den Startup killen.
+        logging.getLogger("vexbob").warning(f"Sentry init failed: {_e}")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s',
@@ -309,7 +336,7 @@ async def login(request: Request,
 async def me(user=Depends(get_current_user)):
     return {"username": user["username"], "is_admin": user["is_admin"], "id": user["id"]}
 
-BACKEND_VERSION = "1.34.0"
+BACKEND_VERSION = "1.35.0"
 
 
 @app.get("/api/health")
