@@ -69,16 +69,39 @@ async def import_health_data(request: Request,
     # gewoehnliches Form-Field ("payload", "data", "csv" o.ae.) statt als echte
     # Datei mit filename. Wir akzeptieren daher beides: UploadFile UND String-Werte.
     if ctype.startswith("multipart/form-data"):
-        form = await request.form()
+        # Rohbody VOR dem Form-Parsing lesen, damit wir bei Parser-Problemen
+        # noch Zugriff auf den Original-Inhalt haben (starlette cached die
+        # Bytes nach body(), form() nutzt dann den Cache).
+        raw_all = await request.body()
+        _log_incoming("multipart-raw", ctype, request.headers, [("full.bin", raw_all)], user["id"])
+
         pseudo_files: list[tuple[str, bytes]] = []
-        for key, value in form.multi_items():
-            if isinstance(value, UploadFile):
-                raw_part = await value.read()
-                pseudo_files.append((value.filename or f"{key}.bin", raw_part))
-            elif isinstance(value, str):
-                # String-Feld: als Roh-Body interpretieren.
-                pseudo_files.append((f"{key}.txt", value.encode("utf-8")))
-        _log_incoming("multipart", ctype, request.headers, pseudo_files, user["id"])
+        try:
+            form = await request.form()
+            for key, value in form.multi_items():
+                if isinstance(value, UploadFile):
+                    raw_part = await value.read()
+                    pseudo_files.append((value.filename or f"{key}.bin", raw_part))
+                elif isinstance(value, str):
+                    pseudo_files.append((f"{key}.txt", value.encode("utf-8")))
+        except Exception as e:
+            logger.warning("Multipart-Parsing fehlgeschlagen user_id=%s: %s", user["id"], e)
+
+        _log_incoming("multipart-parts", ctype, request.headers, pseudo_files, user["id"])
+
+        # Fallback: wenn Form-Parser keine Parts fand, aber der Rohbody nicht
+        # leer ist, versuchen wir den Rohbody direkt als JSON/CSV zu deuten.
+        # Auto Health Export setzt manchmal Content-Type auf multipart, ohne
+        # eine saubere multipart-Struktur zu senden.
+        if not pseudo_files and raw_all:
+            logger.info("Multipart ohne erkennbare Parts, aber Body %d Bytes user_id=%s -> Rohbody-Fallback",
+                        len(raw_all), user["id"])
+            sub = await _ingest_auto(db, user["id"], raw_all, "sync-multipart.bin")
+            merge_ingest_stats(stats, sub)
+            stats["files_processed"] = 1
+            logger.info("Health-Import (multipart-fallback) fuer user_id=%s: %s", user["id"], stats)
+            return stats
+
         if not pseudo_files:
             logger.info("Health-Import: leerer Multipart-Body user_id=%s -> 200 no-op", user["id"])
             stats["skipped"].append("empty_multipart")
