@@ -435,9 +435,20 @@ def detect_csv_kind(header: list) -> Optional[str]:
         return None
     low = [c.strip().lower() for c in header]
     first = low[0] if low else ""
+    # Workouts-CSV: deutsche Version hat "Workout Type" als erste Spalte,
+    # die REST-API-Automation der App verwendet englisch nur "Type". In beiden
+    # Faellen sind Start/End/Duration typisch, was uns von Long-Format unterscheidet.
     if "workout type" in first:
         return "workouts"
-    has_name = any(c in ("name", "metric", "type") for c in low)
+    has_start = any(c == "start" or c.startswith("start ") for c in low)
+    has_end = any(c == "end" or c.startswith("end ") for c in low)
+    has_duration = any(c == "duration" or c == "dauer" for c in low)
+    if first == "type" and has_start and has_end and has_duration:
+        return "workouts"
+    # Long-Format nur wenn "name"/"qty"/"date" alle vorhanden sind (eine Zeile
+    # pro Datenpunkt). Wichtig: "type" allein reicht NICHT (Workouts-CSV hat
+    # eine "Type"-Spalte, ist aber kein Long-Format).
+    has_name = any(c in ("name", "metric") for c in low)
     has_value = any(c in ("qty", "value", "quantity", "amount") for c in low)
     has_date = any(("date" in c) or ("datum" in c) or ("time" in c) or ("zeit" in c) for c in low)
     if has_name and has_value and has_date:
@@ -619,29 +630,42 @@ async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> di
     stats = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
               "bp_imported": 0, "glucose_imported": 0, "skipped": []}
 
+    # Zwei Spalten-Varianten: deutsch (manueller Export, "Aktive Energie") und
+    # englisch (REST-API-Automation der App, "Active Energy"). Wir versuchen
+    # fuer jeden logischen Wert nacheinander mehrere Header-Muster.
+    def _first(*variants):
+        for kws in variants:
+            if isinstance(kws, str):
+                kws = (kws,)
+            idx = _find_col(header, *kws)
+            if idx is not None:
+                return idx
+        return None
+
     col = {
-        "start": _find_col(header, "Start"),
-        "end": _find_col(header, "End"),
-        "duration": _find_col(header, "Duration"),
-        "active_energy": _find_col(header, "Aktive Energie"),
-        "resting_energy": _find_col(header, "Ruheeinträge"),
-        "intensity": _find_col(header, "Intensität"),
-        "max_hr": _find_col(header, "Max.", "Herzfrequenz"),
-        "avg_hr": _find_col(header, "Durchschn.", "Herzfrequenz"),
-        "distance_km": _find_col(header, "Distanz"),
-        "max_speed": _find_col(header, "Max. Geschwindigkeit"),
-        "avg_speed": _find_col(header, "Durchschnittsgeschwindigkeit"),
-        "flights": _find_col(header, "Etagen gestiegen"),
-        "elevation_up": _find_col(header, "Aufgestiegene Höhe"),
-        "elevation_down": _find_col(header, "Abgestiegene Höhe"),
-        "step_count": _find_col(header, "Schrittzählung"),
-        "cadence": _find_col(header, "Schrittfrequenz"),
-        "swim_strokes": _find_col(header, "Anzahl der Schwimmzüge"),
-        "swim_cadence": _find_col(header, "Schwimmkadenz"),
-        "lap_length": _find_col(header, "Rundenlänge"),
-        "swolf": _find_col(header, "SWOLF"),
-        "temperature": _find_col(header, "Temperatur"),
-        "humidity": _find_col(header, "Luftfeuchtigkeit"),
+        "start": _first("Start"),
+        "end": _first("End"),
+        "duration": _first("Duration", "Dauer"),
+        "active_energy": _first("Aktive Energie", "Active Energy"),
+        "resting_energy": _first("Ruheeinträge", ("Resting", "Energy")),
+        "total_energy": _first(("Total", "Energy"), ("Gesamt", "Energie")),
+        "intensity": _first("Intensität", "Intensity"),
+        "max_hr": _first(("Max.", "Herzfrequenz"), ("Max", "Heart", "Rate")),
+        "avg_hr": _first(("Durchschn.", "Herzfrequenz"), ("Avg", "Heart", "Rate")),
+        "distance_km": _first("Distanz", "Distance"),
+        "max_speed": _first("Max. Geschwindigkeit", ("Max", "Speed")),
+        "avg_speed": _first("Durchschnittsgeschwindigkeit", ("Avg", "Speed")),
+        "flights": _first("Etagen gestiegen", "Flights Climbed", "Flights"),
+        "elevation_up": _first("Aufgestiegene Höhe", ("Elevation", "Ascended"), ("Elevation", "Up")),
+        "elevation_down": _first("Abgestiegene Höhe", ("Elevation", "Descended"), ("Elevation", "Down")),
+        "step_count": _first("Schrittzählung", "Step Count", "Steps"),
+        "cadence": _first("Schrittfrequenz", "Cadence"),
+        "swim_strokes": _first("Anzahl der Schwimmzüge", ("Swim", "Strokes"), "Stroke Count"),
+        "swim_cadence": _first("Schwimmkadenz", "Swim Cadence"),
+        "lap_length": _first("Rundenlänge", "Lap Length"),
+        "swolf": _first("SWOLF"),
+        "temperature": _first("Temperatur", "Temperature"),
+        "humidity": _first("Luftfeuchtigkeit", "Humidity"),
     }
 
     for row in rows:
@@ -656,8 +680,8 @@ async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> di
         duration_min = _parse_duration_hms(_row_str(row, col.get("duration")))
         active_kcal = _row_num(row, col.get("active_energy"))
         resting_kcal = _row_num(row, col.get("resting_energy"))
-        total_kcal = None
-        if active_kcal is not None or resting_kcal is not None:
+        total_kcal = _row_num(row, col.get("total_energy"))
+        if total_kcal is None and (active_kcal is not None or resting_kcal is not None):
             total_kcal = (active_kcal or 0) + (resting_kcal or 0)
         distance_km = _row_num(row, col.get("distance_km"))
         distance_m = None if distance_km is None else distance_km * 1000
