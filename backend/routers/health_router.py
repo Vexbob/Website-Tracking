@@ -64,19 +64,27 @@ async def import_health_data(request: Request,
     stats = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
              "bp_imported": 0, "glucose_imported": 0, "skipped": [], "files_processed": 0}
 
-    # ---- Multipart (eine oder mehrere Dateien) ----
+    # ---- Multipart (eine oder mehrere Dateien ODER Text-Felder) ----
+    # Auto Health Export schickt in manchen Versionen den CSV-/JSON-Inhalt als
+    # gewoehnliches Form-Field ("payload", "data", "csv" o.ae.) statt als echte
+    # Datei mit filename. Wir akzeptieren daher beides: UploadFile UND String-Werte.
     if ctype.startswith("multipart/form-data"):
         form = await request.form()
-        files = []
-        for _key, value in form.multi_items():
+        pseudo_files: list[tuple[str, bytes]] = []
+        for key, value in form.multi_items():
             if isinstance(value, UploadFile):
-                files.append(value)
-        if not files:
-            raise HTTPException(400, "Multipart-Body enthaelt keine Dateien")
-        for f in files:
-            raw = await f.read()
-            fname = (f.filename or "").lower()
-            sub = await _ingest_auto(db, user["id"], raw, fname)
+                raw_part = await value.read()
+                pseudo_files.append((value.filename or f"{key}.bin", raw_part))
+            elif isinstance(value, str):
+                # String-Feld: als Roh-Body interpretieren.
+                pseudo_files.append((f"{key}.txt", value.encode("utf-8")))
+        _log_incoming("multipart", ctype, request.headers, pseudo_files, user["id"])
+        if not pseudo_files:
+            logger.info("Health-Import: leerer Multipart-Body user_id=%s -> 200 no-op", user["id"])
+            stats["skipped"].append("empty_multipart")
+            return stats
+        for fname, raw_part in pseudo_files:
+            sub = await _ingest_auto(db, user["id"], raw_part, fname)
             merge_ingest_stats(stats, sub)
             stats["files_processed"] += 1
         logger.info("Health-Import (multipart) fuer user_id=%s: %s", user["id"], stats)
@@ -84,8 +92,14 @@ async def import_health_data(request: Request,
 
     # ---- Raw-Body (JSON oder CSV) ----
     raw = await request.body()
+    _log_incoming("raw", ctype, request.headers, [("body.bin", raw)], user["id"])
     if not raw:
-        raise HTTPException(400, "Leerer Request-Body")
+        # Leerer Body: viele Apps machen einen "Ping" bevor sie den echten
+        # Payload schicken. Wir antworten mit 200 statt 400, damit die App
+        # nicht als "Netzwerkfehler" abbricht.
+        logger.info("Health-Import: leerer Body user_id=%s -> 200 no-op", user["id"])
+        stats["skipped"].append("empty_body")
+        return stats
 
     # Explizit als CSV markiert?
     if "csv" in ctype:
@@ -97,11 +111,10 @@ async def import_health_data(request: Request,
 
     # Ansonsten: erst JSON versuchen, dann CSV-Fallback.
     payload = None
-    if "json" in ctype or not ctype:
-        try:
-            payload = json.loads(raw)
-        except Exception:
-            payload = None
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        payload = None
     if isinstance(payload, dict):
         sub = await ingest_payload(db, user["id"], payload)
         merge_ingest_stats(stats, sub)
@@ -115,6 +128,27 @@ async def import_health_data(request: Request,
     stats["files_processed"] = 1
     logger.info("Health-Import (csv-fallback) fuer user_id=%s: %s", user["id"], stats)
     return stats
+
+
+def _log_incoming(kind: str, ctype: str, headers, parts: list, user_id: int) -> None:
+    """Diagnose-Log: schreibt Content-Type, User-Agent, Anzahl Parts und einen
+    kurzen Vorschau-Snippet aus jedem Part ins Log. Damit sehen wir bei den
+    naechsten Sync-Aufrufen der App exakt, welches Format wirklich reinkommt,
+    ohne den kompletten Body zu loggen (Privacy + Log-Volumen)."""
+    try:
+        ua = headers.get("user-agent") or "-"
+        for idx, (name, data) in enumerate(parts):
+            size = len(data) if data else 0
+            preview = ""
+            if data:
+                try:
+                    preview = data[:160].decode("utf-8", errors="replace").replace("\n", " ")
+                except Exception:
+                    preview = "<binary>"
+            logger.info("Health-Import DEBUG user=%s kind=%s ctype=%r ua=%r part[%d]=%r size=%d preview=%r",
+                        user_id, kind, ctype, ua, idx, name, size, preview)
+    except Exception as e:
+        logger.warning("Health-Import DEBUG log fehlgeschlagen: %s", e)
 
 
 async def _ingest_auto(db, user_id: int, raw: bytes, filename: str) -> dict:
