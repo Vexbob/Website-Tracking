@@ -423,17 +423,37 @@ def _row_str(row: list, idx: Optional[int]) -> Optional[str]:
 
 
 def detect_csv_kind(header: list) -> Optional[str]:
-    """Erkennt anhand der ersten Spalte, ob es sich um die Tages-Gesundheits-
-    CSV oder die Workouts-Uebersicht handelt. Gibt None zurueck, wenn keines
-    von beidem erkannt wird (Datei wird dann komplett uebersprungen)."""
+    """Erkennt anhand des Headers, um welches CSV-Format es sich handelt.
+
+    Unterstuetzte Formate:
+      * ``workouts``        — Workouts-Uebersicht (deutsch/manueller Export)
+      * ``health_metrics``  — Tages-Gesundheitsmetriken (deutsch/manueller Export)
+      * ``long``            — Long-Format aus der REST-API-Automation der App
+                              (name/date/qty pro Zeile)
+    """
     if not header:
         return None
-    first = header[0].strip().lower()
+    low = [c.strip().lower() for c in header]
+    first = low[0] if low else ""
     if "workout type" in first:
         return "workouts"
+    has_name = any(c in ("name", "metric", "type") for c in low)
+    has_value = any(c in ("qty", "value", "quantity", "amount") for c in low)
+    has_date = any(("date" in c) or ("datum" in c) or ("time" in c) or ("zeit" in c) for c in low)
+    if has_name and has_value and has_date:
+        return "long"
     if "datum" in first or "date" in first:
         return "health_metrics"
     return None
+
+
+def _sniff_delimiter(sample: str) -> str:
+    """Findet den wahrscheinlichsten Trenner. Manueller Export nutzt ``;``,
+    REST-API-Automation typischerweise ``,``."""
+    first_line = sample.split("\n", 1)[0]
+    counts = {d: first_line.count(d) for d in (";", ",", "\t", "|")}
+    best = max(counts, key=counts.get)
+    return best if counts[best] > 0 else ","
 
 
 async def ingest_csv_file(db, user_id: int, filename: str, raw: bytes) -> dict:
@@ -451,19 +471,24 @@ async def ingest_csv_file(db, user_id: int, filename: str, raw: bytes) -> dict:
             empty_stats["skipped"].append(f"{filename}:decode_error:{e}")
             return empty_stats
 
-    reader = list(csv.reader(io.StringIO(text), delimiter=";"))
+    delimiter = _sniff_delimiter(text[:2048])
+    reader = list(csv.reader(io.StringIO(text), delimiter=delimiter))
     if not reader:
         empty_stats["skipped"].append(f"{filename}:empty_file")
         return empty_stats
     header = [c.strip() for c in reader[0]]
     kind = detect_csv_kind(header)
     rows = reader[1:]
+    logger.info("CSV-Ingest %s delimiter=%r kind=%r header=%s rows=%d",
+                filename, delimiter, kind, header[:6], len(rows))
 
     if kind == "health_metrics":
         return await _ingest_health_metrics_csv(db, user_id, header, rows)
     if kind == "workouts":
         return await _ingest_workouts_csv(db, user_id, header, rows)
-    empty_stats["skipped"].append(f"{filename}:unrecognized_csv_format")
+    if kind == "long":
+        return await _ingest_long_csv(db, user_id, header, rows)
+    empty_stats["skipped"].append(f"{filename}:unrecognized_csv_format:header={header[:5]}")
     return empty_stats
 
 
@@ -692,6 +717,141 @@ async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> di
                     wid, key, val)
             except Exception as e:
                 logger.warning("Workout-CSV-Metric-Insert fehlgeschlagen (%s): %s", key, e)
+
+    return stats
+
+
+# ---------------------------------------------------------------------------
+# Long-Format CSV (REST-API-Automation der Auto-Health-Export-App)
+# ---------------------------------------------------------------------------
+# Typischer Header (englisch, Komma-getrennt):
+#   name,units,date,qty,source     — oder Variationen davon.
+# Eine Zeile pro Datenpunkt. Metric-Namen entsprechen der JSON-API-Struktur
+# (siehe SIMPLE_METRIC_MAP + Spezialfaelle). Blutdruck kommt als zwei
+# getrennte Zeilen (blood_pressure_systolic/diastolic) mit gleichem Timestamp
+# und wird ueber den Zeitstempel zusammengefuehrt.
+async def _ingest_long_csv(db, user_id: int, header: list, rows: list) -> dict:
+    stats = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
+              "bp_imported": 0, "glucose_imported": 0, "skipped": []}
+
+    low = [c.strip().lower() for c in header]
+
+    def _col(*candidates):
+        for c in candidates:
+            if c in low:
+                return low.index(c)
+        return None
+
+    idx_name = _col("name", "metric", "type")
+    idx_date = _col("date", "datum", "timestamp", "startdate")
+    idx_qty = _col("qty", "value", "quantity", "amount")
+    idx_unit = _col("units", "unit")
+    idx_source = _col("source")
+    idx_sys = _col("systolic", "sys")
+    idx_dia = _col("diastolic", "dia")
+    idx_inbed = _col("inbed", "in_bed")
+    idx_asleep = _col("asleep")
+    idx_core = _col("core")
+    idx_deep = _col("deep")
+    idx_rem = _col("rem")
+    idx_awake = _col("awake")
+    idx_start = _col("sleepstart", "sleep_start", "start")
+    idx_end = _col("sleepend", "sleep_end", "end")
+
+    if idx_name is None or idx_date is None:
+        stats["skipped"].append(f"long_csv:missing_columns:header={header[:6]}")
+        return stats
+
+    bp_pending: dict = {}
+
+    for row in rows:
+        if not row:
+            continue
+        name = _row_str(row, idx_name)
+        if not name:
+            continue
+        raw_date = _row_str(row, idx_date)
+        date_str = _csv_date_str(raw_date) if raw_date else None
+        qty = _row_num(row, idx_qty)
+        unit = _row_str(row, idx_unit)
+
+        # Blutdruck (getrennte Zeilen) — nach Timestamp zusammenfuehren
+        if name in (BP_SYSTOLIC_NAME, BP_DIASTOLIC_NAME):
+            dt = _parse_csv_dt(raw_date)
+            if not dt:
+                stats["skipped"].append(f"{name}:invalid_date")
+                continue
+            key = dt.isoformat()
+            entry = bp_pending.setdefault(key, {"recorded_at": dt})
+            entry["systolic" if name == BP_SYSTOLIC_NAME else "diastolic"] = qty
+            continue
+
+        # Blutdruck (kombinierte Zeile mit systolic/diastolic-Spalten)
+        if name == "blood_pressure" and (idx_sys is not None or idx_dia is not None):
+            dt = _parse_csv_dt(raw_date)
+            if dt:
+                entry = {"recorded_at": dt,
+                         "systolic": _row_num(row, idx_sys),
+                         "diastolic": _row_num(row, idx_dia)}
+                if await _ingest_bp_point(db, user_id, entry):
+                    stats["bp_imported"] += 1
+                else:
+                    stats["skipped"].append(f"blood_pressure:{raw_date}")
+            continue
+
+        # Blutzucker
+        if name == GLUCOSE_NAME:
+            if await _ingest_glucose_point(db, user_id, {"date": date_str, "qty": qty}, unit):
+                stats["glucose_imported"] += 1
+            else:
+                stats["skipped"].append(f"glucose:{raw_date}")
+            continue
+
+        # Schlaf
+        if name == SLEEP_NAME:
+            p = {
+                "date": date_str,
+                "sleepStart": _csv_date_str(_row_str(row, idx_start)) if idx_start is not None else None,
+                "sleepEnd": _csv_date_str(_row_str(row, idx_end)) if idx_end is not None else None,
+                "asleep": _row_num(row, idx_asleep),
+                "inBed": _row_num(row, idx_inbed),
+                "core": _row_num(row, idx_core),
+                "deep": _row_num(row, idx_deep),
+                "rem": _row_num(row, idx_rem),
+                "awake": _row_num(row, idx_awake),
+            }
+            if p["asleep"] is None and qty is not None:
+                p["asleep"] = qty
+            if any(p.get(k) is not None for k in ("asleep", "inBed", "core", "deep", "rem")):
+                if await _ingest_sleep_point(db, user_id, p):
+                    stats["sleep_imported"] += 1
+                else:
+                    stats["skipped"].append(f"sleep:{raw_date}")
+            continue
+
+        # Einfache Zeitreihen
+        metric_type = SIMPLE_METRIC_MAP.get(name)
+        if not metric_type:
+            resolved = await _resolve_unknown_metric(name)
+            if resolved:
+                metric_type = resolved
+            else:
+                stats["skipped"].append(f"unknown_metric:{name}")
+                continue
+        if qty is None:
+            stats["skipped"].append(f"{metric_type}:no_qty:{raw_date}")
+            continue
+        p = {"date": date_str, "qty": qty, "source": _row_str(row, idx_source)}
+        if await _ingest_metric_point(db, user_id, metric_type, p, unit):
+            stats["metrics_imported"] += 1
+        else:
+            stats["skipped"].append(f"{metric_type}:{raw_date}")
+
+    for _key, entry in bp_pending.items():
+        if await _ingest_bp_point(db, user_id, entry):
+            stats["bp_imported"] += 1
+        else:
+            stats["skipped"].append("blood_pressure:merge_failed")
 
     return stats
 
