@@ -1,7 +1,8 @@
 """Health-Router — Sync-Endpoint fuer Auto Health Export (iPhone) + Frontend-API.
 
 Endpoints:
-  POST   /api/health/import              — Ingest-Endpoint fuer die App (API-Key-Auth)
+  POST   /api/health/import              — Ingest-Endpoint fuer die App (API-Key-Auth,
+                                            akzeptiert JSON *und* CSV, siehe Doku am Endpoint)
   POST   /api/health/import-file         — Manueller JSON-Upload im Frontend (JWT-Auth)
   POST   /api/health/import-csv          — Manueller CSV-Multi-Upload im Frontend (JWT-Auth)
   GET    /api/health/api-keys            — eigene Keys auflisten (JWT-Auth)
@@ -30,7 +31,7 @@ from fastapi.responses import Response
 from database import get_db
 from auth import get_current_user, get_user_from_health_api_key, generate_health_api_key
 from deps import logger, limiter, LIMIT_HEALTH_IMPORT, LIMIT_WRITE_RARE, LIMIT_WRITE_STANDARD, _ser_exp
-from services.health_ingest import ingest_payload, ingest_csv_file, SIMPLE_METRIC_MAP
+from services.health_ingest import ingest_payload, ingest_csv_file, SIMPLE_METRIC_MAP, merge_ingest_stats
 from services.full_export import build_health_export_csv
 
 router = APIRouter(tags=["health"])
@@ -41,12 +42,125 @@ ALLOWED_METRIC_TYPES = sorted(set(SIMPLE_METRIC_MAP.values()))
 # ---------- Sync-Ingest (API-Key-Auth, kein JWT) ----------
 @router.post("/api/health/import")
 @limiter.limit(LIMIT_HEALTH_IMPORT)
-async def import_health_data(request: Request, body: dict,
+async def import_health_data(request: Request,
                               db=Depends(get_db),
                               user=Depends(get_user_from_health_api_key)):
-    stats = await ingest_payload(db, user["id"], body)
-    logger.info("Health-Import fuer user_id=%s: %s", user["id"], stats)
+    """Universeller Sync-Ingest fuer die Auto-Health-Export-App.
+
+    Akzeptiert bewusst mehrere Body-Formate, weil die App je nach Version und
+    gewaehltem Export-Format (JSON / CSV) unterschiedlich POSTet:
+
+      * ``application/json``                  -> JSON-Payload direkt (Original-Struktur)
+      * ``text/csv`` / ``application/csv``    -> Roh-CSV im Body (eine Datei)
+      * ``multipart/form-data``               -> eine oder mehrere Dateien (JSON und/oder CSV)
+      * kein/anderer Content-Type             -> Body wird zuerst als JSON, dann als
+                                                 CSV-Fallback interpretiert
+
+    Der Endpoint erkennt das Format anhand von Content-Type + Body-Inhalt und
+    delegiert an ``ingest_payload`` (JSON) bzw. ``ingest_csv_file`` (CSV).
+    Antwort ist immer das gleiche Stats-Dict wie beim JSON-Sync.
+    """
+    ctype = (request.headers.get("content-type") or "").lower()
+    stats = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
+             "bp_imported": 0, "glucose_imported": 0, "skipped": [], "files_processed": 0}
+
+    # ---- Multipart (eine oder mehrere Dateien) ----
+    if ctype.startswith("multipart/form-data"):
+        form = await request.form()
+        files = []
+        for _key, value in form.multi_items():
+            if isinstance(value, UploadFile):
+                files.append(value)
+        if not files:
+            raise HTTPException(400, "Multipart-Body enthaelt keine Dateien")
+        for f in files:
+            raw = await f.read()
+            fname = (f.filename or "").lower()
+            sub = await _ingest_auto(db, user["id"], raw, fname)
+            merge_ingest_stats(stats, sub)
+            stats["files_processed"] += 1
+        logger.info("Health-Import (multipart) fuer user_id=%s: %s", user["id"], stats)
+        return stats
+
+    # ---- Raw-Body (JSON oder CSV) ----
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(400, "Leerer Request-Body")
+
+    # Explizit als CSV markiert?
+    if "csv" in ctype:
+        sub = await _ingest_csv_bytes(db, user["id"], raw, "sync.csv")
+        merge_ingest_stats(stats, sub)
+        stats["files_processed"] = 1
+        logger.info("Health-Import (csv) fuer user_id=%s: %s", user["id"], stats)
+        return stats
+
+    # Ansonsten: erst JSON versuchen, dann CSV-Fallback.
+    payload = None
+    if "json" in ctype or not ctype:
+        try:
+            payload = json.loads(raw)
+        except Exception:
+            payload = None
+    if isinstance(payload, dict):
+        sub = await ingest_payload(db, user["id"], payload)
+        merge_ingest_stats(stats, sub)
+        logger.info("Health-Import (json) fuer user_id=%s: %s", user["id"], stats)
+        return stats
+
+    # Fallback: als CSV interpretieren (die App schickt bei CSV-Automations
+    # oft ohne sauberen Content-Type).
+    sub = await _ingest_csv_bytes(db, user["id"], raw, "sync.csv")
+    merge_ingest_stats(stats, sub)
+    stats["files_processed"] = 1
+    logger.info("Health-Import (csv-fallback) fuer user_id=%s: %s", user["id"], stats)
     return stats
+
+
+async def _ingest_auto(db, user_id: int, raw: bytes, filename: str) -> dict:
+    """Waehlt anhand des Dateinamens / Inhalts JSON- oder CSV-Ingest."""
+    name = (filename or "").lower()
+    # Klarer JSON-Hinweis -> JSON versuchen
+    if name.endswith(".json"):
+        try:
+            payload = json.loads(raw)
+            if isinstance(payload, dict):
+                return await ingest_payload(db, user_id, payload)
+        except Exception:
+            pass
+    # Sonst CSV probieren
+    if name.endswith(".csv") or _looks_like_csv(raw):
+        return await _ingest_csv_bytes(db, user_id, raw, filename or "upload.csv")
+    # Letzter Versuch: JSON
+    try:
+        payload = json.loads(raw)
+        if isinstance(payload, dict):
+            return await ingest_payload(db, user_id, payload)
+    except Exception:
+        pass
+    return {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
+            "bp_imported": 0, "glucose_imported": 0,
+            "skipped": [f"unrecognized_format:{filename or 'body'}"]}
+
+
+async def _ingest_csv_bytes(db, user_id: int, raw: bytes, filename: str) -> dict:
+    return await ingest_csv_file(db, user_id, filename, raw)
+
+
+def _looks_like_csv(raw: bytes) -> bool:
+    """Heuristik: startet der Body mit einer typischen Auto-Health-Export-CSV-
+    Header-Zeile? Prueft die ersten paar hundert Bytes, damit wir auch bei
+    fehlendem Content-Type CSV zuverlaessig erkennen."""
+    try:
+        head = raw[:512].decode("utf-8-sig", errors="replace").lstrip().lower()
+    except Exception:
+        return False
+    if not head:
+        return False
+    first_line = head.splitlines()[0] if head else ""
+    return ("workout type" in first_line
+            or first_line.startswith("datum")
+            or first_line.startswith("date"))
 
 
 # ---------- Manueller Datei-Upload (JWT-Auth, fuer Backfill/Nachimport) ----------
@@ -85,10 +199,7 @@ async def import_health_csv(request: Request, files: List[UploadFile] = File(...
     for f in files:
         raw = await f.read()
         stats = await ingest_csv_file(db, user["id"], f.filename or "unknown.csv", raw)
-        for key in ("metrics_imported", "workouts_imported", "sleep_imported",
-                    "bp_imported", "glucose_imported"):
-            total[key] += stats.get(key, 0)
-        total["skipped"].extend(stats.get("skipped", []))
+        merge_ingest_stats(total, stats)
         total["files_processed"] += 1
     logger.info("Health-CSV-Import fuer user_id=%s: %s Dateien, %s", user["id"], total["files_processed"], total)
     return total

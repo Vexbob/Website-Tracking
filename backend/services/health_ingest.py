@@ -83,6 +83,22 @@ KNOWN_METRIC_NAMES = set(SIMPLE_METRIC_MAP) | {
 }
 
 
+def merge_ingest_stats(total: dict, sub: dict) -> dict:
+    """Summiert die Zaehler eines Sub-Stats-Dicts in ein Total-Dict.
+
+    Wird sowohl vom Multi-File-CSV-Router als auch vom universellen Sync-
+    Endpoint benutzt, damit beide dieselben Feldnamen aggregieren."""
+    if not isinstance(sub, dict):
+        return total
+    for key in ("metrics_imported", "workouts_imported", "sleep_imported",
+                "bp_imported", "glucose_imported"):
+        total[key] = total.get(key, 0) + int(sub.get(key, 0) or 0)
+    skipped = sub.get("skipped") or []
+    if skipped:
+        total.setdefault("skipped", []).extend(skipped)
+    return total
+
+
 def _parse_dt(s: Optional[str]) -> Optional[datetime]:
     if not s:
         return None
