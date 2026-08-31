@@ -236,8 +236,16 @@ def _manual_multipart_split(raw: bytes, ctype: str) -> list[tuple[str, bytes]]:
         return []
     if not bnd:
         return []
-    marker = ("--" + bnd).encode("latin-1")
-    parts = raw.split(marker)
+    # RFC-strikt waere die Boundary case-sensitive, aber die Auto-Health-Export-
+    # App (iOS, "Auto Export/...") deklariert die Boundary im Content-Type-
+    # Header teilweise klein und schreibt sie im Body groß. Daher splitten wir
+    # case-insensitive per Regex.
+    import re
+    marker_pat = re.compile(
+        b"--" + re.escape(bnd.encode("latin-1")),
+        re.IGNORECASE,
+    )
+    parts = marker_pat.split(raw)
     result: list[tuple[str, bytes]] = []
     for i, part in enumerate(parts):
         # Erstes Segment vor erstem Marker + Endsegment nach "--" ignorieren
@@ -246,30 +254,42 @@ def _manual_multipart_split(raw: bytes, ctype: str) -> list[tuple[str, bytes]]:
         stripped = part.lstrip(b"\r\n")
         if stripped.startswith(b"--"):  # Abschluss-Marker
             break
-        # Header und Body sind durch \r\n\r\n oder \n\n getrennt
-        sep = b"\r\n\r\n"
-        pos = stripped.find(sep)
-        if pos < 0:
-            sep = b"\n\n"
-            pos = stripped.find(sep)
+        # Header und Body sind normal durch \r\n\r\n getrennt. Die Auto-Health-
+        # Export-App benutzt aber teils *nur einzelne \r* (Mac Classic-Style!)
+        # -- deshalb pruefen wir mehrere Varianten in Reihenfolge der Wahr-
+        # scheinlichkeit.
+        header_body_seps = (b"\r\n\r\n", b"\n\n", b"\r\r", b"\r\n\r", b"\r\n")
+        pos = -1
+        sep_len = 0
+        for candidate in header_body_seps:
+            p = stripped.find(candidate)
+            if p >= 0:
+                pos = p
+                sep_len = len(candidate)
+                break
         if pos < 0:
             continue
         headers_bytes = stripped[:pos]
-        body_bytes = stripped[pos + len(sep):]
-        # Trailing CRLF vor naechstem Boundary-Marker entfernen
-        if body_bytes.endswith(b"\r\n"):
-            body_bytes = body_bytes[:-2]
-        elif body_bytes.endswith(b"\n"):
+        body_bytes = stripped[pos + sep_len:]
+        # Trailing CR/LF vor naechstem Boundary-Marker entfernen
+        while body_bytes and body_bytes[-1:] in (b"\r", b"\n"):
             body_bytes = body_bytes[:-1]
         # Filename aus Content-Disposition, falls vorhanden
         fname = f"part{i}.bin"
         try:
             hdrs_text = headers_bytes.decode("latin-1", errors="replace")
+            # Normalisiere alle Zeilenumbrueche zu \n (Mac Classic \r -> \n)
+            hdrs_text = hdrs_text.replace("\r\n", "\n").replace("\r", "\n")
             for line in hdrs_text.split("\n"):
                 low = line.lower().strip()
-                if low.startswith("content-disposition:"):
+                if low.startswith("content-disposition"):
                     if "filename=" in line:
-                        fname = line.split("filename=", 1)[1].strip().strip(";").strip('"').strip()
+                        raw_fn = line.split("filename=", 1)[1].strip().strip(";").strip('"').strip()
+                        # iOS liefert filename als "file:///private/.../foo.csv"
+                        # -> nur den Basename behalten, damit .csv-Endung fuer
+                        # _ingest_auto erkennbar bleibt
+                        base = raw_fn.rsplit("/", 1)[-1]
+                        fname = base or raw_fn
                     elif "name=" in line:
                         n = line.split("name=", 1)[1].strip().strip(";").strip('"').strip()
                         fname = f"{n}.bin"
