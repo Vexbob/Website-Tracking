@@ -43,7 +43,20 @@ def _period_key(d: date, mode: str) -> str:
 
 
 def _period_label(mode: str) -> str:
+    """Singular-Label fuer eine Periode (``Woche`` / ``Monat``)."""
     return "Woche" if mode == "week" else ("Monat" if mode == "month" else "Periode")
+
+
+def _period_prefix(mode: str) -> str:
+    """Wortstamm fuer Substantiv-Zusammensetzungen wie ``Wochen-Zusammenfassung``
+    oder ``Monats-Zusammenfassung``. Vermeidet den frueheren Bug ``Woches-...``.
+    """
+    return "Wochen" if mode == "week" else ("Monats" if mode == "month" else "Perioden")
+
+
+def _period_adverb(mode: str) -> str:
+    """Adverb fuer Beschreibungen wie ``wochenweise aggregiert``."""
+    return "wochenweise" if mode == "week" else ("monatsweise" if mode == "month" else "periodenweise")
 
 
 def _date_from_iso_prefix(s: str) -> Optional[date]:
@@ -163,9 +176,7 @@ async def build_full_export_csv(
     # ---------- 1) Sparziel-Metadaten (immer unveraendert) ----------
     lines.extend(await _build_export_metadata(db, user["id"]))
 
-    # ---------- 2) Sparziel-Protokoll (zeitraum-gefiltert) ----------
-    lines.append("# SEKTION: Sparziel-Protokoll")
-    lines.append("Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz")
+    # ---------- 2) Sparziel-Protokoll (zeitraum-gefiltert, optional aggregiert) ----------
     proto_all = await _sparziel_protocol_lines(db, user["id"])
     if date_from or date_to:
         proto_filtered = [
@@ -174,8 +185,15 @@ async def build_full_export_csv(
         ]
     else:
         proto_filtered = proto_all
-    lines.extend(proto_filtered)
-    lines.append("")
+    if aggregate in ("week", "month"):
+        # v1.37.2: Bei Aggregation kompakte Perioden-Zusammenfassung statt
+        # Einzel-Eintraege. Bei ~130 Checkins/Woche wird das sonst unlesbar.
+        lines.extend(_sparziel_protocol_aggregated(proto_filtered, aggregate))
+    else:
+        lines.append("# SEKTION: Sparziel-Protokoll")
+        lines.append("Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz")
+        lines.extend(proto_filtered)
+        lines.append("")
 
     # ---------- 3) Ausgaben (Filter + optionale Wochen-/Monats-Aggregation) ----------
     lines.extend(await _expenses_sections(
@@ -302,6 +320,7 @@ def _expenses_aggregated_section(rows, aggregate: str) -> list[str]:
     Sektion von ~1000 auf ~12-52 Zeilen -- massiv besser lesbar.
     """
     label = _period_label(aggregate)
+    prefix = _period_prefix(aggregate)
     buckets: dict[str, dict] = {}
     for r in rows:
         pd = r["purchase_date"]
@@ -327,7 +346,7 @@ def _expenses_aggregated_section(rows, aggregate: str) -> list[str]:
 
     out: list[str] = []
     out.append(
-        f"# SEKTION: Ausgaben - {label}s-Zusammenfassung (aggregiert; "
+        f"# SEKTION: Ausgaben - {prefix}-Zusammenfassung (aggregiert; "
         "Einzel-Bons und Positionen sind in diesem Aggregations-Modus "
         "bewusst NICHT enthalten, damit lange Zeitraeume kompakt bleiben)")
     out.append(
@@ -343,6 +362,80 @@ def _expenses_aggregated_section(rows, aggregate: str) -> list[str]:
             f'{key};{b["min_d"].isoformat()};{b["max_d"].isoformat()};'
             f'{b["count"]};{_euro_de(b["sum"])};{_euro_de(avg)};'
             f'{len(b["stores"])};{_f(types_str)}'
+        )
+    out.append("")
+    return out
+
+
+# ---------- Sparziel-Protokoll-Aggregation (v1.37.2) ----------
+
+def _sparziel_protocol_aggregated(proto_lines: list[str], aggregate: str) -> list[str]:
+    """Aggregiert die vom Helper gebauten Protokoll-Zeilen zu Wochen/Monaten.
+
+    Format der Eingabe-Zeilen (aus helpers._sparziel_protocol_lines):
+      ``Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz``
+
+    Ausgabe pro Periode:
+      Anzahl Check-ins, Anzahl Meilensteine, Anzahl Streak-Bonus,
+      Summe ausgezahlter Belohnungen, Titel der erreichten Meilensteine.
+    """
+    prefix = _period_prefix(aggregate)
+    label = _period_label(aggregate)
+    buckets: dict[str, dict] = {}
+    for ln in proto_lines:
+        parts = ln.split(";")
+        if len(parts) < 6:
+            continue
+        d = _date_from_iso_prefix(parts[0])
+        if d is None:
+            continue
+        key = _period_key(d, aggregate)
+        b = buckets.setdefault(key, {
+            "checkins": 0, "milestones": 0, "streaks": 0, "transfers": 0,
+            "initials": 0, "reward_sum": 0.0, "transfer_sum": 0.0,
+            "milestone_titles": [],
+        })
+        row_type = parts[1]
+        title = parts[2].strip('"') if len(parts) > 2 else ""
+        try:
+            amount = float(parts[5] or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+
+        if row_type == "checkin":
+            b["checkins"] += 1
+            if amount > 0:                       # Wochenziel-Auszahlung
+                b["reward_sum"] += amount
+        elif row_type == "milestone":
+            b["milestones"] += 1
+            b["reward_sum"] += amount
+            if title:
+                b["milestone_titles"].append(title)
+        elif row_type == "streak_bonus":
+            b["streaks"] += 1
+            b["reward_sum"] += amount
+        elif row_type == "transfer":
+            b["transfers"] += 1
+            b["transfer_sum"] += amount
+        elif row_type == "initial":
+            b["initials"] += 1
+            b["transfer_sum"] += amount
+
+    out: list[str] = []
+    out.append(
+        f"# SEKTION: Sparziel-Protokoll - {prefix}-Zusammenfassung (aggregiert; "
+        "Einzel-Eintraege sind in diesem Aggregations-Modus bewusst NICHT enthalten)")
+    out.append(
+        f"{label};Anzahl Check-ins;Anzahl Meilensteine;Streak-Boni;"
+        "Transfers;Summe Belohnungen (EUR);Transfer-Summe (EUR);"
+        "Erreichte Meilensteine")
+    for key in sorted(buckets.keys()):
+        b = buckets[key]
+        titles = ", ".join(sorted(set(b["milestone_titles"])))
+        out.append(
+            f'{key};{b["checkins"]};{b["milestones"]};{b["streaks"]};'
+            f'{b["transfers"] + b["initials"]};{_euro_de(b["reward_sum"])};'
+            f'{_euro_de(b["transfer_sum"])};{_f(titles)}'
         )
     out.append("")
     return out
@@ -499,7 +592,7 @@ async def _health_vitals_wide_section(
 
     if aggregate in ("week", "month"):
         out.append(
-            f"# SEKTION: Gesundheit - Vitalwerte ({period_label.lower()}sweise "
+            f"# SEKTION: Gesundheit - Vitalwerte ({_period_adverb(aggregate)} "
             "aggregiert; pro Metrik durchschnittlicher Tageswert; _min/_max "
             "ueber alle Tage der Periode)")
     else:
@@ -574,6 +667,135 @@ def _build_range_where(col: str, base_param_start: int, date_from, date_to):
     return where, params
 
 
+# ---------- Health-Aggregation (v1.37.2) ----------
+
+def _bp_aggregated(rows, aggregate: str) -> list[str]:
+    """Blutdruck pro Woche/Monat: Ø + min/max fuer sys/dia, Anzahl Messungen."""
+    prefix = _period_prefix(aggregate); label = _period_label(aggregate)
+    buckets: dict[str, dict] = {}
+    for r in rows:
+        rec = r["recorded_at"]
+        if not rec: continue
+        key = _period_key(rec.date(), aggregate)
+        b = buckets.setdefault(key, {"n": 0, "sys": [], "dia": [], "unit": ""})
+        b["n"] += 1
+        if r["systolic"] is not None: b["sys"].append(float(r["systolic"]))
+        if r["diastolic"] is not None: b["dia"].append(float(r["diastolic"]))
+        if r["unit"]: b["unit"] = r["unit"].strip()
+    out = [f"# SEKTION: Gesundheit - Blutdruck ({_period_adverb(aggregate)} aggregiert)",
+           f"{label};Anzahl Messungen;Systolisch Ø;Systolisch min;Systolisch max;"
+           "Diastolisch Ø;Diastolisch min;Diastolisch max;Einheit"]
+    for key in sorted(buckets.keys()):
+        b = buckets[key]
+        s, d = b["sys"], b["dia"]
+        out.append(
+            f'{key};{b["n"]};'
+            f'{_num(sum(s)/len(s)) if s else ""};{_num(min(s)) if s else ""};{_num(max(s)) if s else ""};'
+            f'{_num(sum(d)/len(d)) if d else ""};{_num(min(d)) if d else ""};{_num(max(d)) if d else ""};'
+            f'{b["unit"]}'
+        )
+    out.append("")
+    return out
+
+
+def _gl_aggregated(rows, aggregate: str) -> list[str]:
+    """Blutzucker pro Woche/Monat: Ø + min/max, Anzahl Messungen."""
+    prefix = _period_prefix(aggregate); label = _period_label(aggregate)
+    buckets: dict[str, dict] = {}
+    for r in rows:
+        rec = r["recorded_at"]
+        if not rec: continue
+        key = _period_key(rec.date(), aggregate)
+        b = buckets.setdefault(key, {"n": 0, "vals": [], "unit": ""})
+        b["n"] += 1
+        if r["value"] is not None:
+            try: b["vals"].append(float(r["value"]))
+            except (TypeError, ValueError): pass
+        if r["unit"]: b["unit"] = r["unit"].strip()
+    out = [f"# SEKTION: Gesundheit - Blutzucker ({_period_adverb(aggregate)} aggregiert)",
+           f"{label};Anzahl Messungen;Wert Ø;Wert min;Wert max;Einheit"]
+    for key in sorted(buckets.keys()):
+        b = buckets[key]; v = b["vals"]
+        out.append(
+            f'{key};{b["n"]};'
+            f'{_num(sum(v)/len(v)) if v else ""};{_num(min(v)) if v else ""};{_num(max(v)) if v else ""};'
+            f'{b["unit"]}'
+        )
+    out.append("")
+    return out
+
+
+def _sleep_aggregated(rows, aggregate: str) -> list[str]:
+    """Schlaf pro Woche/Monat: Anzahl Naechte, Ø-Phasen (in Minuten)."""
+    label = _period_label(aggregate)
+    buckets: dict[str, dict] = {}
+    keys_num = ("in_bed_minutes", "asleep_minutes", "core_minutes",
+                "deep_minutes", "rem_minutes", "awake_minutes")
+    for r in rows:
+        d = r["sleep_date"]
+        if not d: continue
+        key = _period_key(d, aggregate)
+        b = buckets.setdefault(key, {"n": 0, **{k: [] for k in keys_num}})
+        b["n"] += 1
+        for k in keys_num:
+            v = r[k]
+            if v is None: continue
+            try: b[k].append(float(v))
+            except (TypeError, ValueError): pass
+    out = [f"# SEKTION: Gesundheit - Schlaf ({_period_adverb(aggregate)} aggregiert; "
+           "Ø-Phasen in Minuten pro Nacht der Periode)",
+           f"{label};Anzahl Naechte;Im Bett Ø;Geschlafen Ø;Core Ø;Deep Ø;REM Ø;Wach Ø"]
+    for key in sorted(buckets.keys()):
+        b = buckets[key]
+        def avg(k):
+            xs = b[k]
+            return _num(sum(xs)/len(xs)) if xs else ""
+        out.append(
+            f'{key};{b["n"]};{avg("in_bed_minutes")};{avg("asleep_minutes")};'
+            f'{avg("core_minutes")};{avg("deep_minutes")};{avg("rem_minutes")};{avg("awake_minutes")}'
+        )
+    out.append("")
+    return out
+
+
+def _workouts_aggregated(rows, aggregate: str) -> list[str]:
+    """Workouts pro Woche/Monat: Anzahl, Summen Dauer/Energie/Distanz, Typ-Split."""
+    label = _period_label(aggregate)
+    buckets: dict[str, dict] = {}
+    for r in rows:
+        s = r["start_at"]
+        if not s: continue
+        key = _period_key(s.date(), aggregate)
+        b = buckets.setdefault(key, {
+            "n": 0, "dur": 0.0, "kcal_act": 0.0, "kcal_tot": 0.0,
+            "dist": 0.0, "elev": 0.0, "types": {},
+        })
+        b["n"] += 1
+        for tgt, col in (("dur", "duration_min"), ("kcal_act", "active_energy_kcal"),
+                          ("kcal_tot", "total_energy_kcal"), ("dist", "distance_m"),
+                          ("elev", "elevation_m")):
+            v = r[col]
+            if v is None: continue
+            try: b[tgt] += float(v)
+            except (TypeError, ValueError): pass
+        t = r["workout_type"] or "unknown"
+        b["types"][t] = b["types"].get(t, 0) + 1
+    out = [f"# SEKTION: Gesundheit - Workouts ({_period_adverb(aggregate)} aggregiert; "
+           "Summen ueber die Periode)",
+           f"{label};Anzahl Workouts;Summe Dauer (min);Summe aktive Energie (kcal);"
+           "Summe Gesamt-Energie (kcal);Summe Distanz (m);Summe Hoehenmeter (m);"
+           "Typen-Aufteilung"]
+    for key in sorted(buckets.keys()):
+        b = buckets[key]
+        types_str = ", ".join(f"{t}:{n}" for t, n in sorted(b["types"].items(), key=lambda x: -x[1]))
+        out.append(
+            f'{key};{b["n"]};{_num(b["dur"])};{_num(b["kcal_act"])};'
+            f'{_num(b["kcal_tot"])};{_num(b["dist"])};{_num(b["elev"])};{_f(types_str)}'
+        )
+    out.append("")
+    return out
+
+
 async def _health_section(
     db,
     user_id: int,
@@ -588,72 +810,99 @@ async def _health_section(
     out.extend(await _health_vitals_wide_section(
         db, user_id, date_from=date_from, date_to=date_to, aggregate=aggregate))
 
+    agg_on = aggregate in ("week", "month")
+
+    # Blutdruck
     bp_where, bp_params = _build_range_where("recorded_at", 1, date_from, date_to)
-    out.append("# SEKTION: Gesundheit - Blutdruck")
-    out.append("Zeitpunkt;Systolisch;Diastolisch;Einheit")
-    for r in await db.fetch(
+    bp_rows = await db.fetch(
         f"SELECT recorded_at, systolic, diastolic, unit FROM health_blood_pressure "
-        f"WHERE user_id=$1{bp_where} ORDER BY recorded_at", user_id, *bp_params):
-        unit = (r["unit"] or "").strip()
-        out.append(
-            f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
-            f'{_num(r["systolic"])};{_num(r["diastolic"])};{unit}'
-        )
-    out.append("")
+        f"WHERE user_id=$1{bp_where} ORDER BY recorded_at", user_id, *bp_params)
+    if agg_on:
+        out.extend(_bp_aggregated(bp_rows, aggregate))
+    else:
+        out.append("# SEKTION: Gesundheit - Blutdruck")
+        out.append("Zeitpunkt;Systolisch;Diastolisch;Einheit")
+        for r in bp_rows:
+            unit = (r["unit"] or "").strip()
+            out.append(
+                f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
+                f'{_num(r["systolic"])};{_num(r["diastolic"])};{unit}'
+            )
+        out.append("")
 
+    # Blutzucker
     gl_where, gl_params = _build_range_where("recorded_at", 1, date_from, date_to)
-    out.append("# SEKTION: Gesundheit - Blutzucker")
-    out.append("Zeitpunkt;Wert;Einheit")
-    for r in await db.fetch(
+    gl_rows = await db.fetch(
         f"SELECT recorded_at, value, unit FROM health_blood_glucose "
-        f"WHERE user_id=$1{gl_where} ORDER BY recorded_at", user_id, *gl_params):
-        unit = (r["unit"] or "").strip()
-        out.append(
-            f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
-            f'{_num(r["value"])};{unit}'
-        )
-    out.append("")
+        f"WHERE user_id=$1{gl_where} ORDER BY recorded_at", user_id, *gl_params)
+    if agg_on:
+        out.extend(_gl_aggregated(gl_rows, aggregate))
+    else:
+        out.append("# SEKTION: Gesundheit - Blutzucker")
+        out.append("Zeitpunkt;Wert;Einheit")
+        for r in gl_rows:
+            unit = (r["unit"] or "").strip()
+            out.append(
+                f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
+                f'{_num(r["value"])};{unit}'
+            )
+        out.append("")
 
+    # Schlaf
     sl_where, sl_params = _build_range_where("sleep_date", 1, date_from, date_to)
-    out.append("# SEKTION: Gesundheit - Schlaf (Phasen in Minuten)")
-    out.append("Datum;Schlafbeginn;Schlafende;Im Bett (min);Geschlafen (min);"
-                "Core (min);Deep (min);REM (min);Wach (min)")
-    for r in await db.fetch(
+    sl_rows = await db.fetch(
         f"SELECT sleep_date, sleep_start, sleep_end, in_bed_minutes, asleep_minutes, "
         f"core_minutes, deep_minutes, rem_minutes, awake_minutes FROM health_sleep "
-        f"WHERE user_id=$1{sl_where} ORDER BY sleep_date", user_id, *sl_params):
-        out.append(
-            f'{r["sleep_date"].isoformat() if r["sleep_date"] else ""};'
-            f'{r["sleep_start"].isoformat() if r["sleep_start"] else ""};'
-            f'{r["sleep_end"].isoformat() if r["sleep_end"] else ""};'
-            f'{_num(r["in_bed_minutes"])};{_num(r["asleep_minutes"])};'
-            f'{_num(r["core_minutes"])};{_num(r["deep_minutes"])};'
-            f'{_num(r["rem_minutes"])};{_num(r["awake_minutes"])}'
-        )
-    out.append("")
+        f"WHERE user_id=$1{sl_where} ORDER BY sleep_date", user_id, *sl_params)
+    if agg_on:
+        out.extend(_sleep_aggregated(sl_rows, aggregate))
+    else:
+        out.append("# SEKTION: Gesundheit - Schlaf (Phasen in Minuten)")
+        out.append("Datum;Schlafbeginn;Schlafende;Im Bett (min);Geschlafen (min);"
+                    "Core (min);Deep (min);REM (min);Wach (min)")
+        for r in sl_rows:
+            out.append(
+                f'{r["sleep_date"].isoformat() if r["sleep_date"] else ""};'
+                f'{r["sleep_start"].isoformat() if r["sleep_start"] else ""};'
+                f'{r["sleep_end"].isoformat() if r["sleep_end"] else ""};'
+                f'{_num(r["in_bed_minutes"])};{_num(r["asleep_minutes"])};'
+                f'{_num(r["core_minutes"])};{_num(r["deep_minutes"])};'
+                f'{_num(r["rem_minutes"])};{_num(r["awake_minutes"])}'
+            )
+        out.append("")
 
+    # Workouts
     wk_where, wk_params = _build_range_where("start_at", 1, date_from, date_to)
-    out.append("# SEKTION: Gesundheit - Workouts (ohne Routendaten)")
-    out.append("ID;Start;Ende;Typ;Dauer (min);Aktive Energie (kcal);Gesamt-Energie (kcal);"
-                "Distanz (m);Hoehenmeter (m);O-Herzfrequenz;Max-Herzfrequenz")
-    workout_ids: list[int] = []
-    for r in await db.fetch(
+    wk_rows = await db.fetch(
         f"SELECT id, start_at, end_at, workout_type, duration_min, active_energy_kcal, "
         f"total_energy_kcal, distance_m, elevation_m, avg_heart_rate, max_heart_rate "
         f"FROM health_workouts WHERE user_id=$1{wk_where} ORDER BY start_at",
-        user_id, *wk_params):
-        workout_ids.append(r["id"])
-        out.append(
-            f'{r["id"]};'
-            f'{r["start_at"].isoformat() if r["start_at"] else ""};'
-            f'{r["end_at"].isoformat() if r["end_at"] else ""};'
-            f'{_f(r["workout_type"] or "")};'
-            f'{_num(r["duration_min"])};{_num(r["active_energy_kcal"])};'
-            f'{_num(r["total_energy_kcal"])};{_num(r["distance_m"])};'
-            f'{_num(r["elevation_m"])};{_num(r["avg_heart_rate"])};'
-            f'{_num(r["max_heart_rate"])}'
-        )
-    out.append("")
+        user_id, *wk_params)
+    workout_ids: list[int] = [r["id"] for r in wk_rows]
+    if agg_on:
+        out.extend(_workouts_aggregated(wk_rows, aggregate))
+    else:
+        out.append("# SEKTION: Gesundheit - Workouts (ohne Routendaten)")
+        out.append("ID;Start;Ende;Typ;Dauer (min);Aktive Energie (kcal);Gesamt-Energie (kcal);"
+                    "Distanz (m);Hoehenmeter (m);O-Herzfrequenz;Max-Herzfrequenz")
+        for r in wk_rows:
+            out.append(
+                f'{r["id"]};'
+                f'{r["start_at"].isoformat() if r["start_at"] else ""};'
+                f'{r["end_at"].isoformat() if r["end_at"] else ""};'
+                f'{_f(r["workout_type"] or "")};'
+                f'{_num(r["duration_min"])};{_num(r["active_energy_kcal"])};'
+                f'{_num(r["total_energy_kcal"])};{_num(r["distance_m"])};'
+                f'{_num(r["elevation_m"])};{_num(r["avg_heart_rate"])};'
+                f'{_num(r["max_heart_rate"])}'
+            )
+        out.append("")
+
+    # Workout-Zusatzmetriken referenzieren einzelne Workout-IDs; im
+    # Aggregations-Modus sind diese IDs nicht mehr in der CSV -> Sektion
+    # bewusst weglassen statt "haengende" Referenzen zu produzieren.
+    if agg_on:
+        return out
 
     out.append("# SEKTION: Gesundheit - Workout-Zusatzmetriken (Kadenz, "
                 "Schwimmzuege, Temperatur, ...); Workout-ID verweist auf die "
