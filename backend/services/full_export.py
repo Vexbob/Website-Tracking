@@ -17,7 +17,8 @@ v1.28.0 - kompaktes Format (~40 % kleiner als v1.27):
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from typing import Optional
 
 from helpers import (
     _export_csv_field as _f,
@@ -25,6 +26,46 @@ from helpers import (
     _build_export_metadata,
     _sparziel_protocol_lines,
 )
+
+
+# ---------- v1.37.1 Zeitraum- + Aggregations-Helfer ----------
+
+def _period_key(d: date, mode: str) -> str:
+    """Liefert einen Sortier- und Anzeige-freundlichen Perioden-Key.
+
+    ``week``  -> ISO-Woche ``YYYY-Www`` (z. B. ``2024-W03``)
+    ``month`` -> ``YYYY-MM``
+    """
+    if mode == "week":
+        iso = d.isocalendar()
+        return f"{iso[0]:04d}-W{iso[1]:02d}"
+    return f"{d.year:04d}-{d.month:02d}"
+
+
+def _period_label(mode: str) -> str:
+    return "Woche" if mode == "week" else ("Monat" if mode == "month" else "Periode")
+
+
+def _date_from_iso_prefix(s: str) -> Optional[date]:
+    """Extrahiert das Datum aus dem Anfang eines ISO-Timestamps
+    (``YYYY-MM-DD...``). Wird zum Nachfiltern von String-basierten
+    Protokoll-Zeilen genutzt."""
+    if not s or len(s) < 10:
+        return None
+    try:
+        return date.fromisoformat(s[:10])
+    except ValueError:
+        return None
+
+
+def _in_range(d: Optional[date], d_from: Optional[date], d_to: Optional[date]) -> bool:
+    if d is None:
+        return False
+    if d_from and d < d_from:
+        return False
+    if d_to and d > d_to:
+        return False
+    return True
 
 
 # ---------- Kompakt-Helfer ----------
@@ -72,12 +113,38 @@ def _euro_de(v) -> str:
 
 # ---------- Public API ----------
 
-async def build_full_export_csv(db, user) -> str:
-    """Baut die komplette CSV als String. Gibt Zeilen (``\\n``-getrennt) zurueck."""
+async def build_full_export_csv(
+    db,
+    user,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    aggregate: str = "none",
+) -> str:
+    """Baut die komplette CSV als String. Gibt Zeilen (``\\n``-getrennt) zurueck.
+
+    v1.37.1: Optionale Filter/Aggregation.
+      * ``date_from`` / ``date_to``: filtert alle zeitreihen-basierten
+        Sektionen (Sparziel-Protokoll, Ausgaben, Health-Zeitreihen).
+        Metadaten-Sektionen (Sparziele, Achievements, Wochen-/Monatsziele,
+        Trophaeen, ...) bleiben ungefiltert, damit die aggregierten Zahlen
+        weiter im Kontext lesbar bleiben.
+      * ``aggregate`` = ``none|week|month``: fasst Ausgaben und Vitalwerte
+        zu Perioden zusammen (Anzahl Bons + Summe je Woche/Monat, avg/min/max
+        je Metrik). Fuer lange Zeitraeume (Jahre) enorm platzsparend.
+    """
+    if aggregate not in ("none", "week", "month"):
+        aggregate = "none"
+
     lines: list[str] = []
     export_dt = datetime.now(timezone.utc).isoformat()
     lines.append(
         f"# Vexbob Gesamt-Export;user={_f(user['username'])};generated_at={export_dt}")
+    # Optionen-Zeile: dokumentiert Filter/Aggregation direkt in der CSV,
+    # damit der Empfaenger (Mensch/KI) den Kontext der Zahlen versteht.
+    opt_from = date_from.isoformat() if date_from else "(offen)"
+    opt_to = date_to.isoformat() if date_to else "(offen)"
+    lines.append(
+        f"# Optionen: zeitraum={opt_from} bis {opt_to}; aggregation={aggregate}")
     lines.append(
         "# Diese Datei enthaelt ALLE Vexbob-Module in einer CSV: Sparziel "
         "(Ziele, Achievements, Wochen-/Monatsziele, Protokoll), Ausgaben "
@@ -93,20 +160,30 @@ async def build_full_export_csv(db, user) -> str:
         "Euro-Betraege in der Ausgaben-Sektion nutzen Komma-Dezimal.")
     lines.append("")
 
-    # ---------- 1) Sparziel-Metadaten ----------
+    # ---------- 1) Sparziel-Metadaten (immer unveraendert) ----------
     lines.extend(await _build_export_metadata(db, user["id"]))
 
-    # ---------- 2) Sparziel-Protokoll ----------
+    # ---------- 2) Sparziel-Protokoll (zeitraum-gefiltert) ----------
     lines.append("# SEKTION: Sparziel-Protokoll")
     lines.append("Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz")
-    lines.extend(await _sparziel_protocol_lines(db, user["id"]))
+    proto_all = await _sparziel_protocol_lines(db, user["id"])
+    if date_from or date_to:
+        proto_filtered = [
+            ln for ln in proto_all
+            if _in_range(_date_from_iso_prefix(ln.split(";", 1)[0]), date_from, date_to)
+        ]
+    else:
+        proto_filtered = proto_all
+    lines.extend(proto_filtered)
     lines.append("")
 
-    # ---------- 3) Ausgaben ----------
-    lines.extend(await _expenses_sections(db, user["id"]))
+    # ---------- 3) Ausgaben (Filter + optionale Wochen-/Monats-Aggregation) ----------
+    lines.extend(await _expenses_sections(
+        db, user["id"], date_from=date_from, date_to=date_to, aggregate=aggregate))
 
-    # ---------- 4) Gesundheit ----------
-    lines.extend(await _health_section(db, user["id"]))
+    # ---------- 4) Gesundheit (Filter + optionale Aggregation) ----------
+    lines.extend(await _health_section(
+        db, user["id"], date_from=date_from, date_to=date_to, aggregate=aggregate))
 
     return _compact_timestamps("\n".join(lines) + "\n")
 
@@ -133,21 +210,52 @@ async def build_health_export_csv(db, user) -> str:
 
 # ---------- Ausgaben (Bons + Positionen getrennt) ----------
 
-async def _expenses_sections(db, user_id: int) -> list[str]:
+async def _expenses_sections(
+    db,
+    user_id: int,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    aggregate: str = "none",
+) -> list[str]:
     out: list[str] = []
+    # Dynamisches WHERE fuer den Zeitraum-Filter. asyncpg-Positional-Parameter,
+    # damit ohne Filter (default None) das SQL identisch zum alten Verhalten
+    # bleibt und der Query-Planner denselben Plan nutzt.
+    exp_where = "WHERE e.user_id=$1"
+    exp_params: list = [user_id]
+    if date_from:
+        exp_params.append(date_from)
+        exp_where += f" AND e.purchase_date >= ${len(exp_params)}"
+    if date_to:
+        exp_params.append(date_to)
+        exp_where += f" AND e.purchase_date <= ${len(exp_params)}"
+
     rows = await db.fetch(
-        """SELECT e.id, e.purchase_date, e.total_amount, e.payment_method,
-                  e.expense_type, e.note, s.name AS store_name
-           FROM expenses e LEFT JOIN stores s ON s.id=e.store_id
-           WHERE e.user_id=$1 ORDER BY e.purchase_date, e.id""",
-        user_id)
-    item_rows = await db.fetch(
-        """SELECT ei.expense_id, ei.description, ei.quantity, ei.quantity_unit,
-                  ei.unit_price, ei.total_price, ei.is_reduced, ei.original_price,
-                  c.name AS category_name
-           FROM expense_items ei LEFT JOIN expense_categories c ON c.id=ei.category_id
-           WHERE ei.user_id=$1 ORDER BY ei.expense_id, ei.sort_order NULLS LAST, ei.id""",
-        user_id)
+        f"""SELECT e.id, e.purchase_date, e.total_amount, e.payment_method,
+                   e.expense_type, e.note, s.name AS store_name
+            FROM expenses e LEFT JOIN stores s ON s.id=e.store_id
+            {exp_where} ORDER BY e.purchase_date, e.id""",
+        *exp_params)
+
+    # -------- Aggregations-Modus: kompakte Wochen-/Monats-Summary --------
+    if aggregate in ("week", "month") and rows:
+        return _expenses_aggregated_section(rows, aggregate)
+
+    # -------- Standard-Modus: Bons + Positionen (Item-Query erst hier) --------
+    # Nur die Positionen der oben gefilterten Bons holen, damit sie zu den
+    # Bons passen. WHERE user_id=$1 AND expense_id = ANY($2::int[]).
+    expense_ids = [r["id"] for r in rows]
+    if expense_ids:
+        item_rows = await db.fetch(
+            """SELECT ei.expense_id, ei.description, ei.quantity, ei.quantity_unit,
+                      ei.unit_price, ei.total_price, ei.is_reduced, ei.original_price,
+                      c.name AS category_name
+               FROM expense_items ei LEFT JOIN expense_categories c ON c.id=ei.category_id
+               WHERE ei.user_id=$1 AND ei.expense_id = ANY($2::int[])
+               ORDER BY ei.expense_id, ei.sort_order NULLS LAST, ei.id""",
+            user_id, expense_ids)
+    else:
+        item_rows = []
 
     # Bons (ein Eintrag pro Beleg, Kopfdaten NICHT mehr pro Position wiederholt)
     out.append(
@@ -177,6 +285,64 @@ async def _expenses_sections(db, user_id: int) -> list[str]:
             f'{_euro_de(it["unit_price"])};{_euro_de(it["total_price"])};'
             f'{_euro_de(it["original_price"])};'
             f'{"ja" if it["is_reduced"] else ""};{_f(it["category_name"] or "")}'
+        )
+    out.append("")
+    return out
+
+
+# ---------- Ausgaben-Aggregation (v1.37.1) ----------
+
+def _expenses_aggregated_section(rows, aggregate: str) -> list[str]:
+    """Fasst Bons zu Wochen- oder Monats-Buckets zusammen.
+
+    Ausgabe: eine kompakte Sektion statt Bons + Positionen. Enthaelt pro
+    Periode: Anzahl Bons, Summe (EUR), durchschnittlicher Bon,
+    Anzahl unterschiedlicher Laeden, Aufschluesselung nach Typ.
+    Bei einem Jahres-Export mit ~1000 Bons reduziert das die Ausgaben-
+    Sektion von ~1000 auf ~12-52 Zeilen -- massiv besser lesbar.
+    """
+    label = _period_label(aggregate)
+    buckets: dict[str, dict] = {}
+    for r in rows:
+        pd = r["purchase_date"]
+        if not pd:
+            continue
+        key = _period_key(pd, aggregate)
+        b = buckets.setdefault(key, {
+            "count": 0, "sum": 0.0, "stores": set(), "types": {}, "min_d": pd, "max_d": pd,
+        })
+        b["count"] += 1
+        try:
+            b["sum"] += float(r["total_amount"] or 0)
+        except (TypeError, ValueError):
+            pass
+        if r["store_name"]:
+            b["stores"].add(r["store_name"])
+        t = r["expense_type"] or "other"
+        b["types"][t] = b["types"].get(t, 0) + 1
+        if pd < b["min_d"]:
+            b["min_d"] = pd
+        if pd > b["max_d"]:
+            b["max_d"] = pd
+
+    out: list[str] = []
+    out.append(
+        f"# SEKTION: Ausgaben - {label}s-Zusammenfassung (aggregiert; "
+        "Einzel-Bons und Positionen sind in diesem Aggregations-Modus "
+        "bewusst NICHT enthalten, damit lange Zeitraeume kompakt bleiben)")
+    out.append(
+        f"{label};Von;Bis;Anzahl Bons;Summe (EUR);"
+        "Durchschnitt Bon (EUR);Verschiedene Laeden;Typen-Aufteilung")
+    for key in sorted(buckets.keys()):
+        b = buckets[key]
+        avg = b["sum"] / b["count"] if b["count"] else 0.0
+        types_str = ", ".join(
+            f"{t}:{n}" for t, n in sorted(b["types"].items(), key=lambda x: -x[1])
+        )
+        out.append(
+            f'{key};{b["min_d"].isoformat()};{b["max_d"].isoformat()};'
+            f'{b["count"]};{_euro_de(b["sum"])};{_euro_de(avg)};'
+            f'{len(b["stores"])};{_f(types_str)}'
         )
     out.append("")
     return out
@@ -228,7 +394,13 @@ async def _health_summary_section(db, user_id: int) -> list[str]:
     return out
 
 
-async def _health_vitals_wide_section(db, user_id: int) -> list[str]:
+async def _health_vitals_wide_section(
+    db,
+    user_id: int,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    aggregate: str = "none",
+) -> list[str]:
     """Vitalwerte im Wide-Format: eine Zeile pro Tag, Metriken als
     Spalten. Fuer Metriken mit Aggregaten (min/max) werden zusaetzliche
     ``<metrik>_min`` / ``<metrik>_max`` Spalten angelegt - aber nur wenn
@@ -237,12 +409,23 @@ async def _health_vitals_wide_section(db, user_id: int) -> list[str]:
     Effekt: ~50 % kleiner als das alte Long-Format, weil weder Datum
     noch Metrik-Name pro Wert wiederholt werden. Fuer eine KI zusaetzlich
     leichter lesbar, weil Tages-Zusammenhaenge in einer Zeile sichtbar
-    sind (z. B. Zusammenhang steps <-> weight <-> hrv am selben Tag)."""
+    sind (z. B. Zusammenhang steps <-> weight <-> hrv am selben Tag).
+
+    v1.37.1: Zeitraum-Filter via ``date_from``/``date_to`` (auf
+    ``recorded_at::date``) und Wochen-/Monats-Aggregation."""
+    where = "WHERE user_id=$1"
+    params: list = [user_id]
+    if date_from:
+        params.append(date_from)
+        where += f" AND recorded_at::date >= ${len(params)}"
+    if date_to:
+        params.append(date_to)
+        where += f" AND recorded_at::date <= ${len(params)}"
     rows = await db.fetch(
-        "SELECT metric_type, recorded_at, qty, min_value, max_value, "
-        "avg_value, unit, source FROM health_metric_samples "
-        "WHERE user_id=$1 ORDER BY recorded_at, metric_type",
-        user_id)
+        f"SELECT metric_type, recorded_at, qty, min_value, max_value, "
+        f"avg_value, unit, source FROM health_metric_samples "
+        f"{where} ORDER BY recorded_at, metric_type",
+        *params)
 
     if not rows:
         return ["# SEKTION: Gesundheit - Vitalwerte (taeglich, wide format)",
@@ -282,9 +465,47 @@ async def _health_vitals_wide_section(db, user_id: int) -> list[str]:
     metrics_sorted = sorted(metrics)
 
     out: list[str] = []
-    out.append(
-        "# SEKTION: Gesundheit - Vitalwerte (taeglich, wide format; eine "
-        "Zeile pro Tag, Metriken als Spalten)")
+    header_first_col = "Datum"
+    period_label = ""
+    # v1.37.1: Optionale Wochen-/Monats-Aggregation.
+    # Wir aggregieren pro Metrik die Tageswerte per Mittelwert (fuer Vitals
+    # das sinnvollste Default), zusaetzlich min/max ueber die Periode.
+    aggregated_per_period: dict[str, dict[str, dict]] = {}
+    if aggregate in ("week", "month"):
+        period_label = _period_label(aggregate)
+        header_first_col = period_label
+        for day_str, day_data in per_day.items():
+            try:
+                d = date.fromisoformat(day_str)
+            except ValueError:
+                continue
+            key = _period_key(d, aggregate)
+            bucket = aggregated_per_period.setdefault(key, {})
+            for m, cell in day_data.items():
+                q = cell.get("qty")
+                if q is None:
+                    continue
+                try:
+                    q = float(q)
+                except (TypeError, ValueError):
+                    continue
+                mb = bucket.setdefault(m, {"sum": 0.0, "n": 0, "min": q, "max": q})
+                mb["sum"] += q
+                mb["n"] += 1
+                if q < mb["min"]:
+                    mb["min"] = q
+                if q > mb["max"]:
+                    mb["max"] = q
+
+    if aggregate in ("week", "month"):
+        out.append(
+            f"# SEKTION: Gesundheit - Vitalwerte ({period_label.lower()}sweise "
+            "aggregiert; pro Metrik durchschnittlicher Tageswert; _min/_max "
+            "ueber alle Tage der Periode)")
+    else:
+        out.append(
+            "# SEKTION: Gesundheit - Vitalwerte (taeglich, wide format; eine "
+            "Zeile pro Tag, Metriken als Spalten)")
     # Konstante Metadaten in Kommentarzeilen, nicht in jede Datenzeile
     if len(sources) == 1:
         out.append(f"# Quelle aller Vitalwerte: {next(iter(sources))}")
@@ -296,38 +517,83 @@ async def _health_vitals_wide_section(db, user_id: int) -> list[str]:
     if unit_notes:
         out.append(f"# Einheiten: {'; '.join(unit_notes)}")
 
-    header_cols = ["Datum"]
+    header_cols = [header_first_col]
     for m in metrics_sorted:
         header_cols.append(m)
-        if m in has_aggregate:
+        # Im Aggregations-Modus haben ALLE Metriken min/max (ueber die
+        # Periode berechnet), nicht nur die urspruenglich aggregierten.
+        if aggregate in ("week", "month") or m in has_aggregate:
             header_cols.append(f"{m}_min")
             header_cols.append(f"{m}_max")
     out.append(";".join(header_cols))
 
-    for day in sorted(per_day.keys()):
-        row_cells = [day]
-        day_data = per_day[day]
-        for m in metrics_sorted:
-            cell = day_data.get(m, {})
-            row_cells.append(_num(cell.get("qty")))
-            if m in has_aggregate:
-                row_cells.append(_num(cell.get("min")))
-                row_cells.append(_num(cell.get("max")))
-        out.append(";".join(row_cells))
+    if aggregate in ("week", "month"):
+        for key in sorted(aggregated_per_period.keys()):
+            row_cells = [key]
+            bucket = aggregated_per_period[key]
+            for m in metrics_sorted:
+                mb = bucket.get(m)
+                if mb and mb["n"]:
+                    row_cells.append(_num(mb["sum"] / mb["n"]))
+                    row_cells.append(_num(mb["min"]))
+                    row_cells.append(_num(mb["max"]))
+                else:
+                    row_cells.append("")
+                    row_cells.append("")
+                    row_cells.append("")
+            out.append(";".join(row_cells))
+    else:
+        for day in sorted(per_day.keys()):
+            row_cells = [day]
+            day_data = per_day[day]
+            for m in metrics_sorted:
+                cell = day_data.get(m, {})
+                row_cells.append(_num(cell.get("qty")))
+                if m in has_aggregate:
+                    row_cells.append(_num(cell.get("min")))
+                    row_cells.append(_num(cell.get("max")))
+            out.append(";".join(row_cells))
     out.append("")
     return out
 
 
-async def _health_section(db, user_id: int) -> list[str]:
-    out: list[str] = []
-    out.extend(await _health_summary_section(db, user_id))
-    out.extend(await _health_vitals_wide_section(db, user_id))
+def _build_range_where(col: str, base_param_start: int, date_from, date_to):
+    """Baut ein dynamisches ' AND col::date ...' Suffix + Parameter-Liste.
+    ``col`` ist der DB-Spaltenname (z. B. ``recorded_at`` oder ``sleep_date``);
+    ``base_param_start`` ist der bereits belegte Parameter-Index (typisch 1
+    fuer user_id), das erste Datum wird also $2, das zweite $3.
+    """
+    where = ""
+    params: list = []
+    if date_from:
+        params.append(date_from)
+        where += f" AND {col}::date >= ${base_param_start + len(params)}"
+    if date_to:
+        params.append(date_to)
+        where += f" AND {col}::date <= ${base_param_start + len(params)}"
+    return where, params
 
+
+async def _health_section(
+    db,
+    user_id: int,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    aggregate: str = "none",
+) -> list[str]:
+    out: list[str] = []
+    # Zusammenfassung bleibt unveraendert (keys/counts ueber gesamten Bestand),
+    # damit man beim Oeffnen der CSV immer den Gesamtueberblick sieht.
+    out.extend(await _health_summary_section(db, user_id))
+    out.extend(await _health_vitals_wide_section(
+        db, user_id, date_from=date_from, date_to=date_to, aggregate=aggregate))
+
+    bp_where, bp_params = _build_range_where("recorded_at", 1, date_from, date_to)
     out.append("# SEKTION: Gesundheit - Blutdruck")
     out.append("Zeitpunkt;Systolisch;Diastolisch;Einheit")
     for r in await db.fetch(
-        "SELECT recorded_at, systolic, diastolic, unit FROM health_blood_pressure "
-        "WHERE user_id=$1 ORDER BY recorded_at", user_id):
+        f"SELECT recorded_at, systolic, diastolic, unit FROM health_blood_pressure "
+        f"WHERE user_id=$1{bp_where} ORDER BY recorded_at", user_id, *bp_params):
         unit = (r["unit"] or "").strip()
         out.append(
             f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
@@ -335,11 +601,12 @@ async def _health_section(db, user_id: int) -> list[str]:
         )
     out.append("")
 
+    gl_where, gl_params = _build_range_where("recorded_at", 1, date_from, date_to)
     out.append("# SEKTION: Gesundheit - Blutzucker")
     out.append("Zeitpunkt;Wert;Einheit")
     for r in await db.fetch(
-        "SELECT recorded_at, value, unit FROM health_blood_glucose "
-        "WHERE user_id=$1 ORDER BY recorded_at", user_id):
+        f"SELECT recorded_at, value, unit FROM health_blood_glucose "
+        f"WHERE user_id=$1{gl_where} ORDER BY recorded_at", user_id, *gl_params):
         unit = (r["unit"] or "").strip()
         out.append(
             f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
@@ -347,13 +614,14 @@ async def _health_section(db, user_id: int) -> list[str]:
         )
     out.append("")
 
+    sl_where, sl_params = _build_range_where("sleep_date", 1, date_from, date_to)
     out.append("# SEKTION: Gesundheit - Schlaf (Phasen in Minuten)")
     out.append("Datum;Schlafbeginn;Schlafende;Im Bett (min);Geschlafen (min);"
                 "Core (min);Deep (min);REM (min);Wach (min)")
     for r in await db.fetch(
-        "SELECT sleep_date, sleep_start, sleep_end, in_bed_minutes, asleep_minutes, "
-        "core_minutes, deep_minutes, rem_minutes, awake_minutes FROM health_sleep "
-        "WHERE user_id=$1 ORDER BY sleep_date", user_id):
+        f"SELECT sleep_date, sleep_start, sleep_end, in_bed_minutes, asleep_minutes, "
+        f"core_minutes, deep_minutes, rem_minutes, awake_minutes FROM health_sleep "
+        f"WHERE user_id=$1{sl_where} ORDER BY sleep_date", user_id, *sl_params):
         out.append(
             f'{r["sleep_date"].isoformat() if r["sleep_date"] else ""};'
             f'{r["sleep_start"].isoformat() if r["sleep_start"] else ""};'
@@ -364,14 +632,16 @@ async def _health_section(db, user_id: int) -> list[str]:
         )
     out.append("")
 
+    wk_where, wk_params = _build_range_where("start_at", 1, date_from, date_to)
     out.append("# SEKTION: Gesundheit - Workouts (ohne Routendaten)")
     out.append("ID;Start;Ende;Typ;Dauer (min);Aktive Energie (kcal);Gesamt-Energie (kcal);"
                 "Distanz (m);Hoehenmeter (m);O-Herzfrequenz;Max-Herzfrequenz")
     workout_ids: list[int] = []
     for r in await db.fetch(
-        "SELECT id, start_at, end_at, workout_type, duration_min, active_energy_kcal, "
-        "total_energy_kcal, distance_m, elevation_m, avg_heart_rate, max_heart_rate "
-        "FROM health_workouts WHERE user_id=$1 ORDER BY start_at", user_id):
+        f"SELECT id, start_at, end_at, workout_type, duration_min, active_energy_kcal, "
+        f"total_energy_kcal, distance_m, elevation_m, avg_heart_rate, max_heart_rate "
+        f"FROM health_workouts WHERE user_id=$1{wk_where} ORDER BY start_at",
+        user_id, *wk_params):
         workout_ids.append(r["id"])
         out.append(
             f'{r["id"]};'
