@@ -1,4 +1,4 @@
-/* nav-switcher.js — v1.18.1
+/* nav-switcher.js — v1.37.0
  * Injiziert einen Modul-Switcher (Dropdown) in jede .navbar.
  * Läuft automatisch beim DOM-Ready. Erkennt die aktuelle Sektion anhand
  * der URL und markiert sie aktiv. Berücksichtigt Login-Status (für
@@ -140,9 +140,91 @@
         update();
     }
 
+    // v1.37.0 — Mobile Bottom Tab-Bar (nur < 720px).
+    // Kein HTML-Touch pro Seite: wir injizieren die Bar hier auf ALLEN
+    // Seiten, die eine .navbar haben (== eingeloggte Modul-Seiten).
+    // Zeigt die 4 wichtigsten Alltags-Module. Der Modul-Switcher-Button
+    // oben rechts bleibt fuer den vollstaendigen Zugriff (Admin, Blog etc.).
+    const TAB_BAR = [
+        { href: '/',          label: 'Home',     icon: 'home' },
+        { href: '/sparziel/', label: 'Sparen',   icon: 'coin' },
+        { href: '/ausgaben/', label: 'Ausgaben', icon: 'wallet' },
+        { href: '/notizen/',  label: 'Notizen',  icon: 'note' },
+    ];
+    const TAB_ICONS = {
+        // Schlichte, konsistente Line-Icons (24er-Grid).
+        home:   '<path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-8.5Z"/>',
+        coin:   '<circle cx="12" cy="12" r="8"/><path d="M12 7v10M9 9.5c0-1 1.2-1.7 3-1.7s3 .7 3 1.9-1.2 1.6-3 1.8-3 .7-3 1.9 1.2 1.9 3 1.9 3-.8 3-1.8"/>',
+        wallet: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H19a2 2 0 0 1 2 2v2H5.5A2.5 2.5 0 0 1 3 6.5Z"/><path d="M3 8v9a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-3h-4a2 2 0 1 1 0-4h4V9"/>',
+        note:   '<path d="M6 3h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+    };
+    function buildTabBar() {
+        // Nur einfuegen, wenn wir eine navbar haben (= geschuetzte Seite),
+        // eingeloggt sind, und noch keine Tabbar existiert.
+        if (!document.querySelector('.navbar')) return;
+        if (document.querySelector('.mobile-tabbar')) return;
+        try { if (typeof isLoggedIn === 'function' && !isLoggedIn()) return; } catch (e) { return; }
+
+        const bar = document.createElement('nav');
+        bar.className = 'mobile-tabbar';
+        bar.setAttribute('aria-label', 'Hauptnavigation');
+        bar.innerHTML = TAB_BAR.map(t => {
+            const active = isActive(t.href) ? ' active' : '';
+            const svg = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (TAB_ICONS[t.icon] || '') + '</svg>';
+            return '<a href="' + t.href + '" class="mtab' + active + '">' + svg + '<span class="mtab-lbl">' + t.label + '</span></a>';
+        }).join('');
+        document.body.appendChild(bar);
+        // Body bekommt Padding, damit Content nicht hinter der Bar verschwindet
+        document.body.classList.add('has-mobile-tabbar');
+    }
+
+    // v1.37.0 — Theme-Toggle-Button: Emoji 🌓 durch sauberes SVG ersetzen
+    // (nur wenn der Button noch das Emoji enthaelt -- respektiert individuelle
+    // Anpassungen). Aktualisiert das Icon zusaetzlich passend zum aktiven Theme.
+    function upgradeThemeToggle() {
+        const btn = document.getElementById('themeBtn');
+        if (!btn) return;
+        const raw = (btn.textContent || '').trim();
+        // Nur ersetzen, wenn wirklich nur das Emoji drinsteht.
+        if (raw !== '🌓' && raw !== '') return;
+        const render = () => {
+            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const icon = dark
+                ? '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
+                : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>';
+            btn.innerHTML = icon;
+            btn.setAttribute('aria-label', dark ? 'Zu hellem Design' : 'Zu dunklem Design');
+        };
+        render();
+        // Beobachte Theme-Wechsel (data-theme aendert sich via toggleTheme in api.js).
+        try {
+            new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        } catch (e) {}
+    }
+
+    // v1.37.0 — UI-Utilities (Toast, Confirm) lazy nachladen.
+    // Kein HTML-Touch pro Seite noetig; jede Modul-Seite bekommt Toast/Confirm.
+    function loadUIUtils() {
+        if (window.__vexbobUI) return;
+        if (document.querySelector('script[data-vexbob-ui]')) return;
+        const s = document.createElement('script');
+        s.src = '/js/ui.js';
+        s.defer = true;
+        s.setAttribute('data-vexbob-ui', '1');
+        document.head.appendChild(s);
+    }
+
+    function boot() {
+        build();
+        attachScrollShadow();
+        buildTabBar();
+        upgradeThemeToggle();
+        loadUIUtils();
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => { build(); attachScrollShadow(); });
+        document.addEventListener('DOMContentLoaded', boot);
     } else {
-        build(); attachScrollShadow();
+        boot();
     }
 })();
