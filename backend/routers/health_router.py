@@ -89,17 +89,31 @@ async def import_health_data(request: Request,
 
         _log_incoming("multipart-parts", ctype, request.headers, pseudo_files, user["id"])
 
-        # Fallback: wenn Form-Parser keine Parts fand, aber der Rohbody nicht
-        # leer ist, versuchen wir den Rohbody direkt als JSON/CSV zu deuten.
-        # Auto Health Export setzt manchmal Content-Type auf multipart, ohne
-        # eine saubere multipart-Struktur zu senden.
+        # Fallback: wenn Starlettes Form-Parser keine Parts fand, aber der
+        # Rohbody nicht leer ist, machen wir das Multipart-Splitting selbst.
+        # Auto Health Export produziert Multipart-Bodies, die manche Parser
+        # nicht mundgerecht bekommen (Whitespace-/CRLF-Eigenheiten). Der
+        # manuelle Parser hier trennt ueber die im Content-Type deklarierte
+        # Boundary und extrahiert pro Part den reinen Inhalt hinter dem
+        # doppelten CRLF (Header-Ende).
         if not pseudo_files and raw_all:
-            logger.info("Multipart ohne erkennbare Parts, aber Body %d Bytes user_id=%s -> Rohbody-Fallback",
-                        len(raw_all), user["id"])
+            manual = _manual_multipart_split(raw_all, ctype)
+            logger.info("Manueller Multipart-Split user_id=%s: %d Parts gefunden",
+                        user["id"], len(manual))
+            _log_incoming("multipart-manual", ctype, request.headers, manual, user["id"])
+            if manual:
+                for fname, raw_part in manual:
+                    sub = await _ingest_auto(db, user["id"], raw_part, fname)
+                    merge_ingest_stats(stats, sub)
+                    stats["files_processed"] += 1
+                logger.info("Health-Import (multipart-manual) fuer user_id=%s: %s", user["id"], stats)
+                return stats
+            # Letzter Versuch: Rohbody direkt als JSON/CSV interpretieren.
+            logger.info("Manueller Split ergab 0 Parts, versuche Rohbody direkt user_id=%s", user["id"])
             sub = await _ingest_auto(db, user["id"], raw_all, "sync-multipart.bin")
             merge_ingest_stats(stats, sub)
             stats["files_processed"] = 1
-            logger.info("Health-Import (multipart-fallback) fuer user_id=%s: %s", user["id"], stats)
+            logger.info("Health-Import (multipart-rawfallback) fuer user_id=%s: %s", user["id"], stats)
             return stats
 
         if not pseudo_files:
@@ -202,6 +216,69 @@ async def _ingest_auto(db, user_id: int, raw: bytes, filename: str) -> dict:
 
 async def _ingest_csv_bytes(db, user_id: int, raw: bytes, filename: str) -> dict:
     return await ingest_csv_file(db, user_id, filename, raw)
+
+
+def _manual_multipart_split(raw: bytes, ctype: str) -> list[tuple[str, bytes]]:
+    """Manueller Multipart-Parser als Fallback fuer Starlettes Form-Parser.
+
+    Liest die Boundary aus dem Content-Type-Header, trennt den Body an
+    ``--boundary``-Markern und extrahiert je Part einen (filename, content)-
+    Tupel. Sehr tolerant gegenueber CRLF-/Whitespace-Eigenheiten, weil
+    verschiedene iOS-App-Versionen die Multipart-Struktur leicht anders
+    formatieren.
+    """
+    if not raw or "boundary=" not in ctype:
+        return []
+    # Boundary aus Content-Type extrahieren (kann in "" stehen)
+    try:
+        bnd = ctype.split("boundary=", 1)[1].split(";", 1)[0].strip().strip('"')
+    except Exception:
+        return []
+    if not bnd:
+        return []
+    marker = ("--" + bnd).encode("latin-1")
+    parts = raw.split(marker)
+    result: list[tuple[str, bytes]] = []
+    for i, part in enumerate(parts):
+        # Erstes Segment vor erstem Marker + Endsegment nach "--" ignorieren
+        if i == 0:
+            continue
+        stripped = part.lstrip(b"\r\n")
+        if stripped.startswith(b"--"):  # Abschluss-Marker
+            break
+        # Header und Body sind durch \r\n\r\n oder \n\n getrennt
+        sep = b"\r\n\r\n"
+        pos = stripped.find(sep)
+        if pos < 0:
+            sep = b"\n\n"
+            pos = stripped.find(sep)
+        if pos < 0:
+            continue
+        headers_bytes = stripped[:pos]
+        body_bytes = stripped[pos + len(sep):]
+        # Trailing CRLF vor naechstem Boundary-Marker entfernen
+        if body_bytes.endswith(b"\r\n"):
+            body_bytes = body_bytes[:-2]
+        elif body_bytes.endswith(b"\n"):
+            body_bytes = body_bytes[:-1]
+        # Filename aus Content-Disposition, falls vorhanden
+        fname = f"part{i}.bin"
+        try:
+            hdrs_text = headers_bytes.decode("latin-1", errors="replace")
+            for line in hdrs_text.split("\n"):
+                low = line.lower().strip()
+                if low.startswith("content-disposition:"):
+                    if "filename=" in line:
+                        fname = line.split("filename=", 1)[1].strip().strip(";").strip('"').strip()
+                    elif "name=" in line:
+                        n = line.split("name=", 1)[1].strip().strip(";").strip('"').strip()
+                        fname = f"{n}.bin"
+                    break
+        except Exception:
+            pass
+        if body_bytes:
+            result.append((fname, body_bytes))
+    return result
 
 
 def _looks_like_csv(raw: bytes) -> bool:
