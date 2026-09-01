@@ -80,9 +80,23 @@ async function loadExpenses() {
             cur.items.push(r);
             cur.total += Number(r.total_amount) || 0;
         }
-        list.innerHTML = groups.map(g =>
-            renderDateHeader(g) + g.items.map(r => renderExpItem(r)).join('')
-        ).join('');
+
+        const hasFilter = !!(params.q || params.expense_type || params.store_id || params.category_id || params.from || params.to);
+        const cutoff = new Date(); cutoff.setHours(0, 0, 0, 0); cutoff.setDate(cutoff.getDate() - 13);
+        const cutoffIso = isoDate(cutoff);
+        const recent = hasFilter ? groups : groups.filter(g => g.date >= cutoffIso);
+        const older = hasFilter ? [] : groups.filter(g => g.date < cutoffIso);
+
+        const renderGroups = (gs) => gs.map(g => renderDateHeader(g) + g.items.map(r => renderExpItem(r)).join('')).join('');
+        list.innerHTML = recent.length ? renderGroups(recent) : (older.length ? '<div class="empty muted">Keine Ausgaben in den letzten 14 Tagen.</div>' : '');
+        if (older.length) {
+            const oldCount = older.reduce((n, g) => n + g.items.length, 0);
+            list.insertAdjacentHTML('beforeend', `<button type="button" id="expShowAllBtn" class="exp-show-all">Alle anzeigen (+${oldCount} älter als 14 Tage)</button>`);
+            document.getElementById('expShowAllBtn').onclick = () => {
+                list.innerHTML = renderGroups(groups);
+                list.querySelectorAll('.exp-item').forEach(bindItemHandlers);
+            };
+        }
         // Klick-Handler + Swipe binden
         list.querySelectorAll('.exp-item').forEach(bindItemHandlers);
     } catch(e) { list.innerHTML = '<div class="empty muted">Fehler: '+e.message+'</div>'; }

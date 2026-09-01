@@ -4,6 +4,10 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.38.7', date: '2026-09-01', title: 'Ausgaben-Übersicht: nur letzte 14 Tage + Aufklappen', notes: [
+        'Dashboard-Liste zeigt standardmäßig nur Bons der letzten 14 Tage, darunter Button "Alle anzeigen" für ältere Einträge.',
+        'Gilt nur ohne aktive Filter — sobald Zeitraum/Laden/Kategorie/Suche gesetzt ist, werden wie bisher alle Treffer direkt angezeigt.',
+    ]},
     { v: 'v1.38.6', date: '2026-09-01', title: 'README komplett überarbeitet', notes: [
         'Von Changelog-artiger Feature-Liste (Versionsnummern in jedem Bullet) auf prägnante Beschreibung des aktuellen Stands umgestellt.',
         'Fehler behoben: Quickstart nannte JWT_SECRET statt korrektem ENV-Namen SECRET_KEY, Pfade zeigten auf nicht mehr existierendes Website/-Verzeichnis.',
