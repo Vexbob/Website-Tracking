@@ -1,8 +1,8 @@
 # Vexbob
 
-**Persönliche Web-App mit Sparziel-Tracker, Notizen, Rezeptbuch, Fotoalbum & mehr — Selfhosted, PWA-fähig, mit Multi-User & Admin-Bereich.**
+**Persönliche Web-App mit Sparziel-Tracker, Notizen, Ausgaben & mehr — Selfhosted, PWA-fähig, mit Multi-User & Admin-Bereich.**
 
-> Vexbob ist ein modulares, privat gehostetes Toolkit für den Alltag: Sparziele mit Gamification tracken, Notizen ablegen, Rezepte sammeln, Fotos organisieren — alles unter einem Login, mit Dark-Mode und mobiler PWA-Installation.
+> Vexbob ist ein modulares, privat gehostetes Toolkit für den Alltag: Sparziele mit Gamification tracken, Notizen ablegen, Ausgaben erfassen — alles unter einem Login, mit Dark-Mode und mobiler PWA-Installation.
 
 ---
 
@@ -50,12 +50,6 @@ Notiz-Ablage im **Apple-Notes-Stil** (Master-Detail): Sidebar-Liste + inline for
 
 ### 🧭 Globaler Modul-Switcher (v1.18.1)
 Jede Modul-Seite hat oben in der Navbar ein **Dropdown „⊞ Module"**, das direkten Wechsel zwischen Sparziel, Ausgaben, Notizen, Blog und Admin erlaubt — **ohne** den Umweg über das Dashboard. Aktives Modul wird hervorgehoben. Login- und Admin-Status werden berücksichtigt (öffentliche Seiten wie Blog sind immer sichtbar, geschützte nur eingeloggt, Admin-Bereiche nur für Admins).
-
-### 🍳 Rezeptbuch
-Persönliche Rezepte mit Zutaten, Schritten und Kategorien.
-
-### 📸 Fotos
-Privates Fotoalbum mit Upload und Galerie-Ansicht.
 
 ### 💶 Ausgaben-Tracker (neu in v1.7.0, KI-Parser seit v1.8.0, Marken seit v1.16.0)
 - **Kassenbon-OCR** via Google Cloud Vision (deutscher Receipt-Parser: Markt/Datum/Betrag/MwSt./Positionen)
@@ -292,8 +286,6 @@ Website/
     ├── ausgaben/                # Ausgaben-Tracker (bereits modular)
     ├── notizen/                 # Notizen
     ├── health/                  # Gesundheit (Auto Health Export Sync)
-    ├── rezeptbuch/              # Rezepte
-    ├── photos/                  # Fotoalbum
     ├── admin/                   # Admin-Panel
     ├── private/                 # Login-Seite
     ├── css/style.css            # Themes (light/dark)

@@ -4,6 +4,9 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.38.5', date: '2026-09-01', title: 'README aufgeräumt (Rezeptbuch/Fotos entfernt)', notes: [
+        'Nie umgesetzte Platzhalter-Module Rezeptbuch und Fotos aus README (Subtitel, Feature-Liste, Projekt-Struktur) entfernt — beide waren nur "Coming soon"-Seiten ohne Backend oder Navigation.',
+    ]},
     { v: 'v1.38.4', date: '2026-09-01', title: 'Sichtbare File-Inputs und Subnav-Rest weg', notes: [
         'Versteckte <input type=file>-Felder wurden von der globalen Form-Base ungewollt sichtbar gemacht — [hidden] jetzt mit !important abgesichert.',
         '"+ Neuer Bon"-Eintrag aus der Ausgaben-Subnav entfernt (jetzt nur noch ueber die Dashboard-Tiles).',

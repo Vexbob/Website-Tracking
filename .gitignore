@@ -25,3 +25,6 @@ netlify.toml
 projekt_export.txt
 .netlify/
 node_modules/
+
+# Lokale AI-Anweisungen (nicht pushen)
+CLAUDE.md
