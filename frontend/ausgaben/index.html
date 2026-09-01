@@ -31,6 +31,40 @@
 <main class="wide">
     <div id="subnav" data-active="dashboard"></div>
     <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- v1.38.2: Quick-Actions direkt im Dashboard.
+         Kein Modal / kein Popup — die 4 Wege in einen neuen Bon sind sofort sichtbar,
+         daneben nimmt eine Drop-Zone Dateien per Drag & Drop entgegen; ein globaler
+         Strg+V-Listener fuer die Seite behandelt Zwischenablage-Bilder.  -->
+    <div class="card new-card">
+        <div class="new-card-head">
+            <div>
+                <h3 class="new-card-title">Neuer Bon</h3>
+                <div class="new-card-sub">Foto scannen, Bild einfuegen oder manuell eintragen</div>
+            </div>
+        </div>
+        <div class="new-quick" id="newQuick">
+            <button type="button" class="nq-btn" id="nqCamera">
+                <span class="nq-ico" aria-hidden="true">📷</span><span class="nq-lbl">Kamera</span>
+            </button>
+            <button type="button" class="nq-btn" id="nqGallery">
+                <span class="nq-ico" aria-hidden="true">🖼️</span><span class="nq-lbl">Galerie</span>
+            </button>
+            <button type="button" class="nq-btn" id="nqPaste">
+                <span class="nq-ico" aria-hidden="true">📋</span><span class="nq-lbl">Einfügen</span>
+            </button>
+            <a href="/ausgaben/neu.html#manual" class="nq-btn nq-manual" id="nqManual">
+                <span class="nq-ico" aria-hidden="true">✍️</span><span class="nq-lbl">Manuell</span>
+            </a>
+        </div>
+        <div class="nq-dropzone" id="nqDrop">
+            <span class="nq-drop-ico" aria-hidden="true">⤓</span>
+            <span class="nq-drop-text">Datei hierher ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> zum Einfügen · JPG/PNG</span>
+        </div>
+        <input type="file" id="nqFileCam" accept="image/*" capture="environment" hidden>
+        <input type="file" id="nqFileGal" accept="image/*" hidden>
+    </div>
+
     <div class="card">
         <!-- v1.38.0: Kompakte Filter-Zeile — Suche + Presets bleiben sichtbar,
              erweiterte Filter (Typ, Laden, Kategorie, Datum) liegen im Popover. -->
@@ -80,9 +114,6 @@
                         </div>
                     </div>
                 </div>
-                <button type="button" id="btnNewExpense" class="filter-new-btn" title="Neuen Bon anlegen">
-                    <span aria-hidden="true">＋</span><span class="lbl">Neuer Bon</span>
-                </button>
             </div>
         </div>
         <div class="presets" id="datePresets">
@@ -104,10 +135,6 @@
         <div id="duplicatesList"></div>
     </div>
 </main>
-<!-- v1.38.0: Floating Action Button (Mobile) fuer schnellen "Neuer Bon"-Zugriff -->
-<button type="button" id="fabNewExpense" class="fab-new" aria-label="Neuen Bon anlegen" title="Neuen Bon anlegen">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-</button>
 <div class="version-tag"></div>
 <script src="/ausgaben/dashboard.js"></script>
 </body>

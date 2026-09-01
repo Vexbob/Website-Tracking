@@ -8,7 +8,7 @@ async function loadInit() {
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
     populateFilters();
     setupFilterPopover();
-    setupNewExpenseModal();
+    setupQuickNew();
     await Promise.all([loadKpis(), loadExpenses(), loadRecurring(), loadDuplicates()]);
     document.body.classList.add('ready');
     document.body.style.visibility = 'visible';
@@ -428,55 +428,114 @@ function renderActiveFilterChips() {
     });
 }
 
-/* v1.38.0 — "Neuer Bon"-Modal (iframe zu /ausgaben/neu.html?embed=1) */
-function setupNewExpenseModal() {
-    [document.getElementById('btnNewExpense'), document.getElementById('fabNewExpense')]
-        .filter(Boolean)
-        .forEach(b => b.addEventListener('click', openNewExpenseModal));
-    window.addEventListener('message', (ev) => {
-        if (ev.origin !== location.origin) return;
-        const t = ev.data && ev.data.type;
-        if (t === 'vexbob:expense-saved') {
-            closeNewExpenseModal();
-            showToast('Bon gespeichert', 'success', 1500);
-            Promise.all([loadExpenses(), loadKpis(), loadRecurring(), loadDuplicates()]);
-        } else if (t === 'vexbob:expense-cancel') {
-            closeNewExpenseModal();
+/* v1.38.2 — Neuer Bon direkt im Dashboard: Kamera / Galerie / Einfuegen / Drop / Strg+V.
+ * Der Datei-Empfang lauft rein clientseitig; die Bild-Datei wird als DataURL
+ * ueber sessionStorage an /ausgaben/neu.html?src=dash weitergereicht. Vorteile:
+ * keine iframe-/postMessage-Bruecke, gleiche Origin, kein doppelter Upload,
+ * und der komplette OCR-/Edit-Flow auf neu.html bleibt unveraendert. */
+const DASH_HANDOFF_KEY = 'vexbob:new-bon-file';
+
+function setupQuickNew() {
+    const btnCam = document.getElementById('nqCamera');
+    const btnGal = document.getElementById('nqGallery');
+    const btnPaste = document.getElementById('nqPaste');
+    const fileCam = document.getElementById('nqFileCam');
+    const fileGal = document.getElementById('nqFileGal');
+    const drop = document.getElementById('nqDrop');
+    if (!btnCam || !btnGal || !btnPaste || !fileCam || !fileGal || !drop) return;
+
+    btnCam.onclick = () => fileCam.click();
+    btnGal.onclick = () => fileGal.click();
+    btnPaste.onclick = () => quickPasteFromClipboard();
+
+    fileCam.onchange = () => { if (fileCam.files.length) handoffToNeu(fileCam.files[0]); fileCam.value = ''; };
+    fileGal.onchange = () => { if (fileGal.files.length) handoffToNeu(fileGal.files[0]); fileGal.value = ''; };
+
+    drop.ondragover  = (e) => { e.preventDefault(); drop.classList.add('dragover'); };
+    drop.ondragleave = () => drop.classList.remove('dragover');
+    drop.ondrop = (e) => {
+        e.preventDefault(); drop.classList.remove('dragover');
+        const f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) handoffToNeu(f);
+    };
+
+    // Globaler Strg+V-Listener fuer die Dashboard-Seite (nicht in Inputs)
+    window.addEventListener('paste', (e) => {
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const it of items) {
+            if (it.kind === 'file' && it.type.startsWith('image/')) {
+                const blob = it.getAsFile();
+                if (blob) {
+                    e.preventDefault();
+                    const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+                    handoffToNeu(new File([blob], `clipboard-${Date.now()}.${ext}`, { type: blob.type }));
+                    return;
+                }
+            }
         }
     });
 }
 
-let _newExpOverlay = null;
-function openNewExpenseModal() {
-    if (_newExpOverlay) return;
-    const overlay = document.createElement('div');
-    overlay.className = 'new-exp-overlay';
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-modal', 'true');
-    overlay.setAttribute('aria-label', 'Neuer Bon');
-    overlay.innerHTML =
-        '<div class="new-exp-box">' +
-            '<div class="new-exp-head">' +
-                '<h3>Neuer Bon</h3>' +
-                '<button type="button" class="new-exp-close" aria-label="Schliessen">✕</button>' +
-            '</div>' +
-            '<iframe class="new-exp-frame" src="/ausgaben/neu.html?embed=1" title="Neuer Bon"></iframe>' +
-        '</div>';
-    document.body.appendChild(overlay);
-    _newExpOverlay = overlay;
-    overlay.dataset.prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    overlay.querySelector('.new-exp-close').onclick = closeNewExpenseModal;
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeNewExpenseModal(); });
-    document.addEventListener('keydown', _newExpKey);
-    requestAnimationFrame(() => overlay.classList.add('show'));
+async function quickPasteFromClipboard() {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+        showToast('Clipboard-API nicht verfügbar — nutze Strg+V', 'error', 2500);
+        return;
+    }
+    try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+            for (const type of item.types) {
+                if (type.startsWith('image/')) {
+                    const blob = await item.getType(type);
+                    const ext = (type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+                    handoffToNeu(new File([blob], `clipboard-${Date.now()}.${ext}`, { type: blob.type }));
+                    return;
+                }
+            }
+        }
+        showToast('Kein Bild in der Zwischenablage', 'error', 2500);
+    } catch (e) {
+        if (e.name === 'NotAllowedError') showToast('Erlaubnis für Zwischenablage abgelehnt', 'error', 2500);
+        else showToast('Einfügen fehlgeschlagen: ' + (e.message || e), 'error', 2500);
+    }
 }
-function _newExpKey(e) { if (e.key === 'Escape') closeNewExpenseModal(); }
-function closeNewExpenseModal() {
-    if (!_newExpOverlay) return;
-    const ov = _newExpOverlay; _newExpOverlay = null;
-    ov.classList.remove('show');
-    document.removeEventListener('keydown', _newExpKey);
-    setTimeout(() => { ov.remove(); document.body.style.overflow = ov.dataset.prevOverflow || ''; }, 200);
+
+async function handoffToNeu(file) {
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+        showToast('Nur Bilddateien erlaubt', 'error');
+        return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+        showToast('Bild zu gross (max 8 MB)', 'error');
+        return;
+    }
+    const drop = document.getElementById('nqDrop');
+    if (drop) { drop.classList.add('working'); drop.querySelector('.nq-drop-text').textContent = 'Bild wird uebergeben …'; }
+    try {
+        const dataUrl = await new Promise((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(fr.result);
+            fr.onerror = () => reject(new Error('Datei konnte nicht gelesen werden'));
+            fr.readAsDataURL(file);
+        });
+        try {
+            sessionStorage.setItem(DASH_HANDOFF_KEY, JSON.stringify({
+                name: file.name || ('bon-' + Date.now() + '.jpg'),
+                type: file.type,
+                dataUrl,
+            }));
+        } catch (e) {
+            showToast('Bild zu gross fuer Uebergabe — nutze die Vollansicht', 'error');
+            location.href = '/ausgaben/neu.html';
+            return;
+        }
+        location.href = '/ausgaben/neu.html?src=dash';
+    } catch (e) {
+        if (drop) { drop.classList.remove('working'); drop.querySelector('.nq-drop-text').innerHTML = 'Datei hierher ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> zum Einfügen · JPG/PNG'; }
+        showToast('Fehler: ' + (e.message || e), 'error');
+    }
 }
 

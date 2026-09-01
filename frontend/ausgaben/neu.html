@@ -17,10 +17,6 @@
     <script src="/ausgaben/ausgaben.js"></script>
 <style>
 body{visibility:hidden}body.ready{visibility:visible}
-/* v1.38.0: Wenn per ?embed=1 geladen (im Neuer-Bon-Modal des Dashboards),
-   verstecken wir Navbar + Subnav — der Modal-Header uebernimmt die Rolle. */
-body.embed .navbar, body.embed #subnav, body.embed .version-tag { display:none !important; }
-body.embed main { margin-top: 0.75rem; }
 /* v1.36.0: .tabs / .tab-btn Overrides entfernt — nutzen jetzt globalen Segmented-Style aus css/style.css */
 .tab-panel{display:none}
 .tab-panel.active{display:block}

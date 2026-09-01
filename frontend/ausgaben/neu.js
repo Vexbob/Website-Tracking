@@ -2,32 +2,16 @@ let stores = [], categories = [];
 let uploadedReceipt = null;
 let uploadedImgUrl = null;
 
-// v1.38.0: Embed-Modus (Aufruf aus dem Ausgaben-Dashboard via iframe).
-// Statt nach dem Speichern per location.href = '/ausgaben/' zu navigieren,
-// schicken wir dem Parent eine postMessage — das Dashboard schliesst dann
-// das Modal und laedt die Liste neu, ohne einen Vollreload.
-const IS_EMBED = new URLSearchParams(location.search).get('embed') === '1';
-function finishSave() {
-    if (IS_EMBED && window.parent && window.parent !== window) {
-        try { window.parent.postMessage({ type: 'vexbob:expense-saved' }, location.origin); return; } catch(e) {}
-    }
-    location.href = '/ausgaben/';
-}
+// v1.38.2: Hand-off vom Dashboard (Quick-Actions).
+// Wenn das Dashboard auf ?src=dash weiterleitet und die Datei als DataURL
+// unter sessionStorage 'vexbob:new-bon-file' liegt, uebernehmen wir sie
+// nach init() automatisch und starten direkt den OCR-Flow.
+const DASH_HANDOFF_KEY = 'vexbob:new-bon-file';
+function finishSave() { location.href = '/ausgaben/'; }
 
 async function init() {
-    if (IS_EMBED) document.body.classList.add('embed');
     const me = await ensureLoggedIn(); if (!me) return;
-    if (!IS_EMBED) renderSubnav();
-    // v1.38.0: im Embed-Modus soll "Abbrechen" das Parent-Modal schliessen,
-    // nicht auf /ausgaben/ navigieren.
-    if (IS_EMBED) {
-        document.querySelectorAll('a[href="/ausgaben/"]').forEach(a => {
-            a.addEventListener('click', (e) => {
-                e.preventDefault();
-                try { window.parent.postMessage({ type: 'vexbob:expense-cancel' }, location.origin); } catch(_) {}
-            });
-        });
-    }
+    renderSubnav();
     try {
         [stores, categories] = await Promise.all([AUSGABEN_API.stores(), AUSGABEN_API.categories()]);
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
@@ -38,6 +22,12 @@ async function init() {
     setupClipboardPaste();
     setupManualForm();
     addManualItemRow();
+    // v1.38.2: Wenn per #manual verlinkt (Dashboard "Manuell"-Button), gleich
+    // den Manuell-Tab aktivieren statt den OCR-Tab.
+    if (location.hash === '#manual') {
+        const mb = document.querySelector('.tab-btn[data-tab="manual"]');
+        if (mb) mb.click();
+    }
     try {
         const st = await AUSGABEN_API.ocrStatus();
         const el = document.getElementById('ocrStatus');
@@ -46,6 +36,37 @@ async function init() {
     } catch(e) {}
     document.body.classList.add('ready');
     document.body.style.visibility = 'visible';
+    // v1.38.2: Datei-Hand-off vom Dashboard konsumieren (nur wenn ?src=dash gesetzt ist).
+    consumeDashboardHandoff();
+}
+
+/* v1.38.2 — DataURL aus sessionStorage in eine File umwandeln und den
+ * bestehenden OCR-Flow (handleFile) direkt anstossen. Danach den
+ * Hand-off-Eintrag loeschen, damit F5 nicht wieder OCR triggert. */
+function consumeDashboardHandoff() {
+    if (new URLSearchParams(location.search).get('src') !== 'dash') return;
+    let payload = null;
+    try {
+        const raw = sessionStorage.getItem(DASH_HANDOFF_KEY);
+        if (!raw) return;
+        payload = JSON.parse(raw);
+    } catch (e) { return; }
+    try { sessionStorage.removeItem(DASH_HANDOFF_KEY); } catch(e) {}
+    if (!payload || !payload.dataUrl) return;
+    try {
+        const [meta, b64] = payload.dataUrl.split(',');
+        const mime = (meta.match(/data:([^;]+);base64/) || [,'image/jpeg'])[1] || payload.type || 'image/jpeg';
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const file = new File([bytes], payload.name || ('bon-' + Date.now() + '.jpg'), { type: mime });
+        // OCR-Tab sicher aktivieren, dann handleFile starten.
+        const ocrBtn = document.querySelector('.tab-btn[data-tab="ocr"]');
+        if (ocrBtn) ocrBtn.click();
+        handleFile(file);
+    } catch (e) {
+        showToast('Bild-Uebergabe fehlgeschlagen: ' + (e.message || e), 'error');
+    }
 }
 
 function fillStoreSelects() {

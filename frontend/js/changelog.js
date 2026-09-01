@@ -4,6 +4,12 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.38.2', date: '2026-09-01', title: 'Ausgaben-Dashboard: Neuer Bon direkt integriert', notes: [
+        'Popup/Modal + FAB fuer "Neuer Bon" entfernt.',
+        'Stattdessen Quick-Action-Karte oben im Dashboard: Kamera, Galerie, Einfuegen, Manuell.',
+        'Drag & Drop-Zone und globaler Strg+V-Handler auf dem Dashboard.',
+        'Bilder werden per sessionStorage an neu.html?src=dash uebergeben und starten dort automatisch den OCR-Flow.',
+    ]},
     { v: 'v1.38.1', date: '2026-09-01', title: 'Hotfix: Ausgaben-Dashboard lud nicht', notes: [
         'Syntax-Fehler in dashboard.js (fehlende schliessende Klammer in renderActiveFilterChips) behoben — Seite blieb dadurch unsichtbar (body.visibility:hidden).',
     ]},
