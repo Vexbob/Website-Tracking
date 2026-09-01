@@ -4,6 +4,9 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.38.1', date: '2026-09-01', title: 'Hotfix: Ausgaben-Dashboard lud nicht', notes: [
+        'Syntax-Fehler in dashboard.js (fehlende schliessende Klammer in renderActiveFilterChips) behoben — Seite blieb dadurch unsichtbar (body.visibility:hidden).',
+    ]},
     { v: 'v1.38.0', date: '2026-09-01', title: 'Ausgaben-UX + Versions-Zeitstrahl', notes: [
         'Filter im Ausgaben-Dashboard hinter einem Popover versteckt (Suche + Presets bleiben sichtbar).',
         'Aktive Filter erscheinen als Zahl-Badge am Filter-Button.',

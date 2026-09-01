@@ -1,4 +1,4 @@
-// SW_VERSION: v1.38.0 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
+// SW_VERSION: v1.38.1 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
 // werden. Browser erkennen Service-Worker-Updates NUR anhand eines Byte-Diffs
 // der sw.js-Datei selbst — was sw.js per importScripts() nachlaedt (version.js)
 // wird dabei NICHT verglichen. Ohne diese Zeile bleibt der Service Worker also

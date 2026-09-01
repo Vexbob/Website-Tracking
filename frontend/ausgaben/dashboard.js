@@ -426,6 +426,7 @@ function renderActiveFilterChips() {
             loadExpenses();
         };
     });
+}
 
 /* v1.38.0 — "Neuer Bon"-Modal (iframe zu /ausgaben/neu.html?embed=1) */
 function setupNewExpenseModal() {
@@ -477,7 +478,5 @@ function closeNewExpenseModal() {
     ov.classList.remove('show');
     document.removeEventListener('keydown', _newExpKey);
     setTimeout(() => { ov.remove(); document.body.style.overflow = ov.dataset.prevOverflow || ''; }, 200);
-}
-
 }
 
