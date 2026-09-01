@@ -1367,6 +1367,9 @@ async def list_duplicate_groups(db=Depends(get_db), user=Depends(get_current_use
            WHERE e.user_id=$1
            ORDER BY e.purchase_date DESC, e.id DESC""",
         user["id"])
+    dismissed_rows = await db.fetch(
+        "SELECT expense_ids FROM dismissed_expense_duplicates WHERE user_id=$1", user["id"])
+    dismissed = {r["expense_ids"] for r in dismissed_rows}
 
     groups = []
     used = set()
@@ -1388,6 +1391,9 @@ async def list_duplicate_groups(db=Depends(get_db), user=Depends(get_current_use
         if len(cluster) > 1:
             for c in cluster:
                 used.add(c["id"])
+            fingerprint = ",".join(str(x) for x in sorted(m["id"] for m in cluster))
+            if fingerprint in dismissed:
+                continue
             # Bevorzugt den Bon mit Beleg-Bild und mehr Positionen als "Original"
             cluster.sort(key=lambda r: (r["receipt_image_id"] is not None, r["item_count"] or 0), reverse=True)
             groups.append({
@@ -1455,6 +1461,31 @@ async def merge_duplicate_expenses(request: Request, body: dict,
 
     logger.info(f"User {user['id']} merged duplicate expenses {owned_ids} into {keep_id}: {moved_items} items moved")
     return {"status": "merged", "keep_id": keep_id, "removed_ids": owned_ids, "moved_items": moved_items}
+
+
+@router.post("/api/expenses/duplicates/dismiss")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def dismiss_duplicate_group(request: Request, body: dict,
+                                   db=Depends(get_db), user=Depends(get_current_user)):
+    """Blendet eine einzelne Duplikat-Gruppe dauerhaft aus den Vorschlaegen
+    aus, ohne die Bons zu loeschen oder zusammenzufuehren. Da eine Gruppe
+    keine stabile ID hat (wird bei jedem Request frisch geclustert), dient
+    die sortierte Liste ihrer expense-IDs als Fingerabdruck.
+    Body: {expense_ids: [int, ...]} (alle IDs der betroffenen Gruppe)
+    """
+    ids = [i for i in (body.get("expense_ids") or []) if isinstance(i, int)]
+    if len(ids) < 2:
+        raise HTTPException(400, "expense_ids (mind. 2) erforderlich")
+    owned = await db.fetch(
+        "SELECT id FROM expenses WHERE id = ANY($1) AND user_id=$2", ids, user["id"])
+    if len(owned) != len(set(ids)):
+        raise HTTPException(404, "Nicht alle IDs gehoeren dem User")
+    fingerprint = ",".join(str(i) for i in sorted(ids))
+    await db.execute(
+        """INSERT INTO dismissed_expense_duplicates (user_id, expense_ids)
+           VALUES ($1, $2) ON CONFLICT (user_id, expense_ids) DO NOTHING""",
+        user["id"], fingerprint)
+    return {"status": "dismissed"}
 
 
 # ---------- Produkt-Preisverlauf (Aggregation aller gekauften Artikel) ----------

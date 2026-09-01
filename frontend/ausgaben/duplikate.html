@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>Duplikate — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav-switcher.js"></script>
+<script src="/js/sw-update.js"></script>
+    <script src="/ausgaben/ausgaben.js"></script>
+<style>
+body{visibility:hidden}body.ready{visibility:visible}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.empty{text-align:center;padding:2rem 1rem;color:var(--text-faint)}
+.empty-icon{font-size:2.5rem;margin-bottom:0.5rem;opacity:0.5}
+.dup-group{position:relative;border:1px solid var(--border);border-radius:10px;padding:0.625rem 2.25rem 0.625rem 0.625rem;margin-bottom:0.625rem;background:var(--surface-2)}
+.dup-row{display:flex;align-items:center;gap:0.5rem;padding:0.375rem 0;font-size:0.8125rem;flex-wrap:wrap}
+.dup-row .dot{width:6px;height:6px;border-radius:50%;background:var(--red);flex-shrink:0}
+.dup-row.dup-keep{font-weight:600}
+.dup-group .btn-merge{margin-top:0.5rem;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:0.5rem 0.875rem;font-size:0.8125rem;font-weight:600;cursor:pointer}
+.dup-group .btn-merge:disabled{opacity:0.6;cursor:default}
+.dup-dismiss{position:absolute;top:0.5rem;right:0.5rem;width:auto;margin:0;padding:0.25rem 0.4rem;font-size:0.9rem;line-height:1;background:transparent;border:none;color:var(--text-faint);cursor:pointer}
+.dup-dismiss:hover{color:var(--red)}
+.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
+.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.ausg-toast-success{background:var(--green-dark)}
+.ausg-toast-error{background:var(--red-dark)}
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/ausgaben/" class="nav-title">← Duplikate</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="themeBtn" title="Design umschalten" aria-label="Design umschalten">🌓</button>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main>
+<div id="subnav" data-active="duplikate"></div>
+    <div class="card">
+        <h3>♻️ Mögliche Duplikate</h3>
+        <p class="muted" style="font-size:0.8125rem;margin-bottom:0.75rem">Bons mit gleichem Laden, gleichem Datum und ähnlichem Betrag. „Zusammenführen" behält den vollständigsten Bon und löscht die anderen, „✕" blendet einen Vorschlag dauerhaft aus, ohne etwas zu löschen.</p>
+        <div id="duplicatesList"></div>
+    </div>
+</main>
+<div class="version-tag"></div>
+<script src="/ausgaben/duplikate.js"></script>
+</body>
+</html>

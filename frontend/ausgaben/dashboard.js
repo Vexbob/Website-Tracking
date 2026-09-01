@@ -9,7 +9,7 @@ async function loadInit() {
     populateFilters();
     setupFilterPopover();
     setupQuickNew();
-    await Promise.all([loadKpis(), loadExpenses(), loadRecurring(), loadDuplicates()]);
+    await Promise.all([loadKpis(), loadExpenses(), loadRecurring()]);
     document.body.classList.add('ready');
     document.body.style.visibility = 'visible';
 }
@@ -254,51 +254,6 @@ async function loadRecurring() {
 function escapeHtml(s) {
     if (!s) return '';
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-// v1.21.0: Duplikat-Erkennung — findet Bons mit gleichem Laden, gleichem
-// Kaufdatum und (fast) gleichem Betrag und bietet eine automatische
-// Zusammenfuehrung an (Positionen werden auf den behaltenen Bon umgehaengt,
-// Duplikate geloescht). Nichts passiert automatisch ohne Bestaetigung.
-async function loadDuplicates() {
-    try {
-        const data = await AUSGABEN_API.duplicateGroups();
-        const groups = data.groups || [];
-        const card = document.getElementById('duplicatesCard');
-        if (!groups.length) { card.style.display = 'none'; return; }
-        card.style.display = '';
-        document.getElementById('duplicatesList').innerHTML = groups.map((g, gi) => {
-            const rows = g.items.map(it => `
-                <div class="dup-row${it.id === g.keep_id ? ' dup-keep' : ''}">
-                    <span class="dot"></span>
-                    <span>${it.store_icon} <strong>${escapeHtml(it.store_name)}</strong></span>
-                    <span>${fmtDate(it.purchase_date)}</span>
-                    <span>${fmtEur(it.total_amount)}</span>
-                    <span class="muted">${it.item_count} Positionen${it.has_image ? ' · 📷 Beleg' : ''}</span>
-                    ${it.id === g.keep_id ? '<span class="muted">← wird behalten</span>' : ''}
-                </div>`).join('');
-            const removeIds = g.items.filter(it => it.id !== g.keep_id).map(it => it.id);
-            return `<div class="dup-group" data-idx="${gi}">
-                ${rows}
-                <button class="btn-merge" data-keep="${g.keep_id}" data-remove="${removeIds.join(',')}">Zusammenführen</button>
-            </div>`;
-        }).join('');
-        document.querySelectorAll('.btn-merge').forEach(btn => {
-            btn.onclick = async () => {
-                const keepId = parseInt(btn.dataset.keep, 10);
-                const removeIds = btn.dataset.remove.split(',').filter(Boolean).map(Number);
-                btn.disabled = true; btn.textContent = 'Führe zusammen …';
-                try {
-                    await AUSGABEN_API.mergeDuplicates(keepId, removeIds);
-                    showToast('Duplikate zusammengeführt', 'success');
-                    await Promise.all([loadExpenses(), loadDuplicates(), loadKpis()]);
-                } catch (e) {
-                    showToast('Fehler: ' + e.message, 'error');
-                    btn.disabled = false; btn.textContent = 'Zusammenführen';
-                }
-            };
-        });
-    } catch (e) { console.warn(e); }
 }
 
 // Live-Reload bei Filter-Änderung

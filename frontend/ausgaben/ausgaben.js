@@ -84,6 +84,10 @@ const AUSGABEN_API = {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ keep_id, remove_ids }),
     }),
+    dismissDuplicate: (expense_ids) => apiCall('/api/expenses/duplicates/dismiss', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ expense_ids }),
+    }),
     exportCsv:  () => `${API_BASE}/api/expenses/export`,
 };
 
@@ -257,6 +261,7 @@ function renderSubnav() {
         { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
         { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },
         { key: 'marken',       href: '/ausgaben/marken.html',        label: '🏭 Marken' },
+        { key: 'duplikate',    href: '/ausgaben/duplikate.html',     label: '♻️ Duplikate' },
     ];
     el.className = 'subnav';
     el.innerHTML = links.map(l =>

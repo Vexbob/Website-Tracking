@@ -4,6 +4,10 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.39.0', date: '2026-09-01', title: 'Duplikate: eigener Tab + ausblendbare Vorschläge', notes: [
+        'Neue Seite "♻️ Duplikate" im Ausgaben-Subnav statt Karte auf dem Dashboard.',
+        'Jeder Vorschlag hat jetzt ein "✕" zum dauerhaften Ausblenden, ohne die Bons zu löschen oder zusammenzuführen (neue Tabelle dismissed_expense_duplicates, Migration 024).',
+    ]},
     { v: 'v1.38.7', date: '2026-09-01', title: 'Ausgaben-Übersicht: nur letzte 14 Tage + Aufklappen', notes: [
         'Dashboard-Liste zeigt standardmäßig nur Bons der letzten 14 Tage, darunter Button "Alle anzeigen" für ältere Einträge.',
         'Gilt nur ohne aktive Filter — sobald Zeitraum/Laden/Kategorie/Suche gesetzt ist, werden wie bisher alle Treffer direkt angezeigt.',
