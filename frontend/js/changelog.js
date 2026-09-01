@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.39.1', date: '2026-09-01', title: 'Gesundheit: Schlaf-Dopplung weg, Ø-Linie bei Vitalwerten', notes: [
+        'Der kleine Schlaf-Insight auf der Übersicht ist entfallen — er rechnete mit den rohen asleep_minutes und zeigte daher weniger an als die Karte "Letzte Nacht" direkt daneben.',
+        'Vitalwerte-Verlauf hat jetzt eine gestrichelte Ø-Linie.',
+        'Ø, Min und Max ignorieren Messlücken: Werte unter 20 % des Medians (angebrochener heutiger Tag, Uhr nicht getragen, abgebrochener Sync) zählen nicht als Messwert. Die Anzahl ausgenommener Tage steht in der Statistikzeile.',
+    ]},
     { v: 'v1.39.0', date: '2026-09-01', title: 'Duplikate: eigener Tab + ausblendbare Vorschläge', notes: [
         'Neue Seite "♻️ Duplikate" im Ausgaben-Subnav statt Karte auf dem Dashboard.',
         'Jeder Vorschlag hat jetzt ein "✕" zum dauerhaften Ausblenden, ohne die Bons zu löschen oder zusammenzuführen (neue Tabelle dismissed_expense_duplicates, Migration 024).',

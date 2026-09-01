@@ -89,6 +89,31 @@ function pctDelta(cur, prev) {
     return ((cur - prev) / prev) * 100;
 }
 
+// v1.39.1: Durchschnitt ohne Messluecken.
+// Tage, an denen kaum gemessen wurde (angebrochener heutiger Tag, Uhr nicht
+// getragen, Sync abgebrochen), liefern bei kumulativen Metriken wie Schritten
+// nur einen Bruchteil des ueblichen Werts und ziehen den Ø stark nach unten,
+// obwohl an dem Tag gar nicht "wenig passiert" ist. Als Messluecke gilt daher
+// alles unter 20 % des Medians der Reihe — der Median ist gegenueber genau
+// solchen Ausreissern robust, ein Mittelwert waere es nicht.
+// Bei nicht-kumulativen Metriken (Puls, Gewicht, HRV, …) greift die Regel
+// praktisch nie, weil echte Messwerte dort nie auf 20 % des Medians fallen.
+const GAP_FRACTION = 0.2;
+function cleanAverage(values) {
+    const vals = values.map(Number).filter(Number.isFinite);
+    if (!vals.length) return { avg: null, values: [], skipped: 0 };
+    const sorted = [...vals].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    const used = median > 0 ? vals.filter(v => v >= median * GAP_FRACTION) : vals;
+    if (!used.length) return { avg: null, values: [], skipped: vals.length };
+    return {
+        avg: used.reduce((s, v) => s + v, 0) / used.length,
+        values: used,
+        skipped: vals.length - used.length,
+    };
+}
+
 // ---------- Chart-Theme (reagiert auf data-theme-Wechsel) ----------
 function chartTheme() {
     const dark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -252,11 +277,10 @@ function renderInsights(s, extras) {
         items.push({ icon:'💚', txt:`Ruhepuls <strong>${fmt0(extras.restAvg)}</strong> bpm — ${fmt0(extras.restPrev - extras.restAvg)} bpm besser als Vorwoche.` });
     if (extras.restAvg != null && extras.restAvg >= 80)
         items.push({ icon:'⚠️', txt:`Erhöhter Ruhepuls (<strong>${fmt0(extras.restAvg)}</strong> bpm) — evtl. Erholung einplanen.` });
-    if (s.sleep_last && s.sleep_last.asleep_minutes != null) {
-        const h = s.sleep_last.asleep_minutes / 60;
-        if (h < 6) items.push({ icon:'😴', txt:`Letzte Nacht nur <strong>${fmt1(h)} h</strong> Schlaf.` });
-        else if (h >= 7.5) items.push({ icon:'✨', txt:`Guter Schlaf: <strong>${fmt1(h)} h</strong> letzte Nacht.` });
-    }
+    // v1.39.1: Der frueher hier stehende Schlaf-Insight ist entfallen — er hat
+    // die rohen `asleep_minutes` benutzt und damit (siehe renderSleepBlock)
+    // regelmaessig zu wenig angezeigt, direkt neben der korrekten Karte
+    // "Letzte Nacht". Doppelte, widerspruechliche Angabe statt Mehrwert.
     if (s.workouts_this_week >= 4) items.push({ icon:'🔥', txt:`<strong>${s.workouts_this_week}</strong> Workouts diese Woche — respektabel!` });
     box.innerHTML = items.map(i => `<div class="insight"><span class="icon">${i.icon}</span><span>${i.txt}</span></div>`).join('');
 }
@@ -412,11 +436,18 @@ function initVitalwerte() {
     const th = chartTheme();
     state.chartMetric = new Chart(document.getElementById('hChartMetric').getContext('2d'), {
         type: 'line',
-        data: { labels: [], datasets: [{
-            label: '', data: [], borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59,130,246,0.12)', tension: 0.3, fill: true, pointRadius: 0,
-        }] },
-        options: chartDefaults({ plugins: { legend: { display: false } } }),
+        data: { labels: [], datasets: [
+            {
+                label: '', data: [], borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59,130,246,0.12)', tension: 0.3, fill: true, pointRadius: 0,
+            },
+            // Waagrechte Ø-Linie (ohne Messluecken, siehe cleanAverage)
+            {
+                label: 'Ø', data: [], borderColor: th.muted, borderWidth: 1.5,
+                borderDash: [6, 4], tension: 0, fill: false, pointRadius: 0,
+            },
+        ] },
+        options: chartDefaults(),
     });
     state.chartBp = new Chart(document.getElementById('hChartBp').getContext('2d'), {
         type: 'line',
@@ -448,15 +479,20 @@ async function loadVitalTiles() {
     keys.forEach((k, i) => {
         const meta = METRIC_LABELS[k];
         const rows = rowsList[i];
-        const vals = rows.map(r => Number(r.qty)).filter(Number.isFinite);
+        const vals = rows
+            .map(r => { const v = Number(r.qty); return Number.isFinite(v) ? v : Number(r.avg_value); })
+            .filter(Number.isFinite);
         let display = '–';
         if (vals.length) {
             if (meta.cumulative) {
+                // Summe ueber alles — ein angebrochener Tag gehoert zur Summe dazu.
                 const sum = vals.reduce((s,v)=>s+v,0);
                 display = fmt0(sum) + (meta.unit ? ' ' + meta.unit : '');
             } else {
-                const avg = vals.reduce((s,v)=>s+v,0) / vals.length;
-                display = (avg >= 100 ? fmt0(avg) : fmt1(avg)) + (meta.unit ? ' ' + meta.unit : '');
+                // Ø wie im Chart: ohne Messluecken (siehe cleanAverage).
+                const { avg } = cleanAverage(vals);
+                display = avg == null ? '–'
+                    : (avg >= 100 ? fmt0(avg) : fmt1(avg)) + (meta.unit ? ' ' + meta.unit : '');
             }
         }
         const isActive = k === state.vitalMetric;
@@ -484,23 +520,37 @@ async function loadMetricChart() {
     document.getElementById('hMetricTitle').innerHTML = `${meta.icon || '📈'} ${meta.label}`;
     try {
         const rows = await HEALTH_API.metricSeries(type, state.vitalDays);
-        const vals = rows.map(r => Number(r.qty)).filter(Number.isFinite);
+        // Gleiche Wert-Ermittlung wie fuer die Chart-Linie (qty, sonst avg_value),
+        // damit Statistik und Kurve nicht auf unterschiedlichen Zahlen basieren.
+        const valOf = (r) => { const v = Number(r.qty); return Number.isFinite(v) ? v : Number(r.avg_value); };
+        const vals = rows.map(valOf).filter(Number.isFinite);
+        // Ø, Min und Max beziehen sich auf die echten Messtage — Messluecken
+        // wuerden sonst als Rekord-Tief in der Statistik landen.
+        const { avg, values: solid, skipped } = cleanAverage(vals);
         let stats = '';
         if (vals.length) {
-            const mn = Math.min(...vals), mx = Math.max(...vals);
-            const av = vals.reduce((s,v)=>s+v,0) / vals.length;
+            const fmtV = (v) => v >= 100 ? fmt0(v) : fmt1(v);
+            const base = solid.length ? solid : vals;
+            const mn = Math.min(...base), mx = Math.max(...base);
             const sum = vals.reduce((s,v)=>s+v,0);
             stats = meta.cumulative
-                ? `Σ ${fmt0(sum)} · Ø ${fmt0(av)} · Max ${fmt0(mx)}`
-                : `Ø ${(av>=100?fmt0(av):fmt1(av))} · Min ${(mn>=100?fmt0(mn):fmt1(mn))} · Max ${(mx>=100?fmt0(mx):fmt1(mx))} ${meta.unit || ''}`;
+                ? `Σ ${fmt0(sum)} · Ø ${avg != null ? fmt0(avg) : '–'} · Max ${fmt0(mx)}`
+                : `Ø ${avg != null ? fmtV(avg) : '–'} · Min ${fmtV(mn)} · Max ${fmtV(mx)} ${meta.unit || ''}`;
+            if (skipped) stats += ` · ${skipped} Messlücke${skipped === 1 ? '' : 'n'} ausgenommen`;
         }
         document.getElementById('hMetricStats').textContent = stats || (rows.length ? '' : 'Keine Daten in diesem Zeitraum');
         state.chartMetric.data.labels = rows.map(r => fmtDate(r.sample_date || r.recorded_at));
         const ds = state.chartMetric.data.datasets[0];
         ds.label = `${meta.label} (${meta.unit || '–'})`;
-        ds.data = rows.map(r => { const v = Number(r.qty); return Number.isFinite(v) ? v : Number(r.avg_value); });
+        ds.data = rows.map(valOf);
         ds.borderColor = meta.color;
         ds.backgroundColor = meta.color + '1f';
+        const avgDs = state.chartMetric.data.datasets[1];
+        avgDs.label = avg != null
+            ? `Ø ${(avg >= 100 ? fmt0(avg) : fmt1(avg))}${meta.unit ? ' ' + meta.unit : ''}`
+            : 'Ø';
+        avgDs.data = avg != null ? rows.map(() => avg) : [];
+        avgDs.borderColor = chartTheme().muted;
         state.chartMetric.update();
     } catch (e) { showToast('Fehler: ' + e.message, true); }
 }
