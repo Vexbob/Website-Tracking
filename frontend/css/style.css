@@ -260,6 +260,9 @@ input:focus, select:focus, textarea:focus {
     outline: none;
 }
 textarea { min-height: 100px; resize: vertical; }
+/* v1.38.4: [hidden] muss immer wirken. Die :where(input, select, textarea)-Base
+   oben setzt display:block und ueberschreibt den UA-Default fuer [hidden]. */
+[hidden] { display: none !important; }
 :where(button) {
     display: block; width: 100%; margin-bottom: 0.75rem; padding: 0.65rem 0.85rem;
     background: var(--text); border: none; cursor: pointer;

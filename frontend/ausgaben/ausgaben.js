@@ -247,8 +247,9 @@ function renderSubnav() {
     const el = document.getElementById('subnav');
     if (!el) return;
     const active = el.dataset.active || '';
+    // v1.38.4: "+ Neuer Bon"-Eintrag entfernt — der Zugang laeuft jetzt
+    // ausschliesslich ueber die Quick-Action-Tiles auf dem Dashboard.
     const links = [
-        { key: 'neu',          href: '/ausgaben/neu.html',           label: '+ Neuer Bon' },
         { key: 'dashboard',    href: '/ausgaben/',                   label: '📋 Übersicht' },
         { key: 'statistik',    href: '/ausgaben/statistik.html',     label: '📊 Statistik' },
         { key: 'preisverlauf', href: '/ausgaben/preisverlauf.html',  label: '💶 Preisverlauf' },

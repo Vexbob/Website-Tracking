@@ -4,6 +4,10 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.38.4', date: '2026-09-01', title: 'Sichtbare File-Inputs und Subnav-Rest weg', notes: [
+        'Versteckte <input type=file>-Felder wurden von der globalen Form-Base ungewollt sichtbar gemacht — [hidden] jetzt mit !important abgesichert.',
+        '"+ Neuer Bon"-Eintrag aus der Ausgaben-Subnav entfernt (jetzt nur noch ueber die Dashboard-Tiles).',
+    ]},
     { v: 'v1.38.3', date: '2026-09-01', title: 'Neuer-Bon-Tiles im Homepage-Design', notes: [
         '4 Tiles im gleichen Look wie das Homepage-Dashboard: farbiges Icon-Badge + Titel + Kurztext.',
         'Kaste "Datei durchsuchen / hierher ziehen" entfernt.',
