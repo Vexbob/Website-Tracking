@@ -441,8 +441,7 @@ function setupQuickNew() {
     const btnPaste = document.getElementById('nqPaste');
     const fileCam = document.getElementById('nqFileCam');
     const fileGal = document.getElementById('nqFileGal');
-    const drop = document.getElementById('nqDrop');
-    if (!btnCam || !btnGal || !btnPaste || !fileCam || !fileGal || !drop) return;
+    if (!btnCam || !btnGal || !btnPaste || !fileCam || !fileGal) return;
 
     btnCam.onclick = () => fileCam.click();
     btnGal.onclick = () => fileGal.click();
@@ -451,13 +450,9 @@ function setupQuickNew() {
     fileCam.onchange = () => { if (fileCam.files.length) handoffToNeu(fileCam.files[0]); fileCam.value = ''; };
     fileGal.onchange = () => { if (fileGal.files.length) handoffToNeu(fileGal.files[0]); fileGal.value = ''; };
 
-    drop.ondragover  = (e) => { e.preventDefault(); drop.classList.add('dragover'); };
-    drop.ondragleave = () => drop.classList.remove('dragover');
-    drop.ondrop = (e) => {
-        e.preventDefault(); drop.classList.remove('dragover');
-        const f = e.dataTransfer.files && e.dataTransfer.files[0];
-        if (f) handoffToNeu(f);
-    };
+    // Ganzseitiger Drag & Drop mit temporaerem Overlay (nur wenn wirklich
+    // gezogen wird — keine dauerhafte "durchsuchen"-Kiste im UI).
+    setupPageDragDrop();
 
     // Globaler Strg+V-Listener fuer die Dashboard-Seite (nicht in Inputs)
     window.addEventListener('paste', (e) => {
@@ -512,8 +507,6 @@ async function handoffToNeu(file) {
         showToast('Bild zu gross (max 8 MB)', 'error');
         return;
     }
-    const drop = document.getElementById('nqDrop');
-    if (drop) { drop.classList.add('working'); drop.querySelector('.nq-drop-text').textContent = 'Bild wird uebergeben …'; }
     try {
         const dataUrl = await new Promise((resolve, reject) => {
             const fr = new FileReader();
@@ -534,8 +527,50 @@ async function handoffToNeu(file) {
         }
         location.href = '/ausgaben/neu.html?src=dash';
     } catch (e) {
-        if (drop) { drop.classList.remove('working'); drop.querySelector('.nq-drop-text').innerHTML = 'Datei hierher ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> zum Einfügen · JPG/PNG'; }
         showToast('Fehler: ' + (e.message || e), 'error');
     }
+}
+
+/* v1.38.3 — Ganzseiten-Drag&Drop mit temporaerem Overlay */
+function setupPageDragDrop() {
+    if (window.__vexbobPageDnD) return;
+    window.__vexbobPageDnD = true;
+    let overlay = null;
+    let depth = 0;
+    const ensureOverlay = () => {
+        if (overlay) return overlay;
+        overlay = document.createElement('div');
+        overlay.className = 'nq-drag-overlay';
+        overlay.textContent = 'Bild hier fallen lassen';
+        document.body.appendChild(overlay);
+        return overlay;
+    };
+    const hasFiles = (e) => {
+        const t = e.dataTransfer && e.dataTransfer.types;
+        if (!t) return false;
+        for (let i = 0; i < t.length; i++) if (t[i] === 'Files') return true;
+        return false;
+    };
+    window.addEventListener('dragenter', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault(); depth++;
+        ensureOverlay().classList.add('show');
+    });
+    window.addEventListener('dragover', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+    });
+    window.addEventListener('dragleave', (e) => {
+        if (!hasFiles(e)) return;
+        depth = Math.max(0, depth - 1);
+        if (depth === 0 && overlay) overlay.classList.remove('show');
+    });
+    window.addEventListener('drop', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault(); depth = 0;
+        if (overlay) overlay.classList.remove('show');
+        const f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) handoffToNeu(f);
+    });
 }
 

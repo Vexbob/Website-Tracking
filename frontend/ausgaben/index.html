@@ -32,38 +32,38 @@
     <div id="subnav" data-active="dashboard"></div>
     <div class="kpi-grid" id="kpiGrid"></div>
 
-    <!-- v1.38.2: Quick-Actions direkt im Dashboard.
-         Kein Modal / kein Popup — die 4 Wege in einen neuen Bon sind sofort sichtbar,
-         daneben nimmt eine Drop-Zone Dateien per Drag & Drop entgegen; ein globaler
-         Strg+V-Listener fuer die Seite behandelt Zwischenablage-Bilder.  -->
-    <div class="card new-card">
-        <div class="new-card-head">
-            <div>
-                <h3 class="new-card-title">Neuer Bon</h3>
-                <div class="new-card-sub">Foto scannen, Bild einfuegen oder manuell eintragen</div>
-            </div>
-        </div>
-        <div class="new-quick" id="newQuick">
-            <button type="button" class="nq-btn" id="nqCamera">
-                <span class="nq-ico" aria-hidden="true">📷</span><span class="nq-lbl">Kamera</span>
+    <!-- v1.38.3: Neuer Bon als 4 Tiles im Homepage-Look (farbiges Icon-Badge + Text).
+         Drag & Drop funktioniert weiter unsichtbar auf der ganzen Seite, Strg+V ebenfalls. -->
+    <section class="nq-section" id="newQuick" aria-label="Neuer Bon">
+        <div class="nq-grid">
+            <button type="button" class="nq-tile" id="nqCamera">
+                <span class="nq-badge nq-badge-teal" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                </span>
+                <span class="nq-text"><span class="nq-title">Kamera</span><span class="nq-sub">Bon direkt fotografieren</span></span>
             </button>
-            <button type="button" class="nq-btn" id="nqGallery">
-                <span class="nq-ico" aria-hidden="true">🖼️</span><span class="nq-lbl">Galerie</span>
+            <button type="button" class="nq-tile" id="nqGallery">
+                <span class="nq-badge nq-badge-blue" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 17l-5-5-8 8"/></svg>
+                </span>
+                <span class="nq-text"><span class="nq-title">Galerie</span><span class="nq-sub">Bild aus der Galerie waehlen</span></span>
             </button>
-            <button type="button" class="nq-btn" id="nqPaste">
-                <span class="nq-ico" aria-hidden="true">📋</span><span class="nq-lbl">Einfügen</span>
+            <button type="button" class="nq-tile" id="nqPaste">
+                <span class="nq-badge nq-badge-purple" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="4" width="10" height="4" rx="1"/><path d="M9 6H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3"/></svg>
+                </span>
+                <span class="nq-text"><span class="nq-title">Einfuegen</span><span class="nq-sub">Aus Zwischenablage <kbd>Strg</kbd>+<kbd>V</kbd></span></span>
             </button>
-            <a href="/ausgaben/neu.html#manual" class="nq-btn nq-manual" id="nqManual">
-                <span class="nq-ico" aria-hidden="true">✍️</span><span class="nq-lbl">Manuell</span>
+            <a href="/ausgaben/neu.html#manual" class="nq-tile" id="nqManual">
+                <span class="nq-badge nq-badge-pink" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M14 6l4 4"/></svg>
+                </span>
+                <span class="nq-text"><span class="nq-title">Manuell</span><span class="nq-sub">Ohne Foto eintragen</span></span>
             </a>
-        </div>
-        <div class="nq-dropzone" id="nqDrop">
-            <span class="nq-drop-ico" aria-hidden="true">⤓</span>
-            <span class="nq-drop-text">Datei hierher ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> zum Einfügen · JPG/PNG</span>
         </div>
         <input type="file" id="nqFileCam" accept="image/*" capture="environment" hidden>
         <input type="file" id="nqFileGal" accept="image/*" hidden>
-    </div>
+    </section>
 
     <div class="card">
         <!-- v1.38.0: Kompakte Filter-Zeile — Suche + Presets bleiben sichtbar,

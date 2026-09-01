@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.38.3', date: '2026-09-01', title: 'Neuer-Bon-Tiles im Homepage-Design', notes: [
+        '4 Tiles im gleichen Look wie das Homepage-Dashboard: farbiges Icon-Badge + Titel + Kurztext.',
+        'Kaste "Datei durchsuchen / hierher ziehen" entfernt.',
+        'Drag & Drop laeuft jetzt unsichtbar auf der ganzen Seite mit temporaerem Overlay, das nur beim Draggen erscheint.',
+    ]},
     { v: 'v1.38.2', date: '2026-09-01', title: 'Ausgaben-Dashboard: Neuer Bon direkt integriert', notes: [
         'Popup/Modal + FAB fuer "Neuer Bon" entfernt.',
         'Stattdessen Quick-Action-Karte oben im Dashboard: Kamera, Galerie, Einfuegen, Manuell.',
