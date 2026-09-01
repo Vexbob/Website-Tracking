@@ -205,13 +205,19 @@
     // v1.37.0 — UI-Utilities (Toast, Confirm) lazy nachladen.
     // Kein HTML-Touch pro Seite noetig; jede Modul-Seite bekommt Toast/Confirm.
     function loadUIUtils() {
-        if (window.__vexbobUI) return;
-        if (document.querySelector('script[data-vexbob-ui]')) return;
-        const s = document.createElement('script');
-        s.src = '/js/ui.js';
-        s.defer = true;
-        s.setAttribute('data-vexbob-ui', '1');
-        document.head.appendChild(s);
+        if (!window.__vexbobUI && !document.querySelector('script[data-vexbob-ui]')) {
+            const s = document.createElement('script');
+            s.src = '/js/ui.js'; s.defer = true;
+            s.setAttribute('data-vexbob-ui', '1');
+            document.head.appendChild(s);
+        }
+        // v1.38.0: Versions-Zeitstrahl-Handler pro Seite nachladen (idempotent).
+        if (!window.__vexbobVersionTimeline && !document.querySelector('script[data-vexbob-vtl]')) {
+            const s2 = document.createElement('script');
+            s2.src = '/js/version-timeline.js'; s2.defer = true;
+            s2.setAttribute('data-vexbob-vtl', '1');
+            document.head.appendChild(s2);
+        }
     }
 
     function boot() {

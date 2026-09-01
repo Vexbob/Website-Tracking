@@ -32,22 +32,58 @@
     <div id="subnav" data-active="dashboard"></div>
     <div class="kpi-grid" id="kpiGrid"></div>
     <div class="card">
-        <div class="filter-bar" style="margin-bottom:0.5rem">
-            <h3 style="margin:0 auto 0 0;font-size:1rem">Letzte Ausgaben</h3>
-            <input type="search" id="filterQ" placeholder="🔍 Suchen (Laden, Artikel, Notiz)" style="min-width:200px">
-            <select id="filterType">
-                <option value="">Alle Typen</option>
-                <option value="receipt">🧾 Kassenbon</option>
-                <option value="online_order">📦 Online</option>
-                <option value="restaurant">🍽️ Restaurant</option>
-                <option value="subscription">🔁 Abo</option>
-                <option value="other">📌 Sonstiges</option>
-            </select>
-            <select id="filterStore"><option value="">Alle Läden</option></select>
-            <select id="filterCategory"><option value="">Alle Kategorien</option></select>
-            <input type="date" id="filterFrom" title="Von">
-            <input type="date" id="filterTo" title="Bis">
-            <button id="filterReset">✕ Reset</button>
+        <!-- v1.38.0: Kompakte Filter-Zeile — Suche + Presets bleiben sichtbar,
+             erweiterte Filter (Typ, Laden, Kategorie, Datum) liegen im Popover. -->
+        <div class="filter-bar-v2">
+            <h3 class="filter-title">Letzte Ausgaben</h3>
+            <div class="filter-tools">
+                <input type="search" id="filterQ" placeholder="🔍 Suchen (Laden, Artikel, Notiz)">
+                <div class="filter-popover-wrap">
+                    <button type="button" id="filterToggle" class="filter-toggle-btn" aria-expanded="false" aria-haspopup="dialog" aria-controls="filterPopover">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16M7 12h10M10 19h4"/></svg>
+                        <span>Filter</span>
+                        <span class="filter-badge" id="filterBadge" hidden>0</span>
+                    </button>
+                    <div id="filterPopover" class="filter-popover" role="dialog" aria-label="Filter" hidden>
+                        <div class="fp-row">
+                            <label class="fp-label">Typ</label>
+                            <select id="filterType">
+                                <option value="">Alle Typen</option>
+                                <option value="receipt">🧾 Kassenbon</option>
+                                <option value="online_order">📦 Online</option>
+                                <option value="restaurant">🍽️ Restaurant</option>
+                                <option value="subscription">🔁 Abo</option>
+                                <option value="other">📌 Sonstiges</option>
+                            </select>
+                        </div>
+                        <div class="fp-row">
+                            <label class="fp-label">Laden</label>
+                            <select id="filterStore"><option value="">Alle Läden</option></select>
+                        </div>
+                        <div class="fp-row">
+                            <label class="fp-label">Kategorie</label>
+                            <select id="filterCategory"><option value="">Alle Kategorien</option></select>
+                        </div>
+                        <div class="fp-row fp-two">
+                            <div>
+                                <label class="fp-label">Von</label>
+                                <input type="date" id="filterFrom">
+                            </div>
+                            <div>
+                                <label class="fp-label">Bis</label>
+                                <input type="date" id="filterTo">
+                            </div>
+                        </div>
+                        <div class="fp-actions">
+                            <button type="button" id="filterReset" class="fp-btn fp-btn-ghost">Zurücksetzen</button>
+                            <button type="button" id="filterApply" class="fp-btn fp-btn-primary">Fertig</button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" id="btnNewExpense" class="filter-new-btn" title="Neuen Bon anlegen">
+                    <span aria-hidden="true">＋</span><span class="lbl">Neuer Bon</span>
+                </button>
+            </div>
         </div>
         <div class="presets" id="datePresets">
             <button data-preset="week">Diese Woche</button>
@@ -55,6 +91,7 @@
             <button data-preset="quarter">Letzte 3 Monate</button>
             <button data-preset="year">Dieses Jahr</button>
         </div>
+        <div id="activeFilterChips" class="active-filter-chips"></div>
         <div id="filterTotal"></div>
         <div id="expList" class="exp-list"></div>
     </div>
@@ -67,6 +104,10 @@
         <div id="duplicatesList"></div>
     </div>
 </main>
+<!-- v1.38.0: Floating Action Button (Mobile) fuer schnellen "Neuer Bon"-Zugriff -->
+<button type="button" id="fabNewExpense" class="fab-new" aria-label="Neuen Bon anlegen" title="Neuen Bon anlegen">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+</button>
 <div class="version-tag"></div>
 <script src="/ausgaben/dashboard.js"></script>
 </body>

@@ -7,6 +7,8 @@ async function loadInit() {
         [stores, categories] = await Promise.all([AUSGABEN_API.stores(), AUSGABEN_API.categories()]);
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
     populateFilters();
+    setupFilterPopover();
+    setupNewExpenseModal();
     await Promise.all([loadKpis(), loadExpenses(), loadRecurring(), loadDuplicates()]);
     document.body.classList.add('ready');
     document.body.style.visibility = 'visible';
@@ -288,7 +290,12 @@ async function loadDuplicates() {
 // Live-Reload bei Filter-Änderung
 ['filterType','filterStore','filterCategory','filterFrom','filterTo'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.onchange = () => { clearPresetActive(); loadExpenses(); };
+    if (el) el.onchange = () => {
+        clearPresetActive();
+        if (typeof updateFilterBadge === 'function') updateFilterBadge();
+        if (typeof renderActiveFilterChips === 'function') renderActiveFilterChips();
+        loadExpenses();
+    };
 });
 // Suche mit Debounce (500ms)
 const searchEl = document.getElementById('filterQ');
@@ -301,6 +308,8 @@ document.getElementById('filterReset').onclick = () => {
         const el = document.getElementById(id); if (el) el.value = '';
     });
     clearPresetActive();
+    if (typeof updateFilterBadge === 'function') updateFilterBadge();
+    if (typeof renderActiveFilterChips === 'function') renderActiveFilterChips();
     loadExpenses();
 };
 
@@ -330,6 +339,8 @@ function applyPreset(name) {
     document.getElementById('filterTo').value = isoDate(to);
     clearPresetActive();
     document.querySelector(`#datePresets button[data-preset="${name}"]`)?.classList.add('active');
+    if (typeof updateFilterBadge === 'function') updateFilterBadge();
+    if (typeof renderActiveFilterChips === 'function') renderActiveFilterChips();
     loadExpenses();
 }
 document.querySelectorAll('#datePresets button').forEach(b => {
@@ -339,3 +350,134 @@ document.querySelectorAll('#datePresets button').forEach(b => {
 // downloadFile + Export-Link kommen aus ausgaben.js (renderSubnav)
 
 loadInit();
+
+/* v1.38.0 — Filter-Popover: Toggle, Klick-Outside, ESC, Badge, aktive Chips */
+function setupFilterPopover() {
+    const btn = document.getElementById('filterToggle');
+    const pop = document.getElementById('filterPopover');
+    const apply = document.getElementById('filterApply');
+    if (!btn || !pop) return;
+    const outside = (e) => { if (!pop.contains(e.target) && !btn.contains(e.target)) close(); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    const open = () => {
+        pop.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        setTimeout(() => document.addEventListener('click', outside), 0);
+        document.addEventListener('keydown', onKey);
+    };
+    const close = () => {
+        pop.hidden = true;
+        btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', outside);
+        document.removeEventListener('keydown', onKey);
+    };
+    btn.addEventListener('click', () => { pop.hidden ? open() : close(); });
+    if (apply) apply.addEventListener('click', close);
+    updateFilterBadge();
+    renderActiveFilterChips();
+}
+
+function activeFilterCount() {
+    const ids = ['filterType','filterStore','filterCategory','filterFrom','filterTo'];
+    return ids.reduce((n, id) => n + ((document.getElementById(id)?.value || '') ? 1 : 0), 0);
+}
+
+function updateFilterBadge() {
+    const badge = document.getElementById('filterBadge');
+    const btn = document.getElementById('filterToggle');
+    if (!badge || !btn) return;
+    const n = activeFilterCount();
+    if (n > 0) { badge.textContent = String(n); badge.hidden = false; btn.classList.add('has-active'); }
+    else { badge.hidden = true; btn.classList.remove('has-active'); }
+}
+
+function renderActiveFilterChips() {
+    const box = document.getElementById('activeFilterChips');
+    if (!box) return;
+    const chips = [];
+    const push = (id, label, valueLabel) => {
+        chips.push('<span class="aff-chip">' + escapeHtml(label) + ': <strong>' + escapeHtml(valueLabel) + '</strong>' +
+            '<button type="button" data-clear="' + id + '" aria-label="' + escapeHtml(label) + ' entfernen">✕</button></span>');
+    };
+    const typeEl = document.getElementById('filterType');
+    if (typeEl && typeEl.value) push('filterType', 'Typ', typeEl.options[typeEl.selectedIndex].text);
+    const storeEl = document.getElementById('filterStore');
+    if (storeEl && storeEl.value) push('filterStore', 'Laden', storeEl.options[storeEl.selectedIndex].text);
+    const catEl = document.getElementById('filterCategory');
+    if (catEl && catEl.value) push('filterCategory', 'Kategorie', catEl.options[catEl.selectedIndex].text);
+    const from = document.getElementById('filterFrom')?.value;
+    const to = document.getElementById('filterTo')?.value;
+    if (from && to) push('filterFromTo', 'Zeitraum', fmtDate(from) + ' – ' + fmtDate(to));
+    else if (from) push('filterFrom', 'Ab', fmtDate(from));
+    else if (to) push('filterTo', 'Bis', fmtDate(to));
+    box.innerHTML = chips.join('');
+    box.querySelectorAll('button[data-clear]').forEach(b => {
+        b.onclick = () => {
+            const id = b.dataset.clear;
+            if (id === 'filterFromTo') {
+                document.getElementById('filterFrom').value = '';
+                document.getElementById('filterTo').value = '';
+            } else {
+                const el = document.getElementById(id); if (el) el.value = '';
+            }
+            clearPresetActive();
+            updateFilterBadge();
+            renderActiveFilterChips();
+            loadExpenses();
+        };
+    });
+
+/* v1.38.0 — "Neuer Bon"-Modal (iframe zu /ausgaben/neu.html?embed=1) */
+function setupNewExpenseModal() {
+    [document.getElementById('btnNewExpense'), document.getElementById('fabNewExpense')]
+        .filter(Boolean)
+        .forEach(b => b.addEventListener('click', openNewExpenseModal));
+    window.addEventListener('message', (ev) => {
+        if (ev.origin !== location.origin) return;
+        const t = ev.data && ev.data.type;
+        if (t === 'vexbob:expense-saved') {
+            closeNewExpenseModal();
+            showToast('Bon gespeichert', 'success', 1500);
+            Promise.all([loadExpenses(), loadKpis(), loadRecurring(), loadDuplicates()]);
+        } else if (t === 'vexbob:expense-cancel') {
+            closeNewExpenseModal();
+        }
+    });
+}
+
+let _newExpOverlay = null;
+function openNewExpenseModal() {
+    if (_newExpOverlay) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'new-exp-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Neuer Bon');
+    overlay.innerHTML =
+        '<div class="new-exp-box">' +
+            '<div class="new-exp-head">' +
+                '<h3>Neuer Bon</h3>' +
+                '<button type="button" class="new-exp-close" aria-label="Schliessen">✕</button>' +
+            '</div>' +
+            '<iframe class="new-exp-frame" src="/ausgaben/neu.html?embed=1" title="Neuer Bon"></iframe>' +
+        '</div>';
+    document.body.appendChild(overlay);
+    _newExpOverlay = overlay;
+    overlay.dataset.prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    overlay.querySelector('.new-exp-close').onclick = closeNewExpenseModal;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeNewExpenseModal(); });
+    document.addEventListener('keydown', _newExpKey);
+    requestAnimationFrame(() => overlay.classList.add('show'));
+}
+function _newExpKey(e) { if (e.key === 'Escape') closeNewExpenseModal(); }
+function closeNewExpenseModal() {
+    if (!_newExpOverlay) return;
+    const ov = _newExpOverlay; _newExpOverlay = null;
+    ov.classList.remove('show');
+    document.removeEventListener('keydown', _newExpKey);
+    setTimeout(() => { ov.remove(); document.body.style.overflow = ov.dataset.prevOverflow || ''; }, 200);
+}
+
+}
+

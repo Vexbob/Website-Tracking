@@ -1,4 +1,4 @@
-// SW_VERSION: v1.36.1 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
+// SW_VERSION: v1.38.0 — dieser Kommentar MUSS bei jedem Release mit hochgezaehlt
 // werden. Browser erkennen Service-Worker-Updates NUR anhand eines Byte-Diffs
 // der sw.js-Datei selbst — was sw.js per importScripts() nachlaedt (version.js)
 // wird dabei NICHT verglichen. Ohne diese Zeile bleibt der Service Worker also
@@ -21,7 +21,9 @@ try {
 } catch (e) { /* config optional */ }
 const CACHE = 'vexbob-' + APP_VERSION;
 const SHELL = ['/', '/index.html', '/css/style.css', '/js/version.js', '/js/api.js',
-               '/js/nav-switcher.js', '/js/sw-update.js', '/icon.svg', '/manifest.webmanifest',
+               '/js/nav-switcher.js', '/js/sw-update.js', '/js/ui.js',
+               '/js/version-timeline.js', '/js/changelog.js',
+               '/icon.svg', '/manifest.webmanifest',
                '/private/login.html', '/private/activate.html',
                '/ausgaben/', '/ausgaben/index.html',
                '/ausgaben/neu.html', '/ausgaben/bon.html',

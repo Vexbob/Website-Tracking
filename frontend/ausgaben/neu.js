@@ -2,9 +2,32 @@ let stores = [], categories = [];
 let uploadedReceipt = null;
 let uploadedImgUrl = null;
 
+// v1.38.0: Embed-Modus (Aufruf aus dem Ausgaben-Dashboard via iframe).
+// Statt nach dem Speichern per location.href = '/ausgaben/' zu navigieren,
+// schicken wir dem Parent eine postMessage — das Dashboard schliesst dann
+// das Modal und laedt die Liste neu, ohne einen Vollreload.
+const IS_EMBED = new URLSearchParams(location.search).get('embed') === '1';
+function finishSave() {
+    if (IS_EMBED && window.parent && window.parent !== window) {
+        try { window.parent.postMessage({ type: 'vexbob:expense-saved' }, location.origin); return; } catch(e) {}
+    }
+    location.href = '/ausgaben/';
+}
+
 async function init() {
+    if (IS_EMBED) document.body.classList.add('embed');
     const me = await ensureLoggedIn(); if (!me) return;
-    renderSubnav();
+    if (!IS_EMBED) renderSubnav();
+    // v1.38.0: im Embed-Modus soll "Abbrechen" das Parent-Modal schliessen,
+    // nicht auf /ausgaben/ navigieren.
+    if (IS_EMBED) {
+        document.querySelectorAll('a[href="/ausgaben/"]').forEach(a => {
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                try { window.parent.postMessage({ type: 'vexbob:expense-cancel' }, location.origin); } catch(_) {}
+            });
+        });
+    }
     try {
         [stores, categories] = await Promise.all([AUSGABEN_API.stores(), AUSGABEN_API.categories()]);
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
@@ -562,7 +585,7 @@ async function saveOcrExpense() {
         };
         await AUSGABEN_API.createExpense(body);
         showToast('Bon gespeichert', 'success');
-        setTimeout(() => location.href = '/ausgaben/', 500);
+        setTimeout(finishSave, 500);
     } catch(e) { showToast('Fehler: ' + e.message, 'error'); btn.disabled = false; }
 }
 
@@ -596,7 +619,7 @@ function setupManualForm() {
             }
             await AUSGABEN_API.createExpense(body);
             showToast('Bon gespeichert', 'success');
-            setTimeout(() => location.href = '/ausgaben/', 500);
+            setTimeout(finishSave, 500);
         } catch(e) { showToast('Fehler: ' + e.message, 'error'); btn.disabled = false; }
     };
 }
