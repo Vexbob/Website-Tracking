@@ -4,6 +4,10 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.39.2', date: '2026-09-01', title: 'Vitalwerte: Ø-Linie als gleitender Trend', notes: [
+        'Die Ø-Linie ist keine Waagrechte mehr, sondern ein zentriert gleitender Durchschnitt, der dem Verlauf folgt.',
+        'Fensterbreite passt sich dem Zeitraum an (3 / 7 / 14 / 30 Werte), Messlücken bleiben weiterhin aussen vor.',
+    ]},
     { v: 'v1.39.1', date: '2026-09-01', title: 'Gesundheit: Schlaf-Dopplung weg, Ø-Linie bei Vitalwerten', notes: [
         'Der kleine Schlaf-Insight auf der Übersicht ist entfallen — er rechnete mit den rohen asleep_minutes und zeigte daher weniger an als die Karte "Letzte Nacht" direkt daneben.',
         'Vitalwerte-Verlauf hat jetzt eine gestrichelte Ø-Linie.',

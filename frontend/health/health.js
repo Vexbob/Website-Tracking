@@ -99,19 +99,48 @@ function pctDelta(cur, prev) {
 // Bei nicht-kumulativen Metriken (Puls, Gewicht, HRV, …) greift die Regel
 // praktisch nie, weil echte Messwerte dort nie auf 20 % des Medians fallen.
 const GAP_FRACTION = 0.2;
-function cleanAverage(values) {
+function gapThreshold(values) {
     const vals = values.map(Number).filter(Number.isFinite);
-    if (!vals.length) return { avg: null, values: [], skipped: 0 };
+    if (!vals.length) return 0;
     const sorted = [...vals].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-    const used = median > 0 ? vals.filter(v => v >= median * GAP_FRACTION) : vals;
+    return median > 0 ? median * GAP_FRACTION : 0;
+}
+function cleanAverage(values) {
+    const vals = values.map(Number).filter(Number.isFinite);
+    if (!vals.length) return { avg: null, values: [], skipped: 0 };
+    const used = vals.filter(v => v >= gapThreshold(vals));
     if (!used.length) return { avg: null, values: [], skipped: vals.length };
     return {
         avg: used.reduce((s, v) => s + v, 0) / used.length,
         values: used,
         skipped: vals.length - used.length,
     };
+}
+
+// Gleitender Durchschnitt als Trendlinie — zentriert, d. h. das Fenster liegt
+// je zur Haelfte vor und hinter dem Punkt. Anders als bei einem nachlaufenden
+// Fenster (wie in der Ausgaben-Statistik, wo die Reihe fortlaufend waechst)
+// liegen hier alle Daten des Zeitraums schon vor, es gibt also keinen Grund
+// fuer den Versatz. Messluecken (< threshold) fliessen nicht ein.
+function rollingAverage(values, win, threshold) {
+    const half = Math.floor(win / 2);
+    return values.map((_, i) => {
+        let sum = 0, n = 0;
+        for (let j = Math.max(0, i - half); j <= Math.min(values.length - 1, i + half); j++) {
+            const v = Number(values[j]);
+            if (!Number.isFinite(v) || v < threshold) continue;
+            sum += v; n++;
+        }
+        return n ? sum / n : null;
+    });
+}
+// Fensterbreite passend zur Reihenlaenge: kurze Zeitraeume brauchen ein
+// schmales Fenster, sonst buegelt die Linie den ganzen Verlauf platt.
+function trendWindow(n) {
+    const win = n <= 10 ? 3 : n <= 40 ? 7 : n <= 120 ? 14 : 30;
+    return Math.max(2, Math.min(win, n));
 }
 
 // ---------- Chart-Theme (reagiert auf data-theme-Wechsel) ----------
@@ -441,10 +470,11 @@ function initVitalwerte() {
                 label: '', data: [], borderColor: '#3b82f6',
                 backgroundColor: 'rgba(59,130,246,0.12)', tension: 0.3, fill: true, pointRadius: 0,
             },
-            // Waagrechte Ø-Linie (ohne Messluecken, siehe cleanAverage)
+            // Gleitende Ø-/Trendlinie (ohne Messluecken, siehe rollingAverage)
             {
-                label: 'Ø', data: [], borderColor: th.muted, borderWidth: 1.5,
-                borderDash: [6, 4], tension: 0, fill: false, pointRadius: 0,
+                label: 'Ø gleitend', data: [], borderColor: th.muted, borderWidth: 2,
+                borderDash: [6, 4], tension: 0.35, fill: false, pointRadius: 0,
+                spanGaps: true,
             },
         ] },
         options: chartDefaults(),
@@ -545,11 +575,10 @@ async function loadMetricChart() {
         ds.data = rows.map(valOf);
         ds.borderColor = meta.color;
         ds.backgroundColor = meta.color + '1f';
+        const win = trendWindow(ds.data.length);
         const avgDs = state.chartMetric.data.datasets[1];
-        avgDs.label = avg != null
-            ? `Ø ${(avg >= 100 ? fmt0(avg) : fmt1(avg))}${meta.unit ? ' ' + meta.unit : ''}`
-            : 'Ø';
-        avgDs.data = avg != null ? rows.map(() => avg) : [];
+        avgDs.label = `Ø gleitend (${win} Werte)`;
+        avgDs.data = avg != null ? rollingAverage(ds.data, win, gapThreshold(vals)) : [];
         avgDs.borderColor = chartTheme().muted;
         state.chartMetric.update();
     } catch (e) { showToast('Fehler: ' + e.message, true); }
