@@ -664,6 +664,8 @@ async function loadSleepChart() {
                 Schlaf nur, wenn Apple Watch getragen wurde (oder ein anderer Tracker
                 die Schlafphasen liefert).
             </div>`;
+            const emptyNote = document.getElementById('hSleepNote');
+            if (emptyNote) emptyNote.textContent = '';
             state.chartSleep.data.labels = [];
             state.chartSleep.data.datasets.forEach(d => d.data = []);
             state.chartSleep.update();
@@ -715,14 +717,26 @@ async function loadSleepChart() {
             }
             return null;
         };
+        // v1.40.2: Naechte mit unter 1 h Gesamtschlaf sind praktisch immer
+        // Tage ohne getragene Apple Watch (kurz zum Laden abgelegt, spaet
+        // angelegt, Mittagsschlaf-Fragment). Sie zaehlten bisher voll mit und
+        // haben alle Ø-Werte nach unten gezogen.
+        // Das Gate ist bewusst die GESAMTE Schlafdauer der Nacht und nicht die
+        // jeweilige Phase: sonst wuerde eine Nacht nur aus einzelnen Kacheln
+        // fallen (z.B. ohne Tiefschlaf-Anteil) und die vier Kacheln bezoegen
+        // sich auf unterschiedliche Naechte -- Ø-Effizienz und Ø-Dauer waeren
+        // dann nicht mehr miteinander vergleichbar.
+        const MIN_SLEEP_MIN = 60;
+        const usable = rows.filter(r => (asleepMin(r) || 0) >= MIN_SLEEP_MIN);
+        const skippedNights = rows.length - usable.length;
         const meanOf = (extract) => {
-            const arr = rows.map(extract).filter(v => v != null && v > 0);
+            const arr = usable.map(extract).filter(v => v != null && v > 0);
             return arr.length ? arr.reduce((s,v)=>s+v,0) / arr.length : null;
         };
         const meanAsleepMin = meanOf(asleepMin);
         const meanInBedMin  = meanOf(inBedMin);
         const meanDeepMin   = meanOf(r => num(r.deep_minutes));
-        const effList = rows.map(r => {
+        const effList = usable.map(r => {
             const a = asleepMin(r), b = inBedMin(r);
             return (a != null && b != null && b > 0) ? (a / b) * 100 : null;
         }).filter(v => v != null);
@@ -739,6 +753,16 @@ async function loadSleepChart() {
             <div class="stat-kpi"><div class="stat-kpi-icon">${k.icon}</div>
                 <div class="stat-kpi-label">${k.label}</div>
                 <div class="stat-kpi-value">${k.value}</div></div>`).join('');
+
+        // Transparenz statt stiller Filterung: die ausgenommenen Naechte
+        // bleiben im Diagramm sichtbar, nur die Ø-Kacheln lassen sie weg.
+        const note = document.getElementById('hSleepNote');
+        if (note) {
+            note.textContent = skippedNights
+                ? `${skippedNights === 1 ? '1 Nacht' : skippedNights + ' Nächte'} unter 1 h Schlaf `
+                  + `– aus den Ø-Werten ausgenommen (im Diagramm weiterhin sichtbar).`
+                : '';
+        }
     } catch (e) { showToast('Fehler: ' + e.message, true); }
 }
 

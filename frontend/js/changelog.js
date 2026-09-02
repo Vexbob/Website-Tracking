@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.40.2', date: '2026-09-02', title: 'Schlaf: Nächte unter 1 h zählen nicht mehr in den Ø', notes: [
+        'Nächte mit weniger als 1 Stunde Gesamtschlaf (Apple Watch nicht getragen, zu spät angelegt, Schlaf-Fragment) fallen aus allen vier Ø-Kacheln des Schlaf-Tabs: Ø Schlafdauer, Ø Im Bett, Ø Tiefschlaf und Ø Effizienz.',
+        'Entscheidend ist die gesamte Schlafdauer der Nacht, nicht die einzelne Phase — sonst würden sich die vier Kacheln auf unterschiedliche Nächte beziehen.',
+        'Im Schlafphasen-Diagramm bleiben diese Nächte sichtbar; unter den Kacheln steht, wie viele ausgenommen wurden.',
+    ]},
     { v: 'v1.40.1', date: '2026-09-02', title: 'Gesamt-Export: Einkäufe bleiben auch bei Wochen-/Monats-Aggregation drin', notes: [
         'Bei aggregate=week|month stand bisher nur die Perioden-Summe in der CSV — jetzt folgt darunter eine Sektion "Bons kompakt" mit einer Zeile je Einkauf: Woche/Monat, Datum, Laden, Typ, Anzahl Positionen, Gesamtbetrag und die Produktkategorien mit Anzahl und Betrag.',
         'Die Einzelpositionen bleiben in diesem Modus weiterhin weg — damit bleibt erkennbar, wofür das Geld ausgegeben wurde, ohne dass ein Jahres-Export auf über 10.000 Zeilen anwächst.',
