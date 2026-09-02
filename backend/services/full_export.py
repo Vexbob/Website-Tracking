@@ -144,6 +144,9 @@ async def build_full_export_csv(
       * ``aggregate`` = ``none|week|month``: fasst Ausgaben und Vitalwerte
         zu Perioden zusammen (Anzahl Bons + Summe je Woche/Monat, avg/min/max
         je Metrik). Fuer lange Zeitraeume (Jahre) enorm platzsparend.
+        v1.40.1: Ausgaben behalten dabei zusaetzlich eine Zeile je Bon
+        (Datum, Laden, Typ, Anzahl Positionen, Summe, Kategorien-Split) --
+        weg fallen nur die Einzelpositionen.
     """
     if aggregate not in ("none", "week", "month"):
         aggregate = "none"
@@ -256,8 +259,14 @@ async def _expenses_sections(
         *exp_params)
 
     # -------- Aggregations-Modus: kompakte Wochen-/Monats-Summary --------
+    # v1.40.1: Zusaetzlich zur Perioden-Summe steht jeder Einkauf einzeln in
+    # der CSV -- ohne Einzelpositionen, aber mit Kategorien-Aufschluesselung.
+    # Die reine Wochensumme sagt nichts darueber, wofuer das Geld ausgegeben
+    # wurde; die Positionsliste macht lange Zeitraeume dagegen unlesbar.
     if aggregate in ("week", "month") and rows:
-        return _expenses_aggregated_section(rows, aggregate)
+        out = _expenses_aggregated_section(rows, aggregate)
+        out.extend(await _expenses_compact_bons_section(db, user_id, rows, aggregate))
+        return out
 
     # -------- Standard-Modus: Bons + Positionen (Item-Query erst hier) --------
     # Nur die Positionen der oben gefilterten Bons holen, damit sie zu den
@@ -346,9 +355,10 @@ def _expenses_aggregated_section(rows, aggregate: str) -> list[str]:
 
     out: list[str] = []
     out.append(
-        f"# SEKTION: Ausgaben - {prefix}-Zusammenfassung (aggregiert; "
-        "Einzel-Bons und Positionen sind in diesem Aggregations-Modus "
-        "bewusst NICHT enthalten, damit lange Zeitraeume kompakt bleiben)")
+        f"# SEKTION: Ausgaben - {prefix}-Zusammenfassung (aggregiert; die "
+        "einzelnen Bons folgen kompakt in der naechsten Sektion, die "
+        "Einzelpositionen der Bons bleiben in diesem Modus bewusst "
+        "weg, damit lange Zeitraeume kompakt bleiben)")
     out.append(
         f"{label};Von;Bis;Anzahl Bons;Summe (EUR);"
         "Durchschnitt Bon (EUR);Verschiedene Laeden;Typen-Aufteilung")
@@ -362,6 +372,68 @@ def _expenses_aggregated_section(rows, aggregate: str) -> list[str]:
             f'{key};{b["min_d"].isoformat()};{b["max_d"].isoformat()};'
             f'{b["count"]};{_euro_de(b["sum"])};{_euro_de(avg)};'
             f'{len(b["stores"])};{_f(types_str)}'
+        )
+    out.append("")
+    return out
+
+
+async def _expenses_compact_bons_section(db, user_id: int, rows, aggregate: str) -> list[str]:
+    """Ein Eintrag je Einkauf - ohne Einzelpositionen, aber mit Kategorien.
+
+    Ergaenzt im Aggregations-Modus die reine Perioden-Summe: pro Bon Datum,
+    Laden, Typ, Anzahl Positionen, Gesamtbetrag und welche Produktkategorien
+    mit wievielen Positionen und welchem Betrag drin waren. Damit bleibt
+    erkennbar, WOFUER das Geld einer Woche ausgegeben wurde, ohne die
+    komplette Positionsliste (bei einem Jahr schnell >10.000 Zeilen)
+    mitzuschleppen: ~1000 Bons statt ~15.000 Positionszeilen.
+
+    Die Perioden-Spalte (``Woche``/``Monat``) wiederholt den Schluessel aus
+    der Zusammenfassung, damit sich beide Sektionen in Excel/Sheets ueber ein
+    gemeinsames Feld verknuepfen oder pivotieren lassen.
+    """
+    label = _period_label(aggregate)
+    expense_ids = [r["id"] for r in rows]
+    cat_rows = []
+    if expense_ids:
+        cat_rows = await db.fetch(
+            """SELECT ei.expense_id,
+                      COALESCE(c.name, 'Ohne Kategorie') AS category_name,
+                      COUNT(*)                            AS item_count,
+                      COALESCE(SUM(ei.total_price), 0)    AS category_sum
+               FROM expense_items ei
+               LEFT JOIN expense_categories c ON c.id=ei.category_id
+               WHERE ei.user_id=$1 AND ei.expense_id = ANY($2::int[])
+               GROUP BY ei.expense_id, COALESCE(c.name, 'Ohne Kategorie')""",
+            user_id, expense_ids)
+
+    per_expense: dict[int, list] = {}
+    for cr in cat_rows:
+        per_expense.setdefault(cr["expense_id"], []).append(cr)
+
+    out: list[str] = []
+    out.append(
+        "# SEKTION: Ausgaben - Bons kompakt (ein Eintrag pro Einkauf, ohne "
+        "Einzelpositionen). Kategorien-Spalte: 'Kategorie:Anzahl/Betrag', "
+        "mehrere Kategorien mit ' | ' getrennt, absteigend nach Betrag.")
+    out.append(
+        f"{label};Datum;Laden;Typ;Anzahl Positionen;Gesamt (EUR);"
+        "Kategorien (Anzahl/EUR)")
+    for r in rows:
+        pd = r["purchase_date"]
+        cats = per_expense.get(r["id"], [])
+        # Bons ohne erfasste Positionen (Schnelleingabe) bleiben drin - dort
+        # zaehlt nur der Gesamtbetrag, die Kategorie-Spalte ist leer.
+        item_count = sum(int(c["item_count"] or 0) for c in cats)
+        cats_sorted = sorted(cats, key=lambda c: (-float(c["category_sum"] or 0),
+                                                  c["category_name"] or ""))
+        cats_str = " | ".join(
+            f'{c["category_name"]}:{int(c["item_count"] or 0)}/{_euro_de(c["category_sum"])}'
+            for c in cats_sorted)
+        out.append(
+            f'{_period_key(pd, aggregate) if pd else ""};'
+            f'{pd.isoformat() if pd else ""};'
+            f'{_f(r["store_name"] or "")};{_f(r["expense_type"] or "")};'
+            f'{item_count};{_euro_de(r["total_amount"])};{_f(cats_str)}'
         )
     out.append("")
     return out

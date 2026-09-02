@@ -4,6 +4,10 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.40.1', date: '2026-09-02', title: 'Gesamt-Export: Einkäufe bleiben auch bei Wochen-/Monats-Aggregation drin', notes: [
+        'Bei aggregate=week|month stand bisher nur die Perioden-Summe in der CSV — jetzt folgt darunter eine Sektion "Bons kompakt" mit einer Zeile je Einkauf: Woche/Monat, Datum, Laden, Typ, Anzahl Positionen, Gesamtbetrag und die Produktkategorien mit Anzahl und Betrag.',
+        'Die Einzelpositionen bleiben in diesem Modus weiterhin weg — damit bleibt erkennbar, wofür das Geld ausgegeben wurde, ohne dass ein Jahres-Export auf über 10.000 Zeilen anwächst.',
+    ]},
     { v: 'v1.40.0', date: '2026-09-02', title: 'Gesundheit: Import-Protokoll mit Payload-Download', notes: [
         'Jeder automatische Sync der Auto-Health-Export-App wird jetzt mit seinem Roh-Payload gespeichert (neue Tabelle health_import_log, Migration 025).',
         'Neue Karte "Import-Protokoll" in den Gesundheits-Einstellungen: Zeitpunkt, Format, Dateiname, Größe, Ingest-Ergebnis und Vorschau je Aufruf — plus Download der Originaldatei zum Abgleich mit den importierten Werten.',

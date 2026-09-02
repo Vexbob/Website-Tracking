@@ -15,9 +15,11 @@ v1.37.1: Optionale Query-Parameter
       bleiben unveraendert, sonst wird der Kontext der aggregierten
       Zahlen unverstaendlich.
     * ``aggregate`` = ``none`` | ``week`` | ``month`` - fasst grosse
-      Zeitraeume zu Perioden zusammen. Ausgaben werden dann als
-      Wochen-/Monats-Zusammenfassung (Anzahl Bons + Summe) statt als
-      Einzel-Bons ausgegeben, Vitalwerte als Perioden-Durchschnitte.
+      Zeitraeume zu Perioden zusammen. Ausgaben bekommen dann eine
+      Wochen-/Monats-Zusammenfassung (Anzahl Bons + Summe) und zusaetzlich
+      eine kompakte Zeile je Bon (Datum, Laden, Typ, Anzahl Positionen,
+      Summe, Kategorien-Split) statt der vollen Positionsliste (v1.40.1);
+      Vitalwerte werden zu Perioden-Durchschnitten.
 """
 import gzip
 from datetime import date

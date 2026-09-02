@@ -92,8 +92,8 @@
         };
         const updateHint = () => {
             const el = overlay.querySelector('#expHint');
-            if (state.agg === 'week') el.textContent = 'Ausgaben werden pro Woche summiert (Anzahl Bons, Summe, Durchschnitt). Vitalwerte als Wochendurchschnitt inkl. min/max.';
-            else if (state.agg === 'month') el.textContent = 'Ausgaben werden pro Monat summiert. Vitalwerte als Monatsdurchschnitt inkl. min/max. Ideal fuer lange Zeitraeume.';
+            if (state.agg === 'week') el.textContent = 'Ausgaben werden pro Woche summiert (Anzahl Bons, Summe, Durchschnitt) — dazu jeder Einkauf einzeln mit Datum, Laden, Anzahl Positionen und Kategorien, aber ohne Einzelpositionen. Vitalwerte als Wochendurchschnitt inkl. min/max.';
+            else if (state.agg === 'month') el.textContent = 'Ausgaben werden pro Monat summiert — dazu jeder Einkauf einzeln mit Datum, Laden, Anzahl Positionen und Kategorien, aber ohne Einzelpositionen. Vitalwerte als Monatsdurchschnitt inkl. min/max. Ideal fuer lange Zeitraeume.';
             else el.textContent = 'Ausgaben und Vitalwerte werden nicht zusammengefasst.';
         };
         overlay.querySelector('#expRange').addEventListener('click', (e) => {
