@@ -4,6 +4,10 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.40.4', date: '2026-09-02', title: 'README: Funktionen einzeln beschrieben', notes: [
+        'Die Modul-Übersicht besteht nicht mehr aus dichten Aufzählungs-Absätzen, sondern listet jede Funktion einzeln — mit einem Satz dazu, was sie tut und wozu sie da ist.',
+        'Neu dokumentiert: Import-Protokoll und Messlücken-Regeln im Gesundheits-Modul, Bons-kompakt-Sektion im aggregierten Gesamt-Export, Puffer-Konto, Ideen-Listen und Duplikat-Erkennung.',
+    ]},
     { v: 'v1.40.3', date: '2026-09-02', title: 'Schlaf-Diagramm zeigt die Gesamtschlafzeit', notes: [
         'Der Balken steht jetzt für die geschlafene Gesamtzeit der Nacht — die Phasen sind nur noch die Binnenzeichnung in vier Helligkeitsstufen derselben Farbe, damit zuerst die Gesamthöhe lesbar ist.',
         '"Wach" ist nicht mehr Teil des Stapels: Wachzeit ist kein Schlaf und hat den Balken über die tatsächliche Schlafdauer hinaus aufgeblasen. Sie steckt weiterhin in der Ø-Effizienz.',

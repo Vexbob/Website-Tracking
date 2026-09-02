@@ -7,28 +7,80 @@
 ## ✨ Module
 
 ### 💰 Sparziel-Tracker
-Mehrere parallele Sparziele mit eigenem Kontostand. Achievements (Meilensteine mit Belohnungen), Wochen-/Monatsziele mit Streak-Boni, Aktivitäts-Log, 365-Tage-Heatmap, Trophäen-Wand. Ein automatisches „Allgemein"-Konto fängt Belohnungen auf, wenn im Sparziel kein Platz mehr ist. CSV-Export, JSON-Backup mit täglichen Snapshots.
+Führt Buch über echtes Gespartes statt über gute Vorsätze: jedes Ziel hat einen eigenen Kontostand, und jede Bewegung darauf bleibt als Transaktion nachvollziehbar.
+
+- **Mehrere parallele Sparziele** — jedes Ziel mit eigenem Zielbetrag, Kontostand und Verlauf. Genau eines ist aktiv und nimmt neue Einzahlungen auf, die übrigen laufen unangetastet weiter — so lassen sich mehrere Anschaffungen nebeneinander planen, ohne die Beträge im Kopf trennen zu müssen.
+- **Achievements** — selbst definierte Meilensteine, die an eine Kennzahl gekoppelt sind (Startwert, Schrittweite, Richtung steigend oder fallend). Jeder erreichte Schritt schüttet eine Belohnung aufs Sparziel aus und macht damit Fortschritt in einem anderen Lebensbereich finanziell sichtbar.
+- **Wochen- & Monatsziele** — wiederkehrende Vorhaben mit Check-in pro Periode, Streak-Bonus für ununterbrochene Serien und Historie. Ein versehentlicher Check-in lässt sich per Check-out zurücknehmen.
+- **Ideen & mögliche Ziele** — zwei Vorstufen-Listen für Anschaffungen, die noch kein aktives Sparziel verdienen. Hält die Zielliste sauber, ohne dass Einfälle verloren gehen.
+- **„Allgemein"-Konto als Puffer** — läuft ein Sparziel voll oder ist gerade keines aktiv, landen Belohnungen automatisch hier statt verloren zu gehen. Von dort lassen sie sich gezielt auf ein Ziel übertragen.
+- **Aktivitäts-Log & 365-Tage-Heatmap** — jede Einzahlung, jeder Check-in und jeder Meilenstein mit Datum und optionaler Notiz; die Heatmap zeigt auf einen Blick, wie durchgehend das letzte Jahr bespielt war.
+- **Trophäenwand** — abgeschlossene Sparziele wandern als Trophäe in eine eigene Ansicht, damit erreichte Ziele nicht einfach aus der Liste verschwinden.
+- **Export & Backup** — Transaktionen als CSV, dazu ein vollständiges JSON-Backup mit Restore. Tägliche Snapshots laufen automatisch mit und sind pro Nutzer isoliert.
 
 ### 📝 Notizen
-Notiz-Ablage im Apple-Notes-Stil (Master-Detail) mit WYSIWYG-Editor (`contenteditable`, HTML-Speicherformat), Markdown-Shortcuts beim Tippen, Task-Checkboxen, Farblabels, Pin, Archiv, Auto-Save und Live-Suche.
+Schnelle Notiz-Ablage im Apple-Notes-Stil (Master-Detail): links die Liste, rechts der Editor, ohne Speichern-Knopf.
+
+- **WYSIWYG-Editor** — `contenteditable` mit HTML als Speicherformat, dazu Markdown-Shortcuts beim Tippen. Formatieren, ohne die Hände von der Tastatur zu nehmen.
+- **Task-Checkboxen** — abhakbare Punkte direkt im Fließtext, damit eine Notiz auch als kleine To-do-Liste taugt.
+- **Farblabels, Pin & Archiv** — Farben zum groben Sortieren, Pin für Dauerbrenner ganz oben, Archiv für Erledigtes, das man nicht löschen will.
+- **Auto-Save & Live-Suche** — Änderungen werden im Hintergrund gespeichert, die Suche filtert die Liste während des Tippens über alle Notizen.
 
 ### 💶 Ausgaben-Tracker
-Kassenbon-OCR (Google Cloud Vision) mit editierbaren Ergebnissen vor dem Speichern, optionaler KI-Parser (Gemini) für bessere Artikelerkennung inkl. Markenzuordnung (~800 vordefinierte Marken). Läden & Kategorien mit Auto-Kategorisierung, Schnelleingabe, wiederkehrende Ausgaben, Duplikat-Warnung. Statistikseite mit Zeitraumfilter, KPI-Kacheln, Trend-Chart, Kategorie-/Laden-Auswertung, Preisverlauf pro Produkt, Läden-Vergleich. Export als CSV/JSON.
+Erfasst Einkäufe bis auf die einzelne Position und beantwortet damit die Frage, wofür das Geld tatsächlich draufgeht.
+
+- **Kassenbon-Scan (OCR)** — Foto des Bons an Google Cloud Vision, das Ergebnis ist vor dem Speichern vollständig editierbar. Erspart das Abtippen, ohne blind zu übernehmen, was die Erkennung liefert.
+- **Optionaler KI-Parser** — Gemini zerlegt den OCR-Text in saubere Positionen inkl. Markenzuordnung (~800 vordefinierte Marken und Eigenmarken werden pro Nutzer angelegt). Fehlt der API-Key oder scheitert der Aufruf, greift transparent der Regex-Parser.
+- **Schnelleingabe** — Bon ohne Positionen, nur Laden, Datum und Summe. Für den Fall, dass der Beleg nicht mehr da ist oder sich der Aufwand nicht lohnt.
+- **Läden & Kategorien mit Auto-Regeln** — Regeln ordnen wiederkehrende Artikel automatisch einer Kategorie zu, damit die Auswertung nicht an unsortierten Positionen scheitert.
+- **Marken & Produkte** — eigene Seiten für Markenpflege und die Produktliste, Grundlage für Marken- und Produktvergleiche.
+- **Preisverlauf** — je Produkt die Preisentwicklung über die Zeit und über Läden hinweg; zeigt, ob ein „Angebot" wirklich eines ist.
+- **Statistikseite** — Zeitraumfilter, KPI-Kacheln, Trend-Chart, Auswertung nach Kategorie und Laden, Läden-Vergleich.
+- **Duplikat-Erkennung** — eigener Tab mit Vorschlägen für doppelt erfasste Bons; jeder Vorschlag lässt sich zusammenführen oder dauerhaft ausblenden, ohne Bons zu löschen.
+- **Wiederkehrende Ausgaben** — Bons als wiederkehrend markieren, damit Fixkosten in der Auswertung als solche erkennbar bleiben.
+- **Export** — Ausgaben als CSV oder JSON, wahlweise gefiltert.
 
 ### 🏋️ Gesundheit
-Sync-Ziel für die iPhone-App **Auto Health Export**: eigener API-Key pro User (getrennt vom Login), idempotenter Import (`POST /api/health/import`) für Vitalwerte, Blutdruck/-zucker, Schlaf und Workouts. Optionaler AI-Fallback für unbekannte Metriknamen. Manueller Nachimport per CSV oder JSON möglich. Jeder Sync landet mit seinem Roh-Payload im **Import-Protokoll** (`GET /api/health/imports`) und ist von dort herunterladbar — damit lässt sich prüfen, ob ein auffälliger Wert schon so geliefert oder erst beim Import falsch verarbeitet wurde. Frontend mit Dashboard, Vitalwert-Charts, Schlafphasen und Workout-Historie.
+Sync-Ziel für die iPhone-App **Auto Health Export** — die App schiebt die Apple-Health-Daten hierher, die Auswertung passiert in Vexbob.
+
+- **Eigener API-Key pro Nutzer** — getrennt vom Login, jederzeit widerrufbar. Der Klartext ist nur bei der Erzeugung sichtbar, gespeichert wird ein Hash; ein abhandengekommener Sync-Key gibt damit keinen Zugang zum Account.
+- **Idempotenter Import** (`POST /api/health/import`) — nimmt JSON, CSV und Multipart in allen Varianten entgegen, die die App je nach Version schickt. Wiederholte Syncs desselben Zeitraums aktualisieren bestehende Werte, statt Dubletten anzulegen.
+- **Import-Protokoll** — jeder Sync wird mit seinem Roh-Payload gespeichert und ist herunterladbar. Damit lässt sich bei einem auffälligen Wert unterscheiden, ob die App ihn schon so geliefert oder Vexbob ihn falsch verarbeitet hat.
+- **Optionaler AI-Fallback** — unbekannte Metriknamen aus neuen App-Versionen werden per Gemini einem bekannten Typ zugeordnet, statt still im Import verloren zu gehen.
+- **Manueller Nachimport** — CSV-Mehrfachauswahl oder JSON-Datei per Drag & Drop, für einen einmaligen Backfill vergangener Monate ohne eingerichtete Automation.
+- **Dashboard** — Kacheln für heute und die letzten 7 Tage, Aktivitätsverlauf (Schritte oder Kalorien), letzte Nacht, Blutdruck und Herz-Übersicht.
+- **Vitalwerte-Verlauf** — Zeitreihe je Metrik mit gleitender Ø-Linie. Messlücken (Werte unter 20 % des Medians, etwa durch den angebrochenen heutigen Tag oder eine nicht getragene Uhr) fließen nicht in Ø, Min und Max ein und werden unter dem Diagramm ausgewiesen.
+- **Schlaf** — Balkendiagramm mit der geschlafenen Gesamtzeit je Nacht und den Phasen als Binnenzeichnung, dazu ein Diagramm für Zubettgeh- und Aufstehzeiten. Nächte unter einer Stunde Schlaf gelten als Messlücke und bleiben aus Kacheln und Diagrammen draußen.
+- **Workouts** — Historie mit Typ-Filter und Detailansicht inkl. sportartspezifischer Zusatzmetriken.
+- **CSV-Export & gezieltes Löschen** — alle Gesundheitsdaten als eine CSV; gelöscht wird wahlweise nach Kategorie und Zeitraum, damit ein fehlerhafter Import korrigierbar bleibt, ohne alles wegzuwerfen.
 
 ### 📰 Blog
-Öffentlich lesbares Blog-Modul (`/blog/`, keine Anmeldung nötig) — die einzige nach außen sichtbare Fläche der App. Admin-Editor mit derselben WYSIWYG-Logik wie Notizen, Bild-Einbindung per Drag & Drop/Paste, Tag-Filter, Lesezeit-Schätzung, View-Counter, XSS-Schutz per Whitelist-Sanitizer.
+Das einzige nach außen sichtbare Modul: `/blog/` ist ohne Anmeldung lesbar, geschrieben wird im Admin-Bereich.
+
+- **Öffentliche Leseansicht** — Artikelliste, Tag-Filter, Lesezeit-Schätzung und View-Counter.
+- **Admin-Editor** — dieselbe WYSIWYG-Logik wie bei den Notizen, Bilder per Drag & Drop oder Paste, Sichtbarkeit je Artikel steuerbar.
+- **XSS-Schutz** — der gespeicherte HTML-Inhalt läuft vor der Ausgabe durch einen Whitelist-Sanitizer, weil die Seite öffentlich erreichbar ist.
 
 ### ⬇️ Gesamt-Export
-Eine Dashboard-Kachel exportiert alle Module gleichzeitig als eine CSV-Datei (`GET /api/export/all`), abschnittsweise gegliedert.
+Eine Dashboard-Kachel exportiert alle Module gemeinsam als eine CSV (`GET /api/export/all`), abschnittsweise gegliedert mit erklärenden Kommentarzeilen — gedacht als Archiv und als Futter für externe Auswertungen.
+
+- **Zeitraumfilter** — Presets (30 Tage, 3 bzw. 12 Monate, laufendes Jahr) oder freie Von-Bis-Auswahl.
+- **Wochen-/Monats-Aggregation** — fasst Ausgaben und Vitalwerte zu Perioden zusammen. Ausgaben behalten dabei eine Zeile je Einkauf (Datum, Laden, Typ, Anzahl Positionen, Summe, Kategorien-Split); nur die Einzelpositionen entfallen, damit ein Jahresexport lesbar bleibt.
+- **gzip** — die Antwort wird komprimiert, wenn der Browser es anbietet; bei einem Jahresexport spart das rund 85 % Übertragung.
 
 ### 👤 User- & Admin-System
-JWT-Login, Admin-Bereich mit Invite-Tokens (Nutzer anlegen ohne Passwortvergabe), Passwort-Reset, Rate-Limiting auf allen kritischen Endpoints.
+- **JWT-Login** mit bcrypt-gehashten Passwörtern.
+- **Invite-Tokens** — der Admin legt Nutzer an, ohne ein Passwort zu vergeben; der Eingeladene setzt es selbst über den Aktivierungslink. Token sind neu erzeugbar, falls einer verfällt.
+- **Passwort-Reset** durch den Admin, für den Fall, dass der Aktivierungsweg nicht mehr funktioniert.
+- **Rate-Limiting & Ownership-Checks** — Login und alle Schreib-Endpoints sind gedrosselt, jede Abfrage ist an den eingeloggten Nutzer gebunden; Daten anderer Nutzer sind auch bei geratenen IDs nicht erreichbar.
 
 ### 🧭 UX
-Globaler Modul-Switcher in der Navbar, Dark-Mode, responsive & PWA-installierbar, Drag-&-Drop-Sortierung, Undo-Toasts.
+- **Globaler Modul-Switcher** in der Navbar für den Sprung zwischen den Modulen.
+- **Dark-Mode** mit Umschalter, den auch die Diagramme mitmachen.
+- **PWA** — installierbar, Service Worker mit Update-Hinweis, sobald eine neue Version ausgeliefert wurde.
+- **Drag-&-Drop-Sortierung** für Ziele, Achievements und Listen.
+- **Undo-Toasts** — Löschvorgänge lassen sich für ein paar Sekunden zurücknehmen, statt sie vorher wegzuklicken.
+- **Versions-Zeitstrahl** — Klick auf die Versionsnummer öffnet den Changelog der letzten Releases.
 
 ---
 
