@@ -4,6 +4,12 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.40.3', date: '2026-09-02', title: 'Schlaf-Diagramm zeigt die Gesamtschlafzeit', notes: [
+        'Der Balken steht jetzt für die geschlafene Gesamtzeit der Nacht — die Phasen sind nur noch die Binnenzeichnung in vier Helligkeitsstufen derselben Farbe, damit zuerst die Gesamthöhe lesbar ist.',
+        '"Wach" ist nicht mehr Teil des Stapels: Wachzeit ist kein Schlaf und hat den Balken über die tatsächliche Schlafdauer hinaus aufgeblasen. Sie steckt weiterhin in der Ø-Effizienz.',
+        'Neues Segment "ohne Phasendetail" fängt den Anteil ab, den Apple ohne Phasen-Zuordnung liefert — dadurch entspricht die Balkenhöhe exakt der Ø-Schlafdauer-Kachel.',
+        'Die Nächte unter 1 h Schlaf (v1.40.2) fliegen jetzt auch aus beiden Schlaf-Diagrammen, nicht mehr nur aus den Ø-Kacheln.',
+    ]},
     { v: 'v1.40.2', date: '2026-09-02', title: 'Schlaf: Nächte unter 1 h zählen nicht mehr in den Ø', notes: [
         'Nächte mit weniger als 1 Stunde Gesamtschlaf (Apple Watch nicht getragen, zu spät angelegt, Schlaf-Fragment) fallen aus allen vier Ø-Kacheln des Schlaf-Tabs: Ø Schlafdauer, Ø Im Bett, Ø Tiefschlaf und Ø Effizienz.',
         'Entscheidend ist die gesamte Schlafdauer der Nacht, nicht die einzelne Phase — sonst würden sich die vier Kacheln auf unterschiedliche Nächte beziehen.',

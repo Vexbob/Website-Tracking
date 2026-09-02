@@ -606,6 +606,17 @@ async function loadBpGlucoseCharts() {
 }
 
 // ---------- Schlaf ----------
+// Nur das oberste sichtbare Segment eines Stapels bekommt runde Ecken, damit
+// der Balken als EIN Block (= Gesamtschlafdauer) gelesen wird und nicht als
+// vier gestapelte Einzelbalken.
+const SLEEP_STACK_RADIUS = (ctx) => {
+    const ds = ctx.chart.data.datasets;
+    for (let i = ctx.datasetIndex + 1; i < ds.length; i++) {
+        if ((ds[i].data[ctx.dataIndex] || 0) > 0) return 0;
+    }
+    return 4;
+};
+
 function initSchlaf() {
     state.sleepInit = true;
     document.querySelectorAll('#hSleepPresets .stat-chip').forEach(chip => {
@@ -616,21 +627,42 @@ function initSchlaf() {
             loadSleepChart();
         });
     });
+    // v1.40.3: Der Balken zeigt primaer die GESAMTE Schlafdauer der Nacht --
+    // Balkenhoehe = Ø-Schlafdauer-Kachel. Die Phasen sind nur noch die feine
+    // Binnenzeichnung: gleiche Farbfamilie in vier Helligkeitsstufen, damit
+    // das Auge zuerst die Gesamthoehe liest und erst dann die Zusammensetzung.
+    // "Wach" ist bewusst NICHT mehr Teil des Stapels -- Wachzeit ist kein
+    // Schlaf und hat den Balken frueher ueber die tatsaechliche Schlafdauer
+    // hinaus aufgeblasen. Sie steckt weiterhin in der Ø-Effizienz.
     state.chartSleep = new Chart(document.getElementById('hChartSleep').getContext('2d'), {
         type: 'bar',
         data: { labels: [], datasets: [
-            { label: 'Core', data: [], backgroundColor: '#3b82f6', stack: 's', borderRadius: 3 },
-            { label: 'Tief', data: [], backgroundColor: '#8b5cf6', stack: 's', borderRadius: 3 },
-            { label: 'REM', data: [], backgroundColor: '#14b8a6', stack: 's', borderRadius: 3 },
-            { label: 'Wach', data: [], backgroundColor: '#f59e0b', stack: 's', borderRadius: 3 },
+            { label: 'Tief', data: [], backgroundColor: '#4338ca', stack: 's', borderRadius: SLEEP_STACK_RADIUS },
+            { label: 'Core', data: [], backgroundColor: '#6366f1', stack: 's', borderRadius: SLEEP_STACK_RADIUS },
+            { label: 'REM',  data: [], backgroundColor: '#a5b4fc', stack: 's', borderRadius: SLEEP_STACK_RADIUS },
+            // Apples ``asleep_minutes`` enthaelt oft einen Anteil ohne
+            // Phasen-Zuordnung (und manche Naechte haben gar keine Phasen).
+            // Der Rest-Balken haelt die Balkenhoehe trotzdem exakt auf der
+            // Gesamtschlafdauer, statt die Nacht zu kurz darzustellen.
+            { label: 'ohne Phasendetail', data: [], backgroundColor: '#c7d2fe', stack: 's', borderRadius: SLEEP_STACK_RADIUS },
         ] },
-        options: chartDefaults({
-            scales: {
-                x: { stacked: true, ticks: { color: chartTheme().muted }, grid: { display: false } },
-                y: { stacked: true, ticks: { color: chartTheme().muted }, grid: { color: chartTheme().grid },
-                     title: { display: true, text: 'Stunden', color: chartTheme().muted } },
-            },
-        }),
+        options: (() => {
+            const o = chartDefaults({
+                scales: {
+                    x: { stacked: true, ticks: { color: chartTheme().muted }, grid: { display: false } },
+                    y: { stacked: true, ticks: { color: chartTheme().muted }, grid: { color: chartTheme().grid },
+                         title: { display: true, text: 'Stunden', color: chartTheme().muted } },
+                },
+            });
+            // Gesamtschlaf als Fusszeile im Tooltip -- die Summe der Segmente
+            // ist die eigentliche Aussage des Balkens.
+            o.plugins.tooltip.callbacks = {
+                label: (ctx) => `${ctx.dataset.label}: ${fmt1(ctx.parsed.y)} h`,
+                footer: (items) => 'Gesamt: '
+                    + fmt1(items.reduce((s, i) => s + (i.parsed.y || 0), 0)) + ' h',
+            };
+            return o;
+        })(),
     });
     state.chartSleepTimes = new Chart(document.getElementById('hChartSleepTimes').getContext('2d'), {
         type: 'line',
@@ -674,26 +706,6 @@ async function loadSleepChart() {
             state.chartSleepTimes.update();
             return;
         }
-        state.chartSleep.data.labels = rows.map(r => fmtDate(r.sleep_date));
-        state.chartSleep.data.datasets[0].data = rows.map(r => (r.core_minutes || 0) / 60);
-        state.chartSleep.data.datasets[1].data = rows.map(r => (r.deep_minutes || 0) / 60);
-        state.chartSleep.data.datasets[2].data = rows.map(r => (r.rem_minutes || 0) / 60);
-        state.chartSleep.data.datasets[3].data = rows.map(r => (r.awake_minutes || 0) / 60);
-        state.chartSleep.update();
-
-        // Regelmäßigkeits-Chart: Offset ab 18:00
-        const toOffset = (iso) => {
-            if (!iso) return null;
-            const d = new Date(iso);
-            let h = d.getHours() + d.getMinutes() / 60;
-            let off = h - 18; if (off < 0) off += 24;
-            return off;
-        };
-        state.chartSleepTimes.data.labels = rows.map(r => fmtDate(r.sleep_date));
-        state.chartSleepTimes.data.datasets[0].data = rows.map(r => toOffset(r.sleep_start));
-        state.chartSleepTimes.data.datasets[1].data = rows.map(r => toOffset(r.sleep_end));
-        state.chartSleepTimes.update();
-
         // Ø nur ueber Naechte mit tatsaechlichem Wert; sonst verwaessern Null-
         // Naechte (z.B. Tage ohne Apple-Watch) den Schnitt komplett. Zusaetzlich
         // fallen wir auf die Phasen zurueck, wenn das Feld selbst leer ist,
@@ -729,6 +741,35 @@ async function loadSleepChart() {
         const MIN_SLEEP_MIN = 60;
         const usable = rows.filter(r => (asleepMin(r) || 0) >= MIN_SLEEP_MIN);
         const skippedNights = rows.length - usable.length;
+
+        // v1.40.3: Die aussortierten Naechte fliegen auch aus beiden Diagrammen
+        // raus -- ein 20-Minuten-Fragment ist weder ein sinnvoller Balken noch
+        // ein sinnvoller Zubettgeh-Punkt, und ein Diagramm, das andere Naechte
+        // zeigt als die Kacheln darueber, waere schlicht irrefuehrend.
+        state.chartSleep.data.labels = usable.map(r => fmtDate(r.sleep_date));
+        const phaseH = (r, key) => (num(r[key]) || 0) / 60;
+        state.chartSleep.data.datasets[0].data = usable.map(r => phaseH(r, 'deep_minutes'));
+        state.chartSleep.data.datasets[1].data = usable.map(r => phaseH(r, 'core_minutes'));
+        state.chartSleep.data.datasets[2].data = usable.map(r => phaseH(r, 'rem_minutes'));
+        state.chartSleep.data.datasets[3].data = usable.map(r => {
+            const phases = (num(r.deep_minutes) || 0) + (num(r.core_minutes) || 0) + (num(r.rem_minutes) || 0);
+            return Math.max(0, ((asleepMin(r) || 0) - phases)) / 60;
+        });
+        state.chartSleep.update();
+
+        // Regelmäßigkeits-Chart: Offset ab 18:00
+        const toOffset = (iso) => {
+            if (!iso) return null;
+            const d = new Date(iso);
+            let h = d.getHours() + d.getMinutes() / 60;
+            let off = h - 18; if (off < 0) off += 24;
+            return off;
+        };
+        state.chartSleepTimes.data.labels = usable.map(r => fmtDate(r.sleep_date));
+        state.chartSleepTimes.data.datasets[0].data = usable.map(r => toOffset(r.sleep_start));
+        state.chartSleepTimes.data.datasets[1].data = usable.map(r => toOffset(r.sleep_end));
+        state.chartSleepTimes.update();
+
         const meanOf = (extract) => {
             const arr = usable.map(extract).filter(v => v != null && v > 0);
             return arr.length ? arr.reduce((s,v)=>s+v,0) / arr.length : null;
@@ -754,13 +795,13 @@ async function loadSleepChart() {
                 <div class="stat-kpi-label">${k.label}</div>
                 <div class="stat-kpi-value">${k.value}</div></div>`).join('');
 
-        // Transparenz statt stiller Filterung: die ausgenommenen Naechte
-        // bleiben im Diagramm sichtbar, nur die Ø-Kacheln lassen sie weg.
+        // Transparenz statt stiller Filterung: Kacheln und Diagramme zeigen
+        // dieselben Naechte, die Zeile darunter nennt die Zahl der weggelassenen.
         const note = document.getElementById('hSleepNote');
         if (note) {
             note.textContent = skippedNights
                 ? `${skippedNights === 1 ? '1 Nacht' : skippedNights + ' Nächte'} unter 1 h Schlaf `
-                  + `– aus den Ø-Werten ausgenommen (im Diagramm weiterhin sichtbar).`
+                  + `– als Messlücke gewertet und aus Ø-Werten und Diagrammen ausgenommen.`
                 : '';
         }
     } catch (e) { showToast('Fehler: ' + e.message, true); }
