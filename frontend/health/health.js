@@ -32,6 +32,11 @@ const HEALTH_API = {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify(body || {}),
     }),
+    // v1.40.0: Import-Protokoll (Roh-Payloads der Sync-Aufrufe)
+    imports:       (limit) => apiCall(`/api/health/imports?limit=${limit || 50}`),
+    importRaw:     (id) => apiCall(`/api/health/imports/${id}/download`, { raw: true }),
+    deleteImport:  (id) => apiCall(`/api/health/imports/${id}`, { method: 'DELETE' }),
+    clearImports:  () => apiCall('/api/health/imports', { method: 'DELETE' }),
 };
 
 const METRIC_LABELS = {
@@ -916,6 +921,7 @@ function initEinstellungen() {
     state.keysLoaded = true;
     document.getElementById('hImportUrl').textContent = `${API_BASE}/api/health/import`;
     loadApiKeys();
+    loadImportLog();
     setupDropzone('hDropzoneCsv', 'hImportCsvFiles', 'hDropzoneCsvSub', true);
     setupDropzone('hDropzoneJson', 'hImportFile', 'hDropzoneJsonSub', false);
 
@@ -1024,6 +1030,108 @@ async function exportHealthCsv() {
     } catch (e) {
         showToast('Export fehlgeschlagen: ' + e.message, true);
     }
+}
+
+// ---------- Import-Protokoll (v1.40.0) ----------
+// Zeigt die letzten Sync-Aufrufe der iPhone-App inkl. Ingest-Ergebnis und
+// macht den Roh-Payload herunterladbar -- Grundlage fuer den Abgleich
+// "was hat die App geliefert" vs. "was steht in der Datenbank".
+const IMPORT_KIND_LABELS = {
+    'multipart':        'Multipart-Datei',
+    'multipart-manual': 'Multipart (manuell geparst)',
+    'multipart-raw':    'Multipart (Rohbody)',
+    'json':             'JSON',
+    'csv':              'CSV',
+    'csv-fallback':     'CSV (ohne Content-Type)',
+    'empty':            'leerer Aufruf',
+};
+
+function fmtBytes(n) {
+    const b = Number(n || 0);
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1).replace('.', ',')} KB`;
+    return `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+}
+
+function importStatsSummary(s) {
+    if (!s) return 'kein Ergebnis gespeichert';
+    const parts = [];
+    if (s.metrics_imported)  parts.push(`${s.metrics_imported} Vitalwerte`);
+    if (s.workouts_imported) parts.push(`${s.workouts_imported} Workouts`);
+    if (s.sleep_imported)    parts.push(`${s.sleep_imported} Schlaf`);
+    if (s.bp_imported)       parts.push(`${s.bp_imported} Blutdruck`);
+    if (s.glucose_imported)  parts.push(`${s.glucose_imported} Blutzucker`);
+    const skipped = Array.isArray(s.skipped) ? s.skipped.length : 0;
+    if (!parts.length) return skipped ? `nichts importiert (${skipped}× übersprungen)` : 'nichts importiert';
+    return parts.join(' · ') + (skipped ? ` · ${skipped}× übersprungen` : '');
+}
+
+async function loadImportLog() {
+    const box = document.getElementById('hImportLog');
+    if (!box) return;
+    box.className = 'h-empty'; box.innerHTML = '<div class="stat-loading">Lade …</div>';
+    try {
+        const rows = await HEALTH_API.imports(50);
+        if (!rows.length) {
+            box.className = 'h-empty';
+            box.innerHTML = 'Noch kein Sync über die API eingegangen.';
+            return;
+        }
+        box.className = '';
+        box.innerHTML = rows.map(r => `
+            <div class="h-imp-row">
+                <div class="h-imp-main">
+                    <div class="h-imp-head">${fmtDateTime(r.created_at)}
+                        <span class="h-imp-kind">${escHtml(IMPORT_KIND_LABELS[r.kind] || r.kind || '?')}</span>
+                        ${r.truncated ? '<span class="h-imp-trunc">gekürzt</span>' : ''}
+                    </div>
+                    <div class="h-imp-meta">${escHtml(r.filename || 'ohne Dateiname')} · ${fmtBytes(r.size_bytes)} · ${escHtml(importStatsSummary(r.stats))}</div>
+                    ${r.preview ? `<div class="h-imp-preview">${escHtml(r.preview)}</div>` : ''}
+                </div>
+                <div class="h-imp-actions">
+                    <button onclick="downloadImportPayload(${r.id})" ${r.size_bytes ? '' : 'disabled'}>⬇ Payload</button>
+                    <button class="danger" onclick="deleteImportEntry(${r.id})">✕</button>
+                </div>
+            </div>`).join('');
+    } catch (e) {
+        box.className = '';
+        box.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
+    }
+}
+
+async function downloadImportPayload(id) {
+    try {
+        const res = await HEALTH_API.importRaw(id);
+        if (!res || !res.ok) { showToast('Download fehlgeschlagen', true); return; }
+        // Dateiname kommt aus dem Content-Disposition-Header des Backends.
+        const cd = res.headers.get('content-disposition') || '';
+        const m = /filename="?([^";]+)"?/i.exec(cd);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = m ? m[1] : `health-sync_${id}.bin`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        showToast('Payload heruntergeladen ✓');
+    } catch (e) {
+        showToast('Download fehlgeschlagen: ' + e.message, true);
+    }
+}
+
+async function deleteImportEntry(id) {
+    try {
+        await HEALTH_API.deleteImport(id);
+        loadImportLog();
+    } catch (e) { showToast('Löschen fehlgeschlagen: ' + e.message, true); }
+}
+
+async function clearImportLog() {
+    if (!confirm('Das komplette Import-Protokoll löschen? Die importierten Gesundheitsdaten bleiben erhalten.')) return;
+    try {
+        const res = await HEALTH_API.clearImports();
+        showToast(`${res.deleted} Einträge gelöscht ✓`);
+        loadImportLog();
+    } catch (e) { showToast('Löschen fehlgeschlagen: ' + e.message, true); }
 }
 
 // v1.28.0: Bulk-Delete

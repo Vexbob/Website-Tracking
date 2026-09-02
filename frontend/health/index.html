@@ -169,6 +169,20 @@
         </div>
 
         <div class="stat-card">
+            <h3>📥 Import-Protokoll</h3>
+            <p class="h-hint">Jeder automatische Sync der iPhone-App wird hier mit seinem
+                <strong>Roh-Payload</strong> mitgeschrieben — genau die Bytes, die die App
+                geschickt hat. Damit lässt sich prüfen, ob ein auffälliger Wert (z.B. zu wenig
+                Schritte) schon so geliefert oder erst beim Import falsch verarbeitet wurde.
+                Gespeichert werden die letzten 200 Aufrufe.</p>
+            <div class="h-form-row" style="margin-top:0">
+                <button onclick="loadImportLog()">🔄 Aktualisieren</button>
+                <button class="danger-outline" onclick="clearImportLog()">🗑️ Protokoll leeren</button>
+            </div>
+            <div id="hImportLog" class="h-empty" style="margin-top:0.5rem">Lade …</div>
+        </div>
+
+        <div class="stat-card">
             <h3>💾 CSV-Export</h3>
             <p class="h-hint">Lädt alle Gesundheitsdaten als eine einzige CSV herunter —
                 Zusammenfassung, Vitalwerte-Zeitserien, Blutdruck, Blutzucker, Schlaf-Nächte

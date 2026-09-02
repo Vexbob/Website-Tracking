@@ -5,6 +5,10 @@ Endpoints:
                                             akzeptiert JSON *und* CSV, siehe Doku am Endpoint)
   POST   /api/health/import-file         — Manueller JSON-Upload im Frontend (JWT-Auth)
   POST   /api/health/import-csv          — Manueller CSV-Multi-Upload im Frontend (JWT-Auth)
+  GET    /api/health/imports             — Protokoll der letzten Sync-Aufrufe (JWT-Auth)
+  GET    /api/health/imports/{id}/download — Roh-Payload eines Sync-Aufrufs herunterladen
+  DELETE /api/health/imports/{id}        — einzelnen Protokoll-Eintrag loeschen
+  DELETE /api/health/imports             — komplettes Protokoll leeren
   GET    /api/health/api-keys            — eigene Keys auflisten (JWT-Auth)
   POST   /api/health/api-keys            — neuen Key erzeugen (Klartext nur hier sichtbar)
   DELETE /api/health/api-keys/{kid}      — Key widerrufen
@@ -22,6 +26,8 @@ kann ``UploadFile = File(...)`` sonst nicht als Pydantic-Feld aufloesen
 die aus demselben Grund ebenfalls darauf verzichten.
 """
 import json
+import os
+import re as _re
 from datetime import date, timedelta
 from typing import List, Optional
 
@@ -37,6 +43,13 @@ from services.full_export import build_health_export_csv
 router = APIRouter(tags=["health"])
 
 ALLOWED_METRIC_TYPES = sorted(set(SIMPLE_METRIC_MAP.values()))
+
+# ---------- Import-Protokoll (v1.40.0) ----------
+# Jeder Sync-Aufruf der iPhone-App wird mit seinem Roh-Payload gespeichert,
+# damit er im Frontend heruntergeladen und gegen die importierten Werte
+# geprueft werden kann. Zwei ENV-Stellschrauben begrenzen den Platzbedarf:
+HEALTH_IMPORT_LOG_KEEP = int(os.getenv("HEALTH_IMPORT_LOG_KEEP") or 200)
+HEALTH_IMPORT_LOG_MAX_BYTES = int(os.getenv("HEALTH_IMPORT_LOG_MAX_BYTES") or 5 * 1024 * 1024)
 
 
 # ---------- Sync-Ingest (API-Key-Auth, kein JWT) ----------
@@ -106,6 +119,8 @@ async def import_health_data(request: Request,
                     sub = await _ingest_auto(db, user["id"], raw_part, fname)
                     merge_ingest_stats(stats, sub)
                     stats["files_processed"] += 1
+                    await _store_import_log(db, user["id"], "multipart-manual", fname,
+                                            ctype, request.headers, raw_part, sub)
                 logger.info("Health-Import (multipart-manual) fuer user_id=%s: %s", user["id"], stats)
                 return stats
             # Letzter Versuch: Rohbody direkt als JSON/CSV interpretieren.
@@ -113,17 +128,23 @@ async def import_health_data(request: Request,
             sub = await _ingest_auto(db, user["id"], raw_all, "sync-multipart.bin")
             merge_ingest_stats(stats, sub)
             stats["files_processed"] = 1
+            await _store_import_log(db, user["id"], "multipart-raw", "sync-multipart.bin",
+                                    ctype, request.headers, raw_all, sub)
             logger.info("Health-Import (multipart-rawfallback) fuer user_id=%s: %s", user["id"], stats)
             return stats
 
         if not pseudo_files:
             logger.info("Health-Import: leerer Multipart-Body user_id=%s -> 200 no-op", user["id"])
             stats["skipped"].append("empty_multipart")
+            await _store_import_log(db, user["id"], "empty", None, ctype, request.headers,
+                                    b"", {"skipped": ["empty_multipart"]})
             return stats
         for fname, raw_part in pseudo_files:
             sub = await _ingest_auto(db, user["id"], raw_part, fname)
             merge_ingest_stats(stats, sub)
             stats["files_processed"] += 1
+            await _store_import_log(db, user["id"], "multipart", fname,
+                                    ctype, request.headers, raw_part, sub)
         logger.info("Health-Import (multipart) fuer user_id=%s: %s", user["id"], stats)
         return stats
 
@@ -136,6 +157,8 @@ async def import_health_data(request: Request,
         # nicht als "Netzwerkfehler" abbricht.
         logger.info("Health-Import: leerer Body user_id=%s -> 200 no-op", user["id"])
         stats["skipped"].append("empty_body")
+        await _store_import_log(db, user["id"], "empty", None, ctype, request.headers,
+                                b"", {"skipped": ["empty_body"]})
         return stats
 
     # Explizit als CSV markiert?
@@ -143,6 +166,7 @@ async def import_health_data(request: Request,
         sub = await _ingest_csv_bytes(db, user["id"], raw, "sync.csv")
         merge_ingest_stats(stats, sub)
         stats["files_processed"] = 1
+        await _store_import_log(db, user["id"], "csv", "sync.csv", ctype, request.headers, raw, sub)
         logger.info("Health-Import (csv) fuer user_id=%s: %s", user["id"], stats)
         return stats
 
@@ -155,6 +179,7 @@ async def import_health_data(request: Request,
     if isinstance(payload, dict):
         sub = await ingest_payload(db, user["id"], payload)
         merge_ingest_stats(stats, sub)
+        await _store_import_log(db, user["id"], "json", "sync.json", ctype, request.headers, raw, sub)
         logger.info("Health-Import (json) fuer user_id=%s: %s", user["id"], stats)
         return stats
 
@@ -163,8 +188,44 @@ async def import_health_data(request: Request,
     sub = await _ingest_csv_bytes(db, user["id"], raw, "sync.csv")
     merge_ingest_stats(stats, sub)
     stats["files_processed"] = 1
+    await _store_import_log(db, user["id"], "csv-fallback", "sync.csv", ctype, request.headers, raw, sub)
     logger.info("Health-Import (csv-fallback) fuer user_id=%s: %s", user["id"], stats)
     return stats
+
+
+async def _store_import_log(db, user_id: int, kind: str, filename: Optional[str],
+                            ctype: str, headers, raw: Optional[bytes],
+                            stats: Optional[dict]) -> None:
+    """Legt einen Sync-Aufruf mitsamt Roh-Payload im Import-Protokoll ab.
+
+    Wird pro *Teil* aufgerufen (ein Multipart-Part = ein Eintrag), damit sich
+    ein spaeter auffaelliger Wert genau der Datei zuordnen laesst, die ihn
+    geliefert hat. ``stats`` ist das Ingest-Ergebnis dieses Teils.
+
+    Schluckt bewusst jeden Fehler: das Protokoll ist Diagnose-Beiwerk und darf
+    einen laufenden Sync nie scheitern lassen.
+    """
+    try:
+        data = raw or b""
+        size = len(data)
+        truncated = size > HEALTH_IMPORT_LOG_MAX_BYTES
+        blob = data[:HEALTH_IMPORT_LOG_MAX_BYTES] if data else None
+        ua = (headers.get("user-agent") if headers else None) or None
+        await db.execute(
+            "INSERT INTO health_import_log "
+            "(user_id, kind, filename, content_type, user_agent, size_bytes, truncated, payload, stats) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
+            user_id, kind[:60], (filename or None) and filename[:255],
+            (ctype or None) and ctype[:255], ua and ua[:255],
+            size, truncated, blob, json.dumps(stats or {}))
+        # Aufbewahrung begrenzen: nur die letzten N Eintraege je User behalten.
+        await db.execute(
+            "DELETE FROM health_import_log WHERE user_id=$1 AND id NOT IN ("
+            "  SELECT id FROM health_import_log WHERE user_id=$1 "
+            "  ORDER BY created_at DESC, id DESC LIMIT $2)",
+            user_id, HEALTH_IMPORT_LOG_KEEP)
+    except Exception as e:
+        logger.warning("Import-Protokoll konnte nicht geschrieben werden user_id=%s: %s", user_id, e)
 
 
 def _log_incoming(kind: str, ctype: str, headers, parts: list, user_id: int) -> None:
@@ -357,6 +418,97 @@ async def import_health_csv(request: Request, files: List[UploadFile] = File(...
         total["files_processed"] += 1
     logger.info("Health-CSV-Import fuer user_id=%s: %s Dateien, %s", user["id"], total["files_processed"], total)
     return total
+
+
+# ---------- Import-Protokoll (v1.40.0, JWT-Auth) ----------
+@router.get("/api/health/imports")
+async def list_import_log(limit: Optional[int] = 50, db=Depends(get_db),
+                          user=Depends(get_current_user)):
+    """Listet die letzten Sync-Aufrufe der App — Zeitpunkt, Format, Groesse,
+    Ingest-Ergebnis und die ersten Zeichen des Payloads als Vorschau. Der
+    komplette Body haengt an ``/api/health/imports/{id}/download``."""
+    lim = max(1, min(int(limit or 50), 200))
+    rows = await db.fetch(
+        "SELECT id, created_at, kind, filename, content_type, user_agent, size_bytes, "
+        "       truncated, stats, substring(payload from 1 for 240) AS head "
+        "FROM health_import_log WHERE user_id=$1 ORDER BY created_at DESC, id DESC LIMIT $2",
+        user["id"], lim)
+    out = []
+    for r in rows:
+        d = _ser_exp(r)
+        head = d.pop("head", None)
+        if isinstance(head, (bytes, bytearray)):
+            head = head.decode("utf-8", errors="replace")
+        d["preview"] = (head or "").replace("\r", " ").replace("\n", " ").strip()
+        if isinstance(d.get("stats"), str):
+            try:
+                d["stats"] = json.loads(d["stats"])
+            except Exception:
+                d["stats"] = None
+        out.append(d)
+    return out
+
+
+def _import_log_filename(row) -> str:
+    """Baut einen sicheren Download-Dateinamen aus Eintrags-ID und Originalname."""
+    base = (row["filename"] or "").rsplit("/", 1)[-1].strip()
+    base = _re.sub(r"[^A-Za-z0-9._-]", "_", base)[:80]
+    if not base or base in (".", ".."):
+        kind = (row["kind"] or "").lower()
+        ext = ".json" if "json" in kind else (".csv" if "csv" in kind else ".bin")
+        base = f"payload{ext}"
+    ts = row["created_at"].strftime("%Y-%m-%d_%H%M") if row["created_at"] else "unbekannt"
+    return f"health-sync_{ts}_{row['id']}_{base}"
+
+
+@router.get("/api/health/imports/{lid}/download")
+async def download_import_log(lid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    """Liefert den unveraenderten Roh-Payload eines Sync-Aufrufs als Download —
+    genau die Bytes, die die App geschickt hat (ggf. auf
+    ``HEALTH_IMPORT_LOG_MAX_BYTES`` gekuerzt, siehe ``truncated`` in der Liste)."""
+    row = await db.fetchrow(
+        "SELECT id, created_at, kind, filename, content_type, payload "
+        "FROM health_import_log WHERE id=$1 AND user_id=$2", lid, user["id"])
+    if not row:
+        raise HTTPException(404, "Import-Eintrag nicht gefunden")
+    payload = row["payload"] or b""
+    fname = _import_log_filename(row)
+    if fname.endswith(".json"):
+        media = "application/json; charset=utf-8"
+    elif fname.endswith(".csv"):
+        media = "text/csv; charset=utf-8"
+    else:
+        media = "application/octet-stream"
+    return Response(
+        content=payload,
+        media_type=media,
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.delete("/api/health/imports/{lid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def delete_import_log_entry(request: Request, lid: int, db=Depends(get_db),
+                                  user=Depends(get_current_user)):
+    r = await db.execute("DELETE FROM health_import_log WHERE id=$1 AND user_id=$2",
+                         lid, user["id"])
+    if r.endswith(" 0"):
+        raise HTTPException(404, "Import-Eintrag nicht gefunden")
+    return {"status": "deleted"}
+
+
+@router.delete("/api/health/imports")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def clear_import_log(request: Request, db=Depends(get_db),
+                           user=Depends(get_current_user)):
+    """Leert das komplette Protokoll des eingeloggten Users. Loescht nur die
+    Roh-Payloads — die daraus importierten Gesundheitsdaten bleiben."""
+    r = await db.execute("DELETE FROM health_import_log WHERE user_id=$1", user["id"])
+    deleted = int(r.rsplit(" ", 1)[-1]) if r.rsplit(" ", 1)[-1].isdigit() else 0
+    return {"status": "cleared", "deleted": deleted}
 
 
 # ---------- CSV-Export (v1.27.0) ----------

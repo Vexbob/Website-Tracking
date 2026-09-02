@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.40.0', date: '2026-09-02', title: 'Gesundheit: Import-Protokoll mit Payload-Download', notes: [
+        'Jeder automatische Sync der Auto-Health-Export-App wird jetzt mit seinem Roh-Payload gespeichert (neue Tabelle health_import_log, Migration 025).',
+        'Neue Karte "Import-Protokoll" in den Gesundheits-Einstellungen: Zeitpunkt, Format, Dateiname, Größe, Ingest-Ergebnis und Vorschau je Aufruf — plus Download der Originaldatei zum Abgleich mit den importierten Werten.',
+        'Einzelne Einträge löschbar, Protokoll komplett leerbar. Aufbewahrt werden die letzten 200 Aufrufe je Nutzer, Payloads über 5 MB werden gekürzt (ENV HEALTH_IMPORT_LOG_KEEP / HEALTH_IMPORT_LOG_MAX_BYTES).',
+    ]},
     { v: 'v1.39.2', date: '2026-09-01', title: 'Vitalwerte: Ø-Linie als gleitender Trend', notes: [
         'Die Ø-Linie ist keine Waagrechte mehr, sondern ein zentriert gleitender Durchschnitt, der dem Verlauf folgt.',
         'Fensterbreite passt sich dem Zeitraum an (3 / 7 / 14 / 30 Werte), Messlücken bleiben weiterhin aussen vor.',

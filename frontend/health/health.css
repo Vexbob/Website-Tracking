@@ -136,3 +136,20 @@ body{visibility:hidden}body.ready{visibility:visible}
     .h-workout-icon{width:36px;height:36px;font-size:1rem}
 }
 
+
+/* ---------- Import-Protokoll (v1.40.0) ---------- */
+.h-imp-row{display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem;padding:0.7rem 0;border-bottom:1px solid var(--border)}
+.h-imp-row:last-child{border-bottom:none}
+.h-imp-main{min-width:0;flex:1}
+.h-imp-head{font-weight:700;font-size:0.875rem;color:var(--text);display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap}
+.h-imp-kind{font-weight:600;font-size:0.7rem;color:var(--text-muted);background:var(--surface-2);border-radius:5px;padding:0.1rem 0.4rem}
+.h-imp-trunc{font-weight:600;font-size:0.7rem;color:var(--red);border:1px solid var(--red);border-radius:5px;padding:0.05rem 0.35rem}
+.h-imp-meta{font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem}
+.h-imp-preview{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:0.7rem;color:var(--text-muted);background:var(--surface-2);border-radius:6px;padding:0.35rem 0.5rem;margin-top:0.35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-imp-actions{display:flex;gap:0.4rem;flex-shrink:0}
+.h-imp-actions button{width:auto;margin:0;padding:0.35rem 0.7rem;font-size:0.75rem;font-weight:600;border-radius:6px;cursor:pointer;background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+.h-imp-actions button:disabled{opacity:0.4;cursor:default}
+.h-imp-actions button.danger{background:transparent;color:var(--red);border-color:var(--red)}
+.h-imp-actions button.danger:hover{background:var(--red-bg)}
+button.danger-outline{background:transparent;color:var(--red);border:1px solid var(--red)}
+button.danger-outline:hover{background:var(--red-bg)}
