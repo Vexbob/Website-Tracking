@@ -207,7 +207,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .log-day:last-child{margin-bottom:0}
 .log-day-hdr{font-size:0.6875rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-bottom:0.375rem;display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem}
 .log-day-hdr .day-sum{color:var(--green-dark);font-weight:700;font-size:0.75rem}
-.log-row{display:flex;align-items:center;gap:0.625rem;padding:0.4375rem 0;font-size:0.8125rem;border-bottom:1px solid var(--border)}
+.log-row{display:flex;flex-wrap:wrap;align-items:center;gap:0.625rem;padding:0.4375rem 0;font-size:0.8125rem;border-bottom:1px solid var(--border)}
 .log-row:last-child{border-bottom:none}
 .log-row.pending-delete{opacity:0.35}
 .log-row.has-note{background:linear-gradient(90deg,rgba(59,130,246,0.05),transparent 30%)}
@@ -225,9 +225,9 @@ body{visibility:hidden}body.ready{visibility:visible}
 :root[data-theme="dark"] .log-tag.progress{background:rgba(148,163,184,0.18);color:#cbd5e1}
 .log-tag.transfer{background:rgba(139,92,246,0.15);color:#7c3aed}
 :root[data-theme="dark"] .log-tag.transfer{background:rgba(139,92,246,0.22);color:#c4b5fd}
-.log-title{font-weight:600;color:var(--text);word-break:break-word}
+.log-title{font-weight:600;color:var(--text);word-break:break-word;min-width:0}
 .log-desc{color:var(--text-muted);font-size:0.75rem;word-break:break-word;white-space:nowrap}
-.log-note-inline{flex:1;min-width:0;text-align:center;color:var(--blue-dark);font-style:italic;font-size:0.8125rem;padding:0 0.5rem;word-break:break-word;cursor:pointer}
+.log-note-inline{flex:1 1 12rem;min-width:0;text-align:center;color:var(--blue-dark);font-style:italic;font-size:0.8125rem;padding:0 0.5rem;overflow-wrap:anywhere;cursor:pointer}
 :root[data-theme="dark"] .log-note-inline{color:#93c5fd}
 .log-note-inline::before{content:'„'}
 .log-note-inline::after{content:'"'}
@@ -345,4 +345,20 @@ body{visibility:hidden}body.ready{visibility:visible}
     .if-grid{grid-template-columns:1fr}
     /* v1.36.0: Tab-Overrides entfernt — .tabs/.tab-btn wird vollstaendig aus style.css bezogen */
     .log-desc{display:none}
+    /* v1.41.1: Tag und Betrag duerfen schmaler werden, damit fuer den Titel
+       neben der eigenen Notizzeile (siehe unten) genug Platz bleibt. */
+    .log-tag{min-width:72px;padding:2px 6px}
+    .log-amt{min-width:0}
+}
+
+/* v1.41.1: Notiz auf eigener, voller Zeile, solange die Log-Zeile schmal ist.
+   Vorher war die Notiz das einzige schrumpfbare Element der Zeile: neben Tag,
+   Titel, Betrag und den beiden Buttons blieb auf dem Handy eine Spalte von
+   wenigen Pixeln uebrig, der Text brach auf ein Zeichen pro Zeile um und ein
+   einziger Log-Eintrag wurde meterhoch. ``order`` schiebt sie hinter die
+   Buttons, ``flex-basis:100%`` zwingt sie in eine eigene Zeile — Betrag und
+   Buttons bleiben dadurch oben in der ersten Zeile stehen. */
+@media(max-width:700px){
+    .log-row{gap:0.25rem 0.5rem}
+    .log-note-inline{order:2;flex:1 1 100%;width:100%;text-align:left;padding:0;margin:1px 0 2px;line-height:1.45}
 }

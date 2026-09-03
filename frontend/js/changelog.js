@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.41.1', date: '2026-09-03', title: 'Log-Notizen brechen auf dem Handy nicht mehr auf ein Zeichen pro Zeile um', notes: [
+        'Die Notiz war das einzige schrumpfbare Element einer Log-Zeile: neben Tag, Titel, Betrag und den beiden Buttons blieb auf schmalen Displays eine Spalte von wenigen Pixeln übrig — der Text brach senkrecht auf ein Zeichen pro Zeile um und ein einzelner Eintrag wurde meterhoch.',
+        'Unter 700 px Breite steht die Notiz jetzt in einer eigenen, vollbreiten Zeile unter dem Eintrag, linksbündig. Betrag, Notiz- und Löschen-Button bleiben oben in der ersten Zeile.',
+        'Ab 700 px bleibt die gewohnte einzeilige Darstellung; sie kann jetzt aber sauber umbrechen statt zu quetschen. Sehr lange Wörter (URLs) brechen mit overflow-wrap statt die Zeile zu sprengen.',
+    ]},
     { v: 'v1.41.0', date: '2026-09-03', title: 'Log zeigt jede Wertänderung an Achievements', notes: [
         'Bisher landete eine Änderung am Meilenstein-Ziel nur dann im Aktivitäts-Log, wenn sie eine Meilenstein-Schwelle überschritten hat — der "+x"-Button und das manuelle Setzen des Werts haben darunter nichts hinterlassen. Jede Änderung wird jetzt protokolliert (neue Tabelle achievement_progress_logs, Migration 027).',
         'Neuer Log-Typ "Fortschritt" mit eigenem Filter-Chip: zeigt Vorher → Nachher und in der Betragsspalte die Änderung selbst (z.B. "+2,5 km"). Ausgezahlt wird weiterhin nur beim Meilenstein, diese Zeilen tragen keinen Betrag.',
