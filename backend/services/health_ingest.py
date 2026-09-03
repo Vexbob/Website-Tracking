@@ -609,6 +609,30 @@ async def _ingest_health_metrics_csv(db, user_id: int, header: list, rows: list)
     return stats
 
 
+# Auto Health Export beschriftet die Distanz-Spalte der Workouts-CSV immer mit
+# "(km)" und die Geschwindigkeit mit "(km/Std.)", schreibt fuer Schwimm-Workouts
+# aber die HealthKit-Rohwerte in Metern bzw. m/Std. hinein. Ein 1800-m-Bahn-
+# schwimmen landete dadurch als 1800 km in der DB und die Pace im Frontend bei
+# 0:02 min/km. Erkennbar ist der Fall allein an der Groessenordnung: eine
+# einzelne Trainingseinheit ueber 300 km bzw. eine Durchschnitts-
+# geschwindigkeit ueber 100 km/h gibt es nicht, also war die Zahl in Metern
+# gemeint und die ganze Zeile muss durch 1000 geteilt werden (Distanz und
+# Geschwindigkeit stammen aus derselben Umrechnung, deshalb ein gemeinsamer
+# Faktor).
+_CSV_DIST_KM_MAX = 300.0
+_CSV_SPEED_KMH_MAX = 100.0
+
+
+def _csv_metric_scale(distance_raw: Optional[float],
+                      avg_speed_raw: Optional[float]) -> float:
+    """1.0 = Spalten sind wirklich km/kmh, 0.001 = es sind in Wahrheit Meter."""
+    if distance_raw is not None and distance_raw > _CSV_DIST_KM_MAX:
+        return 0.001
+    if avg_speed_raw is not None and avg_speed_raw > _CSV_SPEED_KMH_MAX:
+        return 0.001
+    return 1.0
+
+
 def _parse_duration_hms(s: Optional[str]) -> Optional[float]:
     """Wandelt 'HH:MM:SS' (Workouts-CSV) in Minuten (float) um."""
     if not s:
@@ -684,6 +708,15 @@ async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> di
         if total_kcal is None and (active_kcal is not None or resting_kcal is not None):
             total_kcal = (active_kcal or 0) + (resting_kcal or 0)
         distance_km = _row_num(row, col.get("distance_km"))
+        avg_speed = _row_num(row, col.get("avg_speed"))
+        max_speed = _row_num(row, col.get("max_speed"))
+        scale = _csv_metric_scale(distance_km, avg_speed)
+        if scale != 1.0:
+            distance_km = None if distance_km is None else distance_km * scale
+            avg_speed = None if avg_speed is None else avg_speed * scale
+            max_speed = None if max_speed is None else max_speed * scale
+            logger.info("Workout-CSV: Distanz-/Geschwindigkeitsspalte in Metern "
+                        "erkannt (%s), Zeile umgerechnet", workout_type)
         distance_m = None if distance_km is None else distance_km * 1000
 
         external_id = f"{workout_type or 'workout'}:{start_at.isoformat()}"
@@ -717,8 +750,8 @@ async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> di
         extra = {
             "resting_energy_kcal": resting_kcal,
             "intensity_kcal_h_kg": _row_num(row, col.get("intensity")),
-            "max_speed_kmh": _row_num(row, col.get("max_speed")),
-            "avg_speed_kmh": _row_num(row, col.get("avg_speed")),
+            "max_speed_kmh": max_speed,
+            "avg_speed_kmh": avg_speed,
             "flights_climbed": _row_num(row, col.get("flights")),
             "elevation_descended_m": _row_num(row, col.get("elevation_down")),
             "step_count": _row_num(row, col.get("step_count")),

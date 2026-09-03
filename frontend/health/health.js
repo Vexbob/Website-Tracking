@@ -64,6 +64,13 @@ const WORKOUT_META = {
     'Outdoor Laufen':   { icon: '🏃', cls: 'run',      de: 'Outdoor Laufen' },
 };
 function wMeta(t) { return WORKOUT_META[t] || { icon: '🏋️', cls: '', de: t || 'Workout' }; }
+// Schwimmen wird anders gerechnet als Laufen/Radfahren: Distanz in Metern,
+// Pace in min/100 m. Neben den bekannten Typen greift ein Namens-Fallback,
+// damit auch kuenftige Apple-Bezeichnungen ("Freiwasserschwimmen") passen.
+function isSwimWorkout(t) {
+    if (wMeta(t).cls === 'swim') return true;
+    return /schwimm|swim/i.test(t || '');
+}
 
 // ---------- Helpers ----------
 let toastTimer = null;
@@ -869,19 +876,27 @@ function renderWorkouts() {
 
 function renderWorkoutCard(w) {
     const m = wMeta(w.workout_type);
+    const swim = isSwimWorkout(w.workout_type);
     const dist = Number(w.distance_m);
     const hasDist = Number.isFinite(dist) && dist > 0;
     const distStr = hasDist
-        ? (dist >= 1000 ? fmt1(dist/1000) + ' <small>km</small>' : fmt0(dist) + ' <small>m</small>')
+        ? ((dist >= 1000 && !swim) ? fmt1(dist/1000) + ' <small>km</small>'
+                                   : fmt0(dist) + ' <small>m</small>')
         : null;
-    // Pace nur fuer Distanz-Sportarten
+    // Pace nur fuer Distanz-Sportarten. Beim Schwimmen ist die uebliche (und
+    // von der Uhr angezeigte) Einheit min/100 m — dieselbe Einheit in min/km
+    // waere zwar rechnerisch dasselbe, aber als "38:00" nicht lesbar.
     let paceStr = null;
     if (hasDist && (w.duration_min > 0)) {
-        const paceMinPerKm = w.duration_min / (dist / 1000);
-        if (Number.isFinite(paceMinPerKm) && paceMinPerKm > 0 && paceMinPerKm < 60) {
-            const mm = Math.floor(paceMinPerKm);
-            const ss = Math.round((paceMinPerKm - mm) * 60);
-            paceStr = `${mm}:${String(ss).padStart(2,'0')} <small>min/km</small>`;
+        const refM = swim ? 100 : 1000;
+        const pace = w.duration_min / (dist / refM);
+        const paceMax = swim ? 20 : 60;
+        if (Number.isFinite(pace) && pace > 0 && pace < paceMax) {
+            let mm = Math.floor(pace);
+            let ss = Math.round((pace - mm) * 60);
+            if (ss === 60) { mm += 1; ss = 0; }
+            paceStr = `${mm}:${String(ss).padStart(2,'0')} `
+                + `<small>min/${swim ? '100 m' : 'km'}</small>`;
         }
     }
     const tiles = [

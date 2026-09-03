@@ -4,6 +4,12 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.40.5', date: '2026-09-03', title: 'Schwimm-Pace in min/100 m, Distanz-Einheit korrigiert', notes: [
+        'Die Workouts-CSV beschriftet die Distanz-Spalte immer mit "(km)", liefert beim Schwimmen aber Meter — 1800 wurde dadurch als 1800 km importiert und die Pace-Kachel zeigte 0:02 min/km. Der Import erkennt Meter-Zeilen jetzt an der Größenordnung (über 300 km bzw. über 100 km/h Ø-Geschwindigkeit) und rechnet Distanz und Geschwindigkeit gemeinsam um.',
+        'Migration 026 zieht bereits importierte Workouts nach: unplausible Distanzen und Ø-/Max-Geschwindigkeiten werden durch 1000 geteilt.',
+        'Schwimm-Workouts zeigen die Pace jetzt in min/100 m statt min/km (1800 m in 1:08:21 = 3:48 min/100 m) und die Distanz in Metern statt Kilometern.',
+        'APP_VERSION war seit v1.40.3 versehentlich leer und ist wiederhergestellt — der Versions-Tag im Footer blieb dadurch leer.',
+    ]},
     { v: 'v1.40.4', date: '2026-09-02', title: 'README: Funktionen einzeln beschrieben', notes: [
         'Die Modul-Übersicht besteht nicht mehr aus dichten Aufzählungs-Absätzen, sondern listet jede Funktion einzeln — mit einem Satz dazu, was sie tut und wozu sie da ist.',
         'Neu dokumentiert: Import-Protokoll und Messlücken-Regeln im Gesundheits-Modul, Bons-kompakt-Sektion im aggregierten Gesamt-Export, Puffer-Konto, Ideen-Listen und Duplikat-Erkennung.',
