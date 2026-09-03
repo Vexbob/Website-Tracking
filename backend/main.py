@@ -814,6 +814,27 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
         new_cred = tm
     else:
         new_cred = cred
+
+    # v1.41.0: Jede Wertaenderung kommt ins Fortschritts-Journal — auch die,
+    # die keinen Meilenstein ausloest. Vorher blieb ein "+x"-Klick unter der
+    # Schwelle voellig unsichtbar, weil nur ``current_value`` ueberschrieben
+    # wurde. Die Notiz haengt am Meilenstein, falls einer erreicht wurde,
+    # sonst an dieser Zeile.
+    old_val = float(a["current_value"] or 0)
+    delta = nv - old_val
+    if abs(delta) > 1e-9:
+        try:
+            await db.execute(
+                "INSERT INTO achievement_progress_logs "
+                "(user_id, achievement_id, old_value, new_value, delta, hit_milestone, note, created_at) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8::timestamptz, NOW()))",
+                user["id"], aid, old_val, nv, delta, tm > cred,
+                None if tm > cred else note_val, when)
+        except Exception as e:
+            # Historie ist wichtig, aber nicht wichtiger als die Wertaenderung
+            # selbst — im Zweifel lieber der Eintrag fehlt als der Klick.
+            logger.warning(f"Fortschritts-Log fehlgeschlagen (aid={aid}): {e}")
+
     comp = False
     if tv is not None:
         if dirn == "increase" and nv >= float(tv):
@@ -883,6 +904,9 @@ async def reset_ach(request: Request, aid: int, db=Depends(get_db), user=Depends
         user["id"], aid))
     await db.execute("DELETE FROM achievement_logs WHERE achievement_id=$1 AND user_id=$2", aid, user["id"])
     await db.execute(
+        "DELETE FROM achievement_progress_logs WHERE achievement_id=$1 AND user_id=$2",
+        aid, user["id"])
+    await db.execute(
         "DELETE FROM savings_transactions WHERE user_id=$1 AND source_type='achievement' AND source_id=$2",
         user["id"], aid)
     await db.execute(
@@ -909,6 +933,47 @@ async def del_ach(request: Request, aid: int, db=Depends(get_db), user=Depends(g
         user["id"], aid)
     await db.execute("DELETE FROM achievements WHERE id=$1 AND user_id=$2", aid, user["id"])
     return {"status": "deleted", "removed_count": removed, "removed_sum": removed_sum}
+
+@app.delete("/api/achievement-progress-logs/{log_id}")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def del_ach_progress_log(request: Request, log_id: int, db=Depends(get_db), user=Depends(get_current_user)):
+    """Nimmt einen Fortschritts-Eintrag zurueck (Vertipper, Fehlklick auf "+x").
+
+    Bewusst nur fuer die JEWEILS LETZTE Aenderung eines Ziels und nur, wenn
+    sie keinen Meilenstein ausgeloest hat: nur dann laesst sich der Wert
+    eindeutig zurueckrechnen, ohne dass spaetere Aenderungen oder bereits
+    ausgezahlte Meilensteine inkonsistent werden. Einen Meilenstein nimmt man
+    ueber dessen eigenen Log-Eintrag zurueck.
+    """
+    log = await db.fetchrow(
+        "SELECT * FROM achievement_progress_logs WHERE id=$1 AND user_id=$2", log_id, user["id"])
+    if not log:
+        raise HTTPException(404, "Not found")
+    if log["hit_milestone"]:
+        raise HTTPException(400, "Diese Änderung hat einen Meilenstein ausgelöst — "
+                                 "bitte den Meilenstein-Eintrag löschen.")
+    latest = await db.fetchval(
+        "SELECT MAX(id) FROM achievement_progress_logs WHERE achievement_id=$1 AND user_id=$2",
+        log["achievement_id"], user["id"])
+    if latest != log["id"]:
+        raise HTTPException(400, "Nur die letzte Änderung eines Ziels kann zurückgenommen werden.")
+    a = await db.fetchrow("SELECT * FROM achievements WHERE id=$1 AND user_id=$2",
+                          log["achievement_id"], user["id"])
+    old_value = float(log["old_value"])
+    if a:
+        tv = a["target_value"]
+        comp = False
+        if tv is not None:
+            comp = (old_value >= float(tv)) if a["direction"] == "increase" else (old_value <= float(tv))
+        await db.execute(
+            "UPDATE achievements SET current_value=$1, is_completed=$2 WHERE id=$3 AND user_id=$4",
+            old_value, comp, log["achievement_id"], user["id"])
+    await db.execute("DELETE FROM achievement_progress_logs WHERE id=$1 AND user_id=$2",
+                     log_id, user["id"])
+    logger.info(f"Deleted achievement_progress_log {log_id} (user {user['id']}, "
+                f"achievement {log['achievement_id']}) → current_value={old_value}")
+    return {"status": "deleted", "current_value": old_value,
+            "achievement": ser(a) if a else None}
 
 @app.delete("/api/achievement-logs/{log_id}")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
@@ -1192,6 +1257,19 @@ async def upd_achievement_log_note(request: Request, log_id: int, b: NoteBody, d
         note_val, log_id, user["id"])
     return {"status": "ok", "note": note_val or ""}
 
+@app.put("/api/achievement-progress-logs/{log_id}/note")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def upd_ach_progress_note(request: Request, log_id: int, b: NoteBody, db=Depends(get_db), user=Depends(get_current_user)):
+    owned = await db.fetchval(
+        "SELECT 1 FROM achievement_progress_logs WHERE id=$1 AND user_id=$2", log_id, user["id"])
+    if not owned:
+        raise HTTPException(404, "Not found")
+    note_val = (b.note or "").strip() or None
+    await db.execute(
+        "UPDATE achievement_progress_logs SET note=$1 WHERE id=$2 AND user_id=$3",
+        note_val, log_id, user["id"])
+    return {"status": "ok", "note": note_val or ""}
+
 @app.put("/api/savings-transactions/{tid}/note")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def upd_savings_tx_note(request: Request, tid: int, b: NoteBody, db=Depends(get_db), user=Depends(get_current_user)):
@@ -1429,6 +1507,38 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
             "amount": float(r["reward_amount"]),
             "log_id": r["id"], "source_id": r["achievement_id"],
             "note": r["note"] or "", "deletable": True
+        })
+
+    # v1.41.0: Wertaenderungen an Meilenstein-Zielen, die (noch) keinen
+    # Meilenstein ausgeloest haben. Sie tragen keinen Betrag — das Geld haengt
+    # weiterhin am Meilenstein-Eintrag. Loeschbar ist nur die jeweils letzte
+    # Aenderung eines Ziels, weil nur die sich sauber zurueckrechnen laesst.
+    pr_rows = await db.fetch(
+        """SELECT pr.id, pr.achievement_id, pr.old_value, pr.new_value, pr.delta,
+                  pr.hit_milestone, pr.note, pr.created_at, a.title, a.unit,
+                  (pr.id = (SELECT MAX(p2.id) FROM achievement_progress_logs p2
+                             WHERE p2.achievement_id = pr.achievement_id
+                               AND p2.user_id = pr.user_id)) AS is_latest
+             FROM achievement_progress_logs pr
+             JOIN achievements a ON a.id = pr.achievement_id
+            WHERE pr.user_id=$1
+            ORDER BY pr.created_at DESC LIMIT $2""",
+        user["id"], limit)
+    for r in pr_rows:
+        unit = r["unit"] or ""
+        delta = float(r["delta"])
+        desc = f"{fmt_de_num(float(r['old_value']))} → {fmt_de_num(float(r['new_value']))} {unit}".strip()
+        events.append({
+            "type": "progress",
+            "date": r["created_at"].isoformat(),
+            "title": r["title"],
+            "description": desc,
+            "amount": 0.0,
+            "delta": delta, "unit": unit,
+            "hit_milestone": bool(r["hit_milestone"]),
+            "log_id": r["id"], "source_id": r["achievement_id"],
+            "note": r["note"] or "",
+            "deletable": bool(r["is_latest"]) and not r["hit_milestone"],
         })
 
     for r in await db.fetch(

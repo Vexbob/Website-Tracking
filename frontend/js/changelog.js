@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.41.0', date: '2026-09-03', title: 'Log zeigt jede Wertänderung an Achievements', notes: [
+        'Bisher landete eine Änderung am Meilenstein-Ziel nur dann im Aktivitäts-Log, wenn sie eine Meilenstein-Schwelle überschritten hat — der "+x"-Button und das manuelle Setzen des Werts haben darunter nichts hinterlassen. Jede Änderung wird jetzt protokolliert (neue Tabelle achievement_progress_logs, Migration 027).',
+        'Neuer Log-Typ "Fortschritt" mit eigenem Filter-Chip: zeigt Vorher → Nachher und in der Betragsspalte die Änderung selbst (z.B. "+2,5 km"). Ausgezahlt wird weiterhin nur beim Meilenstein, diese Zeilen tragen keinen Betrag.',
+        'Notizen sind wie bei allen anderen Log-Einträgen möglich. Zurücknehmen lässt sich die jeweils letzte Änderung eines Ziels — sie setzt den Wert wieder auf den Stand davor; hat die Änderung einen Meilenstein ausgelöst, geht das über den Meilenstein-Eintrag.',
+    ]},
     { v: 'v1.40.5', date: '2026-09-03', title: 'Schwimm-Pace in min/100 m, Distanz-Einheit korrigiert', notes: [
         'Die Workouts-CSV beschriftet die Distanz-Spalte immer mit "(km)", liefert beim Schwimmen aber Meter — 1800 wurde dadurch als 1800 km importiert und die Pace-Kachel zeigte 0:02 min/km. Der Import erkennt Meter-Zeilen jetzt an der Größenordnung (über 300 km bzw. über 100 km/h Ø-Geschwindigkeit) und rechnet Distanz und Geschwindigkeit gemeinsam um.',
         'Migration 026 zieht bereits importierte Workouts nach: unplausible Distanzen und Ø-/Max-Geschwindigkeiten werden durch 1000 geteilt.',

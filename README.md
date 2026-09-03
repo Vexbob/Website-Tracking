@@ -14,7 +14,7 @@ Führt Buch über echtes Gespartes statt über gute Vorsätze: jedes Ziel hat ei
 - **Wochen- & Monatsziele** — wiederkehrende Vorhaben mit Check-in pro Periode, Streak-Bonus für ununterbrochene Serien und Historie. Ein versehentlicher Check-in lässt sich per Check-out zurücknehmen.
 - **Ideen & mögliche Ziele** — zwei Vorstufen-Listen für Anschaffungen, die noch kein aktives Sparziel verdienen. Hält die Zielliste sauber, ohne dass Einfälle verloren gehen.
 - **„Allgemein"-Konto als Puffer** — läuft ein Sparziel voll oder ist gerade keines aktiv, landen Belohnungen automatisch hier statt verloren zu gehen. Von dort lassen sie sich gezielt auf ein Ziel übertragen.
-- **Aktivitäts-Log & 365-Tage-Heatmap** — jede Einzahlung, jeder Check-in und jeder Meilenstein mit Datum und optionaler Notiz; die Heatmap zeigt auf einen Blick, wie durchgehend das letzte Jahr bespielt war.
+- **Aktivitäts-Log & 365-Tage-Heatmap** — jede Einzahlung, jeder Check-in, jeder Meilenstein und jede Wertänderung an einem Achievement (auch die, die noch keinen Meilenstein auslöst) mit Datum und optionaler Notiz; die Heatmap zeigt auf einen Blick, wie durchgehend das letzte Jahr bespielt war.
 - **Trophäenwand** — abgeschlossene Sparziele wandern als Trophäe in eine eigene Ansicht, damit erreichte Ziele nicht einfach aus der Liste verschwinden.
 - **Export & Backup** — Transaktionen als CSV, dazu ein vollständiges JSON-Backup mit Restore. Tägliche Snapshots laufen automatisch mit und sind pro Nutzer isoliert.
 

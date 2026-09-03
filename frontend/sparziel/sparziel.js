@@ -937,13 +937,20 @@ function renderLog(){
     if(!rows.length){body.innerHTML='<div class="log-empty">Keine Einträge.</div>';return;}
     if(logView==='weekly') renderLogWeekly(rows,body); else renderLogFlat(rows,body);
 }
-const LOG_LABELS={initial:'Start',milestone:'Meilenstein',checkin:'Check-in',streak_bonus:'Bonus',transfer:'Übertrag'};
+const LOG_LABELS={initial:'Start',milestone:'Meilenstein',checkin:'Check-in',streak_bonus:'Bonus',transfer:'Übertrag',progress:'Fortschritt'};
 function logRowHtml(r){
     const t=r.type||'initial';
     const tagCls=t==='checkin'&&r.fulfilled?'checkin fulfilled':t;
     const amt=Number(r.amount||0);
     const amtCls=t==='streak_bonus'?'log-amt gold':'log-amt';
-    const amtHtml=amt>0?`<span class="${amtCls}">+${fmtEur(amt)}</span>`:'<span class="log-amt zero">—</span>';
+    // Fortschritts-Zeilen zahlen nichts aus — statt eines leeren Strichs steht
+    // dort die Wertaenderung selbst (z.B. "+2,5 km").
+    const delta=Number(r.delta||0);
+    const amtHtml = amt>0
+        ? `<span class="${amtCls}">+${fmtEur(amt)}</span>`
+        : (t==='progress'&&delta
+            ? `<span class="log-amt delta">${delta>0?'+':'−'}${fmtNum(Math.abs(delta))}${r.unit?' '+esc(r.unit):''}</span>`
+            : '<span class="log-amt zero">—</span>');
     const note=r.note||'';
     const hasNote=!!note;
     const noteInline = hasNote
@@ -1019,13 +1026,19 @@ function deleteLogEntry(type,id){
                     haptic('success');
                     showToast(r&&r.payout_removed?'Gelöscht (inkl. Sparbeitrag)':'Gelöscht');
                     await Promise.all([loadLog(),loadAchievements(),loadSparziel()]);
+                } else if(type==='progress'){
+                    // Nimmt die Wertaenderung am Ziel gleich mit zurueck
+                    await apiCall('/api/achievement-progress-logs/'+id,{method:'DELETE'});
+                    haptic('success');
+                    showToast('Zurückgenommen');
+                    await Promise.all([loadLog(),loadAchievements()]);
                 } else if(type==='initial'||type==='streak_bonus'||type==='transfer'){
                     const r=await apiCall('/api/savings-transactions/'+id,{method:'DELETE'});
                     haptic('success');
                     showToast(r && r.pair_deleted ? 'Übertrag zurückgebucht' : 'Gelöscht');
                     await Promise.all([loadLog(),loadSparziel(),loadSavingsGoals()]);
                 }
-            }catch(e){haptic('error');showToast('Löschen fehlgeschlagen',true);await loadLog();}
+            }catch(e){haptic('error');showToast(e.message||'Löschen fehlgeschlagen',true);await loadLog();}
         }
     );
 }
@@ -1255,6 +1268,7 @@ async function submitNote(){
     let url;
     if(noteTarget.type==='checkin')            url = '/api/progress-logs/'+noteTarget.id+'/note';
     else if(noteTarget.type==='milestone')     url = '/api/achievement-logs/'+noteTarget.id+'/note';
+    else if(noteTarget.type==='progress')      url = '/api/achievement-progress-logs/'+noteTarget.id+'/note';
     else                                       url = '/api/savings-transactions/'+noteTarget.id+'/note'; // initial, streak_bonus
     try{
         await apiCall(url, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({note})});
