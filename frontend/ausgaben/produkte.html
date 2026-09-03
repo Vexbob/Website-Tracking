@@ -29,6 +29,10 @@
 <main class="wide">
     <div id="subnav" data-active="produkte"></div>
 
+    <!-- Zusammenfuehren-Vorschlaege: erscheint nur, wenn der Server Schreib-
+         varianten desselben Artikels gefunden hat ("Gouda" / "Gouda jung"). -->
+    <div id="mergeBox" class="merge-box" style="display:none"></div>
+
     <div class="stat-card">
         <div class="stat-card-head">
             <h3>🛒 Produkt-Statistik</h3>
@@ -46,6 +50,8 @@
                 <select id="prodStore" class="stat-chip" style="border-radius:6px;padding:0.375rem 0.5rem">
                     <option value="">Alle Läden</option>
                 </select>
+                <button id="prodReparse" class="prod-reparse-btn"
+                        title="Alle Bons mit Foto neu von der KI parsen — aktualisiert Namen, Kategorien und Mengeneinheiten">🔄 Alle neu parsen</button>
             </div>
         </div>
 
@@ -62,7 +68,7 @@
                     <tr>
                         <th>Produkt</th>
                         <th>Kategorie</th>
-                        <th>Laden</th>
+                        <th>Läden</th>
                         <th style="text-align:right">Käufe</th>
                         <th style="text-align:right">Gesamt</th>
                         <th style="text-align:right">Ø Preis</th>

@@ -94,7 +94,7 @@ function renderItemRow(item) {
     const row = document.createElement('div');
     row.className = 'item-row';
     row.dataset.id = item.id || '';
-    // Falls Item vom Preisvergleich ausgeschlossen ist: visuell abheben
+    // Falls Item aus der Produktliste ausgeblendet ist: visuell abheben
     const comparable = item.price_comparable !== false;
     if (!comparable) row.classList.add('not-comparable');
     const catOpts = '<option value="">– Kategorie –</option>' +
@@ -103,8 +103,8 @@ function renderItemRow(item) {
         ? `<span class="badge" style="background:#dcfce7;color:#166534;font-size:0.625rem;padding:1px 4px" title="${item.original_price ? 'Vorher: ' + item.original_price + ' €' : 'Reduziert'}">RED</span>`
         : '';
     const cmpTitle = comparable
-        ? 'Aus Preisvergleich ausschließen (z.B. Einmalkauf)'
-        : 'In Preisvergleich aufnehmen';
+        ? 'Aus der Produktliste ausblenden (z.B. Einmalkauf)'
+        : 'Wieder in die Produktliste aufnehmen';
     const cmpIcon = comparable ? '📊' : '🚫';
     row.innerHTML = `
         <input type="text" class="d-desc" value="${escapeAttr(item.description||'')}" placeholder="Beschreibung">
@@ -140,10 +140,10 @@ function renderItemRow(item) {
         } catch(err) { showToast('Fehler: ' + err.message, 'error'); }
     };
     row.querySelectorAll('input, select').forEach(el => { el.onchange = save; });
-    // Preisvergleich-Toggle
+    // Produktlisten-Toggle
     row.querySelector('.cmp').onclick = async () => {
         if (!item.id) {
-            showToast('Erst speichern, dann Preisvergleich togglen', 'error');
+            showToast('Erst speichern, dann aus der Produktliste nehmen', 'error');
             return;
         }
         const newVal = !(item.price_comparable !== false);
@@ -154,9 +154,9 @@ function renderItemRow(item) {
             const btn = row.querySelector('.cmp');
             btn.textContent = newVal ? '📊' : '🚫';
             btn.title = newVal
-                ? 'Aus Preisvergleich ausschließen (z.B. Einmalkauf)'
-                : 'In Preisvergleich aufnehmen';
-            showToast(newVal ? 'Wieder im Preisvergleich' : 'Aus Preisvergleich ausgeschlossen', 'success', 1500);
+                ? 'Aus der Produktliste ausblenden (z.B. Einmalkauf)'
+                : 'Wieder in die Produktliste aufnehmen';
+            showToast(newVal ? 'Wieder in der Produktliste' : 'Aus der Produktliste ausgeblendet', 'success', 1500);
         } catch (err) { showToast('Fehler: ' + err.message, 'error'); }
     };
     row.querySelector('.del').onclick = async () => {

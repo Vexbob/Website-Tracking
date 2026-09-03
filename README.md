@@ -34,7 +34,7 @@ Erfasst Einkäufe bis auf die einzelne Position und beantwortet damit die Frage,
 - **Schnelleingabe** — Bon ohne Positionen, nur Laden, Datum und Summe. Für den Fall, dass der Beleg nicht mehr da ist oder sich der Aufwand nicht lohnt.
 - **Läden & Kategorien mit Auto-Regeln** — Regeln ordnen wiederkehrende Artikel automatisch einer Kategorie zu, damit die Auswertung nicht an unsortierten Positionen scheitert.
 - **Marken & Produkte** — eigene Seiten für Markenpflege und die Produktliste, Grundlage für Marken- und Produktvergleiche.
-- **Preisverlauf** — je Produkt die Preisentwicklung über die Zeit und über Läden hinweg; zeigt, ob ein „Angebot" wirklich eines ist.
+- **Produkte** — was wurde wie oft gekauft, was hat es zusammen gekostet und in welchen Läden. Ein Produkt ist eine Zeile, unabhängig vom Laden; Schreibvarianten desselben Artikels ("Gouda", "Gouda jung") schlägt die Seite zum Zusammenführen vor. Einen normierten Preisvergleich (€/kg, günstigster Laden) gibt es bewusst nicht mehr — er hat €/Stück- und €/kg-Werte vermischt, sobald die Mengeneinheit auf dem Bon fehlte.
 - **Statistikseite** — Zeitraumfilter, KPI-Kacheln, Trend-Chart, Auswertung nach Kategorie und Laden, Läden-Vergleich.
 - **Duplikat-Erkennung** — eigener Tab mit Vorschlägen für doppelt erfasste Bons; jeder Vorschlag lässt sich zusammenführen oder dauerhaft ausblenden, ohne Bons zu löschen.
 - **Wiederkehrende Ausgaben** — Bons als wiederkehrend markieren, damit Fixkosten in der Auswertung als solche erkennbar bleiben.

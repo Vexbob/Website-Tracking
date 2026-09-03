@@ -6,6 +6,7 @@ Kein Prefix: die Endpoints behalten ihre alten absoluten Pfade
 ``/api/category-rules``, ``/api/expense-items``, ``/api/receipts``).
 """
 import asyncio
+import re
 from datetime import date, timedelta, datetime, timezone
 from typing import Optional
 
@@ -1220,100 +1221,6 @@ async def expenses_heatmap(db=Depends(get_db), user=Depends(get_current_user)):
         cur += timedelta(days=1)
     return out
 
-@router.get("/api/expenses/price-history")
-async def price_history(q: str = Query(..., min_length=2),
-                         db=Depends(get_db), user=Depends(get_current_user)):
-    """Preisverlauf mit echtem Vergleich:
-    - alle Käufe passend zum Suchbegriff
-    - Summary: Ø-Preis, günstigster/teuerster Laden, Diff in € und %
-    - je Kauf: Diff zum Ø-Preis (billiger/teurer)
-    Berechnet mit Einzelpreis (total_price/quantity), damit Mengen vergleichbar werden.
-    """
-    rows = await db.fetch(
-        """SELECT ei.id, ei.description, ei.total_price, ei.quantity, ei.unit_price,
-                  ei.original_price, ei.is_reduced,
-                  e.purchase_date, e.store_id,
-                  s.name AS store_name, s.color AS store_color, s.icon AS store_icon
-           FROM expense_items ei
-           JOIN expenses e ON e.id=ei.expense_id
-           LEFT JOIN stores s ON s.id=e.store_id
-           WHERE ei.user_id=$1 AND LOWER(ei.description) LIKE '%' || LOWER($2) || '%'
-           ORDER BY e.purchase_date DESC
-           LIMIT 500""",
-        user["id"], q)
-    if not rows:
-        return {
-            "count": 0, "items": [], "by_store": [],
-            "avg_unit_price": None, "cheapest": None, "most_expensive": None,
-            "max_diff_pct": 0,
-        }
-
-    def unit_price(r):
-        qty = float(r["quantity"] or 1) or 1
-        return float(r["total_price"]) / qty
-
-    items = []
-    for r in rows:
-        up = unit_price(r)
-        items.append({
-            "id": r["id"],
-            "description": r["description"],
-            "total_price": float(r["total_price"]),
-            "quantity": float(r["quantity"] or 1),
-            "unit_price_calc": round(up, 4),
-            "original_price": float(r["original_price"]) if r["original_price"] is not None else None,
-            "is_reduced": bool(r["is_reduced"]),
-            "purchase_date": r["purchase_date"].isoformat() if r["purchase_date"] else None,
-            "store_id": r["store_id"],
-            "store_name": r["store_name"] or "Ohne Laden",
-            "store_color": r["store_color"] or "#9ca3af",
-            "store_icon": r["store_icon"] or "🏪",
-        })
-
-    all_up = [i["unit_price_calc"] for i in items]
-    avg = sum(all_up) / len(all_up)
-
-    # Diff pro Item zum Durchschnitt
-    for i in items:
-        diff = i["unit_price_calc"] - avg
-        i["diff_to_avg"] = round(diff, 2)
-        i["diff_pct"] = round((diff / avg) * 100.0, 1) if avg > 0 else 0.0
-
-    # Pro Store aggregieren
-    from collections import defaultdict
-    store_group = defaultdict(list)
-    for i in items:
-        store_group[(i["store_id"], i["store_name"], i["store_color"], i["store_icon"])].append(i)
-    by_store = []
-    for (sid, sname, scolor, sicon), group in store_group.items():
-        ups = [g["unit_price_calc"] for g in group]
-        by_store.append({
-            "store_id": sid, "store_name": sname,
-            "store_color": scolor, "store_icon": sicon,
-            "avg_unit_price": round(sum(ups) / len(ups), 4),
-            "min_unit_price": round(min(ups), 4),
-            "max_unit_price": round(max(ups), 4),
-            "count": len(group),
-            "diff_to_avg_pct": round(((sum(ups)/len(ups)) - avg) / avg * 100.0, 1) if avg > 0 else 0.0,
-        })
-    by_store.sort(key=lambda x: x["avg_unit_price"])
-
-    cheapest = by_store[0] if by_store else None
-    most_expensive = by_store[-1] if by_store else None
-    max_diff_pct = round(
-        (most_expensive["avg_unit_price"] - cheapest["avg_unit_price"]) / cheapest["avg_unit_price"] * 100.0, 1
-    ) if cheapest and cheapest["avg_unit_price"] > 0 and cheapest is not most_expensive else 0.0
-
-    return {
-        "count": len(items),
-        "items": items,
-        "by_store": by_store,
-        "avg_unit_price": round(avg, 4),
-        "cheapest": cheapest,
-        "most_expensive": most_expensive,
-        "max_diff_pct": max_diff_pct,
-    }
-
 @router.get("/api/expenses/recurring/suggestions")
 async def recurring_suggestions(db=Depends(get_db), user=Depends(get_current_user)):
     rows = await db.fetch(
@@ -1488,7 +1395,106 @@ async def dismiss_duplicate_group(request: Request, body: dict,
     return {"status": "dismissed"}
 
 
-# ---------- Produkt-Preisverlauf (Aggregation aller gekauften Artikel) ----------
+# ---------- Produktliste (Aggregation aller gekauften Artikel) ----------
+#
+# v1.42.0: Der Preisvergleich ist ersatzlos entfallen (Ø-Preis je Einheit,
+# guenstigster/teuerster Laden, €/kg-Normierung, Preisaenderung ggue. dem
+# Vorkauf). Er hat Artikel miteinander verrechnet, deren Einheiten gar nicht
+# vergleichbar waren: fehlte die Mengeneinheit oder stand auf dem Bon "1 Pack"
+# statt "500 g", landete ein €/Stueck-Wert im selben Durchschnitt wie die
+# €/kg-Werte -- inklusive erfundener Preissprunge und eines falschen
+# "guenstigster Laden"-Rankings. Was bleibt, ist eine ehrliche Einkaufs-
+# statistik: was wurde wie oft gekauft, was hat es zusammen gekostet und in
+# welchen Laeden. Der Laden ist dabei NIE Teil des Gruppenschluessels -- ein
+# Produkt ist eine Zeile, egal in wie vielen Laeden es gekauft wurde.
+
+_QTY_SUFFIX_RE = re.compile(
+    r"\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|stk|pack|btl|blatt|x\d+)\s*$", re.IGNORECASE)
+
+
+def _norm_product_key(desc: Optional[str]) -> str:
+    """Normalisiert eine Beschreibung zum Produkt-Basisnamen:
+    alles ab '(' abschneiden (Originaltext vom Bon), eine angehaengte
+    Menge+Einheit entfernen, Whitespace normalisieren, lowercase.
+    """
+    d = (desc or "").strip()
+    if "(" in d:
+        d = d.split("(", 1)[0].strip()
+    d = _QTY_SUFFIX_RE.sub("", d)
+    return re.sub(r"\s+", " ", d).strip().lower()
+
+
+def _product_key(r) -> str:
+    """Gruppenschluessel eines Items.
+
+    Prioritaet: ``product_group`` (manuell zusammengefuehrt oder herausgeloest)
+    -> ``base_name`` -> normalisierte ``description``. Der Laden kommt bewusst
+    nicht vor.
+    """
+    pg = (r["product_group"] or "").strip().lower()
+    if pg:
+        return pg
+    bn = (r["base_name"] or "").strip().lower()
+    if bn:
+        return bn
+    return _norm_product_key(r["description"])
+
+
+async def _fetch_product_rows(db, user_id: int, conds=None, params=None):
+    """Alle fuer die Produktaggregation relevanten Positionen, neueste zuerst."""
+    conds = list(conds or [])
+    params = list(params or [user_id])
+    base = ["ei.user_id=$1", "COALESCE(ei.price_comparable, TRUE)=TRUE",
+            "(ei.base_name IS NOT NULL OR (ei.description IS NOT NULL AND ei.description != ''))",
+            "ei.total_price > 0"]
+    return await db.fetch(
+        f"""SELECT ei.id AS item_id, ei.description, ei.base_name, ei.original_text,
+                  ei.total_price, ei.quantity, ei.quantity_unit,
+                  ei.original_price, ei.is_reduced, ei.product_group,
+                  ei.brand_id, ei.category_id, ei.expense_id,
+                  e.purchase_date, e.store_id,
+                  s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
+                  c.name AS category_name,
+                  b.name AS brand_name, b.is_private_label AS brand_is_private_label
+           FROM expense_items ei
+           JOIN expenses e ON e.id=ei.expense_id
+           LEFT JOIN stores s ON s.id=e.store_id
+           LEFT JOIN expense_categories c ON c.id=ei.category_id
+           LEFT JOIN brands b ON b.id=ei.brand_id
+           WHERE {' AND '.join(base + conds)}
+           ORDER BY e.purchase_date DESC, ei.id DESC""",
+        *params)
+
+
+def _stores_of(purchases) -> list:
+    """Alle Laeden einer Produktgruppe mit Anzahl und Summe, haeufigster zuerst.
+
+    Ersetzt die alte Einzel-Spalte "letzter Laden": ein Produkt, das in drei
+    Laeden gekauft wurde, ist EINE Zeile mit drei Laeden -- nicht drei Zeilen.
+    """
+    from collections import defaultdict
+    agg = defaultdict(lambda: {"count": 0, "total": 0.0})
+    meta = {}
+    for p in purchases:
+        sid = p["store_id"]
+        agg[sid]["count"] += 1
+        agg[sid]["total"] += float(p["total_price"])
+        meta.setdefault(sid, (p["store_name"], p["store_color"], p["store_icon"]))
+    out = []
+    for sid, vals in agg.items():
+        name, color, icon = meta[sid]
+        out.append({
+            "store_id": sid,
+            "store_name": name or "Ohne Laden",
+            "store_color": color or "#9ca3af",
+            "store_icon": icon or "🏪",
+            "count": vals["count"],
+            "total": round(vals["total"], 2),
+        })
+    out.sort(key=lambda s: (-s["count"], -s["total"]))
+    return out
+
+
 @router.get("/api/expenses/products")
 async def list_products(
     min_count: int = 2,
@@ -1498,33 +1504,18 @@ async def list_products(
     store_id: Optional[int] = None,
     db=Depends(get_db), user=Depends(get_current_user),
 ):
-    """Aggregierte Produktliste über alle Bons — fuer den Preisverlauf-Tab
-    und die Produkt-Statistik-Seite.
+    """Aggregierte Produktliste ueber alle Bons fuer die Produkt-Seite.
 
-    Gruppiert nach normalisierter Beschreibung (Basisname vor "(").
-    Fuer jedes Produkt: letzter Preis + Rabatt-/Preiserhoehung ggue. vorherigem Kauf,
-    plus Preis/kg oder Preis/L falls Einheit bekannt.
+    Gruppiert nach ``product_group`` -> ``base_name`` -> normalisierter
+    Beschreibung. Je Produkt: Anzahl Kaeufe, Gesamtausgaben, Ø-/Min-/Max-Preis,
+    letzter Kauf und ALLE Laeden, in denen es gekauft wurde.
 
-    Parameter ``min_count`` (v1.16.0, strikt ab v1.17.x): Nur Produkte mit
-    mindestens N Kaeufen zurueckgeben — die Standard-Ansicht zeigt nur Produkte,
-    die man mehrmals gekauft hat (Einmal-Kaeufe sind fuer Preisverlauf
-    uninteressant). ``min_count=1`` gibt alle Produkte zurueck.
-
-    Optionale Filter (v1.20.0) fuer die Produkt-Statistik-Seite: ``date_from``/
-    ``date_to`` (ISO-Datum, beschraenkt auf einzelne Kaeufe im Zeitraum),
-    ``category_id`` und ``store_id`` (beschraenken auf Kaeufe der letzten
-    Kategorie/Laden). Die Aggregation (Anzahl, Gesamtsumme etc.) bezieht sich
-    dann nur auf die gefilterten Kaeufe.
+    ``min_count``: nur Produkte mit mindestens N Kaeufen (1 = alle).
+    Optionale Filter ``date_from``/``date_to``/``category_id``/``store_id``
+    beschraenken die beruecksichtigten Kaeufe; der Store-Filter schraenkt also
+    die Datenbasis ein, er spaltet aber keine Produkte auf.
     """
-    conds = ["ei.user_id=$1", "COALESCE(ei.price_comparable, TRUE)=TRUE",
-             "(ei.base_name IS NOT NULL OR (ei.description IS NOT NULL AND ei.description != ''))",
-             "ei.total_price > 0"]
-    params = [user["id"]]
-    # Bugfix (war Ursache fuer HTTP 500 auf der Produkt-Seite): date_from/
-    # date_to kamen als rohe Strings an und wurden ungecastet gegen die
-    # ``date``-Spalte ``purchase_date`` verglichen -> asyncpg/Postgres wirft
-    # "operator does not exist: date >= text". Muessen zuerst in echte
-    # date-Objekte geparst werden, wie es der Rest des Moduls auch macht.
+    conds, params = [], [user["id"]]
     df = _parse_iso_date(date_from) if date_from else None
     dt = _parse_iso_date(date_to) if date_to else None
     if df:
@@ -1540,160 +1531,26 @@ async def list_products(
         params.append(store_id)
         conds.append(f"e.store_id = ${len(params)}")
 
-    # Nur Artikel die als vergleichbar markiert sind (KI-Flag price_comparable=true)
-    rows = await db.fetch(
-        f"""SELECT ei.description, ei.base_name, ei.original_text,
-                  ei.total_price, ei.quantity, ei.quantity_unit,
-                  ei.original_price, ei.is_reduced, ei.product_group,
-                  ei.brand_id, ei.category_id,
-                  e.purchase_date, e.store_id,
-                  s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
-                  c.name AS category_name,
-                  b.name AS brand_name, b.is_private_label AS brand_is_private_label
-           FROM expense_items ei
-           JOIN expenses e ON e.id=ei.expense_id
-           LEFT JOIN stores s ON s.id=e.store_id
-           LEFT JOIN expense_categories c ON c.id=ei.category_id
-           LEFT JOIN brands b ON b.id=ei.brand_id
-           WHERE {' AND '.join(conds)}
-           ORDER BY e.purchase_date DESC, ei.id DESC""",
-        *params)
-
+    rows = await _fetch_product_rows(db, user["id"], conds, params)
 
     from collections import defaultdict
-    import re
-
-    def norm_key(desc):
-        """Normalisiert zu einem Produkt-Basisnamen:
-        - alles nach '(' abschneiden (Originaltext),
-        - Menge+Einheit am Ende entfernen ('2kg', '500g', '1L', '10 Stk'),
-        - lowercase, Whitespace normalisieren.
-        So gruppieren "Vollmilch 1L (ESL-Vollm.)" und "Vollmilch 500ml (Clever)"
-        beide zu 'vollmilch'.
-        """
-        d = (desc or "").strip()
-        if "(" in d:
-            d = d.split("(", 1)[0].strip()
-        # Trailing Menge+Einheit entfernen (mehrfach falls "2 Stk 500g" etc.)
-        d = re.sub(r"\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|stk|pack|btl|blatt|x\d+)\s*$",
-                   "", d, flags=re.IGNORECASE)
-        d = re.sub(r"\s+", " ", d).strip().lower()
-        return d
-
-    def unit_price_of(r):
-        """Einheits-normalisierter Preis für Vergleiche über Größenvarianten hinweg.
-        - kg/L: total_price / quantity → Preis pro kg/L
-        - g:    (total_price / quantity) * 1000 → Preis pro kg
-        - ml:   (total_price / quantity) * 1000 → Preis pro L
-        - sonst: total_price / quantity (Stk/Pack/etc.)
-        """
-        qty = float(r["quantity"] or 1) or 1
-        tp = float(r["total_price"])
-        unit = (r["quantity_unit"] or "").lower()
-        if unit == "g":
-            return (tp / qty) * 1000.0
-        if unit == "ml":
-            return (tp / qty) * 1000.0
-        return tp / qty
-
-    def group_key(r):
-        # Priorität: product_group (manuelle Zuordnung) → base_name → norm_key(description)
-        pg = (r["product_group"] or "").strip().lower()
-        if pg:
-            return pg
-        bn = (r["base_name"] or "").strip().lower()
-        if bn:
-            return bn
-        return norm_key(r["description"])
-
     groups = defaultdict(list)
     for r in rows:
-        k = group_key(r)
-        if not k:
-            continue
-        groups[k].append(r)
+        k = _product_key(r)
+        if k:
+            groups[k].append(r)
 
     products = []
     for key, purchases in groups.items():
-        # rows sind DESC nach Datum → purchases[0] = neuester Kauf
-        last = purchases[0]
-        prices = [float(p["total_price"]) for p in purchases]
-        unit_prices = [unit_price_of(p) for p in purchases]
-
-        # --- Preisänderung PRO LADEN berechnen (nicht cross-store!) ---
-        # Suche vorherigen Kauf beim SELBEN Laden wie der letzte Kauf.
-        change_abs = change_pct = change_direction = None
-        last_store_id = last["store_id"]
-        same_store_prev = None
-        for p in purchases[1:]:
-            if p["store_id"] == last_store_id:
-                same_store_prev = p
-                break
-        if same_store_prev is not None:
-            last_up = unit_price_of(last)
-            prev_up = unit_price_of(same_store_prev)
-            if prev_up > 0:
-                change_abs = round(last_up - prev_up, 4)
-                change_pct = round((change_abs / prev_up) * 100.0, 1)
-                if change_pct >= 1:
-                    change_direction = "up"
-                elif change_pct <= -1:
-                    change_direction = "down"
-
-        # --- Store-Vergleich: welcher Laden ist im Schnitt am günstigsten? ---
-        by_store = defaultdict(list)
-        for p in purchases:
-            by_store[(p["store_id"], p["store_name"], p["store_color"], p["store_icon"])].append(unit_price_of(p))
-        store_stats = []
-        for (sid, sname, scolor, sicon), ups in by_store.items():
-            store_stats.append({
-                "store_id": sid,
-                "store_name": sname or "Ohne Laden",
-                "store_color": scolor or "#9ca3af",
-                "store_icon": sicon or "🏪",
-                "avg_unit_price": round(sum(ups) / len(ups), 4),
-                "count": len(ups),
-            })
-        cheapest = min(store_stats, key=lambda s: s["avg_unit_price"]) if store_stats else None
-        expensive = max(store_stats, key=lambda s: s["avg_unit_price"]) if len(store_stats) > 1 else None
-        max_diff_pct = None
-        if cheapest and expensive and cheapest["store_id"] != expensive["store_id"] and cheapest["avg_unit_price"] > 0:
-            max_diff_pct = round(
-                (expensive["avg_unit_price"] - cheapest["avg_unit_price"]) / cheapest["avg_unit_price"] * 100.0, 1)
-
-        # €/kg bzw €/L für die Preis-Sub-Zeile in der Liste
-        price_per_kg = None
-        price_per_l = None
-        unit = (last["quantity_unit"] or "").lower() if last["quantity_unit"] else ""
-        qty = float(last["quantity"] or 0)
-        tp = float(last["total_price"])
-        if qty > 0 and tp > 0:
-            if unit == "kg":
-                price_per_kg = round(tp / qty, 2)
-            elif unit == "g":
-                price_per_kg = round(tp / (qty / 1000.0), 2)
-            elif unit == "l":
-                price_per_l = round(tp / qty, 2)
-            elif unit == "ml":
-                price_per_l = round(tp / (qty / 1000.0), 2)
-
-        # Titel: base_name wenn vorhanden, sonst aus description ableiten
-        title = (last["base_name"] or "").strip()
-        if not title:
-            title = norm_key(last["description"]).title() or last["description"]
-
-        # v1.17.x: Filter nach min_count strikt — Produkte mit weniger als
-        # ``min_count`` Kaeufen werden konsequent ausgeblendet.
-        # (Frueher Ausnahme fuer brand_id gesetzt: fiel weg, weil der KI-Parser
-        # inzwischen fast jedem Item eine Marke zuordnet und dadurch die
-        # UI-Zusage "nur mehrfach gekaufte Produkte" verletzt wurde.)
         if len(purchases) < min_count:
             continue
-
-        # Sammle Marken-Info (von der letzten Buchung)
-        last_brand_id = last.get("brand_id")
-        last_brand_name = last.get("brand_name")
-
+        # rows sind DESC nach Datum -> purchases[0] = neuester Kauf
+        last = purchases[0]
+        prices = [float(p["total_price"]) for p in purchases]
+        total_spent = sum(prices)
+        title = ((last["base_name"] or "").strip()
+                 or _norm_product_key(last["description"]).title()
+                 or (last["description"] or key))
         products.append({
             "key": key,
             "title": title,
@@ -1701,45 +1558,203 @@ async def list_products(
             "base_name": last["base_name"],
             "original_text": last["original_text"],
             "category_name": last["category_name"],
-            "brand_id": last_brand_id,
-            "brand_name": last_brand_name,
-            "brand_is_private_label": bool(last.get("brand_is_private_label")),
+            "brand_id": last["brand_id"],
+            "brand_name": last["brand_name"],
+            "brand_is_private_label": bool(last["brand_is_private_label"]),
+            "is_merged": bool((last["product_group"] or "").strip()),
             "count": len(purchases),
+            "total_spent": round(total_spent, 2),
+            "avg_price": round(total_spent / len(purchases), 2),
+            "min_price": round(min(prices), 2),
+            "max_price": round(max(prices), 2),
             "last_date": last["purchase_date"].isoformat() if last["purchase_date"] else None,
-            "last_price": tp,
-            "last_unit_price": round(unit_price_of(last), 4),
+            "last_price": round(float(last["total_price"]), 2),
             "last_quantity": float(last["quantity"] or 1),
             "last_quantity_unit": last["quantity_unit"],
             "last_original_price": float(last["original_price"]) if last["original_price"] is not None else None,
             "last_is_reduced": bool(last["is_reduced"]),
-            "last_store_id": last["store_id"],
-            "last_store_name": last["store_name"] or "Ohne Laden",
-            "last_store_color": last["store_color"] or "#9ca3af",
-            "last_store_icon": last["store_icon"] or "🏪",
-            "min_price": round(min(prices), 2),
-            "max_price": round(max(prices), 2),
-            "min_unit_price": round(min(unit_prices), 4),
-            "max_unit_price": round(max(unit_prices), 4),
-            "avg_unit_price": round(sum(unit_prices) / len(unit_prices), 4),
-            "price_change_abs": change_abs,
-            "price_change_pct": change_pct,
-            "price_change_direction": change_direction,
-            "price_change_same_store": same_store_prev is not None,
-            "price_per_kg": price_per_kg,
-            "price_per_l": price_per_l,
-            "cheapest_store": cheapest,
-            "most_expensive_store": expensive,
-            "max_diff_pct": max_diff_pct,
+            "stores": _stores_of(purchases),
         })
 
-    # Default-Sortierung: neuester Kauf zuerst (User erwartet was er zuletzt gekauft hat)
     products.sort(key=lambda p: p["last_date"] or "", reverse=True)
     return products
 
 
+# ---------- Varianten zusammenfuehren ----------
+#
+# Die KI leitet den Basisnamen aus dem Bon-Text ab, und jeder Laden druckt
+# denselben Artikel anders: "Gouda", "Gouda jung" und "Goudakaese" wurden
+# dadurch zu drei Produkten, die zufaellig je einem Laden entsprachen. Statt
+# Namen heuristisch zu verschmelzen (und dabei "Gouda" mit "Gouda-Auflauf" zu
+# verwechseln) schlaegt der Server Kandidaten vor und der User bestaetigt --
+# die Entscheidung landet als ``product_group`` dauerhaft an den Positionen
+# und gilt damit auch fuer kuenftige Kaeufe mit demselben Namen.
+
+_MERGE_MIN_STEM = 4  # kuerzere Wortstaemme ("Ei", "Bio") wuerden alles verbinden
+
+
+def _merge_words(key: str) -> set:
+    return {w for w in re.split(r"[^0-9a-zA-ZäöüÄÖÜß]+", key.lower()) if len(w) >= _MERGE_MIN_STEM}
+
+
+def _merge_compact(key: str) -> str:
+    return re.sub(r"[^0-9a-zäöüß]+", "", key.lower())
+
+
+def _is_variant_of(a: str, b: str) -> bool:
+    """TRUE, wenn zwei Gruppenschluessel dasselbe Produkt in anderer Schreibweise
+    sein koennten: einer ist Praefix des anderen ("gouda"/"goudakaese") oder die
+    Wortmenge des einen steckt in der des anderen ("gouda"/"gouda jung").
+    Alles andere wird NICHT vorgeschlagen -- lieber ein Vorschlag zu wenig als
+    zwei falsch verschmolzene Produkte.
+    """
+    ca, cb = _merge_compact(a), _merge_compact(b)
+    if not ca or not cb or ca == cb:
+        return False
+    if min(len(ca), len(cb)) >= _MERGE_MIN_STEM and (ca.startswith(cb) or cb.startswith(ca)):
+        return True
+    wa, wb = _merge_words(a), _merge_words(b)
+    if wa and wb and (wa < wb or wb < wa):
+        return True
+    return False
+
+
+@router.get("/api/expenses/products/merge-suggestions")
+async def product_merge_suggestions(db=Depends(get_db), user=Depends(get_current_user)):
+    """Findet Produktgruppen, die vermutlich Schreibweisen desselben Artikels
+    sind, und schlaegt sie zum Zusammenfuehren vor. Bereits abgelehnte
+    Vorschlaege (gleiche Schluesselmenge) tauchen nicht wieder auf.
+    """
+    rows = await _fetch_product_rows(db, user["id"])
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for r in rows:
+        k = _product_key(r)
+        if k:
+            groups[k].append(r)
+
+    keys = sorted(groups.keys())
+    parent = {k: k for k in keys}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for i, a in enumerate(keys):
+        for b in keys[i + 1:]:
+            if _is_variant_of(a, b):
+                ra, rb = find(a), find(b)
+                if ra != rb:
+                    parent[rb] = ra
+
+    clusters = defaultdict(list)
+    for k in keys:
+        clusters[find(k)].append(k)
+
+    dismissed = {r["product_keys"] for r in await db.fetch(
+        "SELECT product_keys FROM dismissed_product_merges WHERE user_id=$1", user["id"])}
+
+    out = []
+    for members in clusters.values():
+        if len(members) < 2:
+            continue
+        fingerprint = "|".join(sorted(members))
+        if fingerprint in dismissed:
+            continue
+        variants = []
+        for k in sorted(members, key=lambda m: (-len(groups[m]), m)):
+            purchases = groups[k]
+            last = purchases[0]
+            variants.append({
+                "key": k,
+                "title": (last["base_name"] or "").strip() or k,
+                "count": len(purchases),
+                "stores": [s["store_name"] for s in _stores_of(purchases)],
+            })
+        # Der kuerzeste Name ist in aller Regel der generische ("Gouda")
+        suggested = min(members, key=lambda m: (len(m), m))
+        out.append({
+            "fingerprint": fingerprint,
+            "keys": sorted(members),
+            "suggested_key": suggested,
+            "suggested_title": next(v["title"] for v in variants if v["key"] == suggested),
+            "total_count": sum(v["count"] for v in variants),
+            "variants": variants,
+        })
+    out.sort(key=lambda s: -s["total_count"])
+    return out
+
+
+class ProductMerge(BaseModel):
+    keys: list
+    title: Optional[str] = None
+
+
+@router.post("/api/expenses/products/merge")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def merge_products(request: Request, b: ProductMerge,
+                          db=Depends(get_db), user=Depends(get_current_user)):
+    """Fuehrt mehrere Produktgruppen dauerhaft zu einer zusammen, indem allen
+    betroffenen Positionen dieselbe ``product_group`` gesetzt wird."""
+    keys = {(k or "").strip().lower() for k in (b.keys or []) if (k or "").strip()}
+    if len(keys) < 2:
+        raise HTTPException(400, "Mindestens zwei Produkt-Schlüssel nötig")
+    target = (b.title or "").strip().lower() or min(keys, key=lambda m: (len(m), m))
+
+    rows = await _fetch_product_rows(db, user["id"])
+    item_ids = [r["item_id"] for r in rows if _product_key(r) in keys]
+    if not item_ids:
+        raise HTTPException(404, "Keine Positionen zu diesen Schlüsseln gefunden")
+    await db.execute(
+        "UPDATE expense_items SET product_group=$1, user_edited=TRUE "
+        "WHERE id = ANY($2) AND user_id=$3",
+        target, item_ids, user["id"])
+    logger.info(f"User {user['id']} merged product groups {sorted(keys)} -> '{target}' "
+                f"({len(item_ids)} items)")
+    return {"status": "merged", "product_group": target, "items": len(item_ids)}
+
+
+@router.post("/api/expenses/products/merge-dismiss")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def dismiss_product_merge(request: Request, b: ProductMerge,
+                                 db=Depends(get_db), user=Depends(get_current_user)):
+    """Blendet einen Zusammenfuehren-Vorschlag dauerhaft aus, ohne etwas zu
+    aendern (analog zu den Bon-Duplikaten)."""
+    keys = sorted({(k or "").strip().lower() for k in (b.keys or []) if (k or "").strip()})
+    if len(keys) < 2:
+        raise HTTPException(400, "Mindestens zwei Produkt-Schlüssel nötig")
+    await db.execute(
+        """INSERT INTO dismissed_product_merges (user_id, product_keys)
+           VALUES ($1, $2) ON CONFLICT (user_id, product_keys) DO NOTHING""",
+        user["id"], "|".join(keys))
+    return {"status": "dismissed"}
+
+
+@router.post("/api/expenses/products/split")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def split_product(request: Request, b: ProductMerge,
+                        db=Depends(get_db), user=Depends(get_current_user)):
+    """Nimmt ein Zusammenfuehren zurueck: ``product_group`` wird fuer alle
+    Positionen der Gruppe geleert, die Artikel fallen auf ihren Basisnamen
+    zurueck."""
+    keys = {(k or "").strip().lower() for k in (b.keys or []) if (k or "").strip()}
+    if not keys:
+        raise HTTPException(400, "Produkt-Schlüssel nötig")
+    rows = await _fetch_product_rows(db, user["id"])
+    item_ids = [r["item_id"] for r in rows if _product_key(r) in keys]
+    if not item_ids:
+        raise HTTPException(404, "Keine Positionen zu diesen Schlüsseln gefunden")
+    await db.execute(
+        "UPDATE expense_items SET product_group=NULL WHERE id = ANY($1) AND user_id=$2",
+        item_ids, user["id"])
+    return {"status": "split", "items": len(item_ids)}
+
+
 class ItemGroupOverride(BaseModel):
     # None => zurück zum automatischen Grouping (Basisname)
-    # Sonst: expliziter Gruppenschlüssel (z.B. "_solo_<random>" für "alleine lassen")
+    # Sonst: expliziter Gruppenschlüssel
     product_group: Optional[str] = None
 
 
@@ -1747,20 +1762,14 @@ class ItemGroupOverride(BaseModel):
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def set_item_product_group(request: Request, iid: int, b: ItemGroupOverride,
                                   db=Depends(get_db), user=Depends(get_current_user)):
-    """Überschreibt die Produkt-Gruppe eines einzelnen Items.
-
-    Anwendungsfall: Ein Artikel wurde vom Preisverlauf-Grouping fälschlich mit
-    einem anderen Produkt zusammengefasst (z.B. „Kaffeesahne" landet in „Milch").
-    Der User setzt eine eigene ``product_group`` — entweder einen sprechenden
-    eigenen Namen oder ``null`` um zum automatischen Grouping zurückzukehren.
-    Wenn hier ein zufälliger eindeutiger String gesetzt wird, ist das Item
-    danach in einer eigenen Ein-Item-Gruppe.
-    """
+    """Überschreibt die Produkt-Gruppe einer EINZELNEN Position — z.B. um einen
+    falsch einsortierten Artikel aus einer Gruppe herauszuloesen. ``null`` setzt
+    auf das automatische Grouping (Basisname) zurueck."""
     existing = await db.fetchval(
         "SELECT 1 FROM expense_items WHERE id=$1 AND user_id=$2", iid, user["id"])
     if not existing:
         raise HTTPException(404, "Nicht gefunden")
-    pg = (b.product_group or "").strip() or None
+    pg = (b.product_group or "").strip().lower() or None
     await db.execute(
         "UPDATE expense_items SET product_group=$1 WHERE id=$2 AND user_id=$3",
         pg, iid, user["id"])
@@ -1775,10 +1784,10 @@ class ItemPriceComparableToggle(BaseModel):
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def toggle_price_comparable(request: Request, iid: int, b: ItemPriceComparableToggle,
                                    db=Depends(get_db), user=Depends(get_current_user)):
-    """Schaltet ein Item aus dem Preisvergleich aus (oder wieder ein).
-    Nützlich für Einmalkäufe wie Töpfe, Vorratsdosen, Werkzeug etc., die die
-    KI falsch als vergleichbar eingestuft hat. Setzt zusätzlich user_edited=TRUE,
-    damit ein zukünftiger Reparse diese manuelle Entscheidung nicht überschreibt."""
+    """Blendet eine Position aus der Produktliste aus (oder wieder ein).
+    Nuetzlich fuer Einmalkaeufe wie Toepfe, Werkzeug oder Pfandzeilen, die in
+    einer Einkaufsstatistik nichts verloren haben. Setzt ``user_edited=TRUE``,
+    damit ein Reparse die Entscheidung nicht ueberschreibt."""
     existing = await db.fetchval(
         "SELECT 1 FROM expense_items WHERE id=$1 AND user_id=$2", iid, user["id"])
     if not existing:
@@ -1791,58 +1800,17 @@ async def toggle_price_comparable(request: Request, iid: int, b: ItemPriceCompar
 
 @router.get("/api/expenses/products/history")
 async def product_history(key: str, db=Depends(get_db), user=Depends(get_current_user)):
-    """Alle Käufe eines Produkts (nach normalisiertem Basisnamen ODER expliziter
-    product_group) fuer Zeitreihen-Chart und Item-Liste."""
+    """Alle Kaeufe eines Produkts (nach Gruppenschluessel) fuer die Detail-
+    Ansicht: Zeitreihe des tatsaechlich bezahlten Preises plus Kaufliste mit
+    Menge, Einheit und Laden. Bewusst OHNE Einheiten-Normierung -- gezeigt wird,
+    was an der Kasse bezahlt wurde, nicht ein hochgerechneter €/kg-Wert."""
     key = (key or "").strip().lower()
     if len(key) < 2:
         raise HTTPException(400, "Key zu kurz")
-    rows = await db.fetch(
-        """SELECT ei.id AS item_id, ei.description, ei.base_name, ei.original_text,
-                  ei.total_price, ei.quantity, ei.quantity_unit,
-                  ei.original_price, ei.is_reduced, ei.product_group,
-                  ei.price_comparable, ei.expense_id,
-                  e.purchase_date, e.store_id,
-                  s.name AS store_name, s.color AS store_color, s.icon AS store_icon
-           FROM expense_items ei
-           JOIN expenses e ON e.id=ei.expense_id
-           LEFT JOIN stores s ON s.id=e.store_id
-           WHERE ei.user_id=$1
-           ORDER BY e.purchase_date ASC, ei.id ASC""",
-        user["id"])
-
-    import re
-    from collections import defaultdict
-
-    def norm_key(desc):
-        d = (desc or "").strip()
-        if "(" in d:
-            d = d.split("(", 1)[0].strip()
-        d = re.sub(r"\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|stk|pack|btl|blatt|x\d+)\s*$",
-                   "", d, flags=re.IGNORECASE)
-        d = re.sub(r"\s+", " ", d).strip().lower()
-        return d
-
-    def unit_price_norm(qty, tp, unit):
-        u = (unit or "").lower()
-        if u in ("g", "ml"):
-            return (tp / qty) * 1000.0
-        return tp / qty
-
-    def item_key(r):
-        pg = (r["product_group"] or "").strip().lower()
-        if pg:
-            return pg
-        bn = (r["base_name"] or "").strip().lower()
-        if bn:
-            return bn
-        return norm_key(r["description"])
-
+    rows = await _fetch_product_rows(db, user["id"])
+    mine = [r for r in rows if _product_key(r) == key]
     items = []
-    for r in rows:
-        if item_key(r) != key:
-            continue
-        qty = float(r["quantity"] or 1) or 1
-        tp = float(r["total_price"])
+    for r in reversed(mine):  # _fetch_product_rows liefert DESC -> hier ASC
         items.append({
             "item_id": r["item_id"],
             "expense_id": r["expense_id"],
@@ -1850,47 +1818,18 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
             "description": r["description"],
             "base_name": r["base_name"],
             "original_text": r["original_text"],
-            "total_price": tp,
-            "quantity": qty,
+            "total_price": round(float(r["total_price"]), 2),
+            "quantity": float(r["quantity"] or 1),
             "quantity_unit": r["quantity_unit"],
-            "unit_price": round(unit_price_norm(qty, tp, r["quantity_unit"]), 4),
             "original_price": float(r["original_price"]) if r["original_price"] is not None else None,
             "is_reduced": bool(r["is_reduced"]),
             "product_group": r["product_group"],
-            "price_comparable": bool(r["price_comparable"]) if r["price_comparable"] is not None else True,
             "store_id": r["store_id"],
             "store_name": r["store_name"] or "Ohne Laden",
             "store_color": r["store_color"] or "#9ca3af",
             "store_icon": r["store_icon"] or "🏪",
         })
-
-    # Store-Vergleichs-Summary
-    by_store = defaultdict(list)
-    for it in items:
-        by_store[(it["store_id"], it["store_name"], it["store_color"], it["store_icon"])].append(it["unit_price"])
-    store_summary = []
-    for (sid, sname, scolor, sicon), ups in by_store.items():
-        store_summary.append({
-            "store_id": sid, "store_name": sname,
-            "store_color": scolor, "store_icon": sicon,
-            "avg_unit_price": round(sum(ups) / len(ups), 4),
-            "count": len(ups),
-        })
-    store_summary.sort(key=lambda s: s["avg_unit_price"])
-    cheapest = store_summary[0] if store_summary else None
-    expensive = store_summary[-1] if len(store_summary) > 1 else None
-    max_diff_pct = None
-    if cheapest and expensive and cheapest["store_id"] != expensive["store_id"] and cheapest["avg_unit_price"] > 0:
-        max_diff_pct = round(
-            (expensive["avg_unit_price"] - cheapest["avg_unit_price"]) / cheapest["avg_unit_price"] * 100.0, 1)
-
-    return {
-        "items": items,
-        "store_summary": store_summary,
-        "cheapest_store": cheapest,
-        "most_expensive_store": expensive,
-        "max_diff_pct": max_diff_pct,
-    }
+    return {"items": items, "stores": _stores_of(mine)}
 
 
 # ---------- Export ----------

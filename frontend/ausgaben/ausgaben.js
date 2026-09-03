@@ -69,7 +69,10 @@ const AUSGABEN_API = {
     },
 
     productHistory:  (key) => apiCall('/api/expenses/products/history?key=' + encodeURIComponent(key)),
-    priceHistory:    (q) => apiCall('/api/expenses/price-history?q=' + encodeURIComponent(q)),
+    mergeSuggestions:(  ) => apiCall('/api/expenses/products/merge-suggestions'),
+    mergeProducts:   (keys, title) => apiCall('/api/expenses/products/merge', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ keys, title }) }),
+    dismissMerge:    (keys) => apiCall('/api/expenses/products/merge-dismiss', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ keys }) }),
+    splitProduct:    (key) => apiCall('/api/expenses/products/split', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ keys: [key] }) }),
     mergeCategory:   (srcId, targetId) => apiCall(`/api/expense-categories/${srcId}/merge-into/${targetId}`, { method: 'POST' }),
     setItemGroup:    (iid, group) => apiCall(`/api/expense-items/${iid}/product-group`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ product_group: group }) }),
     setItemComparable: (iid, comparable) => apiCall(`/api/expense-items/${iid}/price-comparable`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ price_comparable: comparable }) }),
@@ -246,7 +249,7 @@ async function downloadFile(url, filename) {
 
 /* ---------- Gemeinsame Subnav für alle Ausgaben-Seiten ---------- */
 // Nutzung: <div id="subnav" data-active="..."></div> ins HTML, wobei active z.B.
-// "dashboard" | "neu" | "statistik" | "preisverlauf" | "laeden" | "kategorien"
+// "dashboard" | "neu" | "statistik" | "produkte" | "laeden" | "kategorien"
 function renderSubnav() {
     const el = document.getElementById('subnav');
     if (!el) return;
@@ -256,7 +259,6 @@ function renderSubnav() {
     const links = [
         { key: 'dashboard',    href: '/ausgaben/',                   label: '📋 Übersicht' },
         { key: 'statistik',    href: '/ausgaben/statistik.html',     label: '📊 Statistik' },
-        { key: 'preisverlauf', href: '/ausgaben/preisverlauf.html',  label: '💶 Preisverlauf' },
         { key: 'produkte',     href: '/ausgaben/produkte.html',      label: '🛒 Produkte' },
         { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
         { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },

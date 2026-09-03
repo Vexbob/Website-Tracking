@@ -4,6 +4,13 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.42.0', date: '2026-09-03', title: 'Preisverlauf entfernt, Produkte gruppieren jetzt über Läden hinweg', notes: [
+        'Die Preisverlauf-Seite und der normierte Preisvergleich sind raus. Er hat Artikel miteinander verrechnet, deren Einheiten gar nicht vergleichbar waren: fehlte die Mengeneinheit oder stand auf dem Bon "1 Pack" statt "500 g", landete ein €/Stück-Wert im selben Ø wie die €/kg-Werte — samt erfundener Preissprünge und falschem "günstigster Laden"-Ranking.',
+        'Die Produkte-Seite bleibt und zeigt jetzt echte Zahlen: tatsächlich bezahlte Summe statt hochgerechnetem Ø-Einheitspreis, und pro Produkt ALLE Läden nebeneinander statt nur den letzten.',
+        'Neu: Zusammenführen-Vorschläge. "Gouda", "Gouda jung" und "Goudakäse" waren drei Zeilen, weil jeder Laden anders auf den Bon druckt. Der Server erkennt solche Schreibvarianten (Präfix bzw. enthaltene Wortmenge — nie über ein zufällig geteiltes Adjektiv) und schlägt sie zum Zusammenführen vor; ein Klick schreibt allen Positionen dieselbe Gruppe, dauerhaft auch für künftige Käufe. Abgelehnte Vorschläge kommen nicht wieder (Migration 028).',
+        'Import: Mengeneinheiten gehen nicht mehr verloren. Lieferte die KI "Haferflocken 500g" nur im Namen, hat der Parser das "500g" aus dem Namen geschnitten und weggeworfen — jetzt landet es in Menge/Einheit. Synonyme wie Liter, Gramm, Stück, Packung, Rolle oder Dose werden zugeordnet statt still verworfen.',
+        '"Alle neu parsen" ist von der Preisverlauf- auf die Produkte-Seite umgezogen; der Bon-Toggle heißt jetzt "aus der Produktliste ausblenden" statt "aus dem Preisvergleich".',
+    ]},
     { v: 'v1.41.1', date: '2026-09-03', title: 'Log-Notizen brechen auf dem Handy nicht mehr auf ein Zeichen pro Zeile um', notes: [
         'Die Notiz war das einzige schrumpfbare Element einer Log-Zeile: neben Tag, Titel, Betrag und den beiden Buttons blieb auf schmalen Displays eine Spalte von wenigen Pixeln übrig — der Text brach senkrecht auf ein Zeichen pro Zeile um und ein einzelner Eintrag wurde meterhoch.',
         'Unter 700 px Breite steht die Notiz jetzt in einer eigenen, vollbreiten Zeile unter dem Eintrag, linksbündig. Betrag, Notiz- und Löschen-Button bleiben oben in der ersten Zeile.',

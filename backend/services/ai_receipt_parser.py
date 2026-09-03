@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from typing import Any, Optional
 
 from services.receipt_parser import parse_receipt as _regex_parse_receipt
@@ -158,7 +159,16 @@ Pflichtfelder pro Item:
 - quantity (float): Menge als Zahl. Default 1 wenn nicht angegeben.
   "2kg"→2, "10X180"→10, "1L"→1, "500g"→500, "3 Stk"→3.
 - quantity_unit (string|null): EINE von "kg", "g", "L", "ml", "Stk", "Pack", "Btl", "Blatt".
-  null wenn keine Einheit erkennbar.
+  null NUR wenn auf dem Bon wirklich keine Menge steht.
+  WICHTIG — die Menge ist der haeufigste Verlust beim Parsen:
+    · Steht die Menge im Artikelnamen ("Bio Haferflocken 500g"), gehoert sie
+      TROTZDEM nach quantity/quantity_unit — der Name wird ohne sie gespeichert.
+    · Gewichtsware mit Waage-Zeile ("0,652 kg x 2,99 EUR/kg") → quantity=0.652,
+      quantity_unit="kg", unit_price=2.99.
+    · Multipacks ("6x1,5L", "8x100g") → quantity = Gesamtmenge (9 bzw. 800),
+      Einheit "L" bzw. "g". Nicht die Anzahl der Packungen.
+    · Nur diese acht Einheiten sind erlaubt — "Rolle", "Dose", "Glas", "Becher"
+      werden zu "Stk", "Liter"/"Gramm" zu "L"/"g".
 
 - unit_price (float|null): Einzelpreis pro Stück/kg/L. Wenn nicht direkt sichtbar aber
   quantity>1 UND total_price gegeben: total_price/quantity. Sonst null.
@@ -166,8 +176,8 @@ Pflichtfelder pro Item:
 - total_price (float): Preis DIESER Position (was für sie bezahlt wurde).
   Bei "3x1,49 = 4,47" → 4.47.
 
-- price_comparable (bool): TRUE für Verbrauchsgüter, die man regelmäßig neu kauft (Preisvergleich
-  über Zeit sinnvoll). FALSE für Einmalkäufe die keinen sinnvollen Preisverlauf bilden.
+- price_comparable (bool): TRUE für Verbrauchsgüter, die man regelmäßig neu kauft und die
+  deshalb in die Produktliste gehören. FALSE für Einmalkäufe, die dort nur Störrauschen sind.
   TRUE für: Lebensmittel, Getränke, Kaffee/Tee, Alkohol, Tabak, Drogerie, Haushalt-Reinigung,
     Kraftstoff, Tiernahrung, Baby-Verbrauch, Apotheke-Verbrauch.
   FALSE für: langlebige Gebrauchsgegenstände (Topf, Pfanne, Vorratsdose, Sieb),
@@ -344,7 +354,49 @@ Werbetexte ("Vielen Dank", "Kundenbeleg"), Karten-Dummies (####1743), Zeitstempe
 # Helpers
 # ---------------------------------------------------------------------------
 _VALID_PAYMENTS = {"cash", "card", "credit", "paypal", "other"}
-_VALID_UNITS = {"kg", "g", "L", "ml", "Stk", "Pack", "Btl"}
+_VALID_UNITS = {"kg", "g", "L", "ml", "Stk", "Pack", "Btl", "Blatt"}
+
+# Synonyme -> kanonische Einheit. Alles was hier nicht drinsteht, wurde bisher
+# still auf ``None`` gesetzt -- der Artikel galt danach als "1 Stueck" und die
+# Menge vom Bon war weg. Die Liste deckt die Schreibweisen ab, die Gemini und
+# die Bons tatsaechlich liefern; unbekannte Einheiten werden weiterhin
+# verworfen, aber protokolliert statt lautlos zu verschwinden.
+_UNIT_SYNONYMS = {
+    "kg": "kg", "kilo": "kg", "kilogramm": "kg", "kgr": "kg",
+    "g": "g", "gr": "g", "gramm": "g",
+    "l": "L", "ltr": "L", "liter": "L",
+    "ml": "ml", "milliliter": "ml", "cl": "ml",
+    "stk": "Stk", "stk.": "Stk", "st": "Stk", "st.": "Stk",
+    "stueck": "Stk", "stück": "Stk", "stuck": "Stk", "x": "Stk",
+    "pack": "Pack", "packung": "Pack", "pkg": "Pack", "pck": "Pack",
+    "btl": "Btl", "beutel": "Btl", "flasche": "Btl", "fl": "Btl",
+    "blatt": "Blatt", "bl": "Blatt", "rolle": "Stk", "rollen": "Stk",
+    "dose": "Stk", "glas": "Stk", "becher": "Stk", "tube": "Stk",
+}
+
+
+def _canonical_unit(raw):
+    """Bringt eine Einheit auf eine der kanonischen Schreibweisen (oder None)."""
+    if not raw:
+        return None
+    u = str(raw).strip()
+    if u in _VALID_UNITS:
+        return u
+    mapped = _UNIT_SYNONYMS.get(u.lower().rstrip("."))
+    if mapped is None:
+        logger.info("Unbekannte Mengeneinheit vom Parser verworfen: %r", raw)
+    return mapped
+
+
+# Menge + Einheit am Ende eines Artikelnamens ("Haferflocken 500g", "Milch 1 L").
+# Wird gebraucht, weil die KI die Menge oft NUR im Namen liefert und
+# ``quantity``/``quantity_unit`` leer laesst -- der Name wird unten um genau
+# diesen Teil gekuerzt, ohne den Wert waere er danach ersatzlos weg.
+_NAME_QTY_RE = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*(kg|kilogramm|kilo|gramm|gr|g|liter|ltr|l|milliliter|ml|cl|"
+    r"stk\.?|st\.?|stueck|stück|pack(?:ung)?|pck|btl|beutel|flasche|blatt|rolle|dose|glas)"
+    r"\s*$",
+    re.IGNORECASE)
 _MAX_OCR_CHARS = 20_000  # DoS-/Kostenschutz; typische Bons < 2k
 
 
@@ -428,13 +480,19 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
         if not base_name or total_price is None:
             continue
 
-        # Für Preisverlauf-Grouping brauchen wir den Basisnamen OHNE eventuell noch
-        # eingebettete Menge/Einheit (falls AI das nicht sauber trennt).
-        import re as _re
-        base_name = _re.sub(
-            r"\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|stk|pack|btl|blatt)\s*$",
-            "", base_name, flags=_re.IGNORECASE
-        ).strip() or base_name
+        # Fuer die Produkt-Gruppierung brauchen wir den Basisnamen OHNE
+        # eingebettete Menge/Einheit. Die wird dabei NICHT weggeworfen: liefert
+        # die KI "Haferflocken 500g" im Namen, aber quantity/quantity_unit leer,
+        # dann sind 500 g der einzige Ort, an dem die Menge steht -- frueher hat
+        # dieses re.sub sie ersatzlos geloescht und der Artikel galt als 1 Stueck.
+        name_qty, name_unit = None, None
+        m_qty = _NAME_QTY_RE.search(base_name)
+        if m_qty:
+            name_qty = _to_float(m_qty.group(1))
+            name_unit = _canonical_unit(m_qty.group(2))
+            stripped = base_name[:m_qty.start()].strip(" -,;")
+            if stripped:
+                base_name = stripped
 
         # Legacy-description als konkatenierter String für Bestandscode
         if original_text and original_text != base_name:
@@ -443,16 +501,20 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
             description = base_name
 
         qty = _to_float(it.get("quantity"))
+        unit = _canonical_unit(_str_or_none(it.get("quantity_unit")))
+
+        # Fallback: Menge/Einheit standen nur im Artikelnamen. Nur einsetzen
+        # wenn das strukturierte Feld nichts (bzw. den Default 1) hergibt --
+        # eine explizite Angabe der KI hat immer Vorrang.
+        if name_unit and not unit:
+            unit = name_unit
+            if name_qty and (qty is None or qty == 1):
+                qty = name_qty
+        elif name_qty and qty is None:
+            qty = name_qty
+
         if qty is None or qty == 0:
             qty = 1.0
-
-        unit = _str_or_none(it.get("quantity_unit"))
-        if unit and unit not in _VALID_UNITS:
-            mapping = {"stk.": "Stk", "stueck": "Stk", "stück": "Stk",
-                       "l": "L", "kg": "kg", "g": "g", "ml": "ml",
-                       "pack": "Pack", "btl": "Btl", "flasche": "Btl",
-                       "blatt": "Blatt"}
-            unit = mapping.get(unit.lower(), None)
 
         unit_price = _to_float(it.get("unit_price"))
         if unit_price is None and qty:
