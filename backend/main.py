@@ -524,6 +524,9 @@ async def invite_activate(request: Request, b: ActivateBody, db=Depends(get_db))
 
 @app.get("/api/savings-goal")
 async def get_sg(db=Depends(get_db), user=Depends(get_current_user)):
+    """Aktives Sparziel + Saldo. ``goal`` ist ``None``, wenn gerade kein
+    eigenes Sparziel bespart wird -- in dem Fall laeuft alles in den Puffer,
+    dessen Stand hier immer mitgeliefert wird (v1.43.0)."""
     row = await db.fetchrow(
         "SELECT * FROM savings_goals WHERE user_id=$1 AND is_active=TRUE ORDER BY id DESC LIMIT 1",
         user["id"])
@@ -533,7 +536,18 @@ async def get_sg(db=Depends(get_db), user=Depends(get_current_user)):
             "WHERE user_id=$1 AND savings_goal_id=$2", user["id"], row["id"])
     else:
         total = 0
-    return {"goal": ser(row) if row else None, "total_saved": float(total)}
+    buffer = None
+    buf = await db.fetchrow(
+        "SELECT id, name FROM savings_goals WHERE user_id=$1 AND is_general=TRUE LIMIT 1",
+        user["id"])
+    if buf:
+        buf_saved = await db.fetchval(
+            "SELECT COALESCE(SUM(amount),0) FROM savings_transactions "
+            "WHERE user_id=$1 AND savings_goal_id=$2", user["id"], buf["id"])
+        buffer = {"id": buf["id"], "name": buf["name"],
+                  "saved_amount": float(buf_saved or 0)}
+    return {"goal": ser(row) if row else None, "total_saved": float(total),
+            "buffer": buffer}
 
 @app.get("/api/savings-goals")
 async def list_sg(db=Depends(get_db), user=Depends(get_current_user)):
@@ -588,6 +602,25 @@ async def activate_sg(request: Request, gid: int, db=Depends(get_db), user=Depen
             "UPDATE savings_goals SET is_active=TRUE WHERE id=$1 AND user_id=$2",
             gid, user["id"])
     logger.info(f"User {user['id']} activated savings_goal {gid}")
+    return ser(await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid))
+
+@app.post("/api/savings-goals/{gid}/deactivate")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def deactivate_sg(request: Request, gid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    """v1.43.0: Sparziel pausieren, ohne ein anderes zu aktivieren.
+
+    Danach ist kein Ziel aktiv -- alle Belohnungen laufen in den Puffer,
+    bis der User wieder eines aktiviert. Der Kontostand des pausierten
+    Ziels bleibt unangetastet.
+    """
+    row = await db.fetchrow(
+        "SELECT is_general FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+    if not row:
+        raise HTTPException(404, "Sparziel nicht gefunden")
+    await db.execute(
+        "UPDATE savings_goals SET is_active=FALSE WHERE id=$1 AND user_id=$2",
+        gid, user["id"])
+    logger.info(f"User {user['id']} paused savings_goal {gid}")
     return ser(await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid))
 
 @app.post("/api/savings-goals/{gid}/transfer-from-buffer")
@@ -679,12 +712,10 @@ async def del_sg(request: Request, gid: int, db=Depends(get_db), user=Depends(ge
         raise HTTPException(404, "Sparziel nicht gefunden")
     if bool(row["is_general"]):
         raise HTTPException(400, "Das Allgemein-Konto kann nicht gelöscht werden")
-    other = await db.fetchval(
-        "SELECT COUNT(*) FROM savings_goals WHERE user_id=$1 AND id<>$2 AND is_general=FALSE",
-        user["id"], gid)
-    if int(other) == 0:
-        raise HTTPException(400, "Das letzte Sparziel kann nicht gelöscht werden")
-    was_active = bool(row["is_active"])
+    # v1.43.0: Auch das letzte Sparziel darf weg -- "kein aktives Ziel" ist ein
+    # gueltiger Zustand, es wird dann in den Puffer gespart. Es wird bewusst
+    # KEIN anderes Ziel automatisch aktiviert (frueher wurde einfach das
+    # neueste genommen -- im Zweifel sogar das Allgemein-Konto).
     removed_sum = float(await db.fetchval(
         "SELECT COALESCE(SUM(amount),0) FROM savings_transactions "
         "WHERE user_id=$1 AND savings_goal_id=$2", user["id"], gid) or 0)
@@ -693,13 +724,6 @@ async def del_sg(request: Request, gid: int, db=Depends(get_db), user=Depends(ge
             "DELETE FROM savings_transactions WHERE user_id=$1 AND savings_goal_id=$2",
             user["id"], gid)
         await db.execute("DELETE FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
-        if was_active:
-            # neuestes anderes als aktiv setzen
-            nxt = await db.fetchval(
-                "SELECT id FROM savings_goals WHERE user_id=$1 ORDER BY id DESC LIMIT 1",
-                user["id"])
-            if nxt:
-                await db.execute("UPDATE savings_goals SET is_active=TRUE WHERE id=$1", nxt)
     return {"status": "deleted", "removed_sum": removed_sum}
 
 @app.put("/api/savings-goal/{gid}")
@@ -1589,8 +1613,16 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
 # ---------- Stats ----------
 @app.get("/api/stats/savings-progress")
 async def st_sp(db=Depends(get_db), user=Depends(get_current_user)):
-    """Kumulierter Saldo des AKTIVEN Sparziels über die Zeit."""
+    """Kumulierter Saldo des AKTIVEN Sparziels über die Zeit.
+
+    v1.43.0: Ist gerade kein Ziel aktiv, wird der Puffer gezeigt -- dort
+    landet in dem Fall jede Auszahlung, die Kurve bleibt also aussagekraeftig.
+    """
     sg_id = await _active_goal_id(db, user["id"])
+    if sg_id is None:
+        sg_id = await db.fetchval(
+            "SELECT id FROM savings_goals WHERE user_id=$1 AND is_general=TRUE LIMIT 1",
+            user["id"])
     if sg_id is None:
         return []
     rows = await db.fetch(
@@ -1690,7 +1722,14 @@ async def create_trophy(request: Request, b: TrophyCreate, db=Depends(get_db), u
 @app.post("/api/savings-goal/{gid}/complete")
 @limiter.limit(LIMIT_WRITE_RARE)
 async def complete_savings_goal(request: Request, gid: int, b: TrophyCreate, db=Depends(get_db), user=Depends(get_current_user)):
-    """Aktives Sparziel als abgeschlossen markieren, archivieren, neues leeres anlegen."""
+    """Aktives Sparziel abschliessen: als Trophaee archivieren und entfernen.
+
+    v1.43.0: Das Ziel wird geloescht statt auf 0 zurueckgesetzt -- es lebt ab
+    jetzt in der Trophaeen-Wand weiter und hat in "Meine Sparziele" nichts
+    mehr verloren. Es wird auch kein Platzhalter-Ziel ("Neues Sparziel",
+    100 EUR) mehr angelegt: solange der User kein neues Ziel aktiviert, laeuft
+    jede Belohnung ueber ``_reward_goal_for`` in den Puffer.
+    """
     goal = await db.fetchrow(
         "SELECT * FROM savings_goals WHERE id=$1 AND user_id=$2 AND is_active=TRUE",
         gid, user["id"])
@@ -1712,15 +1751,12 @@ async def complete_savings_goal(request: Request, gid: int, b: TrophyCreate, db=
             user["id"], b.name or goal["name"], float(goal["target_amount"]), total,
             goal["created_at"], b.icon or "🏆", b.color or "gold", b.note, b.photo_url, duration_days)
         await db.execute(
-            "UPDATE savings_goals SET is_active=FALSE WHERE id=$1 AND user_id=$2",
-            gid, user["id"])
-        await db.execute(
             "DELETE FROM savings_transactions WHERE user_id=$1 AND savings_goal_id=$2",
             user["id"], gid)
         await db.execute(
-            "INSERT INTO savings_goals (user_id, name, target_amount, is_active) VALUES ($1, 'Neues Sparziel', 100, TRUE)",
-            user["id"])
-    logger.info(f"User {user['id']} completed goal {gid}, saved trophy {trophy['id']}")
+            "DELETE FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+    logger.info(f"User {user['id']} completed goal {gid} (goal removed), "
+                f"saved trophy {trophy['id']}")
     return ser(trophy)
 
 @app.delete("/api/trophies/{tid}")

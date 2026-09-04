@@ -1,6 +1,7 @@
 let chartSavings=null, chartData=[], glGoalId=null, glTarget=0, glTotal=0;
 let achData=[], pgData=[], logRaw=[], logFilter='all', logView='weekly';
 let heatmapData=[], trophyData=[];
+let bufferInfo=null;            // v1.43.0: Puffer-Konto {id,name,saved_amount}
 let loadErrors={ach:false,pg:false,log:false,hm:false,trophies:false};
 const pendingDeletes = new Map();
 let toastTimer=null;
@@ -206,6 +207,23 @@ async function loadAll(){await Promise.all([loadSparziel(),loadAchievements(),lo
 async function loadSparziel(){
     try{
         const d=await apiCall('/api/savings-goal');
+        // v1.43.0: "kein aktives Sparziel" ist ein regulaerer Zustand — nach dem
+        // Abschliessen wird kein Platzhalter-Ziel mehr angelegt. Der Hero zeigt
+        // dann den Puffer, in den ab sofort jede Belohnung laeuft.
+        bufferInfo = d.buffer || null;
+        const hero = document.getElementById('heroBox');
+        const hasGoal = !!(d.goal && d.goal.id);
+        if(hero) hero.classList.toggle('no-goal', !hasGoal);
+        const bufEl = document.getElementById('heBufferAmt');
+        if(bufEl) bufEl.textContent = fmtEur(bufferInfo ? bufferInfo.saved_amount : 0);
+        if(!hasGoal){
+            glGoalId=null; glTarget=0; glTotal=0;
+            prevGlTotal=null; prevGlPct=null; prevWasComplete=false;
+            document.getElementById('heroEdit').classList.remove('open');
+            chartData=await apiCall('/api/stats/savings-progress')||[];
+            renderSparzielChart();
+            return;
+        }
         const g=d.goal||{};
         const newGoalId=g.id;
         const newTarget=Number(g.target_amount||0);
@@ -725,52 +743,114 @@ async function loadSavingsGoals(){
     try{
         const list=await apiCall('/api/savings-goals')||[];
         savingsGoalsCache = list;
+        const general = list.find(g => g.is_general) || null;
+        const goals   = list.filter(g => !g.is_general);
+        renderIdeenSummary(goals, general);
+        renderBufferCard(general, goals);
+        const cnt=document.getElementById('sgCount');
+        if(cnt) cnt.textContent=goals.length;
         const box=document.getElementById('sgList');
         if(!box)return;
-        if(!list.length){box.innerHTML='<div class="muted" style="padding:0.5rem;font-size:0.8125rem">Noch keine Sparziele.</div>';return;}
-        // Allgemein-Konto zuerst (nicht aktivierbar/löschbar)
-        const general = list.filter(g => g.is_general);
-        const normal  = list.filter(g => !g.is_general);
-        const renderCard = (g) => {
-            const saved=Number(g.saved_amount||0);
-            const target=Number(g.target_amount||0);
-            const p=target>0?Math.min(100,(saved/target)*100):0;
-            const active=!!g.is_active;
-            const isGen = !!g.is_general;
-            if(isGen){
-                const canTransfer = saved > 0 && normal.length > 0;
-                return `<div class="ach-card" style="border-color:#a78bfa;background:linear-gradient(135deg,rgba(139,92,246,0.06),transparent)">
-                    <div class="ach-head">
-                        <div class="ach-title">🪙 ${esc(g.name)}</div>
-                        <div class="ach-reward-pill" style="background:#a78bfa;color:#fff">Puffer</div>
-                    </div>
-                    <div class="ach-value">${fmtEur(saved)}</div>
-                    <div class="muted" style="font-size:0.75rem;margin-top:0.25rem;line-height:1.4">Hier landen alle Meilenstein-Belohnungen, die sonst dein aktives Sparziel überschreiten würden.</div>
-                    <div style="display:flex;gap:6px;margin-top:0.5rem;flex-wrap:wrap">
-                        <button onclick="openTransferModal()" ${canTransfer?'':'disabled'}
-                            style="flex:1;padding:0.4375rem;font-size:0.75rem;background:#8b5cf6;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:${canTransfer?'pointer':'not-allowed'};margin:0;opacity:${canTransfer?1:0.5}"
-                            title="${canTransfer?'Geld vom Puffer auf ein Sparziel übertragen':(saved<=0?'Puffer ist leer':'Kein Sparziel vorhanden')}">
-                            🔄 Auf Sparziel übertragen
-                        </button>
-                    </div>
-                </div>`;
-            }
-            return `<div class="ach-card" style="${active?'border-color:var(--green);background:var(--green-bg)':''}">
-                <div class="ach-head">
-                    <div class="ach-title">${active?'⭐ ':''}${esc(g.name)}</div>
-                    <div class="ach-reward-pill">${active?'Aktiv':'Pausiert'}</div>
-                </div>
-                <div class="ach-value">${fmtEur(saved)} <small>/ ${fmtEur(target)}</small></div>
-                <div class="ach-bar"><div class="ach-bar-fill" style="width:${p}%;background:linear-gradient(90deg,#16a34a,#22c55e)"></div></div>
-                <div style="display:flex;gap:6px;margin-top:0.375rem;flex-wrap:wrap">
-                    ${active?'':`<button onclick="activateSavingsGoal(${g.id})" style="flex:1;padding:0.4375rem;font-size:0.75rem;background:var(--green);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;margin:0">Aktivieren</button>`}
-                    <button onclick="deleteSavingsGoal(${g.id},'${esc(g.name).replace(/'/g,"\\'")}')" style="padding:0.4375rem 0.75rem;font-size:0.75rem;background:var(--red-bg);color:var(--red);border:none;border-radius:6px;font-weight:600;cursor:pointer;margin:0" ${active&&normal.length===1?'disabled':''}>Löschen</button>
-                </div>
+        if(!goals.length){
+            box.innerHTML=`<div class="sg-empty">
+                <div class="big">\u{1F3AF}</div>
+                <h4>Noch kein Sparziel angelegt</h4>
+                <p>Ohne aktives Ziel sammelt der Puffer jede Belohnung ein. Leg ein Ziel an, um gezielt darauf hinzusparen — den Puffer kannst du danach darauf übertragen.</p>
+                <button class="he-btn" style="margin-top:0.875rem" onclick="startNewGoal()">+ Erstes Sparziel anlegen</button>
             </div>`;
-        };
-        box.innerHTML = general.map(renderCard).join('') + normal.map(renderCard).join('');
+            return;
+        }
+        box.innerHTML = goals.map(renderSavingsGoalCard).join('');
     }catch(e){console.error(e);}
 }
+
+// Kopfzeile des Tabs: aktives Ziel, Summe auf Zielen, Puffer, offener Rest
+function renderIdeenSummary(goals, general){
+    const box=document.getElementById('ideenSummary');
+    if(!box)return;
+    const active  = goals.find(g => g.is_active) || null;
+    const onGoals = goals.reduce((a,g)=>a+Number(g.saved_amount||0),0);
+    const open    = goals.reduce((a,g)=>a+Math.max(0,Number(g.target_amount||0)-Number(g.saved_amount||0)),0);
+    const buf     = Number((general && general.saved_amount) || 0);
+    const tiles=[
+        {lbl:'Aktives Ziel',   val: active ? esc(active.name) : '— keins —',
+         title: active ? esc(active.name) : 'Kein aktives Sparziel — es wird in den Puffer gespart'},
+        {lbl:'Auf Sparzielen', val: fmtEur(onGoals), cls:'pos'},
+        {lbl:'Im Puffer',      val: fmtEur(buf)},
+        {lbl:'Noch offen',     val: fmtEur(open)},
+    ];
+    box.innerHTML = tiles.map(t=>
+        `<div class="is-tile"><div class="lbl">${t.lbl}</div>`+
+        `<div class="val${t.cls?' '+t.cls:''}" title="${t.title||''}">${t.val}</div></div>`
+    ).join('');
+}
+
+function renderBufferCard(general, goals){
+    const box=document.getElementById('bufferBox');
+    if(!box)return;
+    if(!general){box.innerHTML='';return;}
+    const saved=Number(general.saved_amount||0);
+    const canTransfer = saved>0.005 && goals.length>0;
+    const hasActive = goals.some(g=>g.is_active);
+    const hint = hasActive
+        ? 'Hier landet alles, was dein aktives Sparziel überschreiten würde — plus jede Belohnung, die du dem Puffer fest zugewiesen hast.'
+        : 'Gerade ist kein Sparziel aktiv: <strong>jede Belohnung fließt hierher</strong>, bis du eines anlegst oder aktivierst.';
+    const title = canTransfer ? 'Geld vom Puffer auf ein Sparziel übertragen'
+                : (saved<=0.005 ? 'Puffer ist leer' : 'Kein Sparziel vorhanden');
+    box.innerHTML=`<div class="buffer-card">
+        <div class="buffer-ico">\u{1FA99}</div>
+        <div class="buffer-main">
+            <div class="buffer-lbl">${esc(general.name)} · Puffer</div>
+            <div class="buffer-amt">${fmtEur(saved)}</div>
+            <div class="buffer-hint">${hint}</div>
+        </div>
+        <button class="buffer-btn" onclick="openTransferModal()" ${canTransfer?'':'disabled'} title="${title}">\u{1F504} Auf Sparziel übertragen</button>
+    </div>`;
+}
+
+function renderSavingsGoalCard(g){
+    const saved=Number(g.saved_amount||0);
+    const target=Number(g.target_amount||0);
+    const p=pct(saved,target);
+    const active=!!g.is_active;
+    const full=target>0 && saved>=target-0.005;
+    const missing=Math.max(0,target-saved);
+    const pill = full   ? '<span class="sg-pill full">Ziel erreicht</span>'
+               : active ? '<span class="sg-pill on">Aktiv</span>'
+               :          '<span class="sg-pill off">Pausiert</span>';
+    const actions=[];
+    if(active){
+        actions.push('<button class="sg-btn trophy" onclick="openCompleteModal()">\u{1F3C6} Abschließen</button>');
+        actions.push(`<button class="sg-btn" onclick="pauseSavingsGoal(${g.id})" title="Pausieren — danach läuft alles in den Puffer">Pausieren</button>`);
+    }else{
+        actions.push(`<button class="sg-btn go" onclick="activateSavingsGoal(${g.id})">Aktivieren</button>`);
+    }
+    actions.push(`<button class="sg-btn icon" onclick="deleteSavingsGoal(${g.id})" title="Löschen" aria-label="Sparziel löschen">\u{1F5D1}</button>`);
+    return `<div class="sg-card${active?' is-active':''}${full?' is-full':''}" id="sgCard_${g.id}">
+        <div class="sg-top"><div class="sg-name">${esc(g.name)}</div>${pill}</div>
+        <div class="sg-amt">${fmtEur(saved)}<small>/ ${fmtEur(target)}</small></div>
+        <div class="sg-bar"><i style="width:${p}%"></i></div>
+        <div class="sg-meta"><span>${fmtNum(p,0)} % erreicht</span><span>${full?'geschafft \u{1F389}':'noch '+fmtEur(missing)}</span></div>
+        <div class="sg-actions">${actions.join('')}</div>
+    </div>`;
+}
+
+// Sprung vom Dashboard/Wunschliste ins Anlege-Formular (optional vorbefuellt)
+function startNewGoal(name, price){
+    activateTab('ideen');
+    const form=document.getElementById('sgForm');
+    if(form) form.classList.add('open');
+    const elName=document.getElementById('sgNewName');
+    const elTgt =document.getElementById('sgNewTarget');
+    if(name && elName) elName.value=name;
+    if(price!=null && price!=='' && elTgt) elTgt.value=price;
+    const act=document.getElementById('sgNewActivate');
+    if(act) act.checked=true;
+    if(form) form.scrollIntoView({behavior:'smooth',block:'center'});
+    setTimeout(()=>{const el=(name&&elTgt)?elTgt:elName; if(el) el.focus();},250);
+    haptic('tap');
+}
+
 async function createSavingsGoal(){
     const name=document.getElementById('sgNewName').value.trim();
     const target=parseFloat(document.getElementById('sgNewTarget').value);
@@ -791,13 +871,26 @@ async function activateSavingsGoal(id){
         await Promise.all([loadSavingsGoals(),loadSparziel(),loadAchievements(),loadProgressGoals()]);
     }catch(e){haptic('error');showToast(e.message||'Fehler',true);}
 }
-async function deleteSavingsGoal(id,name){
-    if(!confirm(`Sparziel "${name}" wirklich löschen? Alle zugehörigen Sparbeiträge werden entfernt.`))return;
+// v1.43.0: Ziel pausieren, ohne ein anderes zu aktivieren — danach laeuft
+// jede Belohnung in den Puffer.
+async function pauseSavingsGoal(id){
+    try{
+        await apiCall('/api/savings-goals/'+id+'/deactivate',{method:'POST'});
+        haptic('success');showToast('Pausiert – neue Belohnungen laufen in den Puffer');
+        await Promise.all([loadSavingsGoals(),loadSparziel(),loadAchievements(),loadProgressGoals()]);
+    }catch(e){haptic('error');showToast(e.message||'Fehler',true);}
+}
+async function deleteSavingsGoal(id){
+    const g=(savingsGoalsCache||[]).find(x=>x.id===id);
+    const name=g?g.name:'Sparziel';
+    const saved=Number((g&&g.saved_amount)||0);
+    const extra=saved>0.005?`\n\nDie ${fmtEur(saved)} auf diesem Ziel werden dabei entfernt.`:'';
+    if(!confirm(`Sparziel "${name}" wirklich löschen?${extra}`))return;
     try{
         const r=await apiCall('/api/savings-goals/'+id,{method:'DELETE'});
         haptic('success');
         showToast('Gelöscht'+(r&&r.removed_sum?` (${fmtEur(r.removed_sum)} entfernt)`:''));
-        await Promise.all([loadSavingsGoals(),loadSparziel()]);
+        await Promise.all([loadSavingsGoals(),loadSparziel(),loadAchievements(),loadProgressGoals()]);
     }catch(e){haptic('error');showToast(e.message||'Löschen fehlgeschlagen',true);}
 }
 
@@ -877,8 +970,37 @@ async function submitTransfer(){
         showToast(e.message||'Übertrag fehlgeschlagen',true);
     }
 }
+let potentialCache=[];
+
 async function loadPotentialGoals(){
-    try{const d=await apiCall('/api/potential-goals')||[];document.getElementById('potList').innerHTML=d.length?d.map(p=>`<div class="li" id="potLi_${p.id}"><span>${esc(p.name)}${p.estimated_price?' — <strong>'+fmtEur(p.estimated_price)+'</strong>':''}</span><button class="li-del" onclick="deletePotential(${p.id})" title="Löschen">×</button></div>`).join(''):'<div class="muted" style="padding:0.5rem;font-size:0.8125rem">Noch keine Einträge.</div>';}catch(e){}
+    try{
+        const d=await apiCall('/api/potential-goals')||[];
+        potentialCache=d;
+        const c=document.getElementById('potCount'); if(c)c.textContent=d.length;
+        const box=document.getElementById('potList'); if(!box)return;
+        box.innerHTML = d.length ? d.map(p=>{
+            const price=(p.estimated_price!=null&&p.estimated_price!=='')?Number(p.estimated_price):null;
+            return `<div class="wish" id="potLi_${p.id}">
+                <div class="wish-ico">\u{1F6D2}</div>
+                <div class="wish-body">
+                    <div class="wish-name">${esc(p.name)}</div>
+                    <div class="wish-price">${price!=null?fmtEur(price):'Preis offen'}</div>
+                </div>
+                <div class="wish-act">
+                    <button onclick="startWishGoal(${p.id})" title="Daraus ein Sparziel machen">\u2192 Sparziel</button>
+                    <button class="del" onclick="deletePotential(${p.id})" title="Löschen" aria-label="Wunsch löschen">×</button>
+                </div>
+            </div>`;
+        }).join('') : '<div class="empty-line">Noch kein Wunsch notiert.</div>';
+    }catch(e){}
+}
+
+// Wunsch als Sparziel uebernehmen: fuellt nur das Formular vor, angelegt
+// wird erst mit "Erstellen" — so bleibt der Preis noch korrigierbar.
+function startWishGoal(id){
+    const w=(potentialCache||[]).find(x=>x.id===id);
+    if(!w)return;
+    startNewGoal(w.name, w.estimated_price!=null?Number(w.estimated_price):'');
 }
 
 async function createPotential(){
@@ -897,7 +1019,16 @@ function deletePotential(id){
     );
 }
 async function loadFutureIdeas(){
-    try{const d=await apiCall('/api/future-ideas')||[];document.getElementById('ideaList').innerHTML=d.length?d.map(i=>`<div class="li" id="ideaLi_${i.id}"><span>${esc(i.title)}${i.category?' <span class="muted">('+esc(i.category)+')</span>':''}</span><button class="li-del" onclick="deleteIdea(${i.id})">×</button></div>`).join(''):'<div class="muted" style="padding:0.5rem;font-size:0.8125rem">Noch keine Ideen.</div>';}catch(e){}
+    try{
+        const d=await apiCall('/api/future-ideas')||[];
+        const c=document.getElementById('ideaCount'); if(c)c.textContent=d.length;
+        const box=document.getElementById('ideaList'); if(!box)return;
+        box.innerHTML = d.length ? d.map(i=>`<div class="idea-chip" id="ideaLi_${i.id}">
+            <span>${esc(i.title)}</span>
+            ${i.category?`<span class="idea-cat">${esc(i.category)}</span>`:''}
+            <button class="idea-x" onclick="deleteIdea(${i.id})" title="Löschen" aria-label="Idee löschen">×</button>
+        </div>`).join('') : '<div class="empty-line">Noch keine Idee gesammelt.</div>';
+    }catch(e){}
 }
 async function createIdea(){
     const t=document.getElementById('ideaTitle').value.trim(),c=document.getElementById('ideaCat').value.trim();
@@ -1231,14 +1362,16 @@ async function submitComplete(){
         showToast('🏆 Trophäe verdient!');
         closeCompleteModal();
         document.getElementById('heroEdit').classList.remove('open');
-        // Nach Abschluss: neues leeres Sparziel startet bei 0 → State resetten,
-        // damit Radial nicht von "voll" auf 0 runter-animiert und Konfetti sauber neu triggern kann.
+        // v1.43.0: Nach dem Abschluss ist das Ziel weg und kein neues aktiv →
+        // State resetten, damit das Radial beim naechsten Ziel nicht von "voll"
+        // runter-animiert und das Konfetti sauber neu triggern kann.
         prevGlTotal = null; prevGlPct = null; prevWasComplete = false;
         // Konfetti-Feuerwerk zur Feier des Abschlusses
         fireConfetti({count:260, duration:3200});
         setTimeout(()=>fireConfetti({count:140, duration:2400, originX: window.innerWidth*0.25, spread: Math.PI*0.9}), 300);
         setTimeout(()=>fireConfetti({count:140, duration:2400, originX: window.innerWidth*0.75, spread: Math.PI*0.9}), 600);
-        await Promise.all([loadSparziel(),loadTrophies()]);
+        await Promise.all([loadSparziel(),loadTrophies(),loadSavingsGoals(),
+                           loadAchievements(),loadProgressGoals()]);
         activateTab('trophies');
     }catch(e){
         haptic('error');

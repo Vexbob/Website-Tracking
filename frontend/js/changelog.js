@@ -4,6 +4,14 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.43.0', date: '2026-09-04', title: 'Abgeschlossene Sparziele verschwinden wirklich — ohne Platzhalter-Ziel', notes: [
+        'Ein abgeschlossenes Sparziel wird jetzt gelöscht statt auf 0 zurückgesetzt. Bisher blieb es unter „Meine Sparziele" als leere Hülle stehen, obwohl es längst als Trophäe an der Wand hing.',
+        'Das automatisch angelegte „Neues Sparziel" über 100 € ist raus. Nach dem Abschließen ist bewusst kein Ziel aktiv — jede Belohnung aus Achievements und Wochenzielen läuft dann in den Puffer, bis du selbst ein neues Ziel anlegst oder ein pausiertes aktivierst.',
+        'Passend dazu: Ein aktives Ziel lässt sich per „Pausieren" beenden, ohne dass ein anderes einspringt, und auch das letzte Sparziel darf gelöscht werden. Beim Löschen wird kein zufälliges anderes Ziel mehr aktiviert (im Zweifel war das sogar der Puffer).',
+        'Das Dashboard zeigt in diesem Zustand keinen 0-%-Ring mehr, sondern den Puffer mit Stand, Erklärung und Direktknopf zum Anlegen eines Ziels. Der Sparverlauf-Chart zeigt dann den Puffer statt leer zu bleiben.',
+        'Der Tab „Ideen & Ziele" ist neu gebaut: Kennzahlen-Leiste (aktives Ziel, Summe auf Zielen, Puffer, offener Rest), eigene Puffer-Karte, Sparziel-Karten mit Fortschrittsbalken, Prozent, Restbetrag und Status-Pille sowie klar getrennte Abschnitte für Wunschliste und Ideen-Sammlung mit Zähler und Kurzbeschreibung.',
+        'Neu in der Wunschliste: „→ Sparziel" übernimmt Name und Preis eines Wunsches direkt ins Anlege-Formular.',
+    ]},
     { v: 'v1.42.0', date: '2026-09-03', title: 'Preisverlauf entfernt, Produkte gruppieren jetzt über Läden hinweg', notes: [
         'Die Preisverlauf-Seite und der normierte Preisvergleich sind raus. Er hat Artikel miteinander verrechnet, deren Einheiten gar nicht vergleichbar waren: fehlte die Mengeneinheit oder stand auf dem Bon "1 Pack" statt "500 g", landete ein €/Stück-Wert im selben Ø wie die €/kg-Werte — samt erfundener Preissprünge und falschem "günstigster Laden"-Ranking.',
         'Die Produkte-Seite bleibt und zeigt jetzt echte Zahlen: tatsächlich bezahlte Summe statt hochgerechnetem Ø-Einheitspreis, und pro Produkt ALLE Läden nebeneinander statt nur den letzten.',

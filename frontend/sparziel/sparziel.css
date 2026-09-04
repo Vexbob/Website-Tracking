@@ -335,6 +335,137 @@ body{visibility:hidden}body.ready{visibility:visible}
 .trophy-del:hover{color:var(--red)}
 .trophy-empty{grid-column:1/-1;text-align:center;padding:3rem 1rem;color:var(--text-faint);background:var(--surface);border-radius:12px;border:1px dashed var(--border)}
 
+/* ================= Hero: kein aktives Sparziel (v1.43.0) ================= */
+/* Nach dem Abschliessen eines Ziels gibt es bewusst KEIN Platzhalter-Ziel
+   mehr. Der Hero zeigt dann den Puffer, in den alles einlaeuft. */
+.hero-empty{display:none;align-items:center;gap:1.125rem;flex-wrap:wrap}
+.hero.no-goal .hero-empty{display:flex}
+.hero.no-goal .hero-top,.hero.no-goal .hero-edit{display:none}
+.he-ico{width:76px;height:76px;border-radius:20px;display:grid;place-items:center;font-size:2.25rem;flex-shrink:0;
+    background:linear-gradient(135deg,rgba(139,92,246,0.18),rgba(59,130,246,0.10));border:1px solid rgba(139,92,246,0.3)}
+.he-body{flex:1;min-width:220px}
+.he-title{font-size:1.25rem;font-weight:700;color:var(--text)}
+.he-sub{font-size:0.8125rem;color:var(--text-muted);line-height:1.5;margin-top:0.25rem;max-width:58ch}
+.he-amt{margin-top:0.625rem}
+.he-amt span{display:block;font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-faint);font-weight:600}
+.he-amt em{font-style:normal;font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--purple-dark)}
+:root[data-theme="dark"] .he-amt em{color:#c4b5fd}
+.he-btn{width:auto;margin:0;padding:0.625rem 1.125rem;font-size:0.875rem;font-weight:700;border-radius:10px;
+    background:var(--green);color:#fff;border:none;cursor:pointer;flex-shrink:0}
+.he-btn:hover{background:var(--green-dark)}
+
+/* ================= Tab "Ideen & Ziele" (v1.43.0) ================= */
+.sh-head{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.sh-sub{margin:0;font-size:0.8125rem;color:var(--text-muted);line-height:1.45;max-width:64ch}
+.sh-count{display:inline-block;font-size:0.6875rem;font-weight:700;color:var(--text-muted);background:var(--surface-2);
+    border:1px solid var(--border);border-radius:20px;padding:1px 8px;margin-left:0.25rem;vertical-align:2px}
+
+.ideen-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.625rem;margin-top:1.25rem}
+.is-tile{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0.75rem 0.875rem;box-shadow:var(--shadow-sm)}
+.is-tile .lbl{font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-faint);font-weight:600}
+.is-tile .val{font-size:1.25rem;font-weight:700;color:var(--text);margin-top:2px;font-variant-numeric:tabular-nums;
+    line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.is-tile .val.pos{color:var(--green-dark)}
+:root[data-theme="dark"] .is-tile .val.pos{color:#4ade80}
+
+/* Puffer-Karte */
+.buffer-card{position:relative;overflow:hidden;display:flex;flex-wrap:wrap;align-items:center;gap:1rem;
+    background:linear-gradient(135deg,rgba(139,92,246,0.13),rgba(59,130,246,0.06));
+    border:1px solid rgba(139,92,246,0.35);border-radius:14px;padding:1rem 1.125rem;margin-bottom:0.875rem;
+    box-shadow:var(--shadow-sm)}
+.buffer-card::after{content:"";position:absolute;right:-40px;top:-50px;width:170px;height:170px;border-radius:50%;
+    background:radial-gradient(circle,rgba(139,92,246,0.18),transparent 70%);pointer-events:none}
+.buffer-ico{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-size:1.5rem;flex-shrink:0;
+    background:rgba(139,92,246,0.16)}
+.buffer-main{flex:1;min-width:190px}
+.buffer-lbl{font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;color:var(--purple-dark)}
+:root[data-theme="dark"] .buffer-lbl{color:#c4b5fd}
+.buffer-amt{font-size:1.75rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--text)}
+.buffer-hint{font-size:0.75rem;color:var(--text-muted);line-height:1.45;margin-top:0.25rem;max-width:52ch}
+.buffer-btn{position:relative;z-index:1;width:auto;margin:0;padding:0.5rem 0.875rem;font-size:0.8125rem;font-weight:700;
+    border:none;border-radius:9px;background:var(--purple);color:#fff;cursor:pointer;flex-shrink:0}
+.buffer-btn:hover:not(:disabled){background:var(--purple-dark)}
+.buffer-btn:disabled{opacity:0.45;cursor:not-allowed}
+
+/* Sparziel-Karten */
+.sg-grid{display:grid;grid-template-columns:1fr;gap:0.75rem}
+@media(min-width:640px){.sg-grid{grid-template-columns:1fr 1fr}}
+@media(min-width:1000px){.sg-grid{grid-template-columns:repeat(3,1fr)}}
+.sg-card{position:relative;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);
+    border-radius:14px;padding:1rem;box-shadow:var(--shadow-sm);transition:box-shadow .2s,border-color .2s,opacity .3s}
+.sg-card:hover{box-shadow:var(--shadow);border-color:var(--border-strong)}
+.sg-card.pending-delete{opacity:0.35}
+.sg-card.is-active{border-color:var(--green)}
+.sg-card.is-active::before{content:"";position:absolute;left:-1px;top:16px;bottom:16px;width:3px;border-radius:0 3px 3px 0;
+    background:linear-gradient(180deg,#16a34a,#22c55e)}
+.sg-card.is-full{border-color:#eab308}
+.sg-top{display:flex;align-items:flex-start;gap:0.5rem;margin-bottom:0.5rem}
+.sg-name{flex:1;min-width:0;font-weight:700;font-size:1rem;line-height:1.25;color:var(--text);overflow-wrap:anywhere}
+.sg-pill{flex-shrink:0;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;
+    padding:3px 8px;border-radius:20px;white-space:nowrap}
+.sg-pill.on{background:var(--green-bg);color:var(--green-dark)}
+:root[data-theme="dark"] .sg-pill.on{background:rgba(34,197,94,0.15);color:#4ade80}
+.sg-pill.off{background:var(--surface-2);color:var(--text-faint);border:1px solid var(--border)}
+.sg-pill.full{background:linear-gradient(135deg,#fde047,#eab308);color:#78350f}
+.sg-amt{font-size:1.5rem;font-weight:800;line-height:1.1;color:var(--text);font-variant-numeric:tabular-nums}
+.sg-amt small{font-size:0.8125rem;font-weight:600;color:var(--text-faint);margin-left:3px}
+.sg-bar{height:8px;border-radius:5px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden;margin:0.625rem 0 0.375rem}
+.sg-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#16a34a,#22c55e);transition:width .4s ease}
+.sg-card.is-full .sg-bar i{background:linear-gradient(90deg,#eab308,#fbbf24)}
+.sg-meta{display:flex;justify-content:space-between;gap:0.5rem;font-size:0.75rem;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.sg-actions{display:flex;gap:0.375rem;flex-wrap:wrap;margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border)}
+.sg-btn{flex:1;min-width:0;width:auto;margin:0;padding:0.4375rem 0.5rem;font-size:0.75rem;font-weight:600;
+    border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer}
+.sg-btn:hover{border-color:var(--border-strong)}
+.sg-btn.go{background:var(--green);border-color:var(--green);color:#fff}
+.sg-btn.go:hover{background:var(--green-dark);border-color:var(--green-dark)}
+.sg-btn.trophy{background:linear-gradient(135deg,#fde047,#eab308);border-color:#eab308;color:#78350f;font-weight:700}
+.sg-btn.icon{flex:0 0 auto;padding:0.4375rem 0.625rem;color:var(--text-fainter)}
+.sg-btn.icon:hover{color:var(--red);border-color:var(--red)}
+
+/* Leerzustaende */
+.sg-empty{grid-column:1/-1;text-align:center;padding:2.25rem 1rem;border:1px dashed var(--border);border-radius:14px;
+    background:var(--surface)}
+.sg-empty .big{font-size:2rem;line-height:1}
+.sg-empty h4{margin:0.5rem 0 0.25rem;font-size:1rem;font-weight:700;color:var(--text)}
+.sg-empty p{margin:0 auto;font-size:0.8125rem;color:var(--text-muted);line-height:1.5;max-width:46ch}
+.empty-line{grid-column:1/-1;width:100%;box-sizing:border-box;padding:1.125rem;text-align:center;font-size:0.8125rem;
+    color:var(--text-faint);border:1px dashed var(--border);border-radius:12px;background:var(--surface)}
+
+/* Wunschliste */
+.wish-grid{display:grid;grid-template-columns:1fr;gap:0.5rem}
+@media(min-width:640px){.wish-grid{grid-template-columns:1fr 1fr}}
+@media(min-width:1000px){.wish-grid{grid-template-columns:repeat(3,1fr)}}
+.wish{display:flex;align-items:center;gap:0.75rem;background:var(--surface);border:1px solid var(--border);
+    border-radius:12px;padding:0.625rem 0.75rem;transition:opacity .3s,border-color .2s,box-shadow .2s}
+.wish:hover{border-color:var(--border-strong);box-shadow:var(--shadow-sm)}
+.wish.pending-delete{opacity:0.35}
+.wish-ico{width:34px;height:34px;border-radius:9px;background:var(--blue-bg);display:grid;place-items:center;
+    font-size:1rem;flex-shrink:0}
+:root[data-theme="dark"] .wish-ico{background:rgba(59,130,246,0.18)}
+.wish-body{flex:1;min-width:0}
+.wish-name{font-weight:600;font-size:0.875rem;line-height:1.25;color:var(--text);overflow-wrap:anywhere}
+.wish-price{font-size:0.75rem;color:var(--text-muted);font-variant-numeric:tabular-nums;margin-top:1px}
+.wish-act{display:flex;gap:0.25rem;flex-shrink:0}
+.wish-act button{width:auto;margin:0;padding:0.3125rem 0.5rem;font-size:0.75rem;border-radius:7px;
+    border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);cursor:pointer}
+.wish-act button:hover{color:var(--text);border-color:var(--border-strong)}
+.wish-act .del:hover{color:var(--red);border-color:var(--red)}
+
+/* Ideen-Sammlung */
+.idea-cloud{display:flex;flex-wrap:wrap;gap:0.5rem}
+.idea-chip{display:inline-flex;align-items:center;gap:0.5rem;background:var(--surface);border:1px solid var(--border);
+    border-radius:999px;padding:0.375rem 0.375rem 0.375rem 0.875rem;font-size:0.8125rem;color:var(--text);
+    transition:opacity .3s,border-color .2s}
+.idea-chip:hover{border-color:var(--border-strong)}
+.idea-chip.pending-delete{opacity:0.35}
+.idea-cat{font-size:0.6875rem;font-weight:600;color:var(--purple-dark);background:rgba(139,92,246,0.12);
+    border-radius:999px;padding:1px 7px}
+:root[data-theme="dark"] .idea-cat{color:#c4b5fd;background:rgba(139,92,246,0.2)}
+.idea-x{width:22px;height:22px;padding:0;margin:0;border:none;border-radius:50%;background:var(--surface-2);
+    color:var(--text-fainter);font-size:0.875rem;line-height:1;cursor:pointer;display:grid;place-items:center}
+.idea-x:hover{background:var(--red-bg);color:var(--red)}
+
 @media(max-width:500px){
     main{padding:0 0.75rem}
     .hero-top{gap:1rem}
@@ -343,6 +474,9 @@ body{visibility:hidden}body.ready{visibility:visible}
     .hero-stats{grid-template-columns:1fr 1fr 1fr;gap:0.5rem 0.75rem}
     .ach-edit-form .grid2{grid-template-columns:1fr}
     .if-grid{grid-template-columns:1fr}
+    .sg-grid,.wish-grid{grid-template-columns:1fr}
+    .he-btn,.buffer-btn{width:100%}
+    .hero-empty{gap:0.875rem}
     /* v1.36.0: Tab-Overrides entfernt — .tabs/.tab-btn wird vollstaendig aus style.css bezogen */
     .log-desc{display:none}
     /* v1.41.1: Tag und Betrag duerfen schmaler werden, damit fuer den Titel

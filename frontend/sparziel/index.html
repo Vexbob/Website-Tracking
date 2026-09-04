@@ -38,7 +38,16 @@
     </div>
 
     <div id="tab-dashboard">
-        <div class="hero">
+        <div class="hero" id="heroBox">
+            <div class="hero-empty">
+                <div class="he-ico">🪙</div>
+                <div class="he-body">
+                    <div class="he-title">Kein aktives Sparziel</div>
+                    <div class="he-sub">Alles, was du dir gerade verdienst, wandert in den <strong>Puffer</strong>. Von dort kannst du es jederzeit auf ein Sparziel übertragen, sobald du eines aktivierst.</div>
+                    <div class="he-amt"><span>Im Puffer</span><em id="heBufferAmt">–</em></div>
+                </div>
+                <button class="he-btn" onclick="startNewGoal()">+ Sparziel anlegen</button>
+            </div>
             <div class="hero-top">
                 <div class="hero-radial">
                     <svg viewBox="0 0 100 100">
@@ -180,7 +189,15 @@
     </div>
 
     <div id="tab-ideen" style="display:none">
-        <div class="sh"><h2>Meine Sparziele</h2><button class="sh-add" onclick="toggleForm('sgForm')">+ Neues Sparziel</button></div>
+        <div class="ideen-summary" id="ideenSummary"></div>
+
+        <div class="sh">
+            <div class="sh-head">
+                <h2>Meine Sparziele <span class="sh-count" id="sgCount">0</span></h2>
+                <p class="sh-sub">Höchstens ein Ziel ist aktiv und wird bespart, alle anderen pausieren mit ihrem Kontostand. Ist keines aktiv, sammelt der Puffer.</p>
+            </div>
+            <button class="sh-add" onclick="toggleForm('sgForm')">+ Neues Sparziel</button>
+        </div>
         <div id="sgForm" class="iform">
             <div class="if-grid">
                 <div><label>Name</label><input id="sgNewName" placeholder="z.B. Neues Fahrrad"></div>
@@ -192,9 +209,16 @@
             </label>
             <button class="if-btn" onclick="createSavingsGoal()">Erstellen</button>
         </div>
-        <div id="sgList" style="display:grid;grid-template-columns:1fr;gap:0.625rem;margin-bottom:1.5rem"></div>
+        <div id="bufferBox"></div>
+        <div id="sgList" class="sg-grid"></div>
 
-        <div class="sh"><h2>Potentielle Sparziele (Ideen)</h2><button class="sh-add" onclick="toggleForm('potForm')">+</button></div>
+        <div class="sh">
+            <div class="sh-head">
+                <h2>Wunschliste <span class="sh-count" id="potCount">0</span></h2>
+                <p class="sh-sub">Konkrete Anschaffungen mit Preis — ein Klick macht daraus ein Sparziel.</p>
+            </div>
+            <button class="sh-add" onclick="toggleForm('potForm')">+ Wunsch</button>
+        </div>
         <div id="potForm" class="iform">
             <div class="if-grid">
                 <div><label>Name</label><input id="potName" placeholder="z.B. Fahrrad"></div>
@@ -202,8 +226,15 @@
             </div>
             <button class="if-btn" onclick="createPotential()">Hinzufügen</button>
         </div>
-        <div id="potList"></div>
-        <div class="sh" style="margin-top:1.5rem"><h2>Weitere Ideen</h2><button class="sh-add" onclick="toggleForm('ideaForm')">+</button></div>
+        <div id="potList" class="wish-grid"></div>
+
+        <div class="sh">
+            <div class="sh-head">
+                <h2>Ideen-Sammlung <span class="sh-count" id="ideaCount">0</span></h2>
+                <p class="sh-sub">Alles ohne Preisschild: Vorhaben, Kurse, Reisen — zum Sortieren, bevor daraus ein Ziel wird.</p>
+            </div>
+            <button class="sh-add" onclick="toggleForm('ideaForm')">+ Idee</button>
+        </div>
         <div id="ideaForm" class="iform">
             <div class="if-grid">
                 <div><label>Titel</label><input id="ideaTitle" placeholder="z.B. Sprachkurs"></div>
@@ -211,7 +242,7 @@
             </div>
             <button class="if-btn" onclick="createIdea()">Hinzufügen</button>
         </div>
-        <div id="ideaList"></div>
+        <div id="ideaList" class="idea-cloud"></div>
     </div>
 </main>
 
@@ -271,7 +302,7 @@
 <div class="vex-modal" id="completeModal">
     <div class="vex-modal-card">
         <h3>🏆 Sparziel abschließen</h3>
-        <p class="vex-modal-sub">Das aktuelle Sparziel wandert in die Trophäen-Wand. Ein neues, leeres Sparziel wird angelegt und der Sparkontostand startet bei 0.</p>
+        <p class="vex-modal-sub">Das Sparziel wandert in die Trophäen-Wand und verschwindet aus „Meine Sparziele“. Danach ist kein Ziel aktiv — bis du ein neues anlegst oder aktivierst, landet jede Belohnung im Puffer.</p>
         <label>Trophäen-Name</label>
         <input id="cmName" placeholder="z.B. KTC H27E6 gekauft">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
