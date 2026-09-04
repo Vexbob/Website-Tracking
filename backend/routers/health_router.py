@@ -737,36 +737,65 @@ async def health_summary(db=Depends(get_db), user=Depends(get_current_user)):
 
 
 # ---------- Zeitserien (Vitalwerte-Tab) ----------
+def _series_since(days: Optional[int]):
+    """Startdatum fuer einen Zeitraum-Filter -- oder ``None`` fuer "Gesamt".
+
+    v1.46.0: Alle Zeitraum-Chips im Frontend bieten einheitlich
+    7 / 30 / 90 / 365 Tage und "Gesamt" an. "Gesamt" kommt als ``days=0``
+    an und darf dann eben NICHT auf einen Tag zusammenschnurren (vorher
+    haette ``max(1, 0)`` genau das getan).
+    """
+    d = int(days if days is not None else 30)
+    if d <= 0:
+        return None
+    return date.today() - timedelta(days=min(d, 3650))
+
+
 @router.get("/api/health/metrics/{metric_type}")
 async def get_metric_series(metric_type: str, days: Optional[int] = 30,
                              db=Depends(get_db), user=Depends(get_current_user)):
     if metric_type not in ALLOWED_METRIC_TYPES:
         raise HTTPException(404, "Unbekannter Metric-Typ")
-    since = date.today() - timedelta(days=max(1, min(int(days or 30), 3650)))
-    rows = await db.fetch(
-        "SELECT * FROM health_metric_samples WHERE user_id=$1 AND metric_type=$2 "
-        "AND sample_date>=$3 ORDER BY recorded_at",
-        user["id"], metric_type, since)
+    since = _series_since(days)
+    if since is None:
+        rows = await db.fetch(
+            "SELECT * FROM health_metric_samples WHERE user_id=$1 AND metric_type=$2 "
+            "ORDER BY recorded_at", user["id"], metric_type)
+    else:
+        rows = await db.fetch(
+            "SELECT * FROM health_metric_samples WHERE user_id=$1 AND metric_type=$2 "
+            "AND sample_date>=$3 ORDER BY recorded_at",
+            user["id"], metric_type, since)
     return [_ser_exp(r) for r in rows]
 
 
 @router.get("/api/health/blood-pressure")
 async def get_blood_pressure(days: Optional[int] = 30,
                               db=Depends(get_db), user=Depends(get_current_user)):
-    since = date.today() - timedelta(days=max(1, min(int(days or 30), 3650)))
-    rows = await db.fetch(
-        "SELECT * FROM health_blood_pressure WHERE user_id=$1 AND recorded_at>=$2 ORDER BY recorded_at",
-        user["id"], since)
+    since = _series_since(days)
+    if since is None:
+        rows = await db.fetch(
+            "SELECT * FROM health_blood_pressure WHERE user_id=$1 ORDER BY recorded_at",
+            user["id"])
+    else:
+        rows = await db.fetch(
+            "SELECT * FROM health_blood_pressure WHERE user_id=$1 AND recorded_at>=$2 ORDER BY recorded_at",
+            user["id"], since)
     return [_ser_exp(r) for r in rows]
 
 
 @router.get("/api/health/blood-glucose")
 async def get_blood_glucose(days: Optional[int] = 30,
                              db=Depends(get_db), user=Depends(get_current_user)):
-    since = date.today() - timedelta(days=max(1, min(int(days or 30), 3650)))
-    rows = await db.fetch(
-        "SELECT * FROM health_blood_glucose WHERE user_id=$1 AND recorded_at>=$2 ORDER BY recorded_at",
-        user["id"], since)
+    since = _series_since(days)
+    if since is None:
+        rows = await db.fetch(
+            "SELECT * FROM health_blood_glucose WHERE user_id=$1 ORDER BY recorded_at",
+            user["id"])
+    else:
+        rows = await db.fetch(
+            "SELECT * FROM health_blood_glucose WHERE user_id=$1 AND recorded_at>=$2 ORDER BY recorded_at",
+            user["id"], since)
     return [_ser_exp(r) for r in rows]
 
 
@@ -774,10 +803,14 @@ async def get_blood_glucose(days: Optional[int] = 30,
 @router.get("/api/health/sleep")
 async def get_sleep(days: Optional[int] = 30,
                      db=Depends(get_db), user=Depends(get_current_user)):
-    since = date.today() - timedelta(days=max(1, min(int(days or 30), 3650)))
-    rows = await db.fetch(
-        "SELECT * FROM health_sleep WHERE user_id=$1 AND sleep_date>=$2 ORDER BY sleep_date",
-        user["id"], since)
+    since = _series_since(days)
+    if since is None:
+        rows = await db.fetch(
+            "SELECT * FROM health_sleep WHERE user_id=$1 ORDER BY sleep_date", user["id"])
+    else:
+        rows = await db.fetch(
+            "SELECT * FROM health_sleep WHERE user_id=$1 AND sleep_date>=$2 ORDER BY sleep_date",
+            user["id"], since)
     return [_ser_exp(r) for r in rows]
 
 

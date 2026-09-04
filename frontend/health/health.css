@@ -175,8 +175,15 @@ button.danger-outline:hover{background:var(--red-bg)}
 .h-metric-big small{font-size:0.6875rem;font-weight:600;color:var(--text-muted);margin-left:2px}
 .h-metric-stats{font-size:0.6875rem;color:var(--text-muted);margin:0.1875rem 0 0.5rem;
     font-variant-numeric:tabular-nums;min-height:0.9rem}
-.h-metric-empty{height:150px;display:grid;place-items:center;font-size:0.8125rem;
-    color:var(--text-fainter);border:1px dashed var(--border);border-radius:10px}
+/* Overlay statt Ersatz-Element: das Canvas bleibt liegen, damit ein spaeterer
+   Zeitraum mit Daten ohne Neuaufbau hineinanimieren kann. */
+.h-metric-empty{position:absolute;inset:0;display:grid;place-items:center;font-size:0.8125rem;
+    color:var(--text-fainter);border:1px dashed var(--border);border-radius:10px;
+    background:var(--surface)}
+/* v1.46.0: Beim Zeitraum-Wechsel bleiben die Diagramme stehen und werden nur
+   kurz gedimmt — vorher wurde das Raster durch "Lade …" ersetzt. */
+.h-metric-grid.is-loading{opacity:0.55;pointer-events:none;transition:opacity .15s ease}
+.h-metric-grid{transition:opacity .25s ease}
 
 /* v1.45.1: "Wann" und "Wie viel" liegen in einer Karte untereinander — beide
    zeigen dieselben Naechte in derselben Reihenfolge, nur mit unterschiedlicher

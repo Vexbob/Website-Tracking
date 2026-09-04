@@ -15,7 +15,11 @@ const HEALTH_API = {
     bloodPressure: (days) => apiCall(`/api/health/blood-pressure?days=${days}`),
     bloodGlucose:  (days) => apiCall(`/api/health/blood-glucose?days=${days}`),
     sleep:         (days) => apiCall(`/api/health/sleep?days=${days}`),
-    workouts:      (type) => apiCall('/api/health/workouts' + (type ? `?workout_type=${encodeURIComponent(type)}` : '')),
+    // limit=500 (Server-Maximum): der Workouts-Tab filtert Sportart und
+    // Zeitraum clientseitig -- mit dem Default 100 haette "Gesamt" bei
+    // laengerer Historie stillschweigend Workouts unterschlagen.
+    workouts:      (type) => apiCall('/api/health/workouts?limit=500'
+                       + (type ? `&workout_type=${encodeURIComponent(type)}` : '')),
     workoutDetail: (id) => apiCall(`/api/health/workouts/${id}`),
     importFile:    (file) => { const fd = new FormData(); fd.append('file', file); return apiCall('/api/health/import-file', { method: 'POST', body: fd }); },
     importCsv:     (files) => { const fd = new FormData(); [...files].forEach(f => fd.append('files', f)); return apiCall('/api/health/import-csv', { method: 'POST', body: fd }); },
@@ -229,10 +233,13 @@ const state = {
     metricsCache: {},
     activityMode: 'steps',
     activityChart: null,
-    vitalDays: 30, vitalInit: false, metricCharts: [],
+    vitalDays: 30, vitalInit: false,
+    metricCards: null, metricChartMap: {},   // v1.46.0: Karten bleiben stehen,
+                                             // nur die Daten werden getauscht
+
     chartBp: null, chartGlucose: null,
-    sleepDays: 30, sleepInit: false, chartSleep: null, chartSleepTimes: null,
-    sleepUsable: [],   // v1.45.1: Naechte hinter den Balken, fuer den Tooltip
+    sleepDays: 30, sleepInit: false, chartSleepTimes: null,
+    sleepUsable: [], sleepWindows: [],   // Naechte hinter den Balken (Tooltip)
     workoutsLoaded: false, workoutsAll: [], workoutFilter: '', workoutRange: 0,
     keysLoaded: false,
     sparkCharts: [],
@@ -316,7 +323,6 @@ async function loadDashboard() {
         });
 
         renderSleepBlock('hDashSleep', summary.sleep_last);
-        renderBpBlock('hDashBp', summary.blood_pressure_last);
         renderHeartOverview(summary, hrRows, restRows);
         renderInsights(summary, { stepsSum, stepsPrev, enSum, enPrev, restAvg, restPrev });
         renderActivityChart();
@@ -395,31 +401,6 @@ function renderSleepBlock(elId, sl) {
                 <span><span class="h-phase-dot" style="background:var(--teal)"></span>REM <strong>${fmt1((sl.rem_minutes||0)/60)} h</strong> <em>${pctInt(sl.rem_minutes)} %</em></span>
                 <span><span class="h-phase-dot" style="background:var(--orange)"></span>Wach <strong>${fmt1((sl.awake_minutes||0)/60)} h</strong> <em>${pctInt(sl.awake_minutes)} %</em></span>
             </div>` : ''}
-        </div>`;
-}
-
-function bpCategory(sys, dia) {
-    if (sys == null || dia == null) return { cls: 'normal', label: '—' };
-    if (sys >= 180 || dia >= 120) return { cls: 'crisis', label: 'Krise' };
-    if (sys >= 140 || dia >= 90) return { cls: 'stage2', label: 'Hypertonie' };
-    if (sys >= 130 || dia >= 80) return { cls: 'stage1', label: 'Erhöht' };
-    if (sys >= 120) return { cls: 'elevated', label: 'Leicht erhöht' };
-    if (sys < 120 && dia < 80) return { cls: 'optimal', label: 'Optimal' };
-    return { cls: 'normal', label: 'Normal' };
-}
-
-function renderBpBlock(elId, bp) {
-    const el = document.getElementById(elId);
-    if (!bp) { el.className = 'h-empty'; el.textContent = 'Noch keine Daten synchronisiert.'; return; }
-    el.className = '';
-    const cat = bpCategory(bp.systolic, bp.diastolic);
-    el.innerHTML = `
-        <div class="h-bp-block">
-            <div class="h-bp-head">
-                <span class="h-big">${fmt0(bp.systolic)}/${fmt0(bp.diastolic)}</span>
-                <span class="h-sub">mmHg · ${fmtDateTime(bp.recorded_at)}</span>
-                <span class="h-bp-badge ${cat.cls}">${cat.label}</span>
-            </div>
         </div>`;
 }
 
@@ -515,22 +496,36 @@ function initVitalwerte() {
 // Kachelreihe als Auswahl plus EIN grosses Diagramm — fuer den Vergleich
 // zweier Metriken musste man hin- und herklicken, waehrend Blutdruck und
 // Blutzucker (mit deutlich weniger Datenpunkten) dauerhaft sichtbar waren.
+//
+// v1.46.0: Beim Wechsel des Zeitraums werden Karten und Chart-Instanzen NICHT
+// mehr neu gebaut. Vorher flog das Raster raus und wurde durch "Lade …"
+// ersetzt — sichtbares Flackern und jedes Mal ein Aufbau von null. Jetzt
+// bleiben die Diagramme stehen, bekommen die neuen Daten zugewiesen und
+// animieren per Chart.js von den alten Werten auf die neuen.
 async function loadMetricCharts() {
     const box = document.getElementById('hMetricCharts');
     if (!box) return;
     const keys = Object.keys(METRIC_LABELS);
-    state.metricCharts.forEach(c => c && c.destroy());
-    state.metricCharts = [];
-    box.innerHTML = keys.map(() =>
-        '<div class="stat-card h-metric-card"><div class="stat-loading">Lade …</div></div>').join('');
+
+    if (!state.metricCards) {
+        state.metricCards = {};
+        box.innerHTML = '';
+        keys.forEach(k => {
+            const card = buildMetricShell(k);
+            box.appendChild(card);
+            state.metricCards[k] = card;
+        });
+    }
 
     const days = state.vitalDays;
+    box.classList.add('is-loading');
     const rowsList = await Promise.all(
         keys.map(k => HEALTH_API.metricSeries(k, days).catch(() => [])));
-
-    box.innerHTML = '';
-    keys.forEach((k, i) => box.appendChild(buildMetricCard(k, rowsList[i], days)));
-    keys.forEach((k, i) => mountMetricChart(k, rowsList[i]));
+    // Zwischenzeitlicher Zeitraum-Wechsel: das spaetere Ergebnis gewinnt,
+    // ein veraltetes ueberschreibt die frischeren Daten nicht mehr.
+    if (state.vitalDays !== days) return;
+    box.classList.remove('is-loading');
+    keys.forEach((k, i) => updateMetricCard(k, rowsList[i], days));
 }
 
 // Gleiche Wert-Ermittlung wie fuer die Chart-Linie (qty, sonst avg_value),
@@ -540,11 +535,30 @@ function metricValueOf(r) {
     return Number.isFinite(v) ? v : Number(r.avg_value);
 }
 
-function buildMetricCard(key, rows, days) {
+// Leere Karte samt Canvas — Inhalt kommt aus updateMetricCard().
+function buildMetricShell(key) {
     const meta = METRIC_LABELS[key];
-    const vals = rows.map(metricValueOf).filter(Number.isFinite);
     const card = document.createElement('div');
-    card.className = 'stat-card h-metric-card' + (vals.length ? '' : ' is-empty');
+    card.className = 'stat-card h-metric-card';
+    card.innerHTML = `
+        <div class="h-metric-head">
+            <div class="h-metric-name"><span class="h-metric-ico">${meta.icon}</span>${escHtml(meta.label)}</div>
+            <div class="h-metric-big" data-role="big">–</div>
+        </div>
+        <div class="h-metric-stats" data-role="stats"></div>
+        <div class="chart-wrap mini">
+            <canvas id="hMc_${key}"></canvas>
+            <div class="h-metric-empty" data-role="empty" hidden>Keine Messwerte</div>
+        </div>`;
+    return card;
+}
+
+function updateMetricCard(key, rows, days) {
+    const card = state.metricCards[key];
+    if (!card) return;
+    const meta = METRIC_LABELS[key];
+    const data = rows.map(metricValueOf);
+    const vals = data.filter(Number.isFinite);
 
     let headline = '–', stats = 'Keine Daten in diesem Zeitraum';
     if (vals.length) {
@@ -554,41 +568,49 @@ function buildMetricCard(key, rows, days) {
         const fmtV = (v) => v >= 100 ? fmt0(v) : fmt1(v);
         const base = solid.length ? solid : vals;
         const mn = Math.min(...base), mx = Math.max(...base);
+        const span = days > 0 ? `${days} T.` : 'gesamt';
         if (meta.cumulative) {
-            const sum = vals.reduce((a, v) => a + v, 0);
-            headline = fmt0(sum);
-            stats = `Σ ${days} T. · Ø ${avg != null ? fmt0(avg) : '–'}/Tag · Max ${fmt0(mx)}`;
+            headline = fmt0(vals.reduce((a, v) => a + v, 0));
+            stats = `Σ ${span} · Ø ${avg != null ? fmt0(avg) : '–'}/Tag · Max ${fmt0(mx)}`;
         } else {
             headline = avg != null ? fmtV(avg) : '–';
-            stats = `Ø ${days} T. · Min ${fmtV(mn)} · Max ${fmtV(mx)}`;
+            stats = `Ø ${span} · Min ${fmtV(mn)} · Max ${fmtV(mx)}`;
         }
         if (skipped) stats += ` · ${skipped} Messlücke${skipped === 1 ? '' : 'n'} raus`;
     }
+    card.classList.toggle('is-empty', vals.length === 0);
+    card.querySelector('[data-role="big"]').innerHTML =
+        headline + (meta.unit ? `<small>${escHtml(meta.unit)}</small>` : '');
+    card.querySelector('[data-role="stats"]').textContent = stats;
+    card.querySelector('[data-role="empty"]').hidden = vals.length > 0;
 
-    card.innerHTML = `
-        <div class="h-metric-head">
-            <div class="h-metric-name"><span class="h-metric-ico">${meta.icon}</span>${escHtml(meta.label)}</div>
-            <div class="h-metric-big">${headline}${meta.unit ? `<small>${escHtml(meta.unit)}</small>` : ''}</div>
-        </div>
-        <div class="h-metric-stats">${escHtml(stats)}</div>
-        ${vals.length
-            ? `<div class="chart-wrap mini"><canvas id="hMc_${key}"></canvas></div>`
-            : '<div class="h-metric-empty">Keine Messwerte</div>'}`;
-    return card;
+    const labels = rows.map(r => fmtDate(r.sample_date || r.recorded_at));
+    const win = trendWindow(data.length);
+    const trend = vals.length ? rollingAverage(data, win, gapThreshold(vals)) : [];
+
+    let ch = state.metricChartMap[key];
+    if (!ch) {
+        ch = mountMetricChart(key, labels, data, trend, win);
+        if (!ch) return;
+        state.metricChartMap[key] = ch;
+        return;
+    }
+    ch.data.labels = labels;
+    ch.data.datasets[0].data = data;
+    ch.data.datasets[1].data = trend;
+    ch.data.datasets[1].label = `Ø gleitend (${win})`;
+    ch.update();
 }
 
-function mountMetricChart(key, rows) {
+function mountMetricChart(key, labels, data, trend, win) {
     const canvas = document.getElementById('hMc_' + key);
-    if (!canvas) return;
+    if (!canvas) return null;
     const meta = METRIC_LABELS[key];
     const th = chartTheme();
-    const data = rows.map(metricValueOf);
-    const vals = data.filter(Number.isFinite);
-    const win = trendWindow(data.length);
-    const ch = new Chart(canvas.getContext('2d'), {
+    return new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
-            labels: rows.map(r => fmtDate(r.sample_date || r.recorded_at)),
+            labels,
             datasets: [
                 {
                     label: `${meta.label}${meta.unit ? ' (' + meta.unit + ')' : ''}`,
@@ -597,8 +619,7 @@ function mountMetricChart(key, rows) {
                 },
                 // Gleitende Ø-/Trendlinie (ohne Messluecken, siehe rollingAverage)
                 {
-                    label: `Ø gleitend (${win})`,
-                    data: rollingAverage(data, win, gapThreshold(vals)),
+                    label: `Ø gleitend (${win})`, data: trend,
                     borderColor: th.muted, borderWidth: 1.5, borderDash: [5, 4],
                     tension: 0.35, fill: false, pointRadius: 0, spanGaps: true,
                 },
@@ -614,7 +635,6 @@ function mountMetricChart(key, rows) {
             },
         }),
     });
-    state.metricCharts.push(ch);
 }
 
 async function loadBpGlucoseCharts() {
@@ -634,17 +654,6 @@ async function loadBpGlucoseCharts() {
 }
 
 // ---------- Schlaf ----------
-// Nur das oberste sichtbare Segment eines Stapels bekommt runde Ecken, damit
-// der Balken als EIN Block (= Gesamtschlafdauer) gelesen wird und nicht als
-// vier gestapelte Einzelbalken.
-const SLEEP_STACK_RADIUS = (ctx) => {
-    const ds = ctx.chart.data.datasets;
-    for (let i = ctx.datasetIndex + 1; i < ds.length; i++) {
-        if ((ds[i].data[ctx.dataIndex] || 0) > 0) return 0;
-    }
-    return 4;
-};
-
 // Stunden-Offset ab 18:00 -> "HH:MM". Werte ueber 24 sind erlaubt (eine Nacht
 // darf ueber die 18:00-Grenze des Folgetags hinausreichen) und wrappen sauber.
 function sleepOffsetToClock(v) {
@@ -656,6 +665,25 @@ function sleepOffsetToClock(v) {
     return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
 }
 
+// v1.46.0: Phasen und Schlaffenster stecken in EINEM Diagramm. Die y-Achse ist
+// die Uhrzeit, jede Nacht ein Balken von der Zubettgeh- bis zur Aufstehzeit,
+// und die Phasen kacheln diesen Balken mit ihrer ECHTEN Dauer (keine Normierung
+// auf eine gemeinsame Grundlinie). Technisch sind das mehrere Floating-Bar-
+// Datasets im selben x-Slot (`x.stacked` gruppiert sie uebereinander,
+// `y.stacked` bleibt aus, damit Chart.js die Werte nicht zusaetzlich addiert) --
+// die Segmentgrenzen rechnen wir selbst aus.
+//
+// Was die Daten NICHT hergeben: die zeitliche Lage der Phasen. Apple liefert je
+// Nacht nur Summen. Die Laenge jedes Abschnitts stimmt daher, seine Position im
+// Balken ist eine feste Reihenfolge -- der Hinweis unter dem Diagramm sagt das.
+const SLEEP_SEGMENTS = [
+    { key: 'deep',   label: 'Tief',              color: '#4338ca' },
+    { key: 'core',   label: 'Kern',              color: '#6366f1' },
+    { key: 'rem',    label: 'REM',               color: '#a5b4fc' },
+    { key: 'rest',   label: 'ohne Phasendetail', color: '#c7d2fe' },
+    { key: 'awake',  label: 'Wach',              color: '#f59e0b' },
+];
+
 function initSchlaf() {
     state.sleepInit = true;
     document.querySelectorAll('#hSleepPresets .stat-chip').forEach(chip => {
@@ -666,90 +694,44 @@ function initSchlaf() {
             loadSleepChart();
         });
     });
-    // v1.40.3: Der Balken zeigt primaer die GESAMTE Schlafdauer der Nacht --
-    // Balkenhoehe = Ø-Schlafdauer-Kachel. Die Phasen sind nur noch die feine
-    // Binnenzeichnung: gleiche Farbfamilie in vier Helligkeitsstufen, damit
-    // das Auge zuerst die Gesamthoehe liest und erst dann die Zusammensetzung.
-    // "Wach" ist bewusst NICHT mehr Teil des Stapels -- Wachzeit ist kein
-    // Schlaf und hat den Balken frueher ueber die tatsaechliche Schlafdauer
-    // hinaus aufgeblasen. Sie steckt weiterhin in der Ø-Effizienz.
-    state.chartSleep = new Chart(document.getElementById('hChartSleep').getContext('2d'), {
-        type: 'bar',
-        data: { labels: [], datasets: [
-            { label: 'Tief', data: [], backgroundColor: '#4338ca', stack: 's', borderRadius: SLEEP_STACK_RADIUS },
-            { label: 'Core', data: [], backgroundColor: '#6366f1', stack: 's', borderRadius: SLEEP_STACK_RADIUS },
-            { label: 'REM',  data: [], backgroundColor: '#a5b4fc', stack: 's', borderRadius: SLEEP_STACK_RADIUS },
-            // Apples ``asleep_minutes`` enthaelt oft einen Anteil ohne
-            // Phasen-Zuordnung (und manche Naechte haben gar keine Phasen).
-            // Der Rest-Balken haelt die Balkenhoehe trotzdem exakt auf der
-            // Gesamtschlafdauer, statt die Nacht zu kurz darzustellen.
-            { label: 'ohne Phasendetail', data: [], backgroundColor: '#c7d2fe', stack: 's', borderRadius: SLEEP_STACK_RADIUS },
-        ] },
-        options: (() => {
-            const o = chartDefaults({
-                scales: {
-                    x: { stacked: true, ticks: { color: chartTheme().muted }, grid: { display: false } },
-                    y: { stacked: true, ticks: { color: chartTheme().muted }, grid: { color: chartTheme().grid },
-                         title: { display: true, text: 'Stunden', color: chartTheme().muted } },
-                },
-            });
-            // Gesamtschlaf als Fusszeile im Tooltip -- die Summe der Segmente
-            // ist die eigentliche Aussage des Balkens.
-            o.plugins.tooltip.callbacks = {
-                label: (ctx) => `${ctx.dataset.label}: ${fmt1(ctx.parsed.y)} h`,
-                footer: (items) => 'Gesamt: '
-                    + fmt1(items.reduce((s, i) => s + (i.parsed.y || 0), 0)) + ' h',
-            };
-            return o;
-        })(),
-    });
-    // v1.45.0: Statt zweier Punktwolken (Zubettgehen / Aufstehen), zwischen
-    // denen das Auge die Nacht selbst zusammensetzen musste, ist jede Nacht
-    // jetzt EIN Balken von der Zubettgeh- bis zur Aufstehzeit — Chart.js
-    // "floating bar" mit [start, ende] als Datenpunkt. Die Achse laeuft von
-    // 18:00 bis 18:00 des Folgetags und ist umgedreht, damit spaeter =
-    // weiter unten liegt und der Balken wie im Kalender nach unten haengt.
+    const th = chartTheme();
     state.chartSleepTimes = new Chart(document.getElementById('hChartSleepTimes').getContext('2d'), {
         type: 'bar',
-        data: { labels: [], datasets: [{
-            label: 'Schlaffenster', data: [], backgroundColor: '#6366f1',
-            borderRadius: 4, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.9,
-        }] },
+        data: { labels: [], datasets: [
+            // Dataset 0 ist der helle Rahmen "Zeit im Bett". Er liegt unter den
+            // Phasen und bleibt dort sichtbar, wo die Summe der Phasen die
+            // Bettzeit nicht ganz ausfuellt.
+            { label: 'Im Bett', data: [], backgroundColor: th.grid,
+              borderColor: th.border, borderWidth: 1, borderSkipped: false,
+              borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.9 },
+            ...SLEEP_SEGMENTS.map(seg => ({
+                label: seg.label, data: [], backgroundColor: seg.color,
+                borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.9,
+            })),
+        ] },
         options: chartDefaults({
             plugins: {
-                legend: { display: false },
-                tooltip: themedTooltip({ callbacks: {
-                    // v1.45.1: Die Phasen stehen hier im Tooltip statt im Balken.
-                    // Im Balken haetten sie eine Uhrzeit — und damit eine
-                    // Reihenfolge behauptet, die die Quelle nicht liefert.
-                    label: (ctx) => {
-                        const r = ctx.raw;
-                        if (!Array.isArray(r)) return '';
-                        const lines = [`${sleepOffsetToClock(r[0])} → ${sleepOffsetToClock(r[1])}`
-                            + ` · ${fmt1(r[1] - r[0])} h im Bett`];
-                        const n = (state.sleepUsable || [])[ctx.dataIndex];
-                        if (n) {
-                            const h = (v) => { const x = Number(v); return Number.isFinite(x) ? x / 60 : null; };
-                            const parts = [
-                                ['Kern', h(n.core_minutes)], ['Tief', h(n.deep_minutes)],
-                                ['REM', h(n.rem_minutes)], ['Wach', h(n.awake_minutes)],
-                            ].filter(([, v]) => v != null && v > 0);
-                            if (parts.length) {
-                                lines.push(parts.map(([k, v]) => `${k} ${fmt1(v)} h`).join(' · '));
-                            }
-                        }
-                        return lines;
+                legend: { labels: { color: th.text, boxWidth: 12, font: { size: 11 } } },
+                tooltip: themedTooltip({
+                    // Segmente ohne Dauer wuerden den Tooltip nur zumuellen.
+                    filter: (item) => Array.isArray(item.raw) && (item.raw[1] - item.raw[0]) > 0.01,
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ${fmt1(ctx.raw[1] - ctx.raw[0])} h`,
+                        footer: (items) => {
+                            const first = items && items[0];
+                            const w = first ? (state.sleepWindows || [])[first.dataIndex] : null;
+                            return w ? `${sleepOffsetToClock(w[0])} → ${sleepOffsetToClock(w[1])}` : '';
+                        },
                     },
-                } }),
+                }),
             },
             scales: {
-                x: { ticks: { color: chartTheme().muted, maxRotation: 0, autoSkipPadding: 12 },
+                x: { stacked: true, ticks: { color: th.muted, maxRotation: 0, autoSkipPadding: 12 },
                      grid: { display: false } },
-                y: { reverse: true, min: 0, max: 24,
-                     ticks: { color: chartTheme().muted, stepSize: 3,
-                              callback: (v) => sleepOffsetToClock(v) },
-                     grid: { color: chartTheme().grid },
-                     title: { display: true, text: 'Uhrzeit', color: chartTheme().muted } },
+                y: { stacked: false, reverse: true, min: 0, max: 24,
+                     ticks: { color: th.muted, stepSize: 3, callback: (v) => sleepOffsetToClock(v) },
+                     grid: { color: th.grid },
+                     title: { display: true, text: 'Uhrzeit', color: th.muted } },
             },
         }),
     });
@@ -768,9 +750,7 @@ async function loadSleepChart() {
             </div>`;
             const emptyNote = document.getElementById('hSleepNote');
             if (emptyNote) emptyNote.textContent = '';
-            state.chartSleep.data.labels = [];
-            state.chartSleep.data.datasets.forEach(d => d.data = []);
-            state.chartSleep.update();
+            state.sleepUsable = []; state.sleepWindows = [];
             state.chartSleepTimes.data.labels = [];
             state.chartSleepTimes.data.datasets.forEach(d => d.data = []);
             state.chartSleepTimes.update();
@@ -819,18 +799,7 @@ async function loadSleepChart() {
         // raus -- ein 20-Minuten-Fragment ist weder ein sinnvoller Balken noch
         // ein sinnvoller Zubettgeh-Punkt, und ein Diagramm, das andere Naechte
         // zeigt als die Kacheln darueber, waere schlicht irrefuehrend.
-        state.chartSleep.data.labels = usable.map(r => fmtDate(r.sleep_date));
-        const phaseH = (r, key) => (num(r[key]) || 0) / 60;
-        state.chartSleep.data.datasets[0].data = usable.map(r => phaseH(r, 'deep_minutes'));
-        state.chartSleep.data.datasets[1].data = usable.map(r => phaseH(r, 'core_minutes'));
-        state.chartSleep.data.datasets[2].data = usable.map(r => phaseH(r, 'rem_minutes'));
-        state.chartSleep.data.datasets[3].data = usable.map(r => {
-            const phases = (num(r.deep_minutes) || 0) + (num(r.core_minutes) || 0) + (num(r.rem_minutes) || 0);
-            return Math.max(0, ((asleepMin(r) || 0) - phases)) / 60;
-        });
-        state.chartSleep.update();
-
-        // Regelmäßigkeits-Chart: Offset ab 18:00
+        // Offset ab 18:00
         const toOffset = (iso) => {
             if (!iso) return null;
             const d = new Date(iso);
@@ -847,8 +816,38 @@ async function loadSleepChart() {
             if (a == null || b == null) return null;
             return [a, b <= a ? b + 24 : b];
         });
+        state.sleepWindows = windows;
+
+        // Phasen kacheln das Fenster ab der Zubettgeh-Kante mit ihrer echten
+        // Dauer. Ueberschiesst die Summe das Fenster (Rundung in der Quelle),
+        // wird an der Aufsteh-Kante abgeschnitten statt darueber hinaus gemalt.
+        const segH = (r) => {
+            const h = (v) => (num(v) || 0) / 60;
+            const phases = h(r.deep_minutes) + h(r.core_minutes) + h(r.rem_minutes);
+            return {
+                deep: h(r.deep_minutes), core: h(r.core_minutes), rem: h(r.rem_minutes),
+                rest: Math.max(0, ((asleepMin(r) || 0) / 60) - phases),
+                awake: h(r.awake_minutes),
+            };
+        };
+        const segData = SLEEP_SEGMENTS.map(() => []);
+        usable.forEach((r, i) => {
+            const w = windows[i];
+            if (!w) { segData.forEach(d => d.push(null)); return; }
+            const parts = segH(r);
+            let cursor = w[0];
+            SLEEP_SEGMENTS.forEach((seg, si) => {
+                const len = parts[seg.key] || 0;
+                const from = Math.min(cursor, w[1]);
+                const to = Math.min(cursor + len, w[1]);
+                segData[si].push(len > 0 && to > from ? [from, to] : null);
+                cursor += len;
+            });
+        });
+
         state.chartSleepTimes.data.labels = usable.map(r => fmtDate(r.sleep_date));
         state.chartSleepTimes.data.datasets[0].data = windows;
+        segData.forEach((d, si) => { state.chartSleepTimes.data.datasets[si + 1].data = d; });
         const ends = windows.filter(Boolean).map(w => w[1]);
         state.chartSleepTimes.options.scales.y.max =
             Math.min(36, Math.max(24, Math.ceil(ends.length ? Math.max(...ends) : 24)));
@@ -933,8 +932,9 @@ async function initWorkouts() {
     renderWorkouts();
 }
 
-const WORKOUT_RANGE_LBL = { 0: 'Gesamter Zeitraum', 30: 'Letzte 30 Tage',
-                            90: 'Letzte 90 Tage', 365: 'Letzte 12 Monate' };
+const WORKOUT_RANGE_LBL = { 0: 'Gesamter Zeitraum', 7: 'Letzte 7 Tage',
+                            30: 'Letzte 30 Tage', 90: 'Letzte 90 Tage',
+                            365: 'Letztes Jahr' };
 
 function renderWorkouts() {
     const days = Number(state.workoutRange) || 0;
@@ -1444,9 +1444,9 @@ async function uploadHealthFile() {
     document.getElementById('themeBtn').addEventListener('click', () => {
         toggleTheme();
         // Charts neu einfärben
-        [state.chartBp, state.chartGlucose, state.chartSleep,
+        [state.chartBp, state.chartGlucose,
          state.chartSleepTimes, state.activityChart,
-         ...state.metricCharts].forEach(c => {
+         ...Object.values(state.metricChartMap)].forEach(c => {
             if (c) { Object.assign(c.options, chartDefaults(c.options)); c.update(); }
         });
     });

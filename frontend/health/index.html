@@ -46,8 +46,6 @@
             <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
         </div>
 
-        <div class="stat-insights" id="hDashInsights"></div>
-
         <div class="split-3-2">
             <div class="stat-card">
                 <div class="stat-card-head">
@@ -65,16 +63,12 @@
             </div>
         </div>
 
-        <div class="split-2">
-            <div class="stat-card">
-                <h3>🩺 Blutdruck (letzter Wert)</h3>
-                <div id="hDashBp" class="h-empty">Noch keine Daten synchronisiert.</div>
-            </div>
-            <div class="stat-card">
-                <h3>❤️ Herz-Übersicht <span class="stat-range-lbl">· 7 Tage</span></h3>
-                <div id="hDashHeart" class="h-empty">Lade …</div>
-            </div>
+        <div class="stat-card">
+            <h3>❤️ Herz-Übersicht <span class="stat-range-lbl">· 7 Tage</span></h3>
+            <div id="hDashHeart" class="h-empty">Lade …</div>
         </div>
+
+        <div class="stat-insights" id="hDashInsights"></div>
     </div>
 
     <!-- ---------- Vitalwerte ---------- -->
@@ -84,7 +78,8 @@
                 <button class="stat-chip" data-preset="7">7 Tage</button>
                 <button class="stat-chip active" data-preset="30">30 Tage</button>
                 <button class="stat-chip" data-preset="90">90 Tage</button>
-                <button class="stat-chip" data-preset="365">12 Monate</button>
+                <button class="stat-chip" data-preset="365">1 Jahr</button>
+                <button class="stat-chip" data-preset="0">Gesamt</button>
             </div>
         </div>
 
@@ -107,36 +102,27 @@
     <div id="tab-schlaf" style="display:none">
         <div class="stat-filterbar">
             <div class="stat-preset-chips" id="hSleepPresets">
-                <button class="stat-chip" data-preset="14">14 Nächte</button>
-                <button class="stat-chip active" data-preset="30">30 Nächte</button>
-                <button class="stat-chip" data-preset="90">90 Nächte</button>
-                <button class="stat-chip" data-preset="365">12 Monate</button>
+                <button class="stat-chip" data-preset="7">7 Tage</button>
+                <button class="stat-chip active" data-preset="30">30 Tage</button>
+                <button class="stat-chip" data-preset="90">90 Tage</button>
+                <button class="stat-chip" data-preset="365">1 Jahr</button>
+                <button class="stat-chip" data-preset="0">Gesamt</button>
             </div>
         </div>
         <div class="stat-kpi-grid" id="hSleepKpis"></div>
         <div class="stat-range-lbl" id="hSleepNote" style="margin:-0.25rem 0 0.75rem"></div>
         <div class="stat-card">
             <h3>😴 Schlaf je Nacht</h3>
-            <div class="h-sleep-plot">
-                <div class="h-sleep-plot-lbl">🌙 Wann — Schlaffenster auf der Uhr</div>
-                <p class="h-hint">Ein Balken je Nacht: Oberkante = Zubettgehen, Unterkante =
-                    Aufstehen. Achse läuft von 18:00 bis 18:00 des Folgetags, gleich liegende
-                    Balken untereinander = regelmäßiger Rhythmus. Der Tooltip nennt zusätzlich
-                    die Phasen dieser Nacht.</p>
-                <div class="chart-wrap tall"><canvas id="hChartSleepTimes"></canvas></div>
-            </div>
-            <div class="h-sleep-plot">
-                <div class="h-sleep-plot-lbl">⏱️ Wie viel — Dauer &amp; Phasen</div>
-                <p class="h-hint">Dieselben Nächte, gleiche Reihenfolge: Balkenhöhe = geschlafene
-                    Gesamtzeit, die Farbabstufungen darin sind die Phasen. Wachzeit ist nicht
-                    enthalten.</p>
-                <div class="chart-wrap tall"><canvas id="hChartSleep"></canvas></div>
-                <p class="h-hint" style="margin:0.75rem 0 0">Die Phasen bleiben bewusst auf einer
-                    <em>Dauer</em>-Achse: dort ist die Stapelung reine Zusammensetzung („wie viel
-                    wovon"), die Reihenfolge der Segmente bedeutet nichts. Auf der Uhrzeit-Achse
-                    oben wäre sie dagegen eine Aussage darüber, <em>wann</em> die Phase lag — und
-                    das liefert Apple nicht, es kommen nur die Summen je Nacht.</p>
-            </div>
+            <p class="h-hint">Ein Balken je Nacht auf der Uhrzeit-Achse: Oberkante = Zubettgehen,
+                Unterkante = Aufstehen, Balkenlänge = Zeit im Bett. Die Farbabstufungen darin sind
+                die Phasen mit ihrer <em>echten Dauer</em> — nichts ist auf eine gemeinsame
+                Grundlinie normiert, ein doppelt so langer Abschnitt ist also auch doppelt so viel
+                Zeit. Gleich liegende Balken untereinander = regelmäßiger Rhythmus.</p>
+            <div class="chart-wrap tall"><canvas id="hChartSleepTimes"></canvas></div>
+            <p class="h-hint" style="margin:0.75rem 0 0">Eine Einschränkung, die die Quelle vorgibt:
+                Apple liefert je Nacht nur die <em>Summen</em> für Kern, Tief und REM, nicht deren
+                zeitliche Lage. Die Länge jedes Abschnitts stimmt also, seine Position innerhalb der
+                Nacht ist eine feste Reihenfolge und keine Messung — es ist kein Hypnogramm.</p>
         </div>
     </div>
 
@@ -148,9 +134,10 @@
             </div>
             <span class="stat-filter-sep"></span>
             <div class="stat-preset-chips" id="hWorkoutRangeChips">
+                <button class="stat-chip" data-range="7">7 Tage</button>
                 <button class="stat-chip" data-range="30">30 Tage</button>
                 <button class="stat-chip" data-range="90">90 Tage</button>
-                <button class="stat-chip" data-range="365">12 Monate</button>
+                <button class="stat-chip" data-range="365">1 Jahr</button>
                 <button class="stat-chip active" data-range="0">Gesamt</button>
             </div>
         </div>

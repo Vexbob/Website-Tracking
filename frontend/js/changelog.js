@@ -4,6 +4,15 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.46.0', date: '2026-09-04', title: 'Einheitliche Zeitfilter, Schlaf in einem Diagramm, ruhigerer Vitalwerte-Wechsel', notes: [
+        'Zeitraum-Filter sind überall dieselben: 7 Tage · 30 Tage · 90 Tage · 1 Jahr · Gesamt. Betrifft Vitalwerte (vorher ohne „Gesamt"), Schlaf (vorher 14/30/90 Nächte) und Workouts (vorher ohne 7 Tage); die Ausgaben-Statistik heißt jetzt genauso („1 Jahr" statt „12 Monate", „Gesamt" statt „Alle"). Serverseitig kommt „Gesamt" als days=0 an und hebt den Datumsfilter auf, statt wie bisher auf einen Tag zusammenzuschrumpfen.',
+        'Vitalwerte: Beim Wechsel des Zeitraums verschwinden die Diagramme nicht mehr hinter „Lade …". Karten und Chart-Instanzen bleiben stehen, bekommen die neuen Daten zugewiesen und animieren von den alten Werten auf die neuen; das Raster wird währenddessen nur kurz gedimmt. Ein zwischenzeitlicher zweiter Klick gewinnt, ein verspätetes Ergebnis überschreibt die frischeren Daten nicht mehr.',
+        'Schlaf: Phasen und Schlaffenster stecken jetzt wie gewünscht in EINEM Diagramm. Jede Nacht ist ein Balken auf der Uhrzeit-Achse von der Zubettgeh- bis zur Aufstehzeit, und die Phasen kacheln diesen Balken mit ihrer echten Dauer — nichts wird auf eine gemeinsame Grundlinie normiert. Wachzeit ist als eigener Abschnitt dabei, ein heller Rahmen zeigt die Zeit im Bett. Das separate Dauer-Diagramm ist damit überflüssig und entfällt.',
+        'Was dabei bleibt: Apple liefert je Nacht nur die Summen für Kern, Tief und REM, nicht deren zeitliche Lage. Die Länge jedes Abschnitts stimmt, seine Position im Balken ist eine feste Reihenfolge und keine Messung — der Hinweis steht unter dem Diagramm, damit es niemand für ein Hypnogramm hält.',
+        'Gesundheits-Dashboard: Die Blutdruck-Karte ist raus (Blutdruck steht weiterhin im Vitalwerte-Tab), die Herz-Übersicht nimmt die Breite ein, und die Vergleiche („Ruhepuls x bpm besser als Vorwoche") stehen jetzt ganz unten statt über den Diagrammen.',
+        'Die Icons der Übersichtsseite folgen jetzt dem Schnellwechsler: Sparziel 💰 statt €, Ausgaben 💶 statt €, User-Verwaltung 👥 statt A.',
+        'Der Workouts-Tab holt bis zu 500 statt 100 Workouts — sonst hätte „Gesamt" bei längerer Historie stillschweigend welche unterschlagen.',
+    ]},
     { v: 'v1.45.1', date: '2026-09-04', title: 'Beide Schlaf-Diagramme in einer Karte, Phasen im Tooltip', notes: [
         'Schlaffenster und Phasen-Diagramm sitzen jetzt in EINER Karte untereinander, beschriftet als „Wann" und „Wie viel". Beide zeigen dieselben Nächte in derselben Reihenfolge — man vergleicht sie, ohne zwischen zwei Karten zu springen.',
         'Der Tooltip des Schlaffensters nennt zusätzlich zu Zubettgeh-/Aufstehzeit und Dauer die Phasen dieser Nacht (Kern, Tief, REM, Wach).',
