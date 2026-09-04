@@ -18,6 +18,7 @@
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/sw-update.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
 </head>
 <body>
 <nav class="navbar">
@@ -117,7 +118,11 @@
                 Unterkante = Aufstehen, Balkenlänge = Zeit im Bett. Die Farbabstufungen darin sind
                 die Phasen mit ihrer <em>echten Dauer</em> — nichts ist auf eine gemeinsame
                 Grundlinie normiert, ein doppelt so langer Abschnitt ist also auch doppelt so viel
-                Zeit. Gleich liegende Balken untereinander = regelmäßiger Rhythmus.</p>
+                Zeit. Gleich liegende Balken untereinander = regelmäßiger Rhythmus.
+                Die Achse zeigt immer genau 24 Stunden (18:00 bis 18:00); reicht eine Nacht
+                darüber hinaus, endet der Balken an der Unterkante und bekommt dort einen
+                <strong style="color:#22c55e">grünen Strich</strong> — die echte Aufstehzeit
+                steht im Tooltip.</p>
             <div class="chart-wrap tall"><canvas id="hChartSleepTimes"></canvas></div>
             <p class="h-hint" style="margin:0.75rem 0 0">Eine Einschränkung, die die Quelle vorgibt:
                 Apple liefert je Nacht nur die <em>Summen</em> für Kern, Tief und REM, nicht deren

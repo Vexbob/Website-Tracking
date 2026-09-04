@@ -190,3 +190,12 @@ button.danger-outline:hover{background:var(--red-bg)}
    y-Achse (Uhrzeit vs. Dauer). */
 .h-sleep-plot + .h-sleep-plot{margin-top:1.5rem;padding-top:1.25rem;border-top:1px dashed var(--border)}
 .h-sleep-plot-lbl{font-size:0.8125rem;font-weight:700;color:var(--text);margin-bottom:0.25rem}
+
+/* v1.46.1: Vitalwerte-Karten sind per Drag & Drop sortierbar — gleiche Optik
+   und Bedienung wie die Achievements/Wochenziele im Sparziel-Modul. */
+.drag-handle{cursor:grab;color:var(--text-fainter);padding:2px 4px;user-select:none;
+    touch-action:none;font-size:0.875rem;line-height:1;font-weight:900;flex-shrink:0}
+.drag-handle:hover{color:var(--text-muted)}
+.drag-handle:active{cursor:grabbing}
+.h-metric-card.sortable-ghost{opacity:0.35}
+.h-metric-card.sortable-chosen{box-shadow:var(--shadow-lg)}

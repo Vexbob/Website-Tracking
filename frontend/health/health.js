@@ -21,6 +21,13 @@ const HEALTH_API = {
     workouts:      (type) => apiCall('/api/health/workouts?limit=500'
                        + (type ? `&workout_type=${encodeURIComponent(type)}` : '')),
     workoutDetail: (id) => apiCall(`/api/health/workouts/${id}`),
+    // v1.46.1: Reihenfolge der Vitalwerte-Karten (serverseitig, damit sie auf
+    // allen Geraeten gleich ist — wie bei den Wochenzielen im Sparziel-Modul)
+    metricOrder:    () => apiCall('/api/health/metric-order'),
+    saveMetricOrder: (order) => apiCall('/api/health/metric-order', {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ order }),
+    }),
     importFile:    (file) => { const fd = new FormData(); fd.append('file', file); return apiCall('/api/health/import-file', { method: 'POST', body: fd }); },
     importCsv:     (files) => { const fd = new FormData(); [...files].forEach(f => fd.append('files', f)); return apiCall('/api/health/import-csv', { method: 'POST', body: fd }); },
     apiKeys:       () => apiCall('/api/health/api-keys'),
@@ -236,6 +243,7 @@ const state = {
     vitalDays: 30, vitalInit: false,
     metricCards: null, metricChartMap: {},   // v1.46.0: Karten bleiben stehen,
                                              // nur die Daten werden getauscht
+    metricOrder: null, sortableMetrics: null,
 
     chartBp: null, chartGlucose: null,
     sleepDays: 30, sleepInit: false, chartSleepTimes: null,
@@ -502,20 +510,35 @@ function initVitalwerte() {
 // ersetzt — sichtbares Flackern und jedes Mal ein Aufbau von null. Jetzt
 // bleiben die Diagramme stehen, bekommen die neuen Daten zugewiesen und
 // animieren per Chart.js von den alten Werten auf die neuen.
+// Gespeicherte Reihenfolge auf die bekannten Metriken anwenden: erst die
+// sortierten, dann alles, was der Nutzer noch nie in der Hand hatte (neue
+// Metriken landen so hinten statt zu verschwinden).
+function orderedMetricKeys() {
+    const all = Object.keys(METRIC_LABELS);
+    const saved = (state.metricOrder || []).filter(k => all.includes(k));
+    return saved.concat(all.filter(k => !saved.includes(k)));
+}
+
 async function loadMetricCharts() {
     const box = document.getElementById('hMetricCharts');
     if (!box) return;
-    const keys = Object.keys(METRIC_LABELS);
 
     if (!state.metricCards) {
+        // Reihenfolge einmalig holen; scheitert das, bleibt die Default-Folge.
+        try {
+            const r = await HEALTH_API.metricOrder();
+            state.metricOrder = (r && r.order) || [];
+        } catch (e) { state.metricOrder = []; }
         state.metricCards = {};
         box.innerHTML = '';
-        keys.forEach(k => {
+        orderedMetricKeys().forEach(k => {
             const card = buildMetricShell(k);
             box.appendChild(card);
             state.metricCards[k] = card;
         });
+        initMetricSortable(box);
     }
+    const keys = orderedMetricKeys();
 
     const days = state.vitalDays;
     box.classList.add('is-loading');
@@ -540,9 +563,10 @@ function buildMetricShell(key) {
     const meta = METRIC_LABELS[key];
     const card = document.createElement('div');
     card.className = 'stat-card h-metric-card';
+    card.dataset.metric = key;
     card.innerHTML = `
         <div class="h-metric-head">
-            <div class="h-metric-name"><span class="h-metric-ico">${meta.icon}</span>${escHtml(meta.label)}</div>
+            <div class="h-metric-name"><span class="drag-handle" title="Ziehen zum Sortieren">⠿</span><span class="h-metric-ico">${meta.icon}</span>${escHtml(meta.label)}</div>
             <div class="h-metric-big" data-role="big">–</div>
         </div>
         <div class="h-metric-stats" data-role="stats"></div>
@@ -600,6 +624,44 @@ function updateMetricCard(key, rows, days) {
     ch.data.datasets[1].data = trend;
     ch.data.datasets[1].label = `Ø gleitend (${win})`;
     ch.update();
+}
+
+// Drag & Drop wie bei Achievements/Wochenzielen: Anfassen nur am Griff, auf
+// dem Touchscreen mit kurzer Verzoegerung, damit Scrollen weiter funktioniert.
+function initMetricSortable(box) {
+    if (state.sortableMetrics) return;
+    if (typeof Sortable === 'undefined') {
+        // Sortable.min.js laedt mit `defer` und ist beim ersten Rendern unter
+        // Umstaenden noch nicht da (health.js selbst laeuft undeferred am
+        // Body-Ende). Dann einmal nach dem load-Event nachziehen, statt das
+        // Sortieren still gar nicht zu aktivieren.
+        window.addEventListener('load', () => initMetricSortable(box), { once: true });
+        return;
+    }
+    state.sortableMetrics = Sortable.create(box, {
+        handle: '.drag-handle', animation: 150, delay: 120, delayOnTouchOnly: true,
+        onEnd: async () => {
+            const order = Array.from(box.children)
+                .map(el => el.dataset.metric)
+                .filter(Boolean);
+            if (!order.length) return;
+            const previous = state.metricOrder;
+            state.metricOrder = order;
+            try {
+                await HEALTH_API.saveMetricOrder(order);
+                showToast('Reihenfolge gespeichert');
+            } catch (e) {
+                // Serverstand gilt: zuruecksetzen statt eine Reihenfolge zu
+                // zeigen, die beim naechsten Laden wieder anders waere.
+                state.metricOrder = previous;
+                showToast('Reihenfolge speichern fehlgeschlagen', true);
+                orderedMetricKeys().forEach(k => {
+                    const card = state.metricCards[k];
+                    if (card) box.appendChild(card);
+                });
+            }
+        },
+    });
 }
 
 function mountMetricChart(key, labels, data, trend, win) {
@@ -708,15 +770,37 @@ function initSchlaf() {
                 label: seg.label, data: [], backgroundColor: seg.color,
                 borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.9,
             })),
+            // v1.46.1: Die Achse bleibt fest auf 24 h (18:00 bis 18:00). Eine
+            // Nacht, die darueber hinausreicht, wird an der Unterkante
+            // abgeschnitten und dort mit einem gruenen Strich markiert —
+            // vorher ist stattdessen die Achse gewachsen, wodurch sich die
+            // Skala zwischen zwei Zeitraeumen verschoben hat und Balken nicht
+            // mehr vergleichbar waren.
+            { label: 'über 18:00 hinaus', data: [], backgroundColor: '#22c55e',
+              marker: true, borderSkipped: false,
+              barPercentage: 0.8, categoryPercentage: 0.9 },
         ] },
         options: chartDefaults({
             plugins: {
-                legend: { labels: { color: th.text, boxWidth: 12, font: { size: 11 } } },
+                legend: { labels: { color: th.text, boxWidth: 12, font: { size: 11 },
+                    // Der gruene Eintrag taucht nur auf, wenn wirklich eine
+                    // Nacht abgeschnitten wurde.
+                    filter: (item, data) => {
+                        const ds = data.datasets[item.datasetIndex];
+                        return !ds.marker || (ds.data || []).some(v => Array.isArray(v));
+                    } } },
                 tooltip: themedTooltip({
                     // Segmente ohne Dauer wuerden den Tooltip nur zumuellen.
                     filter: (item) => Array.isArray(item.raw) && (item.raw[1] - item.raw[0]) > 0.01,
                     callbacks: {
-                        label: (ctx) => `${ctx.dataset.label}: ${fmt1(ctx.raw[1] - ctx.raw[0])} h`,
+                        label: (ctx) => {
+                            if (ctx.dataset.marker) {
+                                const w = (state.sleepWindows || [])[ctx.dataIndex];
+                                return w ? `Bei 18:00 abgeschnitten — Aufstehen erst ${sleepOffsetToClock(w[1])}`
+                                         : 'Bei 18:00 abgeschnitten';
+                            }
+                            return `${ctx.dataset.label}: ${fmt1(ctx.raw[1] - ctx.raw[0])} h`;
+                        },
                         footer: (items) => {
                             const first = items && items[0];
                             const w = first ? (state.sleepWindows || [])[first.dataIndex] : null;
@@ -816,11 +900,18 @@ async function loadSleepChart() {
             if (a == null || b == null) return null;
             return [a, b <= a ? b + 24 : b];
         });
+        // `sleepWindows` behaelt die UNGEKAPPTEN Zeiten — Tooltip und Fusszeile
+        // sollen die echte Aufstehzeit nennen, auch wenn der Balken gekappt ist.
         state.sleepWindows = windows;
+        const AXIS_END = 24;   // 18:00 des Folgetags
+        const clipped = windows.map(w => w ? [w[0], Math.min(w[1], AXIS_END)] : null);
+        const overflow = windows.map(w => (w && w[1] > AXIS_END + 1e-6)
+            ? [AXIS_END - 0.22, AXIS_END] : null);
 
         // Phasen kacheln das Fenster ab der Zubettgeh-Kante mit ihrer echten
-        // Dauer. Ueberschiesst die Summe das Fenster (Rundung in der Quelle),
-        // wird an der Aufsteh-Kante abgeschnitten statt darueber hinaus gemalt.
+        // Dauer. Ueberschiesst die Summe das Fenster (Rundung in der Quelle,
+        // oder weil bei 18:00 gekappt wurde), wird an der Unterkante
+        // abgeschnitten statt darueber hinaus gemalt.
         const segH = (r) => {
             const h = (v) => (num(v) || 0) / 60;
             const phases = h(r.deep_minutes) + h(r.core_minutes) + h(r.rem_minutes);
@@ -832,7 +923,7 @@ async function loadSleepChart() {
         };
         const segData = SLEEP_SEGMENTS.map(() => []);
         usable.forEach((r, i) => {
-            const w = windows[i];
+            const w = clipped[i];
             if (!w) { segData.forEach(d => d.push(null)); return; }
             const parts = segH(r);
             let cursor = w[0];
@@ -845,12 +936,11 @@ async function loadSleepChart() {
             });
         });
 
+        const ds = state.chartSleepTimes.data.datasets;
         state.chartSleepTimes.data.labels = usable.map(r => fmtDate(r.sleep_date));
-        state.chartSleepTimes.data.datasets[0].data = windows;
-        segData.forEach((d, si) => { state.chartSleepTimes.data.datasets[si + 1].data = d; });
-        const ends = windows.filter(Boolean).map(w => w[1]);
-        state.chartSleepTimes.options.scales.y.max =
-            Math.min(36, Math.max(24, Math.ceil(ends.length ? Math.max(...ends) : 24)));
+        ds[0].data = clipped;
+        segData.forEach((d, si) => { ds[si + 1].data = d; });
+        ds[ds.length - 1].data = overflow;
         state.chartSleepTimes.update();
 
         const meanOf = (extract) => {

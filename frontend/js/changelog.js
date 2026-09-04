@@ -4,6 +4,12 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.46.1', date: '2026-09-04', title: 'Schlaf-Achse fest auf 24 h, Vitalwerte-Diagramme sortierbar', notes: [
+        'Die Uhrzeit-Achse im Schlaf-Diagramm zeigt jetzt immer genau 24 Stunden (18:00 bis 18:00) und wächst nicht mehr mit einer besonders langen Nacht mit. Vorher verschob sich die Skala zwischen zwei Zeiträumen, wodurch Balken nicht mehr miteinander vergleichbar waren.',
+        'Reicht eine Nacht über die 18:00-Grenze hinaus, endet ihr Balken an der Unterkante und bekommt dort einen grünen Strich. Der Tooltip nennt dann die echte Aufstehzeit, und der grüne Eintrag taucht in der Legende nur auf, wenn tatsächlich eine Nacht abgeschnitten wurde.',
+        'Die Diagramme im Vitalwerte-Tab lassen sich per Drag & Drop anordnen — am Griff ⠿ links neben dem Namen, genau wie Achievements und Wochenziele im Sparziel-Modul.',
+        'Die Reihenfolge liegt auf dem Server (neue Tabelle user_prefs, Migration 030) und ist damit auf allen Geräten dieselbe. Neu hinzukommende Metriken hängen sich hinten an, statt aus der Ansicht zu fallen; schlägt das Speichern fehl, springt die Anordnung sichtbar auf den Serverstand zurück, statt eine Reihenfolge zu zeigen, die beim nächsten Laden wieder anders wäre.',
+    ]},
     { v: 'v1.46.0', date: '2026-09-04', title: 'Einheitliche Zeitfilter, Schlaf in einem Diagramm, ruhigerer Vitalwerte-Wechsel', notes: [
         'Zeitraum-Filter sind überall dieselben: 7 Tage · 30 Tage · 90 Tage · 1 Jahr · Gesamt. Betrifft Vitalwerte (vorher ohne „Gesamt"), Schlaf (vorher 14/30/90 Nächte) und Workouts (vorher ohne 7 Tage); die Ausgaben-Statistik heißt jetzt genauso („1 Jahr" statt „12 Monate", „Gesamt" statt „Alle"). Serverseitig kommt „Gesamt" als days=0 an und hebt den Datumsfilter auf, statt wie bisher auf einen Tag zusammenzuschrumpfen.',
         'Vitalwerte: Beim Wechsel des Zeitraums verschwinden die Diagramme nicht mehr hinter „Lade …". Karten und Chart-Instanzen bleiben stehen, bekommen die neuen Daten zugewiesen und animieren von den alten Werten auf die neuen; das Raster wird währenddessen nur kurz gedimmt. Ein zwischenzeitlicher zweiter Klick gewinnt, ein verspätetes Ergebnis überschreibt die frischeren Daten nicht mehr.',

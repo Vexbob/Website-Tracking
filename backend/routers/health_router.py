@@ -19,6 +19,8 @@ Endpoints:
   GET    /api/health/sleep               — Schlaf-Naechte
   GET    /api/health/workouts            — Workout-Liste (Filter nach Typ)
   GET    /api/health/workouts/{wid}      — Workout-Detail inkl. Zusatzmetriken
+  GET    /api/health/metric-order        — gespeicherte Reihenfolge der Vitalwerte-Diagramme
+  PUT    /api/health/metric-order        — Reihenfolge speichern (Drag & Drop im Frontend)
 
 Hinweis: Bewusst OHNE ``from __future__ import annotations`` — FastAPI 0.109.0
 kann ``UploadFile = File(...)`` sonst nicht als Pydantic-Feld aufloesen
@@ -37,6 +39,7 @@ from fastapi.responses import Response
 from database import get_db
 from auth import get_current_user, get_user_from_health_api_key, generate_health_api_key
 from deps import logger, limiter, LIMIT_HEALTH_IMPORT, LIMIT_WRITE_RARE, LIMIT_WRITE_STANDARD, _ser_exp
+from schemas import MetricOrderBody
 from services.health_ingest import ingest_payload, ingest_csv_file, SIMPLE_METRIC_MAP, merge_ingest_stats
 from services.full_export import build_health_export_csv
 
@@ -734,6 +737,58 @@ async def health_summary(db=Depends(get_db), user=Depends(get_current_user)):
     out["blood_pressure_last"] = _ser_exp(last_bp) if last_bp else None
     out["workouts_this_week"] = workouts_week
     return out
+
+
+# ---------- Anordnung der Vitalwerte-Diagramme (v1.46.1) ----------
+METRIC_ORDER_PREF = "health_metric_order"
+
+
+@router.get("/api/health/metric-order")
+async def get_metric_order(db=Depends(get_db), user=Depends(get_current_user)):
+    """Vom Nutzer per Drag & Drop festgelegte Reihenfolge der Metrik-Karten.
+
+    Leere Liste heisst "noch nie sortiert" — das Frontend nimmt dann seine
+    eigene Default-Reihenfolge. Unbekannte Eintraege (z.B. eine Metrik, die es
+    nicht mehr gibt) werden hier schon herausgefiltert, damit das Frontend sich
+    darum nicht kuemmern muss.
+    """
+    raw = await db.fetchval(
+        "SELECT value FROM user_prefs WHERE user_id=$1 AND key=$2",
+        user["id"], METRIC_ORDER_PREF)
+    order: List[str] = []
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                seen = set()
+                for x in parsed:
+                    k = str(x)
+                    if k in ALLOWED_METRIC_TYPES and k not in seen:
+                        seen.add(k)
+                        order.append(k)
+        except (ValueError, TypeError):
+            logger.warning("Ungueltige Metrik-Reihenfolge fuer User %s", user["id"])
+    return {"order": order}
+
+
+@router.put("/api/health/metric-order")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def set_metric_order(request: Request, b: MetricOrderBody,
+                            db=Depends(get_db), user=Depends(get_current_user)):
+    seen = set()
+    order = []
+    for x in b.order:
+        k = str(x)
+        if k not in ALLOWED_METRIC_TYPES:
+            raise HTTPException(400, f"Unbekannter metric_type: {k}")
+        if k not in seen:
+            seen.add(k)
+            order.append(k)
+    await db.execute(
+        "INSERT INTO user_prefs (user_id, key, value) VALUES ($1, $2, $3) "
+        "ON CONFLICT (user_id, key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()",
+        user["id"], METRIC_ORDER_PREF, json.dumps(order))
+    return {"status": "ok", "order": order}
 
 
 # ---------- Zeitserien (Vitalwerte-Tab) ----------

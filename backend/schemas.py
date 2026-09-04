@@ -111,6 +111,15 @@ class ReorderBody(BaseModel):
     order: list[int]
 
 
+class MetricOrderBody(BaseModel):
+    """Reihenfolge der Vitalwerte-Diagramme (v1.46.1).
+
+    Anders als bei Achievements/Wochenzielen sind das keine DB-IDs, sondern
+    die Metrik-Typen selbst (``steps``, ``heart_rate``, ...).
+    """
+    order: list[str]
+
+
 class RestoreBody(BaseModel):
     payload: dict
     wipe: bool = False
