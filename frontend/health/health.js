@@ -835,6 +835,7 @@ async function loadSleepChart() {
             const emptyNote = document.getElementById('hSleepNote');
             if (emptyNote) emptyNote.textContent = '';
             state.sleepUsable = []; state.sleepWindows = [];
+            renderSleepRhythm([]);
             state.chartSleepTimes.data.labels = [];
             state.chartSleepTimes.data.datasets.forEach(d => d.data = []);
             state.chartSleepTimes.update();
@@ -863,6 +864,16 @@ async function loadSleepChart() {
             }
             return null;
         };
+        // Uhrzeit -> Stunden-Offset ab 18:00 (0 = 18:00, 24 = 18:00 Folgetag)
+        const toOffset = (iso) => {
+            if (!iso) return null;
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return null;
+            let h = d.getHours() + d.getMinutes() / 60;
+            let off = h - 18; if (off < 0) off += 24;
+            return off;
+        };
+
         // v1.40.2: Naechte mit unter 1 h Gesamtschlaf sind praktisch immer
         // Tage ohne getragene Apple Watch (kurz zum Laden abgelegt, spaet
         // angelegt, Mittagsschlaf-Fragment). Sie zaehlten bisher voll mit und
@@ -875,27 +886,23 @@ async function loadSleepChart() {
         const MIN_SLEEP_MIN = 60;
         const usable = rows.filter(r => (asleepMin(r) || 0) >= MIN_SLEEP_MIN);
         const skippedNights = rows.length - usable.length;
-        // Beide Diagramme der Karte zeigen exakt diese Naechte in dieser
-        // Reihenfolge — der Tooltip des Schlaffensters greift darauf zurueck.
-        state.sleepUsable = usable;
 
-        // v1.40.3: Die aussortierten Naechte fliegen auch aus beiden Diagrammen
-        // raus -- ein 20-Minuten-Fragment ist weder ein sinnvoller Balken noch
-        // ein sinnvoller Zubettgeh-Punkt, und ein Diagramm, das andere Naechte
-        // zeigt als die Kacheln darueber, waere schlicht irrefuehrend.
-        // Offset ab 18:00
-        const toOffset = (iso) => {
-            if (!iso) return null;
-            const d = new Date(iso);
-            let h = d.getHours() + d.getMinutes() / 60;
-            let off = h - 18; if (off < 0) off += 24;
-            return off;
-        };
+        // v1.46.2: Ohne Zubettgeh- UND Aufstehzeit laesst sich eine Nacht auf
+        // der Uhrzeit-Achse nicht platzieren -- sie stand bisher als leere
+        // Spalte mit Datum im Diagramm. Solche Naechte kommen z.B. aus der
+        // alten Tages-CSV, die die Schlafphasen ohne Zeitstempel liefert.
+        // Sie fliegen aus dem Diagramm, bleiben aber in den Ø-Kacheln: ihre
+        // Dauer ist echt gemessen, nur eben ohne Uhrzeit. Die Notiz unter den
+        // Kacheln benennt beide Faelle, damit nichts still verschwindet.
+        const plotted = usable.filter(r => r.sleep_start && r.sleep_end
+            && toOffset(r.sleep_start) != null && toOffset(r.sleep_end) != null);
+        const undatedNights = usable.length - plotted.length;
+        state.sleepUsable = plotted;
         // Ein Balken je Nacht: [Zubettgehen, Aufstehen] als Offset ab 18:00.
         // Endet eine Nacht rechnerisch vor ihrem Start (Einschlafen vor 18:00),
         // laeuft sie ueber die Tagesgrenze — dann +24 und die Achse waechst mit,
         // statt den Balken verkehrt herum zu zeichnen.
-        const windows = usable.map(r => {
+        const windows = plotted.map(r => {
             const a = toOffset(r.sleep_start), b = toOffset(r.sleep_end);
             if (a == null || b == null) return null;
             return [a, b <= a ? b + 24 : b];
@@ -922,7 +929,7 @@ async function loadSleepChart() {
             };
         };
         const segData = SLEEP_SEGMENTS.map(() => []);
-        usable.forEach((r, i) => {
+        plotted.forEach((r, i) => {
             const w = clipped[i];
             if (!w) { segData.forEach(d => d.push(null)); return; }
             const parts = segH(r);
@@ -937,11 +944,12 @@ async function loadSleepChart() {
         });
 
         const ds = state.chartSleepTimes.data.datasets;
-        state.chartSleepTimes.data.labels = usable.map(r => fmtDate(r.sleep_date));
+        state.chartSleepTimes.data.labels = plotted.map(r => fmtDate(r.sleep_date));
         ds[0].data = clipped;
         segData.forEach((d, si) => { ds[si + 1].data = d; });
         ds[ds.length - 1].data = overflow;
         state.chartSleepTimes.update();
+        renderSleepRhythm(windows);
 
         const meanOf = (extract) => {
             const arr = usable.map(extract).filter(v => v != null && v > 0);
@@ -972,12 +980,74 @@ async function loadSleepChart() {
         // dieselben Naechte, die Zeile darunter nennt die Zahl der weggelassenen.
         const note = document.getElementById('hSleepNote');
         if (note) {
-            note.textContent = skippedNights
-                ? `${skippedNights === 1 ? '1 Nacht' : skippedNights + ' Nächte'} unter 1 h Schlaf `
-                  + `– als Messlücke gewertet und aus Ø-Werten und Diagrammen ausgenommen.`
-                : '';
+            const nights = (n) => n === 1 ? '1 Nacht' : n + ' Nächte';
+            const parts = [];
+            if (skippedNights) {
+                parts.push(`${nights(skippedNights)} unter 1 h Schlaf – als Messlücke `
+                    + `gewertet und aus Ø-Werten und Diagramm ausgenommen.`);
+            }
+            if (undatedNights) {
+                parts.push(`${nights(undatedNights)} ohne Zubettgeh-/Aufstehzeit aufgezeichnet – `
+                    + `zählen in die Ø-Werte, lassen sich im Diagramm aber nicht auf der Uhr `
+                    + `platzieren.`);
+            }
+            note.textContent = parts.join(' ');
         }
     } catch (e) { showToast('Fehler: ' + e.message, true); }
+}
+
+// v1.46.2: Typische Zubettgeh-/Aufstehzeit mit Streuung.
+//
+// Gerechnet wird auf den 18:00-Offsets, nicht auf der Uhrzeit selbst: sonst
+// waere der Mittelwert aus 23:30 und 00:30 die Mittagszeit statt Mitternacht.
+// Innerhalb des 18:00-Fensters sind die Werte linear, Mittelwert und
+// Standardabweichung sind dort also unproblematisch.
+//
+// Streuung = Standardabweichung der Stichprobe (n-1), in Minuten. Sie ist die
+// eigentliche Aussage: Ein Mittelwert aus einem Nachtschlaf und einem
+// Tagschlaf ist fuer sich genommen wenig wert, die grosse Streuung daneben
+// macht genau das sichtbar.
+function meanAndSd(values) {
+    const arr = values.filter(v => Number.isFinite(v));
+    if (!arr.length) return null;
+    const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
+    if (arr.length < 2) return { mean, sd: null, n: 1 };
+    const varSample = arr.reduce((s, v) => s + (v - mean) * (v - mean), 0) / (arr.length - 1);
+    return { mean, sd: Math.sqrt(varSample), n: arr.length };
+}
+
+function renderSleepRhythm(windows) {
+    const box = document.getElementById('hSleepRhythm');
+    if (!box) return;
+    const valid = (windows || []).filter(Boolean);
+    if (!valid.length) { box.innerHTML = ''; return; }
+
+    const bed = meanAndSd(valid.map(w => w[0]));
+    const wake = meanAndSd(valid.map(w => w[1]));
+    const span = meanAndSd(valid.map(w => w[1] - w[0]));
+    const spread = (st) => st && st.sd != null
+        ? `<small>± ${fmt0(st.sd * 60)} min</small>` : '';
+    const items = [
+        { lbl: '🌙 Zubettgehen', val: sleepOffsetToClock(bed.mean), st: bed },
+        { lbl: '☀️ Aufstehen',   val: sleepOffsetToClock(wake.mean), st: wake },
+        { lbl: '🛏️ Zeit im Bett', val: fmt1(span.mean) + ' h', st: span, minutes: true },
+    ];
+    // Bei einer Streuung von mehreren Stunden liegt der Mittelwert womoeglich
+    // in einer Zeit, zu der nie jemand ins Bett geht (Nacht- und Tagschlaf
+    // gemischt). Das dazuzuschreiben ist ehrlicher, als die Zahl fuer sich
+    // stehen zu lassen.
+    const WOBBLY_MIN = 120;
+    box.innerHTML = items.map(i => {
+        const wobbly = i.st && i.st.sd != null && i.st.sd * 60 > WOBBLY_MIN;
+        const sub = `Ø aus ${valid.length === 1 ? '1 Nacht' : valid.length + ' Nächten'}`
+            + (wobbly ? ' · stark schwankend' : '');
+        return `
+        <div class="h-rhythm-item">
+            <div class="h-rhythm-lbl">${i.lbl}</div>
+            <div class="h-rhythm-val">${i.val} ${spread(i.st)}</div>
+            <div class="h-rhythm-sub">${sub}</div>
+        </div>`;
+    }).join('');
 }
 
 // ---------- Workouts ----------

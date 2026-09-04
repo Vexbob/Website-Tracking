@@ -4,6 +4,12 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.46.2', date: '2026-09-04', title: 'Leere Nächte raus aus dem Schlaf-Diagramm, typische Zeiten mit Streuung', notes: [
+        'Nächte ohne Zubettgeh- und Aufstehzeit standen als leere Spalte mit Datum im Diagramm — sie lassen sich auf der Uhrzeit-Achse schlicht nicht platzieren. Solche Nächte stammen etwa aus der alten Tages-CSV, die die Schlafphasen ohne Zeitstempel liefert. Sie sind jetzt aus dem Diagramm raus.',
+        'Aus den Ø-Kacheln fliegen sie aber NICHT: ihre Schlafdauer ist echt gemessen, nur eben ohne Uhrzeit. Die Zeile unter den Kacheln nennt jetzt beide Fälle getrennt — „x Nächte unter 1 h Schlaf" (Messlücke, überall raus) und „x Nächte ohne Zubettgeh-/Aufstehzeit aufgezeichnet" (zählen mit, nur nicht im Diagramm).',
+        'Neu unter dem Diagramm: typische Zubettgeh- und Aufstehzeit sowie Zeit im Bett, jeweils mit der Streuung in Minuten (Standardabweichung) und der Zahl der Nächte, auf denen das beruht.',
+        'Gerechnet wird auf der 18:00-Achse statt auf der Uhrzeit — sonst wäre der Mittelwert aus 23:30 und 00:30 die Mittagszeit statt Mitternacht. Liegt die Streuung über zwei Stunden, steht „stark schwankend" dabei: bei gemischtem Nacht- und Tagschlaf landet der Mittelwert sonst in einer Zeit, zu der man nie ins Bett geht.',
+    ]},
     { v: 'v1.46.1', date: '2026-09-04', title: 'Schlaf-Achse fest auf 24 h, Vitalwerte-Diagramme sortierbar', notes: [
         'Die Uhrzeit-Achse im Schlaf-Diagramm zeigt jetzt immer genau 24 Stunden (18:00 bis 18:00) und wächst nicht mehr mit einer besonders langen Nacht mit. Vorher verschob sich die Skala zwischen zwei Zeiträumen, wodurch Balken nicht mehr miteinander vergleichbar waren.',
         'Reicht eine Nacht über die 18:00-Grenze hinaus, endet ihr Balken an der Unterkante und bekommt dort einen grünen Strich. Der Tooltip nennt dann die echte Aufstehzeit, und der grüne Eintrag taucht in der Legende nur auf, wenn tatsächlich eine Nacht abgeschnitten wurde.',

@@ -199,3 +199,17 @@ button.danger-outline:hover{background:var(--red-bg)}
 .drag-handle:active{cursor:grabbing}
 .h-metric-card.sortable-ghost{opacity:0.35}
 .h-metric-card.sortable-chosen{box-shadow:var(--shadow-lg)}
+
+/* v1.46.2: Typische Zubettgeh-/Aufstehzeit samt Streuung, direkt unter dem
+   Schlaffenster — dieselben Naechte, nur als Zahl statt als Balken. */
+.h-sleep-rhythm{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:0.75rem;margin-top:1rem}
+.h-sleep-rhythm:empty{display:none}
+.h-rhythm-item{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+    padding:0.625rem 0.75rem}
+.h-rhythm-lbl{font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;
+    color:var(--text-faint);font-weight:600}
+.h-rhythm-val{font-size:1.25rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;
+    margin-top:2px;line-height:1.2}
+.h-rhythm-val small{font-size:0.75rem;font-weight:600;color:var(--text-muted);margin-left:4px}
+.h-rhythm-sub{font-size:0.6875rem;color:var(--text-muted);margin-top:2px}
