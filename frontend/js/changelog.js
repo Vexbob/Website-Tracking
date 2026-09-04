@@ -4,6 +4,14 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.45.0', date: '2026-09-04', title: 'Jede Vitalwert-Metrik mit eigenem Diagramm, neues Schlaffenster-Diagramm', notes: [
+        'Vitalwerte: Statt einer Kachelreihe als Auswahl plus einem großen Diagramm hat jetzt jede Metrik ihr eigenes — kleiner, dafür alle gleichzeitig sichtbar. Vorher waren ausgerechnet Blutdruck und Blutzucker mit den wenigsten Datenpunkten dauerhaft zu sehen, während man sich durch Schritte, Puls, Gewicht & Co. einzeln durchklicken musste.',
+        'Jede Karte trägt die Kennzahl des Zeitraums im Kopf (Ø bzw. Σ), darunter Min/Max und ausgenommene Messlücken, dazu die gleitende Ø-Linie wie bisher. Zwei Diagramme pro Reihe, ab 1300 px drei, auf dem Handy eins.',
+        'Schlaf: „12 Monate" ist als Zeitraum dazugekommen.',
+        'Schlaf: Das Zubettgeh-/Aufsteh-Diagramm war eine Doppel-Punktwolke, aus der man sich die Nacht selbst zusammensuchen musste. Jede Nacht ist jetzt EIN Balken vom Zubettgehen bis zum Aufstehen auf einer Uhrzeit-Achse (18:00 bis 18:00, nach unten laufend wie im Kalender). Länge = Zeit im Schlaffenster, gleich hohe Balken untereinander = regelmäßiger Rhythmus; der Tooltip nennt beide Uhrzeiten und die Dauer.',
+        'Nicht zusammengelegt mit dem Phasen-Diagramm, obwohl angefragt: Apple liefert je Nacht nur die Summen für Kern, Tief und REM, nicht deren zeitliche Lage. Auf der Uhrzeit-Achse gestapelt würden sie eine Reihenfolge behaupten, die in den Daten nicht steht. Der Hinweis steht jetzt unter dem Diagramm.',
+        'Nebenbei: Diagramme, die nur die Legende abschalten, verlieren nicht mehr das Tooltip-Styling — im Dark Mode waren diese Tooltips hell.',
+    ]},
     { v: 'v1.44.0', date: '2026-09-04', title: 'Schlaf als eigene CSV, drei neue Vitalwerte', notes: [
         'Auto Health Export legt den Schlaf als eigene Datei ab, statt ihn als „Schlafanalyse [...]"-Spalten in die Tages-CSV zu mischen. Dieses Format wird jetzt erkannt und eingelesen — einfach zusammen mit den anderen CSVs hochladen, die Erkennung läuft über den Header. Die alte Tages-CSV mit Schlaf-Spalten funktioniert unverändert weiter.',
         'Wichtig dabei: Das Nacht-Datum kommt aus der eigenen Datumsspalte der Datei und wird nicht mehr aus dem Startzeitpunkt abgeleitet. Nächte, die vor Mitternacht beginnen (Start 31.08. 20:38 für die Nacht auf den 01.09.), hätten sonst die Vornacht überschrieben.',

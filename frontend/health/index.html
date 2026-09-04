@@ -88,15 +88,7 @@
             </div>
         </div>
 
-        <div class="stat-kpi-grid" id="hMetricTiles"></div>
-
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3 id="hMetricTitle">📈 Verlauf</h3>
-                <div class="stat-range-lbl" id="hMetricStats"></div>
-            </div>
-            <div class="chart-wrap tall"><canvas id="hChartMetric"></canvas></div>
-        </div>
+        <div class="h-metric-grid" id="hMetricCharts"></div>
 
         <div class="split-2">
             <div class="stat-card">
@@ -118,6 +110,7 @@
                 <button class="stat-chip" data-preset="14">14 Nächte</button>
                 <button class="stat-chip active" data-preset="30">30 Nächte</button>
                 <button class="stat-chip" data-preset="90">90 Nächte</button>
+                <button class="stat-chip" data-preset="365">12 Monate</button>
             </div>
         </div>
         <div class="stat-kpi-grid" id="hSleepKpis"></div>
@@ -128,12 +121,15 @@
             <div class="chart-wrap tall"><canvas id="hChartSleep"></canvas></div>
         </div>
         <div class="stat-card">
-            <h3>🌙 Regelmäßigkeit — Zubettgeh- vs. Aufsteh-Zeit</h3>
-            <div class="chart-wrap"><canvas id="hChartSleepTimes"></canvas></div>
-            <div class="h-hint" style="margin:0.75rem 0 0">
-                Die Punkte zeigen deine Zubettgeh- (unten) und Aufsteh-Zeit (oben) pro Nacht.
-                Enge Bänder = regelmäßiger Rhythmus.
-            </div>
+            <h3>🌙 Schlaffenster — wann du geschlafen hast</h3>
+            <p class="h-hint">Jeder Balken ist eine Nacht: Oberkante = Zubettgehen, Unterkante =
+                Aufstehen, Länge = Zeit im Schlaffenster. Gleich hohe Balken übereinander =
+                regelmäßiger Rhythmus. Die Achse läuft von 18:00 bis 18:00 des Folgetags.</p>
+            <div class="chart-wrap tall"><canvas id="hChartSleepTimes"></canvas></div>
+            <p class="h-hint" style="margin:0.75rem 0 0">Warum das nicht mit den Phasen in einem
+                Diagramm steckt: Apple liefert je Nacht nur die <em>Summen</em> für Kern, Tief und
+                REM — nicht, wann welche Phase lag. Sie im Schlaffenster zu stapeln würde eine
+                Reihenfolge behaupten, die in den Daten nicht steht.</p>
         </div>
     </div>
 
