@@ -328,7 +328,8 @@ async def _ingest_workout(db, user_id: int, w: dict) -> bool:
             "RETURNING id",
             user_id, external_id, w.get("name"), start_at, end_at, duration_min,
             _qty("activeEnergy"), _qty("totalEnergy"), _qty("distance"),
-            _qty("avgHeartRate"), _qty("maxHeartRate"), _qty("elevationAscended"))
+            _plausible_hr(_qty("avgHeartRate")), _plausible_hr(_qty("maxHeartRate")),
+            _qty("elevationAscended"))
     except Exception as e:
         logger.warning("Workout-Insert fehlgeschlagen: %s", e)
         return False
@@ -416,6 +417,20 @@ def _find_col(header: list, *keywords: str, exclude: tuple = ()) -> Optional[int
 # bei ~8 (ms statt bpm). Fuer die Puls-Spalten des Workout-Imports werden
 # HRV-Header deshalb explizit uebersprungen.
 _HR_EXCLUDE = ("variabilit", "variability", "hrv")
+
+# Zweite Verteidigungslinie zur Header-Auswahl: selbst wenn eine Spalte als
+# Puls durchgeht, ist ein Trainings-Puls ausserhalb 30-240 bpm nicht
+# erklaerbar (HRV-Millisekunden liegen typisch bei 5-80). Solche Werte werden
+# verworfen statt gespeichert -- lieber kein Puls als ein falscher, der jeden
+# Durchschnitt daruber kippt.
+_HR_MIN, _HR_MAX = 30.0, 240.0
+
+
+def _plausible_hr(v: Optional[float]) -> Optional[float]:
+    """Gibt ``v`` zurueck, wenn es als Herzfrequenz plausibel ist, sonst None."""
+    if v is None:
+        return None
+    return v if _HR_MIN <= float(v) <= _HR_MAX else None
 
 
 def _row_num(row: list, idx: Optional[int]) -> Optional[float]:
@@ -752,7 +767,8 @@ async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> di
                 "RETURNING id",
                 user_id, external_id, workout_type, start_at, end_at, duration_min,
                 active_kcal, total_kcal, distance_m,
-                _row_num(row, col.get("avg_hr")), _row_num(row, col.get("max_hr")),
+                _plausible_hr(_row_num(row, col.get("avg_hr"))),
+                _plausible_hr(_row_num(row, col.get("max_hr"))),
                 _row_num(row, col.get("elevation_up")), CSV_SOURCE)
         except Exception as e:
             logger.warning("Workout-CSV-Insert fehlgeschlagen: %s", e)

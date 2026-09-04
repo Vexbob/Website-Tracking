@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.43.2', date: '2026-09-04', title: 'Ø Puls über alle Workouts ist zurück — diesmal richtig gerechnet', notes: [
+        'Die Ø-Puls-Kachel im Workouts-Tab gibt es wieder. Sie mittelt nur noch Workouts, die überhaupt einen plausiblen Pulswert mitbringen (30–240 bpm), und schreibt in die Unterzeile, auf wie vielen Workouts der Schnitt beruht — statt stillschweigend über Nullwerte oder Millisekunden zu mitteln.',
+        'Migration 029 räumt die Altlasten weg: Pulswerte außerhalb 30–240 bpm werden auf NULL gesetzt. Das betrifft genau die Zeilen, in denen der Import die HRV-Spalte (ms) als Puls gespeichert hat. Ein erneuter Import füllt den echten Wert wieder auf.',
+        'Der Import verwirft unplausible Pulswerte jetzt schon beim Schreiben — sowohl beim CSV- als auch beim REST-API-Weg. Lieber kein Puls als ein falscher, der jeden Durchschnitt darüber kippt.',
+    ]},
     { v: 'v1.43.1', date: '2026-09-04', title: 'Workout-Kennzahlen mit Zeitfilter, Ideen-Sammlung aufgeraeumt', notes: [
         'Der Ø-Puls über allen Workouts stand bei 8 bpm. Grund: Der CSV-Import hat die Spalte „Durchschn. Herzfrequenzvariabilität (ms)" als Puls-Spalte erkannt, weil sie sowohl „Durchschn." als auch „Herzfrequenz" enthält und im Export vor der echten Puls-Spalte steht. HRV-Spalten werden bei der Puls-Suche jetzt übersprungen — bereits importierte Workouts brauchen dafür einen erneuten Import.',
         'Die Workout-Kennzahlen zeigen jetzt Gesamtzeit, Ø Dauer und Ø Kalorien (aktiv). Anzahl und Ø Puls sind raus. Die Durchschnitte rechnen nur über Workouts, die den Wert wirklich mitbringen.',

@@ -889,15 +889,27 @@ function renderWorkouts() {
     const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
     const avgDur = avgOf(durArr);
     const avgKcal = avgOf(kcalArr);
+    // Puls: nur plausible Werte mitteln. Bis v1.43.0 hat der CSV-Import bei
+    // manchen Exporten die HRV-Spalte (ms) als Puls gespeichert; Migration 029
+    // raeumt die Altlasten weg, dieser Filter faengt alles ab, was trotzdem
+    // noch danebenliegt.
+    const hrArr = rows.map(w => Number(w.avg_heart_rate))
+                      .filter(v => Number.isFinite(v) && v >= 30 && v <= 240);
+    const avgHr = avgOf(hrArr);
     const kpis = [
         { icon:'⏱️', lbl:'Gesamtzeit', val: fmtDuration(totalMin) },
         { icon:'⌛', lbl:'Ø Dauer', val: avgDur != null ? fmtDuration(avgDur) : '–' },
         { icon:'🔥', lbl:'Ø Kalorien (aktiv)', val: avgKcal != null ? fmt0(avgKcal) + ' kcal' : '–' },
+        { icon:'❤️', lbl:'Ø Puls', val: avgHr != null ? fmt0(avgHr) + ' bpm' : '–',
+          sub: avgHr != null
+              ? `aus ${hrArr.length} von ${rows.length} Workout${rows.length === 1 ? '' : 's'}`
+              : 'kein Pulswert importiert' },
     ];
     kpiBox.innerHTML = kpis.map(k => `
         <div class="stat-kpi"><div class="stat-kpi-icon">${k.icon}</div>
             <div class="stat-kpi-label">${k.lbl}</div>
-            <div class="stat-kpi-value">${k.val}</div></div>`).join('');
+            <div class="stat-kpi-value">${k.val}</div>
+            ${k.sub ? `<div class="stat-kpi-sub">${k.sub}</div>` : ''}</div>`).join('');
     list.className = '';
     list.innerHTML = rows.map(w => renderWorkoutCard(w)).join('');
 }
