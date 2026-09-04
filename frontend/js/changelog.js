@@ -4,6 +4,13 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.44.0', date: '2026-09-04', title: 'Schlaf als eigene CSV, drei neue Vitalwerte', notes: [
+        'Auto Health Export legt den Schlaf als eigene Datei ab, statt ihn als „Schlafanalyse [...]"-Spalten in die Tages-CSV zu mischen. Dieses Format wird jetzt erkannt und eingelesen — einfach zusammen mit den anderen CSVs hochladen, die Erkennung läuft über den Header. Die alte Tages-CSV mit Schlaf-Spalten funktioniert unverändert weiter.',
+        'Wichtig dabei: Das Nacht-Datum kommt aus der eigenen Datumsspalte der Datei und wird nicht mehr aus dem Startzeitpunkt abgeleitet. Nächte, die vor Mitternacht beginnen (Start 31.08. 20:38 für die Nacht auf den 01.09.), hätten sonst die Vornacht überschrieben.',
+        'Die geschlafene Zeit kommt aus „Gesamtschlaf" statt aus „Schlafend". „Schlafend" weist nur den Anteil ohne Phasen-Zuordnung aus und lag in der Beispielwoche bei 0,0–1,3 h statt der tatsächlichen 4,6–10,1 h. Eine Liegezeit von 0 h wird als Messlücke gewertet und nicht gespeichert — die Auswertung leitet sie wie bisher aus Schlaf + Wachzeit bzw. Start/Ende ab.',
+        'Drei neue Vitalwerte werden importiert und ausgewertet: Blutsauerstoff (%), Geh-/Laufstrecke (km) und Gehgeschwindigkeit (km/h) — im CSV- wie im automatischen Sync-Weg.',
+        'Der Vitalwerte-Tab zeigt jetzt alle Metriken als Kacheln statt nur der ersten acht. Die Kacheln sind zugleich die Auswahl für das Verlaufsdiagramm; Schwimmdistanz, VO2max und die drei neuen Werte waren dort bisher gar nicht erreichbar.',
+    ]},
     { v: 'v1.43.2', date: '2026-09-04', title: 'Ø Puls über alle Workouts ist zurück — diesmal richtig gerechnet', notes: [
         'Die Ø-Puls-Kachel im Workouts-Tab gibt es wieder. Sie mittelt nur noch Workouts, die überhaupt einen plausiblen Pulswert mitbringen (30–240 bpm), und schreibt in die Unterzeile, auf wie vielen Workouts der Schnitt beruht — statt stillschweigend über Nullwerte oder Millisekunden zu mitteln.',
         'Migration 029 räumt die Altlasten weg: Pulswerte außerhalb 30–240 bpm werden auf NULL gesetzt. Das betrifft genau die Zeilen, in denen der Import die HRV-Spalte (ms) als Puls gespeichert hat. Ein erneuter Import füllt den echten Wert wieder auf.',

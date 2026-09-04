@@ -50,6 +50,9 @@ const METRIC_LABELS = {
     weight:          { label: 'Gewicht', unit: 'kg', icon: '⚖️', color: '#0d9488' },
     vo2_max:         { label: 'VO2max', unit: 'ml/kg/min', icon: '🫁', color: '#2563eb' },
     swim_distance:   { label: 'Schwimmdistanz', unit: 'm', icon: '🏊', color: '#3b82f6', cumulative: true },
+    blood_oxygen:    { label: 'Blutsauerstoff', unit: '%', icon: '🫧', color: '#06b6d4' },
+    walking_distance:{ label: 'Geh-/Laufstrecke', unit: 'km', icon: '🛣️', color: '#84cc16', cumulative: true },
+    walking_speed:   { label: 'Gehgeschwindigkeit', unit: 'km/h', icon: '💨', color: '#f97316' },
 };
 
 const WORKOUT_META = {
@@ -512,10 +515,10 @@ function initVitalwerte() {
 
 async function loadVitalTiles() {
     const grid = document.getElementById('hMetricTiles');
-    grid.innerHTML = Object.keys(METRIC_LABELS).slice(0, 8).map(() =>
+    const keys = Object.keys(METRIC_LABELS);
+    grid.innerHTML = keys.map(() =>
         '<div class="stat-kpi"><div class="stat-loading">Lade …</div></div>').join('');
     const days = state.vitalDays;
-    const keys = Object.keys(METRIC_LABELS).slice(0, 8);
     const rowsList = await Promise.all(keys.map(k => HEALTH_API.metricSeries(k, days).catch(() => [])));
     grid.innerHTML = '';
     keys.forEach((k, i) => {

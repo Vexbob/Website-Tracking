@@ -40,7 +40,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger("vexbob.health_ingest")
@@ -69,6 +69,10 @@ SIMPLE_METRIC_MAP = {
     "step_count": "steps",
     "swimming_distance": "swim_distance",
     "vo2_max": "vo2_max",
+    # v1.44.0 nachgezogen, nachdem der User sie im Export aktiviert hat:
+    "blood_oxygen_saturation": "blood_oxygen",
+    "walking_running_distance": "walking_distance",
+    "walking_speed": "walking_speed",
 }
 
 # Auto-Health-Export nutzt fuer Blutdruck zwei getrennte Metriken
@@ -273,9 +277,19 @@ async def _ingest_sleep_point(db, user_id: int, p: dict) -> bool:
     sleep_start = _parse_dt(p.get("sleepStart"))
     sleep_end = _parse_dt(p.get("sleepEnd"))
     d = _parse_dt(p.get("date"))
-    sample_date = sleep_start or d
-    if not sample_date:
-        return False
+    # v1.44.0: ``sleepDate`` erlaubt es dem Aufrufer, das Nacht-Datum explizit
+    # vorzugeben. Noetig fuer die Schlaf-CSV: dort beginnt eine Nacht oft vor
+    # Mitternacht (Start 31.08. 20:38 gehoert zur Nacht auf den 01.09.). Aus
+    # ``sleep_start`` abgeleitet landete sie auf dem 31.08. und haette die
+    # Vornacht ueberschrieben (UNIQUE user_id, sleep_date, source).
+    explicit = p.get("sleepDate")
+    if isinstance(explicit, date) and not isinstance(explicit, datetime):
+        sample_date = explicit
+    else:
+        base = sleep_start or d
+        if not base:
+            return False
+        sample_date = base.date()
     try:
         await db.execute(
             "INSERT INTO health_sleep "
@@ -287,7 +301,7 @@ async def _ingest_sleep_point(db, user_id: int, p: dict) -> bool:
             "in_bed_minutes=EXCLUDED.in_bed_minutes, asleep_minutes=EXCLUDED.asleep_minutes, "
             "core_minutes=EXCLUDED.core_minutes, deep_minutes=EXCLUDED.deep_minutes, "
             "rem_minutes=EXCLUDED.rem_minutes, awake_minutes=EXCLUDED.awake_minutes",
-            user_id, sample_date.date(), sleep_start, sleep_end,
+            user_id, sample_date, sleep_start, sleep_end,
             _hours_to_min(p.get("inBed")), _hours_to_min(p.get("asleep")),
             _hours_to_min(p.get("core")), _hours_to_min(p.get("deep")),
             _hours_to_min(p.get("rem")), _hours_to_min(p.get("awake")))
@@ -433,6 +447,22 @@ def _plausible_hr(v: Optional[float]) -> Optional[float]:
     return v if _HR_MIN <= float(v) <= _HR_MAX else None
 
 
+def _first_col(header: list, *variants) -> Optional[int]:
+    """Erste Spalte, die zu einer der Header-Varianten passt.
+
+    Jede Variante ist entweder ein einzelnes Stichwort oder ein Tupel von
+    Stichworten, die alle in derselben Header-Zelle vorkommen muessen. Deckt
+    deutsche und englische Exportvarianten in einem Aufruf ab.
+    """
+    for kws in variants:
+        if isinstance(kws, str):
+            kws = (kws,)
+        idx = _find_col(header, *kws)
+        if idx is not None:
+            return idx
+    return None
+
+
 def _row_num(row: list, idx: Optional[int]) -> Optional[float]:
     if idx is None or idx >= len(row):
         return None
@@ -483,6 +513,18 @@ def detect_csv_kind(header: list) -> Optional[str]:
     has_date = any(("date" in c) or ("datum" in c) or ("time" in c) or ("zeit" in c) for c in low)
     if has_name and has_value and has_date:
         return "long"
+    # Schlaf-CSV: eigene Datei mit Start/Ende und den Phasen als eigene
+    # Spalten ("Gesamtschlaf", "Kern", "Tief", "REM", "Wach"). Abgrenzung zur
+    # Tages-CSV, die dieselben Phasen als "Schlafanalyse [REM]" o.ae. NEBEN
+    # allen anderen Vitalwerten fuehrt — dort greift weiterhin der bestehende
+    # Metrik-Parser.
+    if not any("schlafanalyse" in c for c in low):
+        has_total = any(("gesamtschlaf" in c) or ("total sleep" in c) for c in low)
+        has_phases = (any(c.startswith("rem") for c in low)
+                      and any(("kern" in c) or ("core" in c) or ("im bett" in c)
+                              or ("in bed" in c) for c in low))
+        if has_total or has_phases:
+            return "sleep"
     if "datum" in first or "date" in first:
         return "health_metrics"
     return None
@@ -527,6 +569,8 @@ async def ingest_csv_file(db, user_id: int, filename: str, raw: bytes) -> dict:
         return await _ingest_health_metrics_csv(db, user_id, header, rows)
     if kind == "workouts":
         return await _ingest_workouts_csv(db, user_id, header, rows)
+    if kind == "sleep":
+        return await _ingest_sleep_csv(db, user_id, header, rows)
     if kind == "long":
         return await _ingest_long_csv(db, user_id, header, rows)
     empty_stats["skipped"].append(f"{filename}:unrecognized_csv_format:header={header[:5]}")
@@ -542,6 +586,9 @@ async def _ingest_health_metrics_csv(db, user_id: int, header: list, rows: list)
         "bp_sys": _find_col(header, "Blutdruck", "Systolisch"),
         "bp_dia": _find_col(header, "Blutdruck", "Diastolisch"),
         "glucose": _find_col(header, "Blutzucker"),
+        "blood_oxygen": _find_col(header, "Blutsauerstoff"),
+        "walking_distance": _first_col(header, "Laufstrecke", ("Walking", "Distance")),
+        "walking_speed": _first_col(header, "Gehgeschwindigkeit", ("Walking", "Speed")),
         "walking_hr": _find_col(header, "Herzfrequenz beim Gehen"),
         "weight": _find_col(header, "Gewicht"),
         "hr_min": _find_col(header, "Herzfrequenz [Min]"),
@@ -585,6 +632,9 @@ async def _ingest_health_metrics_csv(db, user_id: int, header: list, rows: list)
             ("steps", "steps"),
             ("swim_distance", "swim_distance"),
             ("vo2_max", "vo2_max"),
+            ("blood_oxygen", "blood_oxygen"),
+            ("walking_distance", "walking_distance"),
+            ("walking_speed", "walking_speed"),
         ]
         for col_key, metric_type in simple_cols:
             val = _row_num(row, col.get(col_key))
@@ -680,13 +730,92 @@ def _parse_duration_hms(s: Optional[str]) -> Optional[float]:
     return None
 
 
+async def _ingest_sleep_csv(db, user_id: int, header: list, rows: list) -> dict:
+    """Parser fuer die separate Schlafanalyse-CSV (v1.44.0).
+
+    Auto Health Export legt den Schlaf inzwischen als eigene Datei ab, statt
+    ihn als "Schlafanalyse [...]"-Spalten in die Tages-CSV zu mischen:
+
+        Datum/Uhrzeit;Start;Ende;Gesamtschlaf (Std.);Schlafend (Std.);
+        Im Bett (Std.);Kern (Std.);Tief (Std.);REM (Std.);Wach (Std.);Quellen
+
+    Zwei Eigenheiten des Formats:
+
+    * ``Gesamtschlaf`` ist die tatsaechlich geschlafene Zeit und enthaelt
+      neben Kern/Tief/REM auch den Anteil ohne Phasen-Zuordnung, den die
+      Spalte ``Schlafend`` separat ausweist. Sie wandert deshalb nach
+      ``asleep_minutes`` — ``Schlafend`` allein waere zu wenig (in der
+      Beispielwoche 0,0-1,3 h statt 4,6-10,1 h).
+    * ``Im Bett`` ist 0, wenn kein eigenes inBed-Sample existiert. Eine
+      Liegezeit von 0 h neben 10 h Schlaf ist keine Messung, sondern eine
+      Luecke — sie wird als NULL gespeichert, das Frontend leitet die
+      Liegezeit dann aus Schlaf + Wachzeit bzw. Start/Ende ab.
+    """
+    stats = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
+              "bp_imported": 0, "glucose_imported": 0, "skipped": []}
+
+    col = {
+        "start": _first_col(header, "Start"),
+        "end": _first_col(header, "Ende", "End"),
+        "total": _first_col(header, "Gesamtschlaf", ("Total", "Sleep")),
+        "unspecified": _first_col(header, "Schlafend", "Asleep"),
+        "in_bed": _first_col(header, "Im Bett", "In Bed"),
+        "core": _first_col(header, "Kern", "Core"),
+        "deep": _first_col(header, "Tief", "Deep"),
+        "rem": _first_col(header, "REM"),
+        "awake": _first_col(header, "Wach", "Awake"),
+    }
+
+    for row in rows:
+        if not row or not (row[0] or "").strip():
+            continue
+        dt = _parse_csv_dt(row[0])
+        if not dt:
+            stats["skipped"].append(f"sleep_csv:invalid_date:{row[0]}")
+            continue
+
+        total_h = _row_num(row, col["total"])
+        unspec_h = _row_num(row, col["unspecified"])
+        core_h = _row_num(row, col["core"])
+        deep_h = _row_num(row, col["deep"])
+        rem_h = _row_num(row, col["rem"])
+        awake_h = _row_num(row, col["awake"])
+        in_bed_h = _row_num(row, col["in_bed"])
+
+        if total_h is None:
+            parts = [v for v in (unspec_h, core_h, deep_h, rem_h) if v is not None]
+            total_h = sum(parts) if parts else None
+        if in_bed_h is not None and in_bed_h <= 0:
+            in_bed_h = None
+
+        if all(v is None for v in (total_h, core_h, deep_h, rem_h, awake_h)):
+            stats["skipped"].append(f"sleep_csv:no_values:{row[0]}")
+            continue
+
+        p = {
+            "sleepDate": dt.date(),
+            "date": _csv_date_str(row[0]),
+            "sleepStart": _row_str(row, col["start"]),
+            "sleepEnd": _row_str(row, col["end"]),
+            "asleep": total_h, "inBed": in_bed_h,
+            "core": core_h, "deep": deep_h, "rem": rem_h, "awake": awake_h,
+        }
+        if await _ingest_sleep_point(db, user_id, p):
+            stats["sleep_imported"] += 1
+        else:
+            stats["skipped"].append(f"sleep_csv:{row[0]}")
+
+    return stats
+
+
 async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> dict:
     stats = {"metrics_imported": 0, "workouts_imported": 0, "sleep_imported": 0,
               "bp_imported": 0, "glucose_imported": 0, "skipped": []}
 
     # Zwei Spalten-Varianten: deutsch (manueller Export, "Aktive Energie") und
     # englisch (REST-API-Automation der App, "Active Energy"). Wir versuchen
-    # fuer jeden logischen Wert nacheinander mehrere Header-Muster.
+    # fuer jeden logischen Wert nacheinander mehrere Header-Muster. Wie
+    # ``_first_col``, kann zusaetzlich aber Header ausschliessen (``exclude``).
     def _first(*variants, exclude: tuple = ()):
         for kws in variants:
             if isinstance(kws, str):
