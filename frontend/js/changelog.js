@@ -4,6 +4,12 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.46.3', date: '2026-09-04', title: 'Export und Backup an die Änderungen der letzten Versionen angeglichen', notes: [
+        'Sparziel-Export: Die Sparziel-Sektion hat zwei neue Spalten. „typ" unterscheidet das Allgemein-Konto (Puffer) von echten Sparzielen — es stand vorher als Zeile mit Zielbetrag 0 und is_active=false zwischen den anderen und sah dort wie ein kaputtes Ziel aus, obwohl seit v1.43.0 genau dort das Geld landet, solange kein Ziel aktiv ist. „saved_amount" nennt den Kontostand je Ziel; der ließ sich vorher nur über die Summe des Protokolls rekonstruieren.',
+        'Sparziel-Export: Die Ideen-Sammlung exportiert die Sorte jetzt als „Meilenstein"/„Wochenziel" statt der internen Schlüssel. Alte Freitext-Kategorien bleiben unverändert stehen, damit nichts wegfällt.',
+        'Backup: Die neue Tabelle user_prefs wird mitgesichert — ohne sie wäre nach einem Restore die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.',
+        'Der Gesundheits-Export brauchte nichts: Vitalwerte werden generisch über die vorhandenen Metrik-Typen aufgebaut, die drei neuen (Blutsauerstoff, Geh-/Laufstrecke, Gehgeschwindigkeit) landen samt Einheit automatisch als eigene Spalten darin. Die Schlaf-Sektion enthielt Start- und Endzeit schon vorher.',
+    ]},
     { v: 'v1.46.2', date: '2026-09-04', title: 'Leere Nächte raus aus dem Schlaf-Diagramm, typische Zeiten mit Streuung', notes: [
         'Nächte ohne Zubettgeh- und Aufstehzeit standen als leere Spalte mit Datum im Diagramm — sie lassen sich auf der Uhrzeit-Achse schlicht nicht platzieren. Solche Nächte stammen etwa aus der alten Tages-CSV, die die Schlafphasen ohne Zeitstempel liefert. Sie sind jetzt aus dem Diagramm raus.',
         'Aus den Ø-Kacheln fliegen sie aber NICHT: ihre Schlafdauer ist echt gemessen, nur eben ohne Uhrzeit. Die Zeile unter den Kacheln nennt jetzt beide Fälle getrennt — „x Nächte unter 1 h Schlaf" (Messlücke, überall raus) und „x Nächte ohne Zubettgeh-/Aufstehzeit aufgezeichnet" (zählen mit, nur nicht im Diagramm).',

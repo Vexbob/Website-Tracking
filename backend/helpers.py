@@ -198,6 +198,22 @@ def _export_csv_field(s: str) -> str:
     return f'"{s}"'
 
 
+_IDEA_KIND_LABELS = {
+    "milestone": "Meilenstein", "meilenstein": "Meilenstein",
+    "progress": "Wochenziel", "wochenziel": "Wochenziel", "weekly": "Wochenziel",
+}
+
+
+def _idea_kind_label(category) -> str:
+    """Interner Ideen-Schluessel -> Beschriftung wie in der Oberflaeche.
+
+    Unbekannte Werte (Freitext-Kategorien aus der Zeit vor v1.43.1) werden
+    unveraendert durchgereicht, damit der Export nichts wegwirft.
+    """
+    raw = (category or "").strip()
+    return _IDEA_KIND_LABELS.get(raw.lower(), raw)
+
+
 def _export_amt(v) -> str:
     try:
         return f"{float(v):.2f}"
@@ -285,14 +301,29 @@ async def _build_export_metadata(db, user_id: int) -> list[str]:
     out: list[str] = []
 
     # Sparziele
+    # v1.46.2: Zwei Spalten mehr. ``typ`` unterscheidet das Allgemein-Konto
+    # (Puffer) von echten Sparzielen -- es stand vorher als Zeile mit
+    # Zielbetrag 0 und is_active=false zwischen den anderen und sah dort wie
+    # ein kaputtes Ziel aus, obwohl seit v1.43.0 genau dort das Geld landet,
+    # solange kein Ziel aktiv ist. ``saved_amount`` beantwortet die Frage,
+    # die man beim Oeffnen der Datei zuerst hat (wieviel liegt wo) -- vorher
+    # liess sie sich nur ueber die Summe des Protokolls rekonstruieren.
     out.append("# SEKTION: Sparziele")
-    out.append("id;name;target_amount;is_active;created_at")
+    out.append("id;name;typ;target_amount;saved_amount;is_active;created_at")
     for r in await db.fetch(
-        "SELECT id, name, target_amount, is_active, created_at FROM savings_goals "
-        "WHERE user_id=$1 ORDER BY is_active DESC, id", user_id):
+        """SELECT sg.id, sg.name, sg.target_amount, sg.is_active, sg.created_at,
+                  COALESCE(sg.is_general, FALSE) AS is_general,
+                  COALESCE((SELECT SUM(amount) FROM savings_transactions
+                             WHERE savings_goal_id = sg.id AND user_id = sg.user_id), 0)
+                    AS saved_amount
+             FROM savings_goals sg
+            WHERE sg.user_id = $1
+            ORDER BY sg.is_general, sg.is_active DESC, sg.id""", user_id):
         created = r["created_at"].isoformat() if r["created_at"] else ""
+        typ = "Puffer" if r["is_general"] else "Sparziel"
         out.append(
-            f'{r["id"]};{_export_csv_field(r["name"] or "")};{_export_amt(r["target_amount"])};'
+            f'{r["id"]};{_export_csv_field(r["name"] or "")};{typ};'
+            f'{_export_amt(r["target_amount"])};{_export_amt(r["saved_amount"])};'
             f'{"true" if r["is_active"] else "false"};{created}'
         )
     out.append("")
@@ -342,13 +373,18 @@ async def _build_export_metadata(db, user_id: int) -> list[str]:
     out.append("")
 
     # Zukuenftige Ideen
+    # v1.46.2: Seit v1.43.1 ist die freie Kategorie durch eine feste Auswahl
+    # ersetzt. Der Export schreibt jetzt dieselbe Beschriftung wie die
+    # Oberflaeche, statt die internen Schluessel ``milestone``/``progress``
+    # auszuspucken. Aeltere Freitext-Kategorien bleiben unveraendert stehen.
     out.append("# SEKTION: Zukuenftige Ideen")
-    out.append("id;title;category")
+    out.append("id;title;sorte")
     for r in await db.fetch(
         "SELECT id, title, category FROM future_ideas "
         "WHERE user_id=$1 ORDER BY id", user_id):
         out.append(
-            f'{r["id"]};{_export_csv_field(r["title"] or "")};{_export_csv_field(r["category"] or "")}'
+            f'{r["id"]};{_export_csv_field(r["title"] or "")};'
+            f'{_export_csv_field(_idea_kind_label(r["category"]))}'
         )
     out.append("")
 

@@ -16,7 +16,7 @@ Führt Buch über echtes Gespartes statt über gute Vorsätze: jedes Ziel hat ei
 - **„Allgemein"-Konto als Puffer** — läuft ein Sparziel voll oder ist gerade keines aktiv, landen Belohnungen automatisch hier statt verloren zu gehen. Von dort lassen sie sich gezielt auf ein Ziel übertragen.
 - **Aktivitäts-Log & 365-Tage-Heatmap** — jede Einzahlung, jeder Check-in, jeder Meilenstein und jede Wertänderung an einem Achievement (auch die, die noch keinen Meilenstein auslöst) mit Datum und optionaler Notiz; die Heatmap zeigt auf einen Blick, wie durchgehend das letzte Jahr bespielt war.
 - **Trophäenwand** — ein abgeschlossenes Sparziel wandert mit Zielbetrag, Endstand und Laufzeit als Trophäe in eine eigene Ansicht und verlässt dabei die Zielliste. Es bleibt kein leergeräumtes Ziel und kein Platzhalter zurück; bis ein neues Ziel aktiv ist, spart der Puffer weiter.
-- **Export & Backup** — Transaktionen als CSV, dazu ein vollständiges JSON-Backup mit Restore. Tägliche Snapshots laufen automatisch mit und sind pro Nutzer isoliert.
+- **Export & Backup** — Transaktionen als CSV inkl. Kontostand je Sparziel und einer Kennzeichnung des Puffers, dazu ein vollständiges JSON-Backup mit Restore. Tägliche Snapshots laufen automatisch mit und sind pro Nutzer isoliert.
 
 ### 📝 Notizen
 Schnelle Notiz-Ablage im Apple-Notes-Stil (Master-Detail): links die Liste, rechts der Editor, ohne Speichern-Knopf.

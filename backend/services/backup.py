@@ -36,6 +36,9 @@ TABLES_ORDERED = [
     "health_sleep",
     "health_workouts",
     "health_workout_metrics",
+    # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
+    # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
+    "user_prefs",
 ]
 
 # Tabellen mit binären BYTEA-Feldern, die im Backup base64-serialisiert werden
