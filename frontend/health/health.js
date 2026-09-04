@@ -232,6 +232,7 @@ const state = {
     vitalDays: 30, vitalInit: false, metricCharts: [],
     chartBp: null, chartGlucose: null,
     sleepDays: 30, sleepInit: false, chartSleep: null, chartSleepTimes: null,
+    sleepUsable: [],   // v1.45.1: Naechte hinter den Balken, fuer den Tooltip
     workoutsLoaded: false, workoutsAll: [], workoutFilter: '', workoutRange: 0,
     keysLoaded: false,
     sparkCharts: [],
@@ -718,11 +719,26 @@ function initSchlaf() {
             plugins: {
                 legend: { display: false },
                 tooltip: themedTooltip({ callbacks: {
+                    // v1.45.1: Die Phasen stehen hier im Tooltip statt im Balken.
+                    // Im Balken haetten sie eine Uhrzeit — und damit eine
+                    // Reihenfolge behauptet, die die Quelle nicht liefert.
                     label: (ctx) => {
                         const r = ctx.raw;
                         if (!Array.isArray(r)) return '';
-                        return `${sleepOffsetToClock(r[0])} → ${sleepOffsetToClock(r[1])}`
-                            + ` · ${fmt1(r[1] - r[0])} h im Bett`;
+                        const lines = [`${sleepOffsetToClock(r[0])} → ${sleepOffsetToClock(r[1])}`
+                            + ` · ${fmt1(r[1] - r[0])} h im Bett`];
+                        const n = (state.sleepUsable || [])[ctx.dataIndex];
+                        if (n) {
+                            const h = (v) => { const x = Number(v); return Number.isFinite(x) ? x / 60 : null; };
+                            const parts = [
+                                ['Kern', h(n.core_minutes)], ['Tief', h(n.deep_minutes)],
+                                ['REM', h(n.rem_minutes)], ['Wach', h(n.awake_minutes)],
+                            ].filter(([, v]) => v != null && v > 0);
+                            if (parts.length) {
+                                lines.push(parts.map(([k, v]) => `${k} ${fmt1(v)} h`).join(' · '));
+                            }
+                        }
+                        return lines;
                     },
                 } }),
             },
@@ -795,6 +811,9 @@ async function loadSleepChart() {
         const MIN_SLEEP_MIN = 60;
         const usable = rows.filter(r => (asleepMin(r) || 0) >= MIN_SLEEP_MIN);
         const skippedNights = rows.length - usable.length;
+        // Beide Diagramme der Karte zeigen exakt diese Naechte in dieser
+        // Reihenfolge — der Tooltip des Schlaffensters greift darauf zurueck.
+        state.sleepUsable = usable;
 
         // v1.40.3: Die aussortierten Naechte fliegen auch aus beiden Diagrammen
         // raus -- ein 20-Minuten-Fragment ist weder ein sinnvoller Balken noch

@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.45.1', date: '2026-09-04', title: 'Beide Schlaf-Diagramme in einer Karte, Phasen im Tooltip', notes: [
+        'Schlaffenster und Phasen-Diagramm sitzen jetzt in EINER Karte untereinander, beschriftet als „Wann" und „Wie viel". Beide zeigen dieselben Nächte in derselben Reihenfolge — man vergleicht sie, ohne zwischen zwei Karten zu springen.',
+        'Der Tooltip des Schlaffensters nennt zusätzlich zu Zubettgeh-/Aufstehzeit und Dauer die Phasen dieser Nacht (Kern, Tief, REM, Wach).',
+        'Zur Nachfrage, warum die Phasen nicht direkt in den Schlaffenster-Balken wandern, obwohl sie ohnehin ohne echte Reihenfolge gestapelt sind: Es hängt an der y-Achse, nicht am Stapeln. Auf der Dauer-Achse des Phasen-Diagramms bedeutet die Höhe „wie viel", die Reihenfolge der Segmente bedeutet nichts. Auf der Uhrzeit-Achse des Schlaffensters bedeutet jede Position eine Uhrzeit — dort gestapelt würde jedes Segment behaupten, zu genau dieser Zeit gelegen zu haben. Apple liefert aber nur die Summen je Nacht, keine zeitliche Lage. Der Hinweis unter dem Diagramm sagt das jetzt genau so.',
+    ]},
     { v: 'v1.45.0', date: '2026-09-04', title: 'Jede Vitalwert-Metrik mit eigenem Diagramm, neues Schlaffenster-Diagramm', notes: [
         'Vitalwerte: Statt einer Kachelreihe als Auswahl plus einem großen Diagramm hat jetzt jede Metrik ihr eigenes — kleiner, dafür alle gleichzeitig sichtbar. Vorher waren ausgerechnet Blutdruck und Blutzucker mit den wenigsten Datenpunkten dauerhaft zu sehen, während man sich durch Schritte, Puls, Gewicht & Co. einzeln durchklicken musste.',
         'Jede Karte trägt die Kennzahl des Zeitraums im Kopf (Ø bzw. Σ), darunter Min/Max und ausgenommene Messlücken, dazu die gleitende Ø-Linie wie bisher. Zwei Diagramme pro Reihe, ab 1300 px drei, auf dem Handy eins.',

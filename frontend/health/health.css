@@ -177,3 +177,9 @@ button.danger-outline:hover{background:var(--red-bg)}
     font-variant-numeric:tabular-nums;min-height:0.9rem}
 .h-metric-empty{height:150px;display:grid;place-items:center;font-size:0.8125rem;
     color:var(--text-fainter);border:1px dashed var(--border);border-radius:10px}
+
+/* v1.45.1: "Wann" und "Wie viel" liegen in einer Karte untereinander — beide
+   zeigen dieselben Naechte in derselben Reihenfolge, nur mit unterschiedlicher
+   y-Achse (Uhrzeit vs. Dauer). */
+.h-sleep-plot + .h-sleep-plot{margin-top:1.5rem;padding-top:1.25rem;border-top:1px dashed var(--border)}
+.h-sleep-plot-lbl{font-size:0.8125rem;font-weight:700;color:var(--text);margin-bottom:0.25rem}
