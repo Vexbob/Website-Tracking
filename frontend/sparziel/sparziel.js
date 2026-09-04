@@ -770,14 +770,12 @@ function renderIdeenSummary(goals, general){
     if(!box)return;
     const active  = goals.find(g => g.is_active) || null;
     const onGoals = goals.reduce((a,g)=>a+Number(g.saved_amount||0),0);
-    const open    = goals.reduce((a,g)=>a+Math.max(0,Number(g.target_amount||0)-Number(g.saved_amount||0)),0);
     const buf     = Number((general && general.saved_amount) || 0);
     const tiles=[
         {lbl:'Aktives Ziel',   val: active ? esc(active.name) : '— keins —',
          title: active ? esc(active.name) : 'Kein aktives Sparziel — es wird in den Puffer gespart'},
         {lbl:'Auf Sparzielen', val: fmtEur(onGoals), cls:'pos'},
         {lbl:'Im Puffer',      val: fmtEur(buf)},
-        {lbl:'Noch offen',     val: fmtEur(open)},
     ];
     box.innerHTML = tiles.map(t=>
         `<div class="is-tile"><div class="lbl">${t.lbl}</div>`+
@@ -1018,22 +1016,42 @@ function deletePotential(id){
         async()=>{try{await apiCall('/api/potential-goals/'+id,{method:'DELETE'});haptic('success');await loadPotentialGoals();}catch(e){haptic('error');await loadPotentialGoals();}}
     );
 }
+// Ideen kennen genau zwei Sorten — alles andere bleibt tagless. Aeltere
+// Freitext-Kategorien werden dadurch nicht mehr als Tag ausgespielt.
+const IDEA_KINDS = {
+    milestone: { label: 'Meilenstein', icon: '\u{1F3AF}' },
+    progress:  { label: 'Wochenziel',  icon: '\u{1F4C5}' },
+};
+function ideaKind(cat){
+    const k=(cat||'').trim().toLowerCase();
+    if(k==='milestone'||k==='meilenstein') return 'milestone';
+    if(k==='progress'||k==='wochenziel'||k==='weekly') return 'progress';
+    return null;
+}
+
 async function loadFutureIdeas(){
     try{
         const d=await apiCall('/api/future-ideas')||[];
         const c=document.getElementById('ideaCount'); if(c)c.textContent=d.length;
         const box=document.getElementById('ideaList'); if(!box)return;
-        box.innerHTML = d.length ? d.map(i=>`<div class="idea-chip" id="ideaLi_${i.id}">
-            <span>${esc(i.title)}</span>
-            ${i.category?`<span class="idea-cat">${esc(i.category)}</span>`:''}
-            <button class="idea-x" onclick="deleteIdea(${i.id})" title="Löschen" aria-label="Idee löschen">×</button>
-        </div>`).join('') : '<div class="empty-line">Noch keine Idee gesammelt.</div>';
+        box.innerHTML = d.length ? d.map(i=>{
+            const kind=ideaKind(i.category);
+            const meta=kind?IDEA_KINDS[kind]:null;
+            return `<div class="wish" id="ideaLi_${i.id}">
+                <div class="wish-ico idea">${meta?meta.icon:'\u{1F4A1}'}</div>
+                <div class="wish-body"><div class="wish-name">${esc(i.title)}</div></div>
+                ${meta?`<span class="idea-kind ${kind}">${meta.label}</span>`:''}
+                <div class="wish-act">
+                    <button class="del" onclick="deleteIdea(${i.id})" title="Löschen" aria-label="Idee löschen">×</button>
+                </div>
+            </div>`;
+        }).join('') : '<div class="empty-line">Noch keine Idee gesammelt.</div>';
     }catch(e){}
 }
 async function createIdea(){
-    const t=document.getElementById('ideaTitle').value.trim(),c=document.getElementById('ideaCat').value.trim();
+    const t=document.getElementById('ideaTitle').value.trim(),c=document.getElementById('ideaKind').value;
     if(!t){showToast('Titel fehlt',true);haptic('error');return;}
-    try{await apiCall('/api/future-ideas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,category:c||null})});document.getElementById('ideaTitle').value='';document.getElementById('ideaCat').value='';document.getElementById('ideaForm').classList.remove('open');haptic('success');await loadFutureIdeas();}
+    try{await apiCall('/api/future-ideas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,category:c||null})});document.getElementById('ideaTitle').value='';document.getElementById('ideaKind').value='';document.getElementById('ideaForm').classList.remove('open');haptic('success');await loadFutureIdeas();}
     catch(e){haptic('error');showToast('Fehler',true);}
 }
 function deleteIdea(id){

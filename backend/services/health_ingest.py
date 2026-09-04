@@ -393,14 +393,29 @@ def _csv_date_str(s: Optional[str]) -> Optional[str]:
     return s if not s else f"{s} +0000"
 
 
-def _find_col(header: list, *keywords: str) -> Optional[int]:
+def _find_col(header: list, *keywords: str, exclude: tuple = ()) -> Optional[int]:
     """Findet die Spalte, deren Header-Zelle ALLE Keywords enthaelt
-    (case-insensitive). Robust gegen leicht abweichende Einheiten-Suffixe."""
+    (case-insensitive). Robust gegen leicht abweichende Einheiten-Suffixe.
+
+    ``exclude`` blendet Spalten aus, die eines der Stichworte enthalten —
+    noetig bei Headern, die einander als Teilstring enthalten (siehe
+    ``_HR_EXCLUDE``).
+    """
     for i, cell in enumerate(header):
         low = cell.lower()
+        if any(x.lower() in low for x in exclude):
+            continue
         if all(kw.lower() in low for kw in keywords):
             return i
     return None
+
+
+# "Durchschn. Herzfrequenzvariabilitaet (ms)" enthaelt sowohl "Durchschn."
+# als auch "Herzfrequenz" und wurde daher als Ø-Puls eingelesen, sobald die
+# Spalte im Export vor der echten Puls-Spalte stand — der Ø-Puls lag danach
+# bei ~8 (ms statt bpm). Fuer die Puls-Spalten des Workout-Imports werden
+# HRV-Header deshalb explizit uebersprungen.
+_HR_EXCLUDE = ("variabilit", "variability", "hrv")
 
 
 def _row_num(row: list, idx: Optional[int]) -> Optional[float]:
@@ -657,11 +672,11 @@ async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> di
     # Zwei Spalten-Varianten: deutsch (manueller Export, "Aktive Energie") und
     # englisch (REST-API-Automation der App, "Active Energy"). Wir versuchen
     # fuer jeden logischen Wert nacheinander mehrere Header-Muster.
-    def _first(*variants):
+    def _first(*variants, exclude: tuple = ()):
         for kws in variants:
             if isinstance(kws, str):
                 kws = (kws,)
-            idx = _find_col(header, *kws)
+            idx = _find_col(header, *kws, exclude=exclude)
             if idx is not None:
                 return idx
         return None
@@ -674,8 +689,10 @@ async def _ingest_workouts_csv(db, user_id: int, header: list, rows: list) -> di
         "resting_energy": _first("Ruheeinträge", ("Resting", "Energy")),
         "total_energy": _first(("Total", "Energy"), ("Gesamt", "Energie")),
         "intensity": _first("Intensität", "Intensity"),
-        "max_hr": _first(("Max.", "Herzfrequenz"), ("Max", "Heart", "Rate")),
-        "avg_hr": _first(("Durchschn.", "Herzfrequenz"), ("Avg", "Heart", "Rate")),
+        "max_hr": _first(("Max.", "Herzfrequenz"), ("Max", "Heart", "Rate"),
+                         exclude=_HR_EXCLUDE),
+        "avg_hr": _first(("Durchschn.", "Herzfrequenz"), ("Avg", "Heart", "Rate"),
+                         exclude=_HR_EXCLUDE),
         "distance_km": _first("Distanz", "Distance"),
         "max_speed": _first("Max. Geschwindigkeit", ("Max", "Speed")),
         "avg_speed": _first("Durchschnittsgeschwindigkeit", ("Avg", "Speed")),

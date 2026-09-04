@@ -153,3 +153,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .h-imp-actions button.danger:hover{background:var(--red-bg)}
 button.danger-outline{background:transparent;color:var(--red);border:1px solid var(--red)}
 button.danger-outline:hover{background:var(--red-bg)}
+
+/* v1.43.1: Trenner zwischen Sportart- und Zeitraum-Chips in der Filterleiste. */
+.stat-filter-sep{width:1px;align-self:stretch;min-height:1.5rem;background:var(--border);flex-shrink:0}
+@media(max-width:560px){.stat-filter-sep{display:none}}

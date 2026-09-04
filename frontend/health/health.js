@@ -217,7 +217,7 @@ const state = {
     vitalDays: 30, vitalMetric: 'heart_rate', vitalInit: false,
     chartMetric: null, chartBp: null, chartGlucose: null,
     sleepDays: 30, sleepInit: false, chartSleep: null, chartSleepTimes: null,
-    workoutsLoaded: false, workoutsAll: [], workoutFilter: '',
+    workoutsLoaded: false, workoutsAll: [], workoutFilter: '', workoutRange: 0,
     keysLoaded: false,
     sparkCharts: [],
 };
@@ -840,31 +840,59 @@ async function initWorkouts() {
             renderWorkouts();
         });
     });
+    // v1.43.1: Zeitraum-Chips — die Kennzahlen darueber beziehen sich auf den
+    // gewaehlten Zeitraum, nicht mehr zwangslaeufig auf die gesamte Historie.
+    const rangeBox = document.getElementById('hWorkoutRangeChips');
+    if (rangeBox) {
+        rangeBox.querySelectorAll('.stat-chip').forEach(btn => {
+            btn.addEventListener('click', () => {
+                rangeBox.querySelectorAll('.stat-chip').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                state.workoutRange = Number(btn.dataset.range) || 0;
+                renderWorkouts();
+            });
+        });
+    }
     renderWorkouts();
 }
 
+const WORKOUT_RANGE_LBL = { 0: 'Gesamter Zeitraum', 30: 'Letzte 30 Tage',
+                            90: 'Letzte 90 Tage', 365: 'Letzte 12 Monate' };
+
 function renderWorkouts() {
-    const rows = state.workoutFilter
-        ? state.workoutsAll.filter(w => w.workout_type === state.workoutFilter)
-        : state.workoutsAll;
+    const days = Number(state.workoutRange) || 0;
+    const since = days ? Date.now() - days * 86400000 : null;
+    const rows = state.workoutsAll.filter(w => {
+        if (state.workoutFilter && w.workout_type !== state.workoutFilter) return false;
+        if (since == null) return true;
+        const t = Date.parse(w.start_at);
+        return Number.isFinite(t) && t >= since;
+    });
     const kpiBox = document.getElementById('hWorkoutKpis');
-    const countEl = document.getElementById('hWorkoutCount');
+    const rangeEl = document.getElementById('hWorkoutRangeLbl');
     const list = document.getElementById('hWorkoutList');
+    if (rangeEl) rangeEl.textContent = WORKOUT_RANGE_LBL[days] || 'Gesamter Zeitraum';
     if (!rows.length) {
-        kpiBox.innerHTML = ''; countEl.textContent = '';
-        list.className = 'h-empty'; list.innerHTML = 'Noch keine Workouts synchronisiert.';
+        kpiBox.innerHTML = '';
+        list.className = 'h-empty';
+        list.innerHTML = state.workoutsAll.length
+            ? 'Keine Workouts in diesem Zeitraum.'
+            : 'Noch keine Workouts synchronisiert.';
         return;
     }
-    countEl.textContent = `${rows.length} Workout${rows.length === 1 ? '' : 's'}`;
     const totalMin = rows.reduce((s, w) => s + (Number(w.duration_min) || 0), 0);
-    const totalKcal = rows.reduce((s, w) => s + (Number(w.active_energy_kcal) || 0), 0);
-    const hrArr = rows.map(w => Number(w.avg_heart_rate)).filter(Number.isFinite);
-    const avgHr = hrArr.length ? hrArr.reduce((s,v)=>s+v,0) / hrArr.length : null;
+    // Durchschnitte nur ueber die Workouts bilden, die den Wert wirklich
+    // mitbringen — sonst zieht jedes Workout ohne Kalorienwert den Schnitt
+    // nach unten.
+    const durArr = rows.map(w => Number(w.duration_min)).filter(v => Number.isFinite(v) && v > 0);
+    const kcalArr = rows.map(w => Number(w.active_energy_kcal)).filter(Number.isFinite);
+    const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+    const avgDur = avgOf(durArr);
+    const avgKcal = avgOf(kcalArr);
     const kpis = [
-        { icon:'🏋️', lbl:'Anzahl', val: fmt0(rows.length) },
         { icon:'⏱️', lbl:'Gesamtzeit', val: fmtDuration(totalMin) },
-        { icon:'🔥', lbl:'Ø Kalorien', val: fmt0(totalKcal / rows.length) + ' kcal' },
-        { icon:'❤️', lbl:'Ø Puls', val: avgHr != null ? fmt0(avgHr) + ' bpm' : '–' },
+        { icon:'⌛', lbl:'Ø Dauer', val: avgDur != null ? fmtDuration(avgDur) : '–' },
+        { icon:'🔥', lbl:'Ø Kalorien (aktiv)', val: avgKcal != null ? fmt0(avgKcal) + ' kcal' : '–' },
     ];
     kpiBox.innerHTML = kpis.map(k => `
         <div class="stat-kpi"><div class="stat-kpi-icon">${k.icon}</div>

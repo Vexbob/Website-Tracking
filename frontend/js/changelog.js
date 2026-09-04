@@ -4,6 +4,13 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.43.1', date: '2026-09-04', title: 'Workout-Kennzahlen mit Zeitfilter, Ideen-Sammlung aufgeraeumt', notes: [
+        'Der Ø-Puls über allen Workouts stand bei 8 bpm. Grund: Der CSV-Import hat die Spalte „Durchschn. Herzfrequenzvariabilität (ms)" als Puls-Spalte erkannt, weil sie sowohl „Durchschn." als auch „Herzfrequenz" enthält und im Export vor der echten Puls-Spalte steht. HRV-Spalten werden bei der Puls-Suche jetzt übersprungen — bereits importierte Workouts brauchen dafür einen erneuten Import.',
+        'Die Workout-Kennzahlen zeigen jetzt Gesamtzeit, Ø Dauer und Ø Kalorien (aktiv). Anzahl und Ø Puls sind raus. Die Durchschnitte rechnen nur über Workouts, die den Wert wirklich mitbringen.',
+        'Neu im Workouts-Tab: Zeitraum-Filter (30 Tage / 90 Tage / 12 Monate / Gesamt) neben den Sportart-Chips. Die Kennzahlen beziehen sich auf den gewählten Zeitraum, die Überschrift der Liste nennt ihn.',
+        'Sparziele: Die Kachel „Noch offen" ist raus.',
+        'Ideen-Sammlung: Einträge stehen jetzt als Zeilen wie die Wunschliste statt als Chip-Wolke. Die freie Kategorie ist durch eine feste Auswahl ersetzt — ohne, Meilenstein oder Wochenziel; nur diese beiden werden noch als Tag angezeigt.',
+    ]},
     { v: 'v1.43.0', date: '2026-09-04', title: 'Abgeschlossene Sparziele verschwinden wirklich — ohne Platzhalter-Ziel', notes: [
         'Ein abgeschlossenes Sparziel wird jetzt gelöscht statt auf 0 zurückgesetzt. Bisher blieb es unter „Meine Sparziele" als leere Hülle stehen, obwohl es längst als Trophäe an der Wand hing.',
         'Das automatisch angelegte „Neues Sparziel" über 100 € ist raus. Nach dem Abschließen ist bewusst kein Ziel aktiv — jede Belohnung aus Achievements und Wochenzielen läuft dann in den Puffer, bis du selbst ein neues Ziel anlegst oder ein pausiertes aktivierst.',

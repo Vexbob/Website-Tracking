@@ -231,18 +231,22 @@
         <div class="sh">
             <div class="sh-head">
                 <h2>Ideen-Sammlung <span class="sh-count" id="ideaCount">0</span></h2>
-                <p class="sh-sub">Alles ohne Preisschild: Vorhaben, Kurse, Reisen — zum Sortieren, bevor daraus ein Ziel wird.</p>
+                <p class="sh-sub">Alles ohne Preisschild: Vorhaben, Kurse, Reisen — optional als Meilenstein- oder Wochenziel-Idee markiert.</p>
             </div>
             <button class="sh-add" onclick="toggleForm('ideaForm')">+ Idee</button>
         </div>
         <div id="ideaForm" class="iform">
             <div class="if-grid">
                 <div><label>Titel</label><input id="ideaTitle" placeholder="z.B. Sprachkurs"></div>
-                <div><label>Kategorie (optional)</label><input id="ideaCat" placeholder="Bildung"></div>
+                <div><label>Sorte (optional)</label><select id="ideaKind">
+                    <option value="">— ohne —</option>
+                    <option value="milestone">Meilenstein</option>
+                    <option value="progress">Wochenziel</option>
+                </select></div>
             </div>
             <button class="if-btn" onclick="createIdea()">Hinzufügen</button>
         </div>
-        <div id="ideaList" class="idea-cloud"></div>
+        <div id="ideaList" class="wish-grid"></div>
     </div>
 </main>
 
