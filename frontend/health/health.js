@@ -770,61 +770,62 @@ function initSchlaf() {
                 label: seg.label, data: [], backgroundColor: seg.color,
                 borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.9,
             })),
-            // v1.46.1: Die Achse bleibt fest auf 24 h (18:00 bis 18:00). Eine
-            // Nacht, die darueber hinausreicht, wird an der Unterkante
-            // abgeschnitten und dort mit einem gruenen Strich markiert —
-            // vorher ist stattdessen die Achse gewachsen, wodurch sich die
-            // Skala zwischen zwei Zeitraeumen verschoben hat und Balken nicht
-            // mehr vergleichbar waren.
+            // v1.46.5: Was hinter der 18:00-Kante liegt, wird in DERSELBEN
+            // Spalte ab der Oberkante weitergezeichnet — die Achse ist ein
+            // 24-h-Kreis, oben und unten sind dieselbe Uhrzeit. Diese Datasets
+            // sind die Fortsetzung: gleicher Aufbau, gleiche Farben.
+            //
+            // Vorher lief der Rest in der FOLGESPALTE weiter (v1.46.4). Das
+            // war falsch: die naechste Spalte ist die naechste aufgezeichnete
+            // Nacht und oft nicht der naechste Tag — bei einer Luecke von zwei
+            // Wochen behauptete der Balken einen Schlaf, den es dort nie gab.
+            // Und die betroffenen Naechte enden gar nicht spaet, sie BEGINNEN
+            // vor 18:00 (z.B. 16:30 bis 01:30); ihr Rest gehoert derselben Nacht.
+            { label: 'Im Bett (Fortsetzung)', data: [], backgroundColor: th.grid,
+              borderColor: th.border, borderWidth: 1, borderSkipped: false,
+              borderRadius: 4, wrap: true, barPercentage: 0.8, categoryPercentage: 0.9 },
+            ...SLEEP_SEGMENTS.map(seg => ({
+                label: seg.label + ' (nach 18:00)', data: [], backgroundColor: seg.color,
+                wrap: true, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.9,
+            })),
+            // Die beiden duennen gruenen Kanten: unten, wo der Balken die
+            // 18:00-Grenze reisst, und oben, wo er wieder einsetzt.
             { label: 'über 18:00 hinaus', data: [], backgroundColor: '#22c55e',
               marker: true, borderSkipped: false,
               barPercentage: 0.8, categoryPercentage: 0.9 },
-            // v1.46.4: Der gruene Strich ist nur noch die Schnittkante — die
-            // Nacht laeuft in der FOLGESPALTE ab der Oberkante (18:00) weiter,
-            // statt an der Unterkante einfach aufzuhoeren. Die Achse ist ein
-            // 24-h-Kreis, unten und oben sind dieselbe Uhrzeit; der Rest der
-            // Nacht steht also genau dort, wo er zeitlich hingehoert. Der
-            // Balken ist bewusst schmaler als die uebrigen, damit die Nacht,
-            // der die Spalte gehoert, daneben sichtbar bleibt.
-            { label: 'Fortsetzung der Vornacht', data: [], backgroundColor: '#22c55e',
-              carry: true, borderSkipped: false, borderRadius: 4,
-              barPercentage: 0.32, categoryPercentage: 0.9 },
+            { label: 'über 18:00 hinaus (oben)', data: [], backgroundColor: '#22c55e',
+              marker: true, wrap: true, borderSkipped: false,
+              barPercentage: 0.8, categoryPercentage: 0.9 },
         ] },
         options: chartDefaults({
             plugins: {
                 legend: { labels: { color: th.text, boxWidth: 12, font: { size: 11 },
+                    // Die Fortsetzung benutzt dieselben Farben wie der
+                    // Hauptteil und bekommt deshalb keinen zweiten Eintrag.
                     // Der gruene Eintrag taucht nur auf, wenn wirklich eine
-                    // Nacht abgeschnitten wurde — und steht dann fuer beides,
-                    // Schnittkante und Fortsetzung. Die Fortsetzung bekommt
-                    // deshalb keinen eigenen Eintrag.
+                    // Nacht ueber die Kante laeuft.
                     filter: (item, data) => {
                         const ds = data.datasets[item.datasetIndex];
-                        if (ds.carry) return false;
+                        if (ds.wrap) return false;
                         return !ds.marker || (ds.data || []).some(v => Array.isArray(v));
                     } } },
                 tooltip: themedTooltip({
                     // Segmente ohne Dauer wuerden den Tooltip nur zumuellen.
-                    filter: (item) => Array.isArray(item.raw) && (item.raw[1] - item.raw[0]) > 0.01,
+                    // Segmente ohne Dauer wuerden den Tooltip nur zumuellen, und
+                    // die obere Bruchkante teilt sich die Zeile mit der unteren.
+                    filter: (item) => Array.isArray(item.raw) && (item.raw[1] - item.raw[0]) > 0.01
+                        && !(item.dataset.marker && item.dataset.wrap),
                     callbacks: {
                         label: (ctx) => {
                             if (ctx.dataset.marker) {
                                 const w = (state.sleepWindows || [])[ctx.dataIndex];
-                                return w ? `Bei 18:00 abgeschnitten — Aufstehen erst ${sleepOffsetToClock(w[1])}`
-                                         : 'Bei 18:00 abgeschnitten';
-                            }
-                            if (ctx.dataset.carry) {
-                                const src = (state.sleepCarrySource || [])[ctx.dataIndex];
-                                const w = src != null ? (state.sleepWindows || [])[src] : null;
-                                const from = src != null ? (ctx.chart.data.labels[src] || '') : '';
-                                return w ? `Nacht ${from} läuft hier weiter — bis ${sleepOffsetToClock(w[1])}`
-                                         : 'Fortsetzung der Vornacht';
+                                return w ? `Über 18:00 hinaus — läuft oben in derselben Spalte weiter bis ${sleepOffsetToClock(w[1])}`
+                                         : 'Über 18:00 hinaus';
                             }
                             return `${ctx.dataset.label}: ${fmt1(ctx.raw[1] - ctx.raw[0])} h`;
                         },
                         footer: (items) => {
-                            // Die Fusszeile gehoert der Nacht, der die Spalte
-                            // gehoert — nicht der eingeblendeten Fortsetzung.
-                            const first = (items || []).find(it => !it.dataset.carry);
+                            const first = items && items[0];
                             const w = first ? (state.sleepWindows || [])[first.dataIndex] : null;
                             return w ? `${sleepOffsetToClock(w[0])} → ${sleepOffsetToClock(w[1])}` : '';
                         },
@@ -856,7 +857,7 @@ async function loadSleepChart() {
             </div>`;
             const emptyNote = document.getElementById('hSleepNote');
             if (emptyNote) emptyNote.textContent = '';
-            state.sleepUsable = []; state.sleepWindows = []; state.sleepCarrySource = [];
+            state.sleepUsable = []; state.sleepWindows = [];
             renderSleepRhythm([]);
             state.chartSleepTimes.data.labels = [];
             state.chartSleepTimes.data.datasets.forEach(d => d.data = []);
@@ -933,27 +934,21 @@ async function loadSleepChart() {
         // sollen die echte Aufstehzeit nennen, auch wenn der Balken gekappt ist.
         state.sleepWindows = windows;
         const AXIS_END = 24;   // 18:00 des Folgetags
+        // Der Balken bis zur 18:00-Kante ...
         const clipped = windows.map(w => w ? [w[0], Math.min(w[1], AXIS_END)] : null);
-        const overflow = windows.map(w => (w && w[1] > AXIS_END + 1e-6)
-            ? [AXIS_END - 0.22, AXIS_END] : null);
-        // Was hinter 18:00 liegt, wird in der naechsten Spalte ab der
-        // Oberkante weitergezeichnet. `carrySource` merkt sich, aus welcher
-        // Nacht der Rest stammt, damit der Tooltip sie benennen kann. Fuer die
-        // letzte Nacht gibt es keine Folgespalte mehr — dort bleibt es beim
-        // gruenen Strich.
-        const carry = windows.map(() => null);
-        const carrySource = windows.map(() => null);
-        windows.forEach((w, i) => {
-            if (!w || w[1] <= AXIS_END + 1e-6 || i + 1 >= windows.length) return;
-            carry[i + 1] = [0, Math.min(w[1] - AXIS_END, AXIS_END)];
-            carrySource[i + 1] = i;
-        });
-        state.sleepCarrySource = carrySource;
+        // ... und der Rest, der oben in DERSELBEN Spalte weiterlaeuft. Er hoert
+        // spaetestens am eigenen Zubettgeh-Zeitpunkt auf: laenger als 24 h ist
+        // keine Nacht, und der Balken darf sich nicht selbst ueberlappen.
+        const wrapped = windows.map(w => (w && w[1] > AXIS_END + 1e-6)
+            ? [0, Math.min(w[1] - AXIS_END, w[0])] : null);
+        // Duenne gruene Kanten an der Bruchstelle: unten am Achsenende, oben
+        // dort, wo die Nacht wieder einsetzt.
+        const cutLow  = wrapped.map(x => x ? [AXIS_END - 0.2, AXIS_END] : null);
+        const cutHigh = wrapped.map(x => x ? [0, 0.2] : null);
 
         // Phasen kacheln das Fenster ab der Zubettgeh-Kante mit ihrer echten
-        // Dauer. Ueberschiesst die Summe das Fenster (Rundung in der Quelle,
-        // oder weil bei 18:00 gekappt wurde), wird an der Unterkante
-        // abgeschnitten statt darueber hinaus gemalt.
+        // Dauer. Ueberschiesst die Summe das Fenster (Rundung in der Quelle),
+        // wird am Fensterende abgeschnitten statt darueber hinaus gemalt.
         const segH = (r) => {
             const h = (v) => (num(v) || 0) / 60;
             const phases = h(r.deep_minutes) + h(r.core_minutes) + h(r.rem_minutes);
@@ -963,27 +958,41 @@ async function loadSleepChart() {
                 awake: h(r.awake_minutes),
             };
         };
+        // Gekachelt wird ueber das GANZE Fenster, auch ueber die 18:00-Kante
+        // hinweg; jedes Segment wird an der Kante geteilt. Der Teil davor
+        // landet im Hauptbalken, der Teil dahinter oben in derselben Spalte --
+        // eine Phase, die genau auf der Kante liegt, erscheint dadurch in
+        // beiden Stuecken mit ihrer jeweils richtigen Laenge.
         const segData = SLEEP_SEGMENTS.map(() => []);
+        const segWrap = SLEEP_SEGMENTS.map(() => []);
         plotted.forEach((r, i) => {
-            const w = clipped[i];
-            if (!w) { segData.forEach(d => d.push(null)); return; }
+            const w = windows[i];
+            if (!w) { segData.forEach(d => d.push(null)); segWrap.forEach(d => d.push(null)); return; }
             const parts = segH(r);
+            const endLow  = Math.min(w[1], AXIS_END);
+            const endHigh = wrapped[i] ? wrapped[i][1] : 0;
             let cursor = w[0];
             SLEEP_SEGMENTS.forEach((seg, si) => {
                 const len = parts[seg.key] || 0;
-                const from = Math.min(cursor, w[1]);
-                const to = Math.min(cursor + len, w[1]);
-                segData[si].push(len > 0 && to > from ? [from, to] : null);
-                cursor += len;
+                const from = cursor, to = cursor + len;
+                const lowFrom = Math.min(from, endLow), lowTo = Math.min(to, endLow);
+                segData[si].push(lowTo - lowFrom > 0.01 ? [lowFrom, lowTo] : null);
+                const hiFrom = Math.min(Math.max(from - AXIS_END, 0), endHigh);
+                const hiTo   = Math.min(Math.max(to   - AXIS_END, 0), endHigh);
+                segWrap[si].push(hiTo - hiFrom > 0.01 ? [hiFrom, hiTo] : null);
+                cursor = to;
             });
         });
 
         const ds = state.chartSleepTimes.data.datasets;
+        const N = SLEEP_SEGMENTS.length;
         state.chartSleepTimes.data.labels = plotted.map(r => fmtDate(r.sleep_date));
         ds[0].data = clipped;
         segData.forEach((d, si) => { ds[si + 1].data = d; });
-        ds[ds.length - 2].data = overflow;
-        ds[ds.length - 1].data = carry;
+        ds[N + 1].data = wrapped;
+        segWrap.forEach((d, si) => { ds[N + 2 + si].data = d; });
+        ds[2 * N + 2].data = cutLow;
+        ds[2 * N + 3].data = cutHigh;
         state.chartSleepTimes.update();
         renderSleepRhythm(windows);
 

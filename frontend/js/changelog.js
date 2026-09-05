@@ -4,6 +4,12 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.46.5', date: '2026-09-05', title: 'Schlaf-Diagramm: Umbruch in derselben Spalte statt in der nächsten', notes: [
+        'Der Rest einer Nacht, die über die 18:00-Kante läuft, wird jetzt oben in DERSELBEN Spalte weitergezeichnet — nicht mehr in der nächsten. Die Achse ist ein 24-Stunden-Kreis, oben und unten sind dieselbe Uhrzeit; der Balken bricht unten ab und setzt oben wieder ein, beide Stücke gehören sichtbar zu einer Nacht.',
+        'Die Fortsetzung aus v1.46.4 in der Folgespalte war aus zwei Gründen falsch: Die nächste Spalte ist die nächste AUFGEZEICHNETE Nacht und oft nicht der nächste Tag — bei einer Lücke von zwei Wochen behauptete der Balken einen Schlaf, den es dort nie gab. Und die betroffenen Nächte enden gar nicht spät, sie beginnen vor 18:00 (etwa 16:30 bis 01:30); ihr Rest gehört derselben Nacht.',
+        'Das Stück oben ist kein grüner Klotz mehr, sondern zeigt die Schlafphasen in ihren normalen Farben weiter — die Phasen laufen über die Bruchstelle hinweg und werden dort geteilt, jedes Stück mit seiner richtigen Länge. Markiert ist der Bruch nur noch durch zwei dünne grüne Kanten (unten am Achsenende, oben am Wiedereinsatz).',
+        'Der grüne Legendeneintrag erscheint weiterhin nur, wenn tatsächlich eine Nacht über die Kante läuft; die Fortsetzung bekommt keinen eigenen Eintrag, da sie dieselben Farben benutzt.',
+    ]},
     { v: 'v1.46.4', date: '2026-09-05', title: 'Schlaf-Diagramm: Nächte über 18:00 laufen in der Folgespalte weiter', notes: [
         'Reicht eine Nacht über die 18:00-Grenze hinaus, hörte ihr Balken bisher an der Unterkante einfach auf — der grüne Strich sagte nur, dass da noch etwas fehlt. Jetzt bleibt der grüne Strich als Schnittkante stehen, und der Rest der Nacht wird in der nächsten Spalte ab der Oberkante (18:00) weitergezeichnet. Die Achse ist ein 24-Stunden-Kreis: oben und unten sind dieselbe Uhrzeit, der Rest steht also genau dort, wo er zeitlich hingehört.',
         'Der Fortsetzungs-Balken ist schmaler als die übrigen, damit die Nacht, der die Spalte gehört, daneben sichtbar bleibt. Sein Tooltip nennt die Nacht, aus der er stammt, und deren echte Aufstehzeit; die Fußzeile mit Zubettgeh- und Aufstehzeit gehört weiterhin der Nacht der Spalte. In der Legende bleibt es bei einem grünen Eintrag für beides, und nur, wenn tatsächlich eine Nacht abgeschnitten wurde. Für die letzte Nacht im Zeitraum gibt es keine Folgespalte — dort bleibt es beim grünen Strich.',
