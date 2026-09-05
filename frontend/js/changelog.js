@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.46.4', date: '2026-09-05', title: 'Schlaf-Diagramm: Nächte über 18:00 laufen in der Folgespalte weiter', notes: [
+        'Reicht eine Nacht über die 18:00-Grenze hinaus, hörte ihr Balken bisher an der Unterkante einfach auf — der grüne Strich sagte nur, dass da noch etwas fehlt. Jetzt bleibt der grüne Strich als Schnittkante stehen, und der Rest der Nacht wird in der nächsten Spalte ab der Oberkante (18:00) weitergezeichnet. Die Achse ist ein 24-Stunden-Kreis: oben und unten sind dieselbe Uhrzeit, der Rest steht also genau dort, wo er zeitlich hingehört.',
+        'Der Fortsetzungs-Balken ist schmaler als die übrigen, damit die Nacht, der die Spalte gehört, daneben sichtbar bleibt. Sein Tooltip nennt die Nacht, aus der er stammt, und deren echte Aufstehzeit; die Fußzeile mit Zubettgeh- und Aufstehzeit gehört weiterhin der Nacht der Spalte. In der Legende bleibt es bei einem grünen Eintrag für beides, und nur, wenn tatsächlich eine Nacht abgeschnitten wurde. Für die letzte Nacht im Zeitraum gibt es keine Folgespalte — dort bleibt es beim grünen Strich.',
+        'Die Beschreibung über dem Schlaf-Diagramm und der Hinweis darunter sind entfernt; die Karte zeigt jetzt nur noch Diagramm und typische Zeiten.',
+    ]},
     { v: 'v1.46.3', date: '2026-09-04', title: 'Export und Backup an die Änderungen der letzten Versionen angeglichen', notes: [
         'Sparziel-Export: Die Sparziel-Sektion hat zwei neue Spalten. „typ" unterscheidet das Allgemein-Konto (Puffer) von echten Sparzielen — es stand vorher als Zeile mit Zielbetrag 0 und is_active=false zwischen den anderen und sah dort wie ein kaputtes Ziel aus, obwohl seit v1.43.0 genau dort das Geld landet, solange kein Ziel aktiv ist. „saved_amount" nennt den Kontostand je Ziel; der ließ sich vorher nur über die Summe des Protokolls rekonstruieren.',
         'Sparziel-Export: Die Ideen-Sammlung exportiert die Sorte jetzt als „Meilenstein"/„Wochenziel" statt der internen Schlüssel. Alte Freitext-Kategorien bleiben unverändert stehen, damit nichts wegfällt.',
