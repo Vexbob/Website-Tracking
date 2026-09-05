@@ -36,6 +36,9 @@ TABLES_ORDERED = [
     "health_sleep",
     "health_workouts",
     "health_workout_metrics",
+    # Beta-Strecke iPhone-Kurzbefehl (v1.47.0) -- ohne diesen Eintrag waeren die
+    # Rohdaten der neuen Strecke nach einem Restore weg.
+    "health_shortcut_samples",
     # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
     # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
     "user_prefs",

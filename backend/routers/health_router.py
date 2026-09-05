@@ -198,7 +198,7 @@ async def import_health_data(request: Request,
 
 async def _store_import_log(db, user_id: int, kind: str, filename: Optional[str],
                             ctype: str, headers, raw: Optional[bytes],
-                            stats: Optional[dict]) -> None:
+                            stats: Optional[dict]) -> Optional[int]:
     """Legt einen Sync-Aufruf mitsamt Roh-Payload im Import-Protokoll ab.
 
     Wird pro *Teil* aufgerufen (ein Multipart-Part = ein Eintrag), damit sich
@@ -207,6 +207,10 @@ async def _store_import_log(db, user_id: int, kind: str, filename: Optional[str]
 
     Schluckt bewusst jeden Fehler: das Protokoll ist Diagnose-Beiwerk und darf
     einen laufenden Sync nie scheitern lassen.
+
+    Gibt die ID des Eintrags zurueck (None, wenn das Schreiben scheiterte).
+    Genutzt von der Kurzbefehl-Strecke, die die ID in ihrer Antwort mitschickt,
+    damit ein Testlauf direkt auf seinen Roh-Payload zeigen kann.
     """
     try:
         data = raw or b""
@@ -214,10 +218,10 @@ async def _store_import_log(db, user_id: int, kind: str, filename: Optional[str]
         truncated = size > HEALTH_IMPORT_LOG_MAX_BYTES
         blob = data[:HEALTH_IMPORT_LOG_MAX_BYTES] if data else None
         ua = (headers.get("user-agent") if headers else None) or None
-        await db.execute(
+        row = await db.fetchrow(
             "INSERT INTO health_import_log "
             "(user_id, kind, filename, content_type, user_agent, size_bytes, truncated, payload, stats) "
-            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING id",
             user_id, kind[:60], (filename or None) and filename[:255],
             (ctype or None) and ctype[:255], ua and ua[:255],
             size, truncated, blob, json.dumps(stats or {}))
@@ -227,8 +231,10 @@ async def _store_import_log(db, user_id: int, kind: str, filename: Optional[str]
             "  SELECT id FROM health_import_log WHERE user_id=$1 "
             "  ORDER BY created_at DESC, id DESC LIMIT $2)",
             user_id, HEALTH_IMPORT_LOG_KEEP)
+        return row["id"] if row else None
     except Exception as e:
         logger.warning("Import-Protokoll konnte nicht geschrieben werden user_id=%s: %s", user_id, e)
+        return None
 
 
 def _log_incoming(kind: str, ctype: str, headers, parts: list, user_id: int) -> None:
@@ -425,17 +431,28 @@ async def import_health_csv(request: Request, files: List[UploadFile] = File(...
 
 # ---------- Import-Protokoll (v1.40.0, JWT-Auth) ----------
 @router.get("/api/health/imports")
-async def list_import_log(limit: Optional[int] = 50, db=Depends(get_db),
-                          user=Depends(get_current_user)):
+async def list_import_log(limit: Optional[int] = 50, kind: Optional[str] = None,
+                          db=Depends(get_db), user=Depends(get_current_user)):
     """Listet die letzten Sync-Aufrufe der App — Zeitpunkt, Format, Groesse,
     Ingest-Ergebnis und die ersten Zeichen des Payloads als Vorschau. Der
-    komplette Body haengt an ``/api/health/imports/{id}/download``."""
+    komplette Body haengt an ``/api/health/imports/{id}/download``.
+
+    ``kind`` filtert per Praefix (v1.47.0): ``?kind=shortcut`` zeigt nur die
+    Aufrufe der Kurzbefehl-Beta-Strecke, deren Eintraege als
+    ``shortcut-<format>`` abgelegt werden. Ohne den Parameter bleibt das
+    Verhalten unveraendert -- die Liste zeigt beide Strecken, weil sie sich das
+    Protokoll teilen."""
     lim = max(1, min(int(limit or 50), 200))
+    sql = ("SELECT id, created_at, kind, filename, content_type, user_agent, size_bytes, "
+           "       truncated, stats, substring(payload from 1 for 240) AS head "
+           "FROM health_import_log WHERE user_id=$1")
+    args = [user["id"]]
+    if kind:
+        args.append(kind[:60] + "%")
+        sql += f" AND kind LIKE ${len(args)}"
+    args.append(lim)
     rows = await db.fetch(
-        "SELECT id, created_at, kind, filename, content_type, user_agent, size_bytes, "
-        "       truncated, stats, substring(payload from 1 for 240) AS head "
-        "FROM health_import_log WHERE user_id=$1 ORDER BY created_at DESC, id DESC LIMIT $2",
-        user["id"], lim)
+        sql + f" ORDER BY created_at DESC, id DESC LIMIT ${len(args)}", *args)
     out = []
     for r in rows:
         d = _ser_exp(r)
