@@ -515,7 +515,17 @@ def _import_log_filename(row) -> str:
     base = _re.sub(r"[^A-Za-z0-9._-]", "_", base)[:80]
     if not base or base in (".", ".."):
         kind = (row["kind"] or "").lower()
-        ext = ".json" if "json" in kind else (".csv" if "csv" in kind else ".bin")
+        if "json" in kind:
+            ext = ".json"
+        elif "csv" in kind:
+            ext = ".csv"
+        elif "text" in kind or kind.startswith("shortcut"):
+            # v1.48.1: Die Kurzbefehl-Strecke schickt Klartext. Der bekam vorher
+            # ``.bin``, weil die Zuordnung nur JSON und CSV kannte -- eine Datei,
+            # die sich nicht oeffnen laesst, ist als Diagnosewerkzeug wertlos.
+            ext = ".txt"
+        else:
+            ext = ".bin"
         base = f"payload{ext}"
     ts = row["created_at"].strftime("%Y-%m-%d_%H%M") if row["created_at"] else "unbekannt"
     return f"health-sync_{ts}_{row['id']}_{base}"
@@ -537,6 +547,8 @@ async def download_import_log(lid: int, db=Depends(get_db), user=Depends(get_cur
         media = "application/json; charset=utf-8"
     elif fname.endswith(".csv"):
         media = "text/csv; charset=utf-8"
+    elif fname.endswith(".txt"):
+        media = "text/plain; charset=utf-8"
     else:
         media = "application/octet-stream"
     return Response(

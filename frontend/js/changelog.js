@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.48.1', date: '2026-09-05', title: 'Roh-Payload der Kurzbefehl-Strecke lädt als .txt statt .bin', notes: [
+        'Der Download eines Protokoll-Eintrags leitete seine Dateiendung nur aus „json“ und „csv“ ab; alles andere bekam .bin. Die Kurzbefehl-Aufrufe laufen als shortcut-text beziehungsweise shortcut-unreadable und fielen damit durchs Raster — der Klartext vom iPhone landete als .bin und ließ sich nicht ohne Umweg öffnen. Eine Diagnosedatei, die man nicht aufbekommt, ist als Diagnosewerkzeug wertlos.',
+        'Kurzbefehl-Payloads kommen jetzt als .txt mit text/plain, CSV und JSON aus dieser Strecke weiterhin als .csv beziehungsweise .json. Die Endungen der Auto-Health-Export-Einträge sind unverändert, Multipart bleibt .bin.',
+        'Am gespeicherten Inhalt ändert sich nichts: Der Roh-Payload wurde und wird vollständig und ungeteilt abgelegt. Die 240-Zeichen-Vorschau in der Liste ist nur die Listenansicht, nicht der gespeicherte Umfang.',
+    ]},
     { v: 'v1.48.0', date: '2026-09-05', title: 'Beta-Reiter für die Kurzbefehl-Strecke, CSV mit Kopfzeile, größeres Import-Protokoll', notes: [
         'Das Gesundheits-Modul hat einen sechsten Reiter „Beta“. Er zeigt die Kurzbefehl-Strecke roh: die letzten Aufrufe mit Format, Größe, Ergebnis und herunterladbarem Roh-Payload, darunter eine Tabelle der importierten Werte mit Zeitraum- und Metrik-Filter. Bewusst ohne Diagramme — diese Daten fließen in keine Auswertung ein, und beim Einrichten will man sehen, was wirklich angekommen ist.',
         'Die Tabelle zeigt neben dem zugeordneten Datum auch den Zeitstempel unverändert so, wie der Kurzbefehl ihn geschickt hat. Weichen beide voneinander ab, hat der Parser umgerechnet — damit lässt sich ein falsch einsortierter Tag dem Kurzbefehl oder Vexbob zuordnen, ohne den Roh-Payload zu öffnen.',
