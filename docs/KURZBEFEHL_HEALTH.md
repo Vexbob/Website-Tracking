@@ -199,14 +199,46 @@ kann, ohne den Parser anzufassen.
 | Wert | `value`, `qty`, `quantity`, `amount`, `sum`, `wert`, `count` |
 | Einheit | `unit`, `units`, `einheit` |
 
-**Textzeilen:** Trenner `;`, `,` oder Tab. Zeilen mit `#` am Anfang und Leerzeilen
-werden übersprungen.
+**Textzeilen ohne Kopfzeile:** Trenner `;`, `,` oder Tab. Die Spaltenreihenfolge
+ist dann fest. Zeilen mit `#` am Anfang und Leerzeilen werden übersprungen.
 
 ```
 2026-09-05;steps;8421;count     # Datum;Metrik;Wert;Einheit
 2026-09-05;steps;8421           # Datum;Metrik;Wert
 2026-09-05;8421                 # Datum;Wert  (braucht ?metric=steps)
 ```
+
+**CSV mit Kopfzeile:** Steht in der ersten Zeile eine Kopfzeile, sagt sie, welche
+Spalte was ist — die **Reihenfolge der Spalten ist dann egal**. Erkannt wird eine
+Kopfzeile daran, dass die erste Zelle kein Datum ist und mindestens eine Spalte
+einen bekannten Namen trägt. Fängt die erste Zeile mit einem Datum an, gilt sie
+als Datenzeile.
+
+```csv
+Datum;Metrik;Wert;Einheit          # lang — eine Zeile je Messpunkt
+2026-09-05;steps;8421;count
+
+Datum;Wert                         # schmal — Metrik aus ?metric=steps
+2026-09-05;8421
+
+Datum;Schritte (count);Aktive Energie (kcal)   # breit — eine Spalte je Metrik
+2026-09-05;8421;512
+```
+
+Spaltennamen, die erkannt werden — deutsch und englisch:
+
+| Zweck | Spaltennamen |
+| --- | --- |
+| Datum | `date`, `day`, `datum`, `tag`, `zeit`, `time`, `timestamp`, `zeitstempel`, `start`, … |
+| Metrik | `metric`, `metrik`, `name`, `key`, `type`, `typ`, `kennzahl` |
+| Wert | `value`, `wert`, `qty`, `quantity`, `amount`, `sum`, `summe`, `menge`, `anzahl` |
+| Einheit | `unit`, `units`, `einheit` |
+
+Im breiten Format darf die Einheit in der Überschrift stehen —
+`Schritte (count)` ergibt Metrik `steps` mit Einheit `count`. Genau so
+beschriftet Auto Health Export seine Tages-CSV, ein solcher Export lässt sich
+also direkt durchreichen. Leere Zellen sind kein Fehler, sondern eine Lücke an
+diesem Tag.
 
 **Datumsformate:** `2026-09-05`, `2026/09/05`, `05.09.2026`,
 `2026-09-05T12:30:00+02:00`, `2026-09-05 12:30:00 +0200`, `2026-09-05T10:30:00Z`,
@@ -271,8 +303,11 @@ Zwei Wege, beide ohne Datenbank-Änderung:
   Punkte mit vollem Zeitstempel.
 - **Import-Protokoll geteilt:** Die Aufrufe liegen in derselben Tabelle wie die
   von Auto Health Export (`kind` = `shortcut-<format>`). Die Aufbewahrungsgrenze
-  von `HEALTH_IMPORT_LOG_KEEP` (Standard 200) Einträgen gilt damit für **beide
-  Strecken zusammen** — bei ausgiebigem Testen können ältere HAE-Einträge
-  herausfallen.
+  `HEALTH_IMPORT_LOG_KEEP` gilt damit für **beide Strecken zusammen**; Standard
+  seit v1.48.0 **1000** statt 200, damit ein Testtag am Kurzbefehl nicht die
+  Einträge der produktiven Strecke verdrängt. Wird die Grenze erreicht, steht
+  das als Warnung in der Antwort des Ingests (`warnings` und `log_status`) und
+  als Banner im Beta-Reiter — ab 90 % als Vorwarnung, ab 100 % rot. Füllstand
+  jederzeit abrufbar über `GET /api/health/imports/status`.
 - **Obergrenze** 2000 Punkte pro Aufruf; darüber wird abgeschnitten und in
   `warnings` vermerkt.

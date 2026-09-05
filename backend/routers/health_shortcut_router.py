@@ -39,7 +39,7 @@ from deps import (logger, limiter, request_id_ctx, _ser_exp, _parse_iso_date,
 # Truncation des Import-Protokolls sollen an genau EINER Stelle stehen. Eine
 # Kopie hier wuerde bei der naechsten Aenderung an den ENV-Grenzen auseinander
 # laufen.
-from routers.health_router import _store_import_log
+from routers.health_router import _store_import_log, import_log_status
 from services.health_shortcut import (
     MAX_POINTS, MAX_REPORT_ITEMS, SHORTCUT_METRICS, SHORTCUT_SOURCE,
     build_summary, cap, extract_points, local_tz, metric_label,
@@ -148,6 +148,24 @@ async def shortcut_import(request: Request, metric: Optional[str] = None,
     # Lauf nie scheitern lassen.
     report["log_id"] = await _store_import_log(
         db, user["id"], f"shortcut-{fmt}", None, ctype, request.headers, raw, report)
+
+    # Fuellstand des Protokolls melden. Ist die Grenze erreicht, verdraengt jeder
+    # weitere Aufruf den aeltesten Eintrag -- dann fehlt beim Nachsehen genau der
+    # Roh-Payload, den man sucht. Das soll man erfahren, bevor es weh tut.
+    try:
+        status = await import_log_status(db, user["id"])
+        report["log_status"] = status
+        if status["at_limit"]:
+            report["warnings"].append(
+                f"Import-Protokoll voll ({status['count']} von {status['keep']}) — "
+                f"ab jetzt wird der jeweils älteste Eintrag verdrängt. "
+                f"Grenze über HEALTH_IMPORT_LOG_KEEP anheben.")
+        elif status["near_limit"]:
+            report["warnings"].append(
+                f"Import-Protokoll fast voll ({status['count']} von {status['keep']}).")
+    except Exception as e:
+        logger.warning("Protokoll-Fuellstand nicht ermittelbar user_id=%s: %s",
+                       user["id"], e)
 
     logger.info("Shortcut-Import user_id=%s fmt=%s bytes=%d: %s",
                 user["id"], fmt, len(raw), report["summary"])

@@ -123,6 +123,102 @@ def test_text_accepts_comma_and_tab_and_ignores_comments():
     assert len(points) == 2
 
 
+# ---------------------------------------------------------------------------
+# CSV mit Kopfzeile
+# ---------------------------------------------------------------------------
+def test_csv_long_format():
+    fmt, points, skipped = extract_points(_b(
+        "Datum;Metrik;Wert;Einheit\n"
+        "2026-09-03;steps;7120;count\n"
+        "2026-09-04;steps;9033;count\n"))
+    assert fmt == "csv"
+    assert skipped == []
+    assert len(points) == 2
+    norm, skip, _ = normalize_point(points[0], None, UTC)
+    assert skip is None
+    assert (norm["metric_key"], norm["value"], norm["unit"]) == ("steps", 7120.0, "count")
+
+
+def test_csv_column_order_does_not_matter():
+    """Die Kopfzeile sagt, welche Spalte was ist -- nicht die Position."""
+    _, points, _ = extract_points(_b("Wert;Datum;Metrik\n8421;2026-09-05;steps\n"))
+    norm, skip, _ = normalize_point(points[0], None, UTC)
+    assert skip is None
+    assert norm["value"] == 8421.0
+    assert norm["sample_date"] == date(2026, 9, 5)
+
+
+def test_csv_narrow_uses_default_metric():
+    """Datum;Wert ohne Metrikspalte -- die Metrik kommt aus ?metric=steps.
+    Ohne diese Sonderbehandlung wuerde "Wert" als Metrikname gelesen."""
+    fmt, points, _ = extract_points(_b("Datum;Wert\n2026-09-05;8421\n"),
+                                    default_metric="steps")
+    assert fmt == "csv"
+    norm, skip, _ = normalize_point(points[0], "steps", UTC)
+    assert skip is None
+    assert norm["metric_key"] == "steps"
+    assert norm["value"] == 8421.0
+
+
+def test_csv_wide_one_column_per_metric():
+    fmt, points, _ = extract_points(_b(
+        "Datum;Schritte;Aktive Energie\n"
+        "2026-09-03;7120;512\n"
+        "2026-09-04;9033;603\n"))
+    assert fmt == "csv"
+    assert len(points) == 4
+    got = []
+    for p in points:
+        norm, skip, _ = normalize_point(p, None, UTC)
+        assert skip is None
+        got.append((norm["sample_date"].isoformat(), norm["metric_key"], norm["value"]))
+    assert got == [("2026-09-03", "steps", 7120.0),
+                   ("2026-09-03", "aktive_energie", 512.0),
+                   ("2026-09-04", "steps", 9033.0),
+                   ("2026-09-04", "aktive_energie", 603.0)]
+
+
+def test_csv_wide_reads_unit_from_the_header():
+    """Auto Health Export beschriftet seine Tages-CSV genau so."""
+    _, points, _ = extract_points(_b("Datum;Schritte (count)\n2026-09-05;8421\n"))
+    norm, _, _ = normalize_point(points[0], None, UTC)
+    assert norm["unit"] == "count"
+
+
+def test_csv_wide_skips_empty_cells_without_complaining():
+    """Ein Tag ohne Wert in einer Spalte ist kein Fehler, sondern eine Luecke."""
+    _, points, skipped = extract_points(_b(
+        "Datum;Schritte;Aktive Energie\n2026-09-05;8421;\n"))
+    assert skipped == []
+    assert len(points) == 1
+
+
+def test_header_detection_does_not_swallow_a_data_row():
+    """Faengt die erste Zeile mit einem Datum an, ist sie Daten -- egal wie die
+    uebrigen Spalten heissen."""
+    fmt, points, _ = extract_points(_b("2026-09-03;steps;7120\n2026-09-04;steps;9033\n"))
+    assert fmt == "text"
+    assert len(points) == 2
+
+
+def test_unrecognisable_first_line_is_not_treated_as_a_header():
+    """Eine Zeile aus lauter Unbekanntem darf nicht still als Kopfzeile
+    verschwinden -- sie soll als benannter Skip auffallen."""
+    fmt, points, skipped = extract_points(_b("blah;bloed;quatsch\n"))
+    assert fmt == "text"
+    _, skip, _ = normalize_point(points[0], None, UTC)
+    assert skip["reason"] == "bad_date"
+
+
+def test_csv_accepts_comma_separator_and_bom():
+    fmt, points, _ = extract_points(
+        "Datum,Schritte\n2026-09-05,8421\n".encode("utf-8-sig"))
+    assert fmt == "csv"
+    norm, skip, _ = normalize_point(points[0], None, UTC)
+    assert skip is None
+    assert norm["metric_key"] == "steps"
+
+
 def test_empty_and_unreadable_bodies():
     assert extract_points(b"")[0] == "empty"
     assert extract_points(b"   ")[0] == "empty"

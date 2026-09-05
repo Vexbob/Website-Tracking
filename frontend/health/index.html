@@ -35,6 +35,7 @@
         <button class="tab-btn" data-tab="vitalwerte">❤️ Vitalwerte</button>
         <button class="tab-btn" data-tab="schlaf">😴 Schlaf</button>
         <button class="tab-btn" data-tab="workouts">🏋️ Workouts</button>
+        <button class="tab-btn" data-tab="beta">🧪 Beta</button>
         <button class="tab-btn" data-tab="einstellungen">⚙️ Einstellungen</button>
     </div>
 
@@ -144,6 +145,83 @@
         </div>
     </div>
 
+
+    <!-- ---------- Beta: Apple Health per iPhone-Kurzbefehl (v1.47.0) ---------- -->
+    <div id="tab-beta" style="display:none">
+        <div class="stat-card">
+            <h3>🧪 Apple Health per iPhone-Kurzbefehl <span class="h-beta-badge">Beta</span></h3>
+            <p class="h-hint">Zweiter, von Auto Health Export unabhängiger Importweg: ein Kurzbefehl
+                auf dem iPhone schickt einmal täglich die <strong>letzten drei Tage</strong> hierher.
+                Fällt ein Lauf aus, holt der nächste ihn nach — derselbe Tag darf mehrfach ankommen und
+                überschreibt sich dabei selbst.<br>
+                <strong>Diese Daten fließen in keine Auswertung ein.</strong> Sie stehen ausschließlich
+                hier, roh, und rühren die Daten der bestehenden Strecke nicht an.</p>
+            <p class="h-hint" style="margin-bottom:0">Ziel-URL:<br>
+                <code id="hScImportUrl">–</code><br>
+                Einfachste Variante (nur <code>Datum;Wert</code> je Zeile):<br>
+                <code id="hScImportUrlMetric">–</code><br><br>
+                Authentifizierung mit demselben API-Key wie Auto Health Export, Header
+                <code>Authorization: Bearer &lt;Key&gt;</code> — erzeugen im Tab
+                <strong>⚙️ Einstellungen</strong>. Schritt-für-Schritt-Anleitung zum Bau des
+                Kurzbefehls: <code>docs/KURZBEFEHL_HEALTH.md</code> im Repo.</p>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>📥 Letzte Aufrufe</h3>
+                <div class="stat-mini-toggle"><button onclick="loadShortcutImports()">🔄 Aktualisieren</button></div>
+            </div>
+            <div id="hScLogStatus"></div>
+            <p class="h-hint">Der Roh-Payload jedes Kurzbefehl-Aufrufs — genau die Bytes, die das
+                iPhone geschickt hat. Damit lässt sich unterscheiden, ob der Kurzbefehl etwas
+                Falsches geliefert oder Vexbob es falsch gelesen hat. Das Protokoll teilt sich die
+                Tabelle mit den Aufrufen von Auto Health Export; hier stehen nur die des Kurzbefehls.</p>
+            <div id="hScImports" class="h-empty">Lade …</div>
+        </div>
+
+        <div class="stat-card">
+            <h3>📊 Rohdaten</h3>
+            <div class="stat-filterbar">
+                <div class="stat-preset-chips" id="hScRangeChips">
+                    <button class="stat-chip" data-preset="7">7 Tage</button>
+                    <button class="stat-chip active" data-preset="30">30 Tage</button>
+                    <button class="stat-chip" data-preset="90">90 Tage</button>
+                    <button class="stat-chip" data-preset="365">1 Jahr</button>
+                    <button class="stat-chip" data-preset="0">Gesamt</button>
+                </div>
+            </div>
+            <div class="stat-preset-chips" id="hScMetricChips" style="margin-bottom:0.75rem"></div>
+            <div id="hScSamples" class="h-empty">Lade …</div>
+        </div>
+
+        <div class="stat-card" style="border-color:var(--red)">
+            <h3>🗑️ Beta-Rohdaten löschen</h3>
+            <p class="h-hint">Löscht <strong>ausschließlich</strong> die Rohdaten dieser Beta-Strecke —
+                die Daten von Auto Health Export bleiben unberührt. Gedacht für den Testbetrieb:
+                ändert sich das Format des Kurzbefehls, lässt sich der Testmüll davor wegräumen.</p>
+            <div class="h-form-row" style="align-items:flex-end">
+                <div style="flex:1;min-width:180px">
+                    <label style="display:block;font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.25rem">Metrik</label>
+                    <select id="hScDelMetric" style="margin:0;width:100%">
+                        <option value="">Alle Metriken</option>
+                    </select>
+                </div>
+                <div style="min-width:130px">
+                    <label style="display:block;font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.25rem">Von (optional)</label>
+                    <input type="date" id="hScDelFrom" style="margin:0;width:100%">
+                </div>
+                <div style="min-width:130px">
+                    <label style="display:block;font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.25rem">Bis (optional)</label>
+                    <input type="date" id="hScDelTo" style="margin:0;width:100%">
+                </div>
+            </div>
+            <div class="h-form-row">
+                <button class="primary" onclick="deleteShortcutSamples()"
+                        style="background:var(--red);border-color:var(--red)">🗑️ Löschen</button>
+            </div>
+            <div id="hScDelResult" style="margin-top:0.75rem"></div>
+        </div>
+    </div>
 
     <!-- ---------- Einstellungen ---------- -->
     <div id="tab-einstellungen" style="display:none">

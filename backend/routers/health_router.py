@@ -51,7 +51,14 @@ ALLOWED_METRIC_TYPES = sorted(set(SIMPLE_METRIC_MAP.values()))
 # Jeder Sync-Aufruf der iPhone-App wird mit seinem Roh-Payload gespeichert,
 # damit er im Frontend heruntergeladen und gegen die importierten Werte
 # geprueft werden kann. Zwei ENV-Stellschrauben begrenzen den Platzbedarf:
-HEALTH_IMPORT_LOG_KEEP = int(os.getenv("HEALTH_IMPORT_LOG_KEEP") or 200)
+# v1.47.0: Default von 200 auf 1000 angehoben. Seit der Kurzbefehl-Beta teilen
+# sich zwei Strecken dasselbe Protokoll, und beim Einrichten eines Kurzbefehls
+# entstehen in kurzer Zeit viele Testaufrufe -- mit 200 waeren dabei die
+# Eintraege der produktiven Auto-Health-Export-Strecke verdraengt worden, also
+# genau die, die man zum Vergleich braucht. Wird die Grenze trotzdem erreicht,
+# sagt das die Antwort des Ingests und der Beta-Reiter ausdruecklich, statt die
+# aeltesten Eintraege still zu verschlucken (siehe ``import_log_status``).
+HEALTH_IMPORT_LOG_KEEP = int(os.getenv("HEALTH_IMPORT_LOG_KEEP") or 1000)
 HEALTH_IMPORT_LOG_MAX_BYTES = int(os.getenv("HEALTH_IMPORT_LOG_MAX_BYTES") or 5 * 1024 * 1024)
 
 
@@ -467,6 +474,39 @@ async def list_import_log(limit: Optional[int] = 50, kind: Optional[str] = None,
                 d["stats"] = None
         out.append(d)
     return out
+
+
+async def import_log_status(db, user_id: int) -> dict:
+    """Wie voll ist das Import-Protokoll?
+
+    Das Protokoll ist eine Ringpuffer-artige Tabelle: ist ``HEALTH_IMPORT_LOG_KEEP``
+    erreicht, verdraengt jeder neue Aufruf den aeltesten. Das ist gewollt, darf
+    aber nicht unbemerkt passieren -- sonst sucht man spaeter den Roh-Payload
+    eines Aufrufs, den die Aufbewahrung laengst weggeworfen hat. Der Ingest
+    haengt das Ergebnis an seine Antwort, der Beta-Reiter zeigt es an.
+    """
+    row = await db.fetchrow(
+        "SELECT COUNT(*) AS n, MIN(created_at) AS oldest "
+        "FROM health_import_log WHERE user_id=$1", user_id)
+    n = int(row["n"] or 0) if row else 0
+    keep = HEALTH_IMPORT_LOG_KEEP
+    return {
+        "count": n,
+        "keep": keep,
+        "at_limit": n >= keep,
+        # Vorwarnung ab 90 %, damit man die Grenze anheben kann, BEVOR der erste
+        # Eintrag verloren geht.
+        "near_limit": n >= int(keep * 0.9),
+        "oldest": row["oldest"].isoformat() if row and row["oldest"] else None,
+    }
+
+
+@router.get("/api/health/imports/status")
+async def get_import_log_status(db=Depends(get_db), user=Depends(get_current_user)):
+    """Fuellstand des Import-Protokolls (v1.47.0). Beide Strecken -- Auto Health
+    Export und Kurzbefehl -- teilen sich diese Tabelle und damit die
+    Aufbewahrungsgrenze."""
+    return await import_log_status(db, user["id"])
 
 
 def _import_log_filename(row) -> str:

@@ -28,6 +28,12 @@ Akzeptierte Body-Formate (siehe ``extract_points``):
   5. Textzeilen  "2026-09-05;steps;8421;count" (Trenner ; , oder Tab)
   6. Zweispaltig "2026-09-05;8421" zusammen mit ``?metric=steps`` an der URL --
      die kleinstmoegliche erste Version im Kurzbefehl.
+  7. CSV mit Kopfzeile, in drei Auspraegungen (Spaltenreihenfolge egal):
+       Datum;Metrik;Wert[;Einheit]        -- lang, eine Zeile je Messpunkt
+       Datum;Wert                         -- schmal, Metrik aus ?metric=...
+       Datum;Schritte;Aktive Energie      -- breit, eine Spalte je Metrik
+     Eine Einheit darf in der Spaltenueberschrift stehen ("Schritte (count)"),
+     so wie Auto Health Export seine Tages-CSV beschriftet.
 """
 from __future__ import annotations
 
@@ -373,9 +379,122 @@ def _split_line(line: str) -> list[str]:
     return [line.strip()]
 
 
-def _points_from_text(text: str, default_metric: Optional[str]) -> tuple[list[dict], list[dict]]:
+# ---------------------------------------------------------------------------
+# CSV mit Kopfzeile
+# ---------------------------------------------------------------------------
+# Spaltennamen, an denen eine Kopfzeile erkannt und ausgewertet wird. Deutsch
+# und englisch, weil unklar ist, in welcher Sprache Kurzbefehle die Spalten
+# benennt -- und weil dieselbe Datei auch aus einem Auto-Health-Export-Ordner
+# stammen koennte.
+_HEADER_DATE_NAMES = ("date", "day", "datum", "tag", "zeit", "time", "timestamp",
+                      "zeitstempel", "start", "recorded_at", "sample_date", "start_date")
+_HEADER_METRIC_NAMES = ("metric", "metrik", "name", "key", "type", "typ", "kennzahl")
+_HEADER_VALUE_NAMES = ("value", "wert", "qty", "quantity", "amount", "sum", "summe",
+                       "menge", "anzahl")
+_HEADER_UNIT_NAMES = ("unit", "units", "einheit")
+
+# "Schritte (count)" -> Name "Schritte", Einheit "count". Genau so beschriftet
+# Auto Health Export seine Tages-CSV.
+_UNIT_IN_HEADER = re.compile(r"^(.*?)\s*[\(\[]([^)\]]{1,20})[\)\]]$")
+
+
+def _clean_header(cell: str) -> tuple[str, Optional[str]]:
+    name = cell.strip().strip('"').strip()
+    m = _UNIT_IN_HEADER.match(name)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    return name, None
+
+
+def _looks_like_header(parts: list[str]) -> bool:
+    """Ist die erste Zeile eine Kopfzeile oder schon Daten?
+
+    Entscheidend ist die erste Zelle: laesst sie sich als Datum lesen, ist es
+    eine Datenzeile. Sonst muss mindestens eine Spalte einen bekannten
+    Spaltennamen oder einen bekannten Metriknamen tragen -- eine Zeile aus
+    lauter Unbekanntem wird NICHT als Kopfzeile weginterpretiert, sondern
+    laeuft in die positionsbasierte Auswertung und faellt dort mit einem
+    benannten Grund auf.
+    """
+    if len(parts) < 2:
+        return False
+    if parse_when(parts[0].strip().strip('"'), timezone.utc)[0] is not None:
+        return False
+    names = [_clean_header(p)[0].lower() for p in parts]
+    known = (set(_HEADER_DATE_NAMES) | set(_HEADER_METRIC_NAMES)
+             | set(_HEADER_VALUE_NAMES) | set(_HEADER_UNIT_NAMES))
+    if any(n in known for n in names):
+        return True
+    return any(normalize_metric_key(n) in _ALIAS_TO_KEY for n in names[1:])
+
+
+def _points_from_csv(header_parts: list[str], rows: list[tuple[str, list[str]]],
+                     default_metric: Optional[str]) -> tuple[list[dict], list[dict]]:
+    """Wertet eine CSV mit Kopfzeile aus. Drei Auspraegungen:
+
+      lang    Datum;Metrik;Wert[;Einheit]     -- eine Zeile je Messpunkt
+      schmal  Datum;Wert                      -- Metrik kommt aus ?metric=...
+      breit   Datum;Schritte;Aktive Energie   -- eine Spalte je Metrik
+
+    Welche es ist, entscheiden die vorhandenen Spaltennamen -- die Reihenfolge
+    der Spalten ist egal.
+    """
+    cols = [_clean_header(p) for p in header_parts]
+    names = [c[0].lower() for c in cols]
+
+    def find(candidates):
+        for i, n in enumerate(names):
+            if n in candidates:
+                return i
+        return None
+
+    i_date = find(_HEADER_DATE_NAMES)
+    i_metric = find(_HEADER_METRIC_NAMES)
+    i_value = find(_HEADER_VALUE_NAMES)
+    i_unit = find(_HEADER_UNIT_NAMES)
+    if i_date is None:
+        i_date = 0      # unbenannte erste Spalte ist das Datum
+
     points: list[dict] = []
     skipped: list[dict] = []
+    for line, parts in rows:
+        if i_date >= len(parts):
+            skipped.append({"reason": "bad_line", "raw": line[:200]})
+            continue
+        day = parts[i_date]
+
+        if i_value is not None:
+            p = {"date": day, "__line": line,
+                 "value": parts[i_value] if i_value < len(parts) else None}
+            if i_metric is not None:
+                p["metric"] = parts[i_metric] if i_metric < len(parts) else default_metric
+            else:
+                p["metric"] = default_metric
+            unit = cols[i_value][1]
+            if i_unit is not None and i_unit < len(parts) and parts[i_unit].strip():
+                unit = parts[i_unit].strip()
+            if unit:
+                p["unit"] = unit
+            points.append(p)
+            continue
+
+        # Breites Format: jede Spalte ausser der Datumsspalte ist eine Metrik.
+        for idx, (name, unit) in enumerate(cols):
+            if idx == i_date or idx >= len(parts):
+                continue
+            cell = parts[idx].strip()
+            if not cell:
+                continue        # Tag ohne Wert in dieser Spalte -- kein Fehler
+            p = {"date": day, "metric": name or default_metric, "value": cell,
+                 "__line": line}
+            if unit:
+                p["unit"] = unit
+            points.append(p)
+    return points, skipped
+
+
+def _points_from_text(text: str, default_metric: Optional[str]) -> tuple[str, list[dict], list[dict]]:
+    rows: list[tuple[str, list[str]]] = []
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -383,6 +502,18 @@ def _points_from_text(text: str, default_metric: Optional[str]) -> tuple[list[di
         parts = _split_line(line)
         while parts and parts[-1] == "":
             parts.pop()
+        rows.append((line, parts))
+    if not rows:
+        return "text", [], []
+
+    head_line, head_parts = rows[0]
+    if _looks_like_header(head_parts):
+        points, skipped = _points_from_csv(head_parts, rows[1:], default_metric)
+        return "csv", points, skipped
+
+    points = []
+    skipped = []
+    for line, parts in rows:
         if len(parts) >= 4:
             points.append({"date": parts[0], "metric": parts[1], "value": parts[2],
                            "unit": parts[3], "__line": line})
@@ -395,7 +526,7 @@ def _points_from_text(text: str, default_metric: Optional[str]) -> tuple[list[di
                            "metric": default_metric, "__line": line})
         else:
             skipped.append({"reason": "bad_line", "raw": line[:200]})
-    return points, skipped
+    return "text", points, skipped
 
 
 def extract_points(raw: bytes, content_type: str = "",
@@ -441,10 +572,10 @@ def extract_points(raw: bytes, content_type: str = "",
             return "unreadable", [], [{"reason": "no_points_in_json", "raw": text[:200]}]
         return "unreadable", [], [{"reason": "bad_json", "raw": text[:200]}]
 
-    points, skipped = _points_from_text(text, default_metric)
+    fmt, points, skipped = _points_from_text(text, default_metric)
     if not points and not skipped:
         return "unreadable", [], [{"reason": "empty_after_parse", "raw": text[:200]}]
-    return "text", points, skipped
+    return fmt, points, skipped
 
 
 # ---------------------------------------------------------------------------
