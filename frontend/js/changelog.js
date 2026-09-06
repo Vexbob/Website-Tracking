@@ -4,6 +4,10 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.50.1', date: '2026-09-06', title: 'Schlaf: Streuung von Zubettgeh- und Aufstehzeit in Stunden', notes: [
+        'Die Standardabweichung neben der typischen Zubettgeh- und Aufstehzeit steht jetzt in Stunden statt in Minuten — „± 1,3 h" statt „± 78 min". Die Größenordnung passt damit zur Aussage: eine Streuung von über einer Stunde ist der Normalfall, und die Minutenzahl hat eine Genauigkeit vorgetäuscht, die in der Zahl nicht steckt. Auch die Streuung der Zeit im Bett ist jetzt in derselben Einheit wie der Wert daneben.',
+        'Gerechnet wird unverändert: Standardabweichung der Stichprobe auf den 18:00-Offsets, damit 23:30 und 00:30 nicht die Mittagszeit als Mittelwert ergeben. Der Hinweis „stark schwankend" erscheint weiterhin ab zwei Stunden Streuung.',
+    ]},
     { v: 'v1.50.0', date: '2026-09-06', title: 'Workouts: beide Exportvarianten werden zu einem Training zusammengeführt', notes: [
         'Auto Health Export liefert dasselbe Workout je nach Einstellung in zwei Ausprägungen, und keine davon ist vollständig: die eine bringt Ø-, Max- und Min-Puls samt Minutenreihe, activeEnergyBurned, Aufstieg und Bahnlänge — die andere Gesamtenergie, Schwimmzüge, Schwimm- und Schrittkadenz, Schritte, Etagen und Auf-/Abstieg, hat dafür aber alle Pulsfelder auf 0 und leere Puls-Arrays. Beide tragen dieselbe Startzeit, aber eine eigene zufällige ID.',
         'Weil bisher die App-ID die Identität war, landete jedes Training doppelt in der Datenbank: einmal ohne Puls, einmal ohne Zusatzmetriken — zwei halbe Karten in der Liste. Zugeordnet wird jetzt über Nutzer, Typ und Startzeit (Fenster von zwei Minuten); beide Exporte füllen dieselbe Zeile. Beim Zusammenführen gewinnt immer der belegte Wert: eine fehlende Größe kommt als 0 oder leeres Array an und überschreibt nie einen bereits importierten Wert. Die Reihenfolge der beiden Exporte ist damit egal.',

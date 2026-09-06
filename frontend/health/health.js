@@ -1049,10 +1049,12 @@ async function loadSleepChart() {
 // Innerhalb des 18:00-Fensters sind die Werte linear, Mittelwert und
 // Standardabweichung sind dort also unproblematisch.
 //
-// Streuung = Standardabweichung der Stichprobe (n-1), in Minuten. Sie ist die
-// eigentliche Aussage: Ein Mittelwert aus einem Nachtschlaf und einem
-// Tagschlaf ist fuer sich genommen wenig wert, die grosse Streuung daneben
-// macht genau das sichtbar.
+// Streuung = Standardabweichung der Stichprobe (n-1), ausgewiesen in Stunden
+// (v1.50.1). Sie ist die eigentliche Aussage: Ein Mittelwert aus einem
+// Nachtschlaf und einem Tagschlaf ist fuer sich genommen wenig wert, die
+// grosse Streuung daneben macht genau das sichtbar. Stunden passen dabei zur
+// Groessenordnung -- eine typische Streuung liegt bei ein bis zwei Stunden,
+// als Minutenzahl (78 min) liest sich das genauer als es ist.
 function meanAndSd(values) {
     const arr = values.filter(v => Number.isFinite(v));
     if (!arr.length) return null;
@@ -1071,20 +1073,21 @@ function renderSleepRhythm(windows) {
     const bed = meanAndSd(valid.map(w => w[0]));
     const wake = meanAndSd(valid.map(w => w[1]));
     const span = meanAndSd(valid.map(w => w[1] - w[0]));
+    // Die Offsets sind bereits Stunden -- die Standardabweichung damit auch.
     const spread = (st) => st && st.sd != null
-        ? `<small>± ${fmt0(st.sd * 60)} min</small>` : '';
+        ? `<small>± ${fmt1(st.sd)} h</small>` : '';
     const items = [
         { lbl: '🌙 Zubettgehen', val: sleepOffsetToClock(bed.mean), st: bed },
         { lbl: '☀️ Aufstehen',   val: sleepOffsetToClock(wake.mean), st: wake },
-        { lbl: '🛏️ Zeit im Bett', val: fmt1(span.mean) + ' h', st: span, minutes: true },
+        { lbl: '🛏️ Zeit im Bett', val: fmt1(span.mean) + ' h', st: span },
     ];
     // Bei einer Streuung von mehreren Stunden liegt der Mittelwert womoeglich
     // in einer Zeit, zu der nie jemand ins Bett geht (Nacht- und Tagschlaf
     // gemischt). Das dazuzuschreiben ist ehrlicher, als die Zahl fuer sich
     // stehen zu lassen.
-    const WOBBLY_MIN = 120;
+    const WOBBLY_H = 2;
     box.innerHTML = items.map(i => {
-        const wobbly = i.st && i.st.sd != null && i.st.sd * 60 > WOBBLY_MIN;
+        const wobbly = i.st && i.st.sd != null && i.st.sd > WOBBLY_H;
         const sub = `Ø aus ${valid.length === 1 ? '1 Nacht' : valid.length + ' Nächten'}`
             + (wobbly ? ' · stark schwankend' : '');
         return `
