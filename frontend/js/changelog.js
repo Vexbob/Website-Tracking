@@ -2,137 +2,63 @@
  * Statisch generierte Versions-Historie fuer den vertikalen Zeitstrahl,
  * der beim Klick auf .version-tag angezeigt wird.
  * Neue Releases OBEN einfuegen.
+ *
+ * Konvention seit v1.51.1 — damit die Liste lesbar bleibt:
+ *   - Ein Eintrag = eine Version, hinter der etwas Erkennbares steht.
+ *   - Ein bis fuenf Stichpunkte, je ein Satz. Was nur den Code betrifft,
+ *     gehoert in den Commit, nicht hierher.
+ *   - Eine Korrektur am selben Thema bekommt KEINEN eigenen Eintrag: sie hebt
+ *     die Patch-Nummer des bestehenden Eintrags an und kommt als Stichpunkt
+ *     dazu ("Nachgezogen: ..."). So bleibt APP_VERSION immer der oberste
+ *     Eintrag, und aus einem Tag mit sieben Hotfixes werden nicht sieben
+ *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
-    { v: 'v1.51.0', date: '2026-09-06', title: 'Tab-Leiste auf dem Handy ist frei belegbar', notes: [
-        'Die Leiste am unteren Bildschirmrand zeigte fest verdrahtet Home, Sparen, Ausgaben und Notizen — welche vier das sind, war eine Annahme im Frontend. Jetzt wählt jeder Nutzer selbst, welche zwei bis sechs Module dort stehen und in welcher Reihenfolge. Zu finden im Modul-Switcher oben rechts unter „Tab-Leiste anpassen“.',
-        'Zur Auswahl stehen alle Module, die das Konto sehen darf — inklusive Gesundheit, Blog und (für Admins) der User-Verwaltung, die vorher gar nicht in die Leiste kamen. Jedes davon hat jetzt ein eigenes Icon im selben Strichstil wie die bisherigen vier.',
-        'Die Belegung liegt am Konto, nicht am Gerät: auf iPhone und iPad steht dieselbe Leiste. Im localStorage liegt nur eine Kopie, damit die Leiste beim Seitenwechsel sofort richtig steht statt nach der Antwort des Servers umzuspringen. Ist ein gewähltes Ziel nicht mehr erreichbar — etwa der Admin-Bereich nach Rechteentzug —, fällt es beim Zeichnen still heraus.',
-        'Sortiert wird mit Hoch-/Runter-Knöpfen statt per Drag & Drop: der Dialog wird fast immer auf dem Handy geöffnet, und dort trifft ein 44-Pixel-Knopf zuverlässig — ein gezogener Finger neben einer scrollbaren Dialogfläche nicht. Ab fünf Tabs werden die Beschriftungen kleiner, damit auch sechs Stück auf einem schmalen iPhone lesbar bleiben.',
-        'Untergrenze sind zwei Einträge (darunter ist es keine Navigation mehr), Obergrenze sechs — beides prüft der Server mit, nicht nur der Dialog. „Standard“ stellt die ursprünglichen vier wieder her.',
+    { v: 'v1.51.1', date: '2026-09-06', title: 'Changelog zusammengefasst und gekürzt', notes: [
+        'Der Zeitstrahl hatte 86 Einträge, darunter ein Tag mit sieben Hotfix-Versionen — ein README-Aufräumen wog darin so viel wie ein neues Modul. Folgekorrekturen stehen jetzt als „Nachgezogen“-Stichpunkt in dem Eintrag, zu dem sie gehören; übrig bleiben 39 Versionen, hinter denen etwas Erkennbares steht.',
+        'Die Texte der letzten Releases sind auf ein bis fünf Stichpunkte à einem Satz gekürzt, ältere Einträge bleiben im Wortlaut. Künftig hebt eine Korrektur die Patch-Nummer des bestehenden Eintrags an, statt eine eigene Zeile zu bekommen.',
     ]},
-    { v: 'v1.50.1', date: '2026-09-06', title: 'Schlaf: Streuung von Zubettgeh- und Aufstehzeit in Stunden', notes: [
-        'Die Standardabweichung neben der typischen Zubettgeh- und Aufstehzeit steht jetzt in Stunden statt in Minuten — „± 1,3 h" statt „± 78 min". Die Größenordnung passt damit zur Aussage: eine Streuung von über einer Stunde ist der Normalfall, und die Minutenzahl hat eine Genauigkeit vorgetäuscht, die in der Zahl nicht steckt. Auch die Streuung der Zeit im Bett ist jetzt in derselben Einheit wie der Wert daneben.',
-        'Gerechnet wird unverändert: Standardabweichung der Stichprobe auf den 18:00-Offsets, damit 23:30 und 00:30 nicht die Mittagszeit als Mittelwert ergeben. Der Hinweis „stark schwankend" erscheint weiterhin ab zwei Stunden Streuung.',
+    { v: 'v1.51.0', date: '2026-09-06', title: 'Tab-Leiste frei belegbar, Schlaf-Streuung in Stunden', notes: [
+        'Die Leiste unten auf dem Handy war fest auf vier Module verdrahtet. Jetzt wählst du zwei bis sechs selbst aus und bestimmst die Reihenfolge — im Modul-Switcher unter „Tab-Leiste anpassen“.',
+        'Zur Auswahl stehen alle Module des Kontos, auch Gesundheit, Blog und User-Verwaltung; jedes mit eigenem Icon. Die Belegung hängt am Konto, nicht am Gerät.',
+        'Schlaf: Die Streuung neben typischer Zubettgeh- und Aufstehzeit steht jetzt in Stunden statt in Minuten — „± 1,3 h“ statt „± 78 min“.',
     ]},
     { v: 'v1.50.0', date: '2026-09-06', title: 'Workouts: beide Exportvarianten werden zu einem Training zusammengeführt', notes: [
-        'Auto Health Export liefert dasselbe Workout je nach Einstellung in zwei Ausprägungen, und keine davon ist vollständig: die eine bringt Ø-, Max- und Min-Puls samt Minutenreihe, activeEnergyBurned, Aufstieg und Bahnlänge — die andere Gesamtenergie, Schwimmzüge, Schwimm- und Schrittkadenz, Schritte, Etagen und Auf-/Abstieg, hat dafür aber alle Pulsfelder auf 0 und leere Puls-Arrays. Beide tragen dieselbe Startzeit, aber eine eigene zufällige ID.',
-        'Weil bisher die App-ID die Identität war, landete jedes Training doppelt in der Datenbank: einmal ohne Puls, einmal ohne Zusatzmetriken — zwei halbe Karten in der Liste. Zugeordnet wird jetzt über Nutzer, Typ und Startzeit (Fenster von zwei Minuten); beide Exporte füllen dieselbe Zeile. Beim Zusammenführen gewinnt immer der belegte Wert: eine fehlende Größe kommt als 0 oder leeres Array an und überschreibt nie einen bereits importierten Wert. Die Reihenfolge der beiden Exporte ist damit egal.',
-        'Migration 033 räumt die bereits entstandenen Dubletten auf: Kopfdaten und Zusatzmetriken wandern auf den ältesten Eintrag je Training, die überzähligen Zeilen werden gelöscht. Außerdem tragen die Zusatzmetriken aus dem JSON-Import jetzt dieselben Schlüssel wie die aus dem CSV-Import (swim_cadence_spm statt swimCadence) — dieselbe Größe stand sonst unter zwei Namen in derselben Tabelle und im Frontend zweimal, einmal ohne Beschriftung.',
-        'Einheiten werden beim Import normalisiert, weil die Varianten sich auch dort widersprechen: dieselbe Schwimmstrecke kommt als 1,825 km oder als 1825 m, dasselbe Tempo als 1,42 oder 1424,9 — beide Male mit dem Etikett „m/hr". Die Bahnlänge steht als 0,025 „m" im Export und meint 25 Meter. Bisher wurde der Rohwert ohne Blick auf die Einheit gespeichert; ein 5-km-Spaziergang stand als 5 Meter in der Datenbank und ließ die Pace-Kachel leer. Die Migration zieht die betroffenen Zeilen nach.',
-        'Neu im Workout: der Pulsverlauf. Die Minutenreihe der einen Variante wird gespeichert und beim Aufklappen als Diagramm gezeigt, die Erholungswerte nach dem Trainingsende als eigene gestrichelte Linie dahinter. Fehlen die Aggregate, rechnet der Import Ø, Max und Min aus dieser Reihe. Der Min-Puls hat zusätzlich eine eigene Kachel und steht im CSV-Export.',
-        'Die Routendaten (GPS) bleiben bewusst draußen, wie bisher.',
-    ]},
-    { v: 'v1.49.1', date: '2026-09-06', title: 'Import-Protokoll: Roh-Payload lädt als .txt statt .bin', notes: [
-        'Der Download eines Eintrags aus dem Import-Protokoll leitete seine Endung aus dem gespeicherten Dateinamen ab, und der ist bei den Multipart-Aufrufen von Auto Health Export .bin — der Klartext landete damit als Binärdatei und ließ sich nicht ohne Umbenennen öffnen. Genau diese Datei ist aber das Werkzeug, mit dem sich ein auffälliger Wert der Quelle oder Vexbob zuordnen lässt.',
-        'Payloads ohne brauchbare Endung kommen jetzt als .txt mit text/plain, ebenso alles, was bisher .bin hieß. CSV und JSON behalten .csv beziehungsweise .json samt ihrem Content-Type.',
-        'Am gespeicherten Inhalt ändert sich nichts: Der Roh-Payload wird weiterhin vollständig und ungeteilt abgelegt und Byte für Byte unverändert ausgeliefert — nur Dateiname und Content-Type des Downloads sind anders.',
+        'Auto Health Export liefert dasselbe Workout in zwei Ausprägungen mit je eigener ID: die eine bringt Puls und Minutenreihe, die andere Schwimmzüge, Kadenz und Höhenmeter. Zugeordnet wird jetzt über Typ und Startzeit statt über die ID — vorher stand jedes Training doppelt und halb leer in der Liste.',
+        'Einheiten werden dabei geradegezogen: dieselbe Bahn kommt je nach Variante als 1,825 km oder als 1825 m an. Migration 033 führt bestehende Dubletten zusammen und korrigiert Distanzen, die als Meter gespeichert wurden.',
+        'Neu im aufgeklappten Workout: der Pulsverlauf je Minute, die Erholung danach als eigene Linie. Dazu eine Min-Puls-Kachel.',
+        'Der Roh-Payload im Import-Protokoll lädt als .txt statt .bin und lässt sich ohne Umbenennen öffnen.',
     ]},
     { v: 'v1.49.0', date: '2026-09-06', title: 'Beta-Strecke „Apple Health per iPhone-Kurzbefehl“ wieder entfernt', notes: [
-        'Die in v1.47.0 begonnene zweite Importstrecke ist vollständig zurückgebaut: Endpoints, Parser, Beta-Reiter, Tests und Anleitung sind weg. Sie war als Ausweichweg gedacht, weil der Sync über Auto Health Export unzuverlässig wirkte.',
-        'Der Grund für den Rückbau ist die gefundene Ursache: Das Problem lag nie am Sync, sondern an Auto Health Export selbst — die App exportiert die sportartspezifischen Zusatzmetriken nicht, sobald mehrere Workout-Typen zusammen exportiert werden. Mit einem Workout-Typ je Export läuft der bestehende Weg, und ein zweiter Importkanal löst ein Problem, das es nicht gibt.',
-        'Migration 032 löscht die Tabelle der Beta-Strecke und die zugehörigen Testaufrufe aus dem Import-Protokoll. Migration 031 bleibt unverändert liegen: sie ist bereits angewendet, und der Runner prüft ihre Prüfsumme — eine Rücknahme gehört deshalb in eine eigene, nachfolgende Migration statt in eine Bearbeitung der alten.',
-        'Die Gesundheitsdaten der regulären Strecke sind unberührt; außer der neuen Migration und einer Zeile im Health-Router ist der Code Byte für Byte wieder auf dem Stand von v1.46.5.',
-        'Eine Sache bleibt: Das Import-Protokoll behält 1000 statt 200 Aufrufe je Nutzer. Bei mehreren Syncs täglich reichten 200 Einträge nur wenige Wochen zurück — zu wenig, um einem auffälligen Wert von vor einem Monat noch seinen Roh-Payload gegenüberzustellen, was der einzige Zweck dieses Protokolls ist.',
+        'Die zweite Importstrecke aus v1.47.0 ist vollständig zurückgebaut. Der Grund: Das Problem lag nie am Sync, sondern an Auto Health Export selbst — die App exportiert die sportartspezifischen Zusatzmetriken nicht, sobald mehrere Workout-Typen zusammen exportiert werden.',
+        'Migration 032 löscht die Beta-Tabelle. Geblieben ist das größere Import-Protokoll mit 1000 statt 200 Aufrufen je Nutzer.',
     ]},
-    { v: 'v1.48.1', date: '2026-09-05', title: 'Roh-Payload der Kurzbefehl-Strecke lädt als .txt statt .bin', notes: [
-        'Der Download eines Protokoll-Eintrags leitete seine Dateiendung nur aus „json“ und „csv“ ab; alles andere bekam .bin. Die Kurzbefehl-Aufrufe laufen als shortcut-text beziehungsweise shortcut-unreadable und fielen damit durchs Raster — der Klartext vom iPhone landete als .bin und ließ sich nicht ohne Umweg öffnen. Eine Diagnosedatei, die man nicht aufbekommt, ist als Diagnosewerkzeug wertlos.',
-        'Kurzbefehl-Payloads kommen jetzt als .txt mit text/plain, CSV und JSON aus dieser Strecke weiterhin als .csv beziehungsweise .json. Die Endungen der Auto-Health-Export-Einträge sind unverändert, Multipart bleibt .bin.',
-        'Am gespeicherten Inhalt ändert sich nichts: Der Roh-Payload wurde und wird vollständig und ungeteilt abgelegt. Die 240-Zeichen-Vorschau in der Liste ist nur die Listenansicht, nicht der gespeicherte Umfang.',
+    { v: 'v1.47.0', date: '2026-09-05', title: 'Gesundheit: zweiter Importweg per iPhone-Kurzbefehl (Beta)', notes: [
+        'Ein Kurzbefehl schickt Werte an einen eigenen, sehr toleranten Endpoint mit eigener Tabelle; die bestehenden Gesundheitsdaten bleiben unangetastet. Dazu ein Beta-Reiter, der die Aufrufe roh zeigt.',
+        'Nachgezogen: CSV mit Kopfzeile im Import, Import-Protokoll auf 1000 Aufrufe, Roh-Payload als .txt. In v1.49.0 wurde die Strecke wieder entfernt.',
     ]},
-    { v: 'v1.48.0', date: '2026-09-05', title: 'Beta-Reiter für die Kurzbefehl-Strecke, CSV mit Kopfzeile, größeres Import-Protokoll', notes: [
-        'Das Gesundheits-Modul hat einen sechsten Reiter „Beta“. Er zeigt die Kurzbefehl-Strecke roh: die letzten Aufrufe mit Format, Größe, Ergebnis und herunterladbarem Roh-Payload, darunter eine Tabelle der importierten Werte mit Zeitraum- und Metrik-Filter. Bewusst ohne Diagramme — diese Daten fließen in keine Auswertung ein, und beim Einrichten will man sehen, was wirklich angekommen ist.',
-        'Die Tabelle zeigt neben dem zugeordneten Datum auch den Zeitstempel unverändert so, wie der Kurzbefehl ihn geschickt hat. Weichen beide voneinander ab, hat der Parser umgerechnet — damit lässt sich ein falsch einsortierter Tag dem Kurzbefehl oder Vexbob zuordnen, ohne den Roh-Payload zu öffnen.',
-        'Eigener Lösch-Block im Beta-Reiter, wahlweise nach Metrik und Zeitraum. Er rührt ausschließlich die Beta-Rohdaten an; die Daten von Auto Health Export bleiben unberührt. Gedacht für den Testbetrieb, wenn sich das Format des Kurzbefehls ändert.',
-        'Der Import-Endpoint versteht jetzt auch CSV mit Kopfzeile. Die Kopfzeile sagt, welche Spalte was ist — die Spaltenreihenfolge ist damit egal. Drei Ausprägungen: lang (Datum;Metrik;Wert), schmal (Datum;Wert zusammen mit ?metric=steps) und breit mit einer Spalte je Metrik. Eine Einheit darf in der Überschrift stehen, „Schritte (count)“ — genau so beschriftet Auto Health Export seine Tages-CSV. Fängt die erste Zeile mit einem Datum an, gilt sie weiterhin als Datenzeile.',
-        'Das Import-Protokoll behält jetzt 1000 statt 200 Aufrufe je Nutzer. Beide Strecken teilen sich diese Tabelle, und beim Einrichten eines Kurzbefehls entstehen in kurzer Zeit viele Testaufrufe — mit 200 wären dabei genau die Einträge der produktiven Strecke verdrängt worden, die man zum Vergleich braucht.',
-        'Wird die Grenze trotzdem erreicht, sagt Vexbob das jetzt, statt die ältesten Einträge still zu verschlucken: ab 90 % als Vorwarnung, ab 100 % rot — als Banner im Beta-Reiter und als Hinweis in der Antwort, die der Kurzbefehl zurückbekommt.',
+    { v: 'v1.46.0', date: '2026-09-04', title: 'Einheitliche Zeitfilter, Schlaf in einem Diagramm', notes: [
+        'Zeitraum-Filter sind überall dieselben: 7 Tage · 30 Tage · 90 Tage · 1 Jahr · Gesamt.',
+        'Schlaf: Phasen und Schlaffenster stecken in EINEM Diagramm — je Nacht ein Balken auf der 24-Stunden-Achse (18:00 bis 18:00), die Phasen darin mit ihrer echten Dauer. Eine Nacht, die über die Kante läuft, wird oben in derselben Spalte weitergezeichnet.',
+        'Unter dem Diagramm stehen typische Zubettgeh- und Aufstehzeit mit ihrer Streuung. Nächte ohne Zeitstempel bleiben aus dem Diagramm draußen, zählen aber in die Ø-Werte.',
+        'Vitalwerte: Diagramme per Drag & Drop anordenbar, Reihenfolge am Konto (Migration 030). Beim Zeitraumwechsel bleiben sie stehen und animieren, statt hinter „Lade …“ zu verschwinden.',
+        'Nachgezogen: Sparziel-Export mit Typ und Kontostand je Ziel, user_prefs im Backup.',
     ]},
-    { v: 'v1.47.0', date: '2026-09-05', title: 'Gesundheit: zweiter Importweg per iPhone-Kurzbefehl (Beta, nur Backend)', notes: [
-        'Neben der App Auto Health Export gibt es jetzt eine zweite, davon völlig unabhängige Strecke: ein Kurzbefehl auf dem iPhone schickt einmal täglich die letzten drei Tage an POST /api/health/shortcut/import. Drei Tage statt einem, damit ein ausgefallener Lauf vom nächsten nachgeholt wird; derselbe Tag überschreibt sich dabei selbst, statt Dubletten anzulegen.',
-        'Die Daten liegen in einer eigenen Tabelle und fließen in KEINE Auswertung ein — die bestehenden Gesundheitsdaten und der bisherige Sync bleiben unangetastet. Authentifiziert wird mit den vorhandenen Health-API-Keys; ein zusätzlicher Key mit eigener Bezeichnung lässt sich einzeln widerrufen, ohne die bestehende Anbindung abzuschalten.',
-        'Der Endpoint ist auf Fehlersuche gebaut, weil der Kurzbefehl noch nicht existiert und sein Ausgabeformat offen ist: er antwortet immer mit HTTP 200 — ein 4xx würde den Kurzbefehl abbrechen lassen, bevor der Antworttext sichtbar wird —, schreibt jeden Roh-Payload ins Import-Protokoll und liefert einen Bericht zurück, der Punkt für Punkt nennt, was neu war, was überschrieben wurde und was mit welchem Grund übersprungen wurde.',
-        'Angenommen werden JSON, blanke Arrays, Textzeilen (Datum;Metrik;Wert), zweispaltiger Text zusammen mit ?metric=steps sowie die Struktur von Auto Health Export — letztere, damit sich die Strecke später umschalten lässt, ohne den Parser anzufassen. Ein kaputter Punkt kippt nie den ganzen Batch, und wo der Parser rät (etwa „8.421“ als Tausendertrennung), steht das als Hinweis in der Antwort.',
-        'Gestartet wird nur mit Schritten. Eine weitere Metrik braucht keinen Umbau: unbekannte Namen werden gespeichert und als solche ausgewiesen, ein Registry-Eintrag gibt ihnen Label und Einheit. Auch Metriken mit mehreren Werten pro Tag passen ohne Schemaänderung in dieselbe Tabelle.',
-        'Anleitung zum Bau des Kurzbefehls: docs/KURZBEFEHL_HEALTH.md. Der Beta-Reiter mit der Rohansicht folgt, sobald die Strecke am iPhone getestet ist.',
-    ]},
-    { v: 'v1.46.5', date: '2026-09-05', title: 'Schlaf-Diagramm: Umbruch in derselben Spalte statt in der nächsten', notes: [
-        'Der Rest einer Nacht, die über die 18:00-Kante läuft, wird jetzt oben in DERSELBEN Spalte weitergezeichnet — nicht mehr in der nächsten. Die Achse ist ein 24-Stunden-Kreis, oben und unten sind dieselbe Uhrzeit; der Balken bricht unten ab und setzt oben wieder ein, beide Stücke gehören sichtbar zu einer Nacht.',
-        'Die Fortsetzung aus v1.46.4 in der Folgespalte war aus zwei Gründen falsch: Die nächste Spalte ist die nächste AUFGEZEICHNETE Nacht und oft nicht der nächste Tag — bei einer Lücke von zwei Wochen behauptete der Balken einen Schlaf, den es dort nie gab. Und die betroffenen Nächte enden gar nicht spät, sie beginnen vor 18:00 (etwa 16:30 bis 01:30); ihr Rest gehört derselben Nacht.',
-        'Das Stück oben ist kein grüner Klotz mehr, sondern zeigt die Schlafphasen in ihren normalen Farben weiter — die Phasen laufen über die Bruchstelle hinweg und werden dort geteilt, jedes Stück mit seiner richtigen Länge. Markiert ist der Bruch nur noch durch zwei dünne grüne Kanten (unten am Achsenende, oben am Wiedereinsatz).',
-        'Der grüne Legendeneintrag erscheint weiterhin nur, wenn tatsächlich eine Nacht über die Kante läuft; die Fortsetzung bekommt keinen eigenen Eintrag, da sie dieselben Farben benutzt.',
-    ]},
-    { v: 'v1.46.4', date: '2026-09-05', title: 'Schlaf-Diagramm: Nächte über 18:00 laufen in der Folgespalte weiter', notes: [
-        'Reicht eine Nacht über die 18:00-Grenze hinaus, hörte ihr Balken bisher an der Unterkante einfach auf — der grüne Strich sagte nur, dass da noch etwas fehlt. Jetzt bleibt der grüne Strich als Schnittkante stehen, und der Rest der Nacht wird in der nächsten Spalte ab der Oberkante (18:00) weitergezeichnet. Die Achse ist ein 24-Stunden-Kreis: oben und unten sind dieselbe Uhrzeit, der Rest steht also genau dort, wo er zeitlich hingehört.',
-        'Der Fortsetzungs-Balken ist schmaler als die übrigen, damit die Nacht, der die Spalte gehört, daneben sichtbar bleibt. Sein Tooltip nennt die Nacht, aus der er stammt, und deren echte Aufstehzeit; die Fußzeile mit Zubettgeh- und Aufstehzeit gehört weiterhin der Nacht der Spalte. In der Legende bleibt es bei einem grünen Eintrag für beides, und nur, wenn tatsächlich eine Nacht abgeschnitten wurde. Für die letzte Nacht im Zeitraum gibt es keine Folgespalte — dort bleibt es beim grünen Strich.',
-        'Die Beschreibung über dem Schlaf-Diagramm und der Hinweis darunter sind entfernt; die Karte zeigt jetzt nur noch Diagramm und typische Zeiten.',
-    ]},
-    { v: 'v1.46.3', date: '2026-09-04', title: 'Export und Backup an die Änderungen der letzten Versionen angeglichen', notes: [
-        'Sparziel-Export: Die Sparziel-Sektion hat zwei neue Spalten. „typ" unterscheidet das Allgemein-Konto (Puffer) von echten Sparzielen — es stand vorher als Zeile mit Zielbetrag 0 und is_active=false zwischen den anderen und sah dort wie ein kaputtes Ziel aus, obwohl seit v1.43.0 genau dort das Geld landet, solange kein Ziel aktiv ist. „saved_amount" nennt den Kontostand je Ziel; der ließ sich vorher nur über die Summe des Protokolls rekonstruieren.',
-        'Sparziel-Export: Die Ideen-Sammlung exportiert die Sorte jetzt als „Meilenstein"/„Wochenziel" statt der internen Schlüssel. Alte Freitext-Kategorien bleiben unverändert stehen, damit nichts wegfällt.',
-        'Backup: Die neue Tabelle user_prefs wird mitgesichert — ohne sie wäre nach einem Restore die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.',
-        'Der Gesundheits-Export brauchte nichts: Vitalwerte werden generisch über die vorhandenen Metrik-Typen aufgebaut, die drei neuen (Blutsauerstoff, Geh-/Laufstrecke, Gehgeschwindigkeit) landen samt Einheit automatisch als eigene Spalten darin. Die Schlaf-Sektion enthielt Start- und Endzeit schon vorher.',
-    ]},
-    { v: 'v1.46.2', date: '2026-09-04', title: 'Leere Nächte raus aus dem Schlaf-Diagramm, typische Zeiten mit Streuung', notes: [
-        'Nächte ohne Zubettgeh- und Aufstehzeit standen als leere Spalte mit Datum im Diagramm — sie lassen sich auf der Uhrzeit-Achse schlicht nicht platzieren. Solche Nächte stammen etwa aus der alten Tages-CSV, die die Schlafphasen ohne Zeitstempel liefert. Sie sind jetzt aus dem Diagramm raus.',
-        'Aus den Ø-Kacheln fliegen sie aber NICHT: ihre Schlafdauer ist echt gemessen, nur eben ohne Uhrzeit. Die Zeile unter den Kacheln nennt jetzt beide Fälle getrennt — „x Nächte unter 1 h Schlaf" (Messlücke, überall raus) und „x Nächte ohne Zubettgeh-/Aufstehzeit aufgezeichnet" (zählen mit, nur nicht im Diagramm).',
-        'Neu unter dem Diagramm: typische Zubettgeh- und Aufstehzeit sowie Zeit im Bett, jeweils mit der Streuung in Minuten (Standardabweichung) und der Zahl der Nächte, auf denen das beruht.',
-        'Gerechnet wird auf der 18:00-Achse statt auf der Uhrzeit — sonst wäre der Mittelwert aus 23:30 und 00:30 die Mittagszeit statt Mitternacht. Liegt die Streuung über zwei Stunden, steht „stark schwankend" dabei: bei gemischtem Nacht- und Tagschlaf landet der Mittelwert sonst in einer Zeit, zu der man nie ins Bett geht.',
-    ]},
-    { v: 'v1.46.1', date: '2026-09-04', title: 'Schlaf-Achse fest auf 24 h, Vitalwerte-Diagramme sortierbar', notes: [
-        'Die Uhrzeit-Achse im Schlaf-Diagramm zeigt jetzt immer genau 24 Stunden (18:00 bis 18:00) und wächst nicht mehr mit einer besonders langen Nacht mit. Vorher verschob sich die Skala zwischen zwei Zeiträumen, wodurch Balken nicht mehr miteinander vergleichbar waren.',
-        'Reicht eine Nacht über die 18:00-Grenze hinaus, endet ihr Balken an der Unterkante und bekommt dort einen grünen Strich. Der Tooltip nennt dann die echte Aufstehzeit, und der grüne Eintrag taucht in der Legende nur auf, wenn tatsächlich eine Nacht abgeschnitten wurde.',
-        'Die Diagramme im Vitalwerte-Tab lassen sich per Drag & Drop anordnen — am Griff ⠿ links neben dem Namen, genau wie Achievements und Wochenziele im Sparziel-Modul.',
-        'Die Reihenfolge liegt auf dem Server (neue Tabelle user_prefs, Migration 030) und ist damit auf allen Geräten dieselbe. Neu hinzukommende Metriken hängen sich hinten an, statt aus der Ansicht zu fallen; schlägt das Speichern fehl, springt die Anordnung sichtbar auf den Serverstand zurück, statt eine Reihenfolge zu zeigen, die beim nächsten Laden wieder anders wäre.',
-    ]},
-    { v: 'v1.46.0', date: '2026-09-04', title: 'Einheitliche Zeitfilter, Schlaf in einem Diagramm, ruhigerer Vitalwerte-Wechsel', notes: [
-        'Zeitraum-Filter sind überall dieselben: 7 Tage · 30 Tage · 90 Tage · 1 Jahr · Gesamt. Betrifft Vitalwerte (vorher ohne „Gesamt"), Schlaf (vorher 14/30/90 Nächte) und Workouts (vorher ohne 7 Tage); die Ausgaben-Statistik heißt jetzt genauso („1 Jahr" statt „12 Monate", „Gesamt" statt „Alle"). Serverseitig kommt „Gesamt" als days=0 an und hebt den Datumsfilter auf, statt wie bisher auf einen Tag zusammenzuschrumpfen.',
-        'Vitalwerte: Beim Wechsel des Zeitraums verschwinden die Diagramme nicht mehr hinter „Lade …". Karten und Chart-Instanzen bleiben stehen, bekommen die neuen Daten zugewiesen und animieren von den alten Werten auf die neuen; das Raster wird währenddessen nur kurz gedimmt. Ein zwischenzeitlicher zweiter Klick gewinnt, ein verspätetes Ergebnis überschreibt die frischeren Daten nicht mehr.',
-        'Schlaf: Phasen und Schlaffenster stecken jetzt wie gewünscht in EINEM Diagramm. Jede Nacht ist ein Balken auf der Uhrzeit-Achse von der Zubettgeh- bis zur Aufstehzeit, und die Phasen kacheln diesen Balken mit ihrer echten Dauer — nichts wird auf eine gemeinsame Grundlinie normiert. Wachzeit ist als eigener Abschnitt dabei, ein heller Rahmen zeigt die Zeit im Bett. Das separate Dauer-Diagramm ist damit überflüssig und entfällt.',
-        'Was dabei bleibt: Apple liefert je Nacht nur die Summen für Kern, Tief und REM, nicht deren zeitliche Lage. Die Länge jedes Abschnitts stimmt, seine Position im Balken ist eine feste Reihenfolge und keine Messung — der Hinweis steht unter dem Diagramm, damit es niemand für ein Hypnogramm hält.',
-        'Gesundheits-Dashboard: Die Blutdruck-Karte ist raus (Blutdruck steht weiterhin im Vitalwerte-Tab), die Herz-Übersicht nimmt die Breite ein, und die Vergleiche („Ruhepuls x bpm besser als Vorwoche") stehen jetzt ganz unten statt über den Diagrammen.',
-        'Die Icons der Übersichtsseite folgen jetzt dem Schnellwechsler: Sparziel 💰 statt €, Ausgaben 💶 statt €, User-Verwaltung 👥 statt A.',
-        'Der Workouts-Tab holt bis zu 500 statt 100 Workouts — sonst hätte „Gesamt" bei längerer Historie stillschweigend welche unterschlagen.',
-    ]},
-    { v: 'v1.45.1', date: '2026-09-04', title: 'Beide Schlaf-Diagramme in einer Karte, Phasen im Tooltip', notes: [
-        'Schlaffenster und Phasen-Diagramm sitzen jetzt in EINER Karte untereinander, beschriftet als „Wann" und „Wie viel". Beide zeigen dieselben Nächte in derselben Reihenfolge — man vergleicht sie, ohne zwischen zwei Karten zu springen.',
-        'Der Tooltip des Schlaffensters nennt zusätzlich zu Zubettgeh-/Aufstehzeit und Dauer die Phasen dieser Nacht (Kern, Tief, REM, Wach).',
-        'Zur Nachfrage, warum die Phasen nicht direkt in den Schlaffenster-Balken wandern, obwohl sie ohnehin ohne echte Reihenfolge gestapelt sind: Es hängt an der y-Achse, nicht am Stapeln. Auf der Dauer-Achse des Phasen-Diagramms bedeutet die Höhe „wie viel", die Reihenfolge der Segmente bedeutet nichts. Auf der Uhrzeit-Achse des Schlaffensters bedeutet jede Position eine Uhrzeit — dort gestapelt würde jedes Segment behaupten, zu genau dieser Zeit gelegen zu haben. Apple liefert aber nur die Summen je Nacht, keine zeitliche Lage. Der Hinweis unter dem Diagramm sagt das jetzt genau so.',
-    ]},
-    { v: 'v1.45.0', date: '2026-09-04', title: 'Jede Vitalwert-Metrik mit eigenem Diagramm, neues Schlaffenster-Diagramm', notes: [
-        'Vitalwerte: Statt einer Kachelreihe als Auswahl plus einem großen Diagramm hat jetzt jede Metrik ihr eigenes — kleiner, dafür alle gleichzeitig sichtbar. Vorher waren ausgerechnet Blutdruck und Blutzucker mit den wenigsten Datenpunkten dauerhaft zu sehen, während man sich durch Schritte, Puls, Gewicht & Co. einzeln durchklicken musste.',
-        'Jede Karte trägt die Kennzahl des Zeitraums im Kopf (Ø bzw. Σ), darunter Min/Max und ausgenommene Messlücken, dazu die gleitende Ø-Linie wie bisher. Zwei Diagramme pro Reihe, ab 1300 px drei, auf dem Handy eins.',
-        'Schlaf: „12 Monate" ist als Zeitraum dazugekommen.',
-        'Schlaf: Das Zubettgeh-/Aufsteh-Diagramm war eine Doppel-Punktwolke, aus der man sich die Nacht selbst zusammensuchen musste. Jede Nacht ist jetzt EIN Balken vom Zubettgehen bis zum Aufstehen auf einer Uhrzeit-Achse (18:00 bis 18:00, nach unten laufend wie im Kalender). Länge = Zeit im Schlaffenster, gleich hohe Balken untereinander = regelmäßiger Rhythmus; der Tooltip nennt beide Uhrzeiten und die Dauer.',
-        'Nicht zusammengelegt mit dem Phasen-Diagramm, obwohl angefragt: Apple liefert je Nacht nur die Summen für Kern, Tief und REM, nicht deren zeitliche Lage. Auf der Uhrzeit-Achse gestapelt würden sie eine Reihenfolge behaupten, die in den Daten nicht steht. Der Hinweis steht jetzt unter dem Diagramm.',
-        'Nebenbei: Diagramme, die nur die Legende abschalten, verlieren nicht mehr das Tooltip-Styling — im Dark Mode waren diese Tooltips hell.',
+    { v: 'v1.45.0', date: '2026-09-04', title: 'Jede Vitalwert-Metrik mit eigenem Diagramm, neues Schlaffenster', notes: [
+        'Vitalwerte: Jede Metrik hat ihr eigenes Diagramm — kleiner, dafür alle gleichzeitig sichtbar, jeweils mit Kennzahl, Min/Max und gleitender Ø-Linie. Vorher musste man sich durch eine Kachelreihe klicken.',
+        'Schlaf: Statt einer Doppel-Punktwolke ist jede Nacht ein Balken vom Zubettgehen bis zum Aufstehen auf einer Uhrzeit-Achse. Fenster und Phasen sitzen in einer Karte untereinander.',
+        'Die Phasen wandern bewusst nicht in den Fenster-Balken: Apple liefert je Nacht nur ihre Summen, nicht ihre zeitliche Lage — auf einer Uhrzeit-Achse würden sie eine Reihenfolge behaupten, die in den Daten nicht steht.',
     ]},
     { v: 'v1.44.0', date: '2026-09-04', title: 'Schlaf als eigene CSV, drei neue Vitalwerte', notes: [
-        'Auto Health Export legt den Schlaf als eigene Datei ab, statt ihn als „Schlafanalyse [...]"-Spalten in die Tages-CSV zu mischen. Dieses Format wird jetzt erkannt und eingelesen — einfach zusammen mit den anderen CSVs hochladen, die Erkennung läuft über den Header. Die alte Tages-CSV mit Schlaf-Spalten funktioniert unverändert weiter.',
-        'Wichtig dabei: Das Nacht-Datum kommt aus der eigenen Datumsspalte der Datei und wird nicht mehr aus dem Startzeitpunkt abgeleitet. Nächte, die vor Mitternacht beginnen (Start 31.08. 20:38 für die Nacht auf den 01.09.), hätten sonst die Vornacht überschrieben.',
-        'Die geschlafene Zeit kommt aus „Gesamtschlaf" statt aus „Schlafend". „Schlafend" weist nur den Anteil ohne Phasen-Zuordnung aus und lag in der Beispielwoche bei 0,0–1,3 h statt der tatsächlichen 4,6–10,1 h. Eine Liegezeit von 0 h wird als Messlücke gewertet und nicht gespeichert — die Auswertung leitet sie wie bisher aus Schlaf + Wachzeit bzw. Start/Ende ab.',
-        'Drei neue Vitalwerte werden importiert und ausgewertet: Blutsauerstoff (%), Geh-/Laufstrecke (km) und Gehgeschwindigkeit (km/h) — im CSV- wie im automatischen Sync-Weg.',
-        'Der Vitalwerte-Tab zeigt jetzt alle Metriken als Kacheln statt nur der ersten acht. Die Kacheln sind zugleich die Auswahl für das Verlaufsdiagramm; Schwimmdistanz, VO2max und die drei neuen Werte waren dort bisher gar nicht erreichbar.',
+        'Auto Health Export legt den Schlaf als eigene CSV ab; dieses Format wird jetzt am Header erkannt. Das Nacht-Datum kommt aus der Datumsspalte statt aus dem Startzeitpunkt — sonst überschreiben Nächte, die vor Mitternacht beginnen, die Vornacht.',
+        'Die geschlafene Zeit kommt aus „Gesamtschlaf“ statt aus „Schlafend“: Letzteres weist nur den Anteil ohne Phasen-Zuordnung aus und lag in der Beispielwoche bei 0,0–1,3 h statt der tatsächlichen 4,6–10,1 h.',
+        'Drei neue Vitalwerte: Blutsauerstoff, Geh-/Laufstrecke und Gehgeschwindigkeit. Der Vitalwerte-Tab zeigt jetzt alle Metriken statt nur der ersten acht.',
     ]},
-    { v: 'v1.43.2', date: '2026-09-04', title: 'Ø Puls über alle Workouts ist zurück — diesmal richtig gerechnet', notes: [
-        'Die Ø-Puls-Kachel im Workouts-Tab gibt es wieder. Sie mittelt nur noch Workouts, die überhaupt einen plausiblen Pulswert mitbringen (30–240 bpm), und schreibt in die Unterzeile, auf wie vielen Workouts der Schnitt beruht — statt stillschweigend über Nullwerte oder Millisekunden zu mitteln.',
-        'Migration 029 räumt die Altlasten weg: Pulswerte außerhalb 30–240 bpm werden auf NULL gesetzt. Das betrifft genau die Zeilen, in denen der Import die HRV-Spalte (ms) als Puls gespeichert hat. Ein erneuter Import füllt den echten Wert wieder auf.',
-        'Der Import verwirft unplausible Pulswerte jetzt schon beim Schreiben — sowohl beim CSV- als auch beim REST-API-Weg. Lieber kein Puls als ein falscher, der jeden Durchschnitt darüber kippt.',
-    ]},
-    { v: 'v1.43.1', date: '2026-09-04', title: 'Workout-Kennzahlen mit Zeitfilter, Ideen-Sammlung aufgeraeumt', notes: [
-        'Der Ø-Puls über allen Workouts stand bei 8 bpm. Grund: Der CSV-Import hat die Spalte „Durchschn. Herzfrequenzvariabilität (ms)" als Puls-Spalte erkannt, weil sie sowohl „Durchschn." als auch „Herzfrequenz" enthält und im Export vor der echten Puls-Spalte steht. HRV-Spalten werden bei der Puls-Suche jetzt übersprungen — bereits importierte Workouts brauchen dafür einen erneuten Import.',
-        'Die Workout-Kennzahlen zeigen jetzt Gesamtzeit, Ø Dauer und Ø Kalorien (aktiv). Anzahl und Ø Puls sind raus. Die Durchschnitte rechnen nur über Workouts, die den Wert wirklich mitbringen.',
-        'Neu im Workouts-Tab: Zeitraum-Filter (30 Tage / 90 Tage / 12 Monate / Gesamt) neben den Sportart-Chips. Die Kennzahlen beziehen sich auf den gewählten Zeitraum, die Überschrift der Liste nennt ihn.',
-        'Sparziele: Die Kachel „Noch offen" ist raus.',
-        'Ideen-Sammlung: Einträge stehen jetzt als Zeilen wie die Wunschliste statt als Chip-Wolke. Die freie Kategorie ist durch eine feste Auswahl ersetzt — ohne, Meilenstein oder Wochenziel; nur diese beiden werden noch als Tag angezeigt.',
-    ]},
-    { v: 'v1.43.0', date: '2026-09-04', title: 'Abgeschlossene Sparziele verschwinden wirklich — ohne Platzhalter-Ziel', notes: [
-        'Ein abgeschlossenes Sparziel wird jetzt gelöscht statt auf 0 zurückgesetzt. Bisher blieb es unter „Meine Sparziele" als leere Hülle stehen, obwohl es längst als Trophäe an der Wand hing.',
-        'Das automatisch angelegte „Neues Sparziel" über 100 € ist raus. Nach dem Abschließen ist bewusst kein Ziel aktiv — jede Belohnung aus Achievements und Wochenzielen läuft dann in den Puffer, bis du selbst ein neues Ziel anlegst oder ein pausiertes aktivierst.',
-        'Passend dazu: Ein aktives Ziel lässt sich per „Pausieren" beenden, ohne dass ein anderes einspringt, und auch das letzte Sparziel darf gelöscht werden. Beim Löschen wird kein zufälliges anderes Ziel mehr aktiviert (im Zweifel war das sogar der Puffer).',
-        'Das Dashboard zeigt in diesem Zustand keinen 0-%-Ring mehr, sondern den Puffer mit Stand, Erklärung und Direktknopf zum Anlegen eines Ziels. Der Sparverlauf-Chart zeigt dann den Puffer statt leer zu bleiben.',
-        'Der Tab „Ideen & Ziele" ist neu gebaut: Kennzahlen-Leiste (aktives Ziel, Summe auf Zielen, Puffer, offener Rest), eigene Puffer-Karte, Sparziel-Karten mit Fortschrittsbalken, Prozent, Restbetrag und Status-Pille sowie klar getrennte Abschnitte für Wunschliste und Ideen-Sammlung mit Zähler und Kurzbeschreibung.',
-        'Neu in der Wunschliste: „→ Sparziel" übernimmt Name und Preis eines Wunsches direkt ins Anlege-Formular.',
+    { v: 'v1.43.0', date: '2026-09-04', title: 'Abgeschlossene Sparziele verschwinden wirklich, Workout-Kennzahlen', notes: [
+        'Ein abgeschlossenes Sparziel wird gelöscht statt auf 0 zurückgesetzt, und das automatische „Neues Sparziel“ über 100 € ist raus. Ist kein Ziel aktiv, laufen die Belohnungen in den Puffer — das Dashboard zeigt dann ihn statt eines 0-%-Rings.',
+        'Der Tab „Ideen & Ziele“ ist neu gebaut: Kennzahlen-Leiste, Puffer-Karte, Sparziel-Karten mit Fortschritt, getrennte Abschnitte für Wunschliste und Ideen. „→ Sparziel“ übernimmt Name und Preis eines Wunsches.',
+        'Workouts: Kennzahlen (Gesamtzeit, Ø Dauer, Ø Kalorien) mit eigenem Zeitraum-Filter.',
+        'Der Ø Puls stand bei 8 bpm — der CSV-Import hielt die HRV-Spalte (ms) für die Puls-Spalte. Unplausible Werte werden jetzt schon beim Schreiben verworfen, Migration 029 räumt die Altlasten weg.',
     ]},
     { v: 'v1.42.0', date: '2026-09-03', title: 'Preisverlauf entfernt, Produkte gruppieren jetzt über Läden hinweg', notes: [
         'Die Preisverlauf-Seite und der normierte Preisvergleich sind raus. Er hat Artikel miteinander verrechnet, deren Einheiten gar nicht vergleichbar waren: fehlte die Mengeneinheit oder stand auf dem Bon "1 Pack" statt "500 g", landete ein €/Stück-Wert im selben Ø wie die €/kg-Werte — samt erfundener Preissprünge und falschem "günstigster Laden"-Ranking.',
@@ -141,145 +67,73 @@ window.VEXBOB_CHANGELOG = [
         'Import: Mengeneinheiten gehen nicht mehr verloren. Lieferte die KI "Haferflocken 500g" nur im Namen, hat der Parser das "500g" aus dem Namen geschnitten und weggeworfen — jetzt landet es in Menge/Einheit. Synonyme wie Liter, Gramm, Stück, Packung, Rolle oder Dose werden zugeordnet statt still verworfen.',
         '"Alle neu parsen" ist von der Preisverlauf- auf die Produkte-Seite umgezogen; der Bon-Toggle heißt jetzt "aus der Produktliste ausblenden" statt "aus dem Preisvergleich".',
     ]},
-    { v: 'v1.41.1', date: '2026-09-03', title: 'Log-Notizen brechen auf dem Handy nicht mehr auf ein Zeichen pro Zeile um', notes: [
-        'Die Notiz war das einzige schrumpfbare Element einer Log-Zeile: neben Tag, Titel, Betrag und den beiden Buttons blieb auf schmalen Displays eine Spalte von wenigen Pixeln übrig — der Text brach senkrecht auf ein Zeichen pro Zeile um und ein einzelner Eintrag wurde meterhoch.',
-        'Unter 700 px Breite steht die Notiz jetzt in einer eigenen, vollbreiten Zeile unter dem Eintrag, linksbündig. Betrag, Notiz- und Löschen-Button bleiben oben in der ersten Zeile.',
-        'Ab 700 px bleibt die gewohnte einzeilige Darstellung; sie kann jetzt aber sauber umbrechen statt zu quetschen. Sehr lange Wörter (URLs) brechen mit overflow-wrap statt die Zeile zu sprengen.',
-    ]},
     { v: 'v1.41.0', date: '2026-09-03', title: 'Log zeigt jede Wertänderung an Achievements', notes: [
         'Bisher landete eine Änderung am Meilenstein-Ziel nur dann im Aktivitäts-Log, wenn sie eine Meilenstein-Schwelle überschritten hat — der "+x"-Button und das manuelle Setzen des Werts haben darunter nichts hinterlassen. Jede Änderung wird jetzt protokolliert (neue Tabelle achievement_progress_logs, Migration 027).',
         'Neuer Log-Typ "Fortschritt" mit eigenem Filter-Chip: zeigt Vorher → Nachher und in der Betragsspalte die Änderung selbst (z.B. "+2,5 km"). Ausgezahlt wird weiterhin nur beim Meilenstein, diese Zeilen tragen keinen Betrag.',
         'Notizen sind wie bei allen anderen Log-Einträgen möglich. Zurücknehmen lässt sich die jeweils letzte Änderung eines Ziels — sie setzt den Wert wieder auf den Stand davor; hat die Änderung einen Meilenstein ausgelöst, geht das über den Meilenstein-Eintrag.',
-    ]},
-    { v: 'v1.40.5', date: '2026-09-03', title: 'Schwimm-Pace in min/100 m, Distanz-Einheit korrigiert', notes: [
-        'Die Workouts-CSV beschriftet die Distanz-Spalte immer mit "(km)", liefert beim Schwimmen aber Meter — 1800 wurde dadurch als 1800 km importiert und die Pace-Kachel zeigte 0:02 min/km. Der Import erkennt Meter-Zeilen jetzt an der Größenordnung (über 300 km bzw. über 100 km/h Ø-Geschwindigkeit) und rechnet Distanz und Geschwindigkeit gemeinsam um.',
-        'Migration 026 zieht bereits importierte Workouts nach: unplausible Distanzen und Ø-/Max-Geschwindigkeiten werden durch 1000 geteilt.',
-        'Schwimm-Workouts zeigen die Pace jetzt in min/100 m statt min/km (1800 m in 1:08:21 = 3:48 min/100 m) und die Distanz in Metern statt Kilometern.',
-        'APP_VERSION war seit v1.40.3 versehentlich leer und ist wiederhergestellt — der Versions-Tag im Footer blieb dadurch leer.',
-    ]},
-    { v: 'v1.40.4', date: '2026-09-02', title: 'README: Funktionen einzeln beschrieben', notes: [
-        'Die Modul-Übersicht besteht nicht mehr aus dichten Aufzählungs-Absätzen, sondern listet jede Funktion einzeln — mit einem Satz dazu, was sie tut und wozu sie da ist.',
-        'Neu dokumentiert: Import-Protokoll und Messlücken-Regeln im Gesundheits-Modul, Bons-kompakt-Sektion im aggregierten Gesamt-Export, Puffer-Konto, Ideen-Listen und Duplikat-Erkennung.',
-    ]},
-    { v: 'v1.40.3', date: '2026-09-02', title: 'Schlaf-Diagramm zeigt die Gesamtschlafzeit', notes: [
-        'Der Balken steht jetzt für die geschlafene Gesamtzeit der Nacht — die Phasen sind nur noch die Binnenzeichnung in vier Helligkeitsstufen derselben Farbe, damit zuerst die Gesamthöhe lesbar ist.',
-        '"Wach" ist nicht mehr Teil des Stapels: Wachzeit ist kein Schlaf und hat den Balken über die tatsächliche Schlafdauer hinaus aufgeblasen. Sie steckt weiterhin in der Ø-Effizienz.',
-        'Neues Segment "ohne Phasendetail" fängt den Anteil ab, den Apple ohne Phasen-Zuordnung liefert — dadurch entspricht die Balkenhöhe exakt der Ø-Schlafdauer-Kachel.',
-        'Die Nächte unter 1 h Schlaf (v1.40.2) fliegen jetzt auch aus beiden Schlaf-Diagrammen, nicht mehr nur aus den Ø-Kacheln.',
-    ]},
-    { v: 'v1.40.2', date: '2026-09-02', title: 'Schlaf: Nächte unter 1 h zählen nicht mehr in den Ø', notes: [
-        'Nächte mit weniger als 1 Stunde Gesamtschlaf (Apple Watch nicht getragen, zu spät angelegt, Schlaf-Fragment) fallen aus allen vier Ø-Kacheln des Schlaf-Tabs: Ø Schlafdauer, Ø Im Bett, Ø Tiefschlaf und Ø Effizienz.',
-        'Entscheidend ist die gesamte Schlafdauer der Nacht, nicht die einzelne Phase — sonst würden sich die vier Kacheln auf unterschiedliche Nächte beziehen.',
-        'Im Schlafphasen-Diagramm bleiben diese Nächte sichtbar; unter den Kacheln steht, wie viele ausgenommen wurden.',
-    ]},
-    { v: 'v1.40.1', date: '2026-09-02', title: 'Gesamt-Export: Einkäufe bleiben auch bei Wochen-/Monats-Aggregation drin', notes: [
-        'Bei aggregate=week|month stand bisher nur die Perioden-Summe in der CSV — jetzt folgt darunter eine Sektion "Bons kompakt" mit einer Zeile je Einkauf: Woche/Monat, Datum, Laden, Typ, Anzahl Positionen, Gesamtbetrag und die Produktkategorien mit Anzahl und Betrag.',
-        'Die Einzelpositionen bleiben in diesem Modus weiterhin weg — damit bleibt erkennbar, wofür das Geld ausgegeben wurde, ohne dass ein Jahres-Export auf über 10.000 Zeilen anwächst.',
+        'Nachgezogen: Log-Notizen brechen auf dem Handy nicht mehr auf ein Zeichen pro Zeile um.',
     ]},
     { v: 'v1.40.0', date: '2026-09-02', title: 'Gesundheit: Import-Protokoll mit Payload-Download', notes: [
         'Jeder automatische Sync der Auto-Health-Export-App wird jetzt mit seinem Roh-Payload gespeichert (neue Tabelle health_import_log, Migration 025).',
         'Neue Karte "Import-Protokoll" in den Gesundheits-Einstellungen: Zeitpunkt, Format, Dateiname, Größe, Ingest-Ergebnis und Vorschau je Aufruf — plus Download der Originaldatei zum Abgleich mit den importierten Werten.',
         'Einzelne Einträge löschbar, Protokoll komplett leerbar. Aufbewahrt werden die letzten 200 Aufrufe je Nutzer, Payloads über 5 MB werden gekürzt (ENV HEALTH_IMPORT_LOG_KEEP / HEALTH_IMPORT_LOG_MAX_BYTES).',
-    ]},
-    { v: 'v1.39.2', date: '2026-09-01', title: 'Vitalwerte: Ø-Linie als gleitender Trend', notes: [
-        'Die Ø-Linie ist keine Waagrechte mehr, sondern ein zentriert gleitender Durchschnitt, der dem Verlauf folgt.',
-        'Fensterbreite passt sich dem Zeitraum an (3 / 7 / 14 / 30 Werte), Messlücken bleiben weiterhin aussen vor.',
-    ]},
-    { v: 'v1.39.1', date: '2026-09-01', title: 'Gesundheit: Schlaf-Dopplung weg, Ø-Linie bei Vitalwerten', notes: [
-        'Der kleine Schlaf-Insight auf der Übersicht ist entfallen — er rechnete mit den rohen asleep_minutes und zeigte daher weniger an als die Karte "Letzte Nacht" direkt daneben.',
-        'Vitalwerte-Verlauf hat jetzt eine gestrichelte Ø-Linie.',
-        'Ø, Min und Max ignorieren Messlücken: Werte unter 20 % des Medians (angebrochener heutiger Tag, Uhr nicht getragen, abgebrochener Sync) zählen nicht als Messwert. Die Anzahl ausgenommener Tage steht in der Statistikzeile.',
+        'Nachgezogen: Schwimm-Pace in min/100 m und korrigierte Distanz-Einheit, Gesamtschlafzeit im Schlaf-Diagramm, Nächte unter 1 h zählen nicht mehr in den Ø, Einkäufe bleiben bei Wochen-/Monats-Aggregation im Gesamt-Export, README mit einzeln beschriebenen Funktionen.',
     ]},
     { v: 'v1.39.0', date: '2026-09-01', title: 'Duplikate: eigener Tab + ausblendbare Vorschläge', notes: [
         'Neue Seite "♻️ Duplikate" im Ausgaben-Subnav statt Karte auf dem Dashboard.',
         'Jeder Vorschlag hat jetzt ein "✕" zum dauerhaften Ausblenden, ohne die Bons zu löschen oder zusammenzuführen (neue Tabelle dismissed_expense_duplicates, Migration 024).',
-    ]},
-    { v: 'v1.38.7', date: '2026-09-01', title: 'Ausgaben-Übersicht: nur letzte 14 Tage + Aufklappen', notes: [
-        'Dashboard-Liste zeigt standardmäßig nur Bons der letzten 14 Tage, darunter Button "Alle anzeigen" für ältere Einträge.',
-        'Gilt nur ohne aktive Filter — sobald Zeitraum/Laden/Kategorie/Suche gesetzt ist, werden wie bisher alle Treffer direkt angezeigt.',
-    ]},
-    { v: 'v1.38.6', date: '2026-09-01', title: 'README komplett überarbeitet', notes: [
-        'Von Changelog-artiger Feature-Liste (Versionsnummern in jedem Bullet) auf prägnante Beschreibung des aktuellen Stands umgestellt.',
-        'Fehler behoben: Quickstart nannte JWT_SECRET statt korrektem ENV-Namen SECRET_KEY, Pfade zeigten auf nicht mehr existierendes Website/-Verzeichnis.',
-        'Projekt-Struktur, Routers-Liste und Modul-Übersicht an tatsächlichen Code-Stand angeglichen (Blog ergänzt, veraltete Verweise entfernt).',
-    ]},
-    { v: 'v1.38.5', date: '2026-09-01', title: 'README aufgeräumt (Rezeptbuch/Fotos entfernt)', notes: [
-        'Nie umgesetzte Platzhalter-Module Rezeptbuch und Fotos aus README (Subtitel, Feature-Liste, Projekt-Struktur) entfernt — beide waren nur "Coming soon"-Seiten ohne Backend oder Navigation.',
-    ]},
-    { v: 'v1.38.4', date: '2026-09-01', title: 'Sichtbare File-Inputs und Subnav-Rest weg', notes: [
-        'Versteckte <input type=file>-Felder wurden von der globalen Form-Base ungewollt sichtbar gemacht — [hidden] jetzt mit !important abgesichert.',
-        '"+ Neuer Bon"-Eintrag aus der Ausgaben-Subnav entfernt (jetzt nur noch ueber die Dashboard-Tiles).',
-    ]},
-    { v: 'v1.38.3', date: '2026-09-01', title: 'Neuer-Bon-Tiles im Homepage-Design', notes: [
-        '4 Tiles im gleichen Look wie das Homepage-Dashboard: farbiges Icon-Badge + Titel + Kurztext.',
-        'Kaste "Datei durchsuchen / hierher ziehen" entfernt.',
-        'Drag & Drop laeuft jetzt unsichtbar auf der ganzen Seite mit temporaerem Overlay, das nur beim Draggen erscheint.',
-    ]},
-    { v: 'v1.38.2', date: '2026-09-01', title: 'Ausgaben-Dashboard: Neuer Bon direkt integriert', notes: [
-        'Popup/Modal + FAB fuer "Neuer Bon" entfernt.',
-        'Stattdessen Quick-Action-Karte oben im Dashboard: Kamera, Galerie, Einfuegen, Manuell.',
-        'Drag & Drop-Zone und globaler Strg+V-Handler auf dem Dashboard.',
-        'Bilder werden per sessionStorage an neu.html?src=dash uebergeben und starten dort automatisch den OCR-Flow.',
-    ]},
-    { v: 'v1.38.1', date: '2026-09-01', title: 'Hotfix: Ausgaben-Dashboard lud nicht', notes: [
-        'Syntax-Fehler in dashboard.js (fehlende schliessende Klammer in renderActiveFilterChips) behoben — Seite blieb dadurch unsichtbar (body.visibility:hidden).',
+        'Nachgezogen: Ø-Linie der Vitalwerte als gleitender Trend, Messlücken raus aus Ø/Min/Max, doppelter Schlaf-Insight entfernt.',
     ]},
     { v: 'v1.38.0', date: '2026-09-01', title: 'Ausgaben-UX + Versions-Zeitstrahl', notes: [
         'Filter im Ausgaben-Dashboard hinter einem Popover versteckt (Suche + Presets bleiben sichtbar).',
         'Aktive Filter erscheinen als Zahl-Badge am Filter-Button.',
         '"+ Neuer Bon" oeffnet ein Modal direkt im Dashboard statt einer eigenen Seite.',
         'Klick auf die Versionszahl unten rechts oeffnet einen vertikalen Zeitstrahl mit allen Releases.',
+        'Nachgezogen: Hotfix für das nicht ladende Ausgaben-Dashboard, Neuer-Bon-Tiles im Homepage-Design, versteckte File-Inputs repariert, Ausgaben-Übersicht auf 14 Tage mit Aufklappen, README aufgeräumt und überarbeitet.',
     ]},
-    { v: 'v1.37.2', date: '2026-08-31', title: 'Export-Aggregation korrekt', notes: [
-        'Fix: bei aggregate=week|month wurden nicht alle Bereiche zusammengefasst.',
-    ]},
-    { v: 'v1.37.1', date: '2026-08-31', title: 'Zeitraum + Aggregation im Gesamt-Export', notes: [] },
     { v: 'v1.37.0', date: '2026-08-31', title: 'Toast/Confirm, Mobile Tab-Bar, SVG-Theme-Icon', notes: [
         'Modul-uebergreifender Toast/Confirm-Layer, Bottom-Tab-Bar auf Mobile.',
+        'Nachgezogen: Zeitraum und Aggregation im Gesamt-Export, Aggregation korrigiert.',
     ]},
-    { v: 'v1.36.1', date: '2026-08-29', title: 'Schlaf-Fix + Icon-only Modul-Switcher', notes: [] },
-    { v: 'v1.36.0', date: '2026-08-29', title: 'Design-Refresh (Glass Navbar, Hero, iOS-Tabs)', notes: [] },
+    { v: 'v1.36.0', date: '2026-08-29', title: 'Design-Refresh (Glass Navbar, Hero, iOS-Tabs)', notes: [
+        'Nachgezogen: Schlaf-Fix und Icon-only-Modul-Switcher.',
+    ]},
     { v: 'v1.35.0', date: '2026-08-29', title: 'Migration-Checksums, Dry-Run, Sentry-Hook', notes: [] },
     { v: 'v1.34.0', date: '2026-08-29', title: 'Observability + Readiness-Probe', notes: [] },
     { v: 'v1.33.0', date: '2026-08-29', title: 'Backend-Haertung (Pool-Race, Timing-Attack, JSON)', notes: [] },
     { v: 'v1.32.0', date: '2026-08-29', title: ':where()-Form-Base, .btn-Utility, weg mit !important', notes: [] },
     { v: 'v1.31.0', date: '2026-08-29', title: 'CSS-Auslagerung, Print/Touch/SEO', notes: [] },
     { v: 'v1.30.0', date: '2026-08-29', title: 'P0/P1 CSS-Fixes (A11y, FOUC, Design-Tokens)', notes: [] },
-    { v: 'v1.29.2', date: '2026-08-28', title: 'CSV-Exports mit UTF-8-BOM', notes: [] },
-    { v: 'v1.29.1', date: '2026-08-28', title: 'Fix Schlaf-KPIs bei fehlenden Werten', notes: [] },
-    { v: 'v1.29.0', date: '2026-08-28', title: 'CSV-Import 1:1, Rescale entfernt', notes: [] },
-    { v: 'v1.28.1', date: '2026-08-28', title: 'Fix Startup-Crash (slowapi)', notes: [] },
-    { v: 'v1.28.0', date: '2026-08-28', title: 'Health-Datensaetze loeschen', notes: [] },
+    { v: 'v1.29.0', date: '2026-08-28', title: 'CSV-Import 1:1, Rescale entfernt', notes: [
+        'Nachgezogen: Schlaf-KPIs bei fehlenden Werten korrigiert, CSV-Exports mit UTF-8-BOM.',
+    ]},
+    { v: 'v1.28.0', date: '2026-08-28', title: 'Health-Datensaetze loeschen', notes: [
+        'Nachgezogen: Startup-Crash durch slowapi behoben.',
+    ]},
     { v: 'v1.27.0', date: '2026-08-28', title: 'Health-CSV im Gesamt-Export', notes: [] },
     { v: 'v1.26.0', date: '2026-08-28', title: 'Uebertrag vom Puffer aufs Sparziel', notes: [] },
-    { v: 'v1.25.1', date: '2026-08-28', title: 'Workouts inline + Schlaf-Empty-State', notes: [] },
-    { v: 'v1.25.0', date: '2026-08-28', title: 'Health-Seite modernisiert', notes: [] },
+    { v: 'v1.25.0', date: '2026-08-28', title: 'Health-Seite modernisiert', notes: [
+        'Nachgezogen: Workouts inline statt im Modal, Empty-State für Schlaf.',
+    ]},
     { v: 'v1.24.0', date: '2026-08-28', title: 'CSV-basierter Health-Import', notes: [] },
-    { v: 'v1.23.2', date: '2026-08-28', title: 'Hotfix Crash-Loop (health_router)', notes: [] },
-    { v: 'v1.23.1', date: '2026-08-28', title: 'Manueller JSON-Import (Health)', notes: [] },
-    { v: 'v1.23.0', date: '2026-08-28', title: 'Gesamt-Export (Sparziel+Ausgaben+Health)', notes: [] },
-    { v: 'v1.22.1', date: '2026-08-28', title: 'Fix: hKeyModal blockierte Klicks', notes: [] },
-    { v: 'v1.22.0', date: '2026-08-28', title: 'Health-Modul (Auto Health Export Sync)', notes: [] },
-    { v: 'v1.21.3', date: '2026-08-26', title: 'Fix Produkte-Seite unsichtbar', notes: [] },
-    { v: 'v1.21.2', date: '2026-08-26', title: 'Fix HTTP 500 auf Produkt-Seite', notes: [] },
-    { v: 'v1.21.1', date: '2026-08-26', title: 'SW Auto-Update, Blog-Menue, GZip', notes: [] },
-    { v: 'v1.21.0', date: '2026-08-25', title: 'Duplikat-Erkennung + SW-Cache-Fix', notes: [] },
+    { v: 'v1.23.0', date: '2026-08-28', title: 'Gesamt-Export (Sparziel+Ausgaben+Health)', notes: [
+        'Nachgezogen: manueller JSON-Import für Gesundheitsdaten, Hotfix für den Crash-Loop im health_router.',
+    ]},
+    { v: 'v1.22.0', date: '2026-08-28', title: 'Health-Modul (Auto Health Export Sync)', notes: [
+        'Nachgezogen: das Modal für den API-Key blockierte Klicks.',
+    ]},
+    { v: 'v1.21.0', date: '2026-08-25', title: 'Duplikat-Erkennung + SW-Cache-Fix', notes: [
+        'Nachgezogen: Service-Worker-Auto-Update, Blog im Menü, GZip, Fixes für HTTP 500 und die unsichtbare Produkte-Seite.',
+    ]},
     { v: 'v1.20.0', date: '2026-08-25', title: 'Produkt-Seite Bugfix + Server-Filter', notes: [] },
     { v: 'v1.19.0', date: '2026-08-25', title: 'Blog, Wochenziel-History, Produkt-Statistik', notes: [] },
-    { v: 'v1.12.1', date: '2026-08-14', title: 'Erweiterte Kategorien-Liste (~70)', notes: [] },
-    { v: 'v1.12.0', date: '2026-08-14', title: 'Item-Split, Preisvergleich pro Laden', notes: [] },
-    { v: 'v1.11.2', date: '2026-08-14', title: 'Produkt-History-Modal + Detach', notes: [] },
-    { v: 'v1.11.1', date: '2026-08-14', title: 'Fix Pool-Release, Preisverlauf-UI', notes: [] },
-    { v: 'v1.11.0', date: '2026-08-14', title: 'Reparse-All, 3-Spalten-Items', notes: [] },
-    { v: 'v1.10.2', date: '2026-08-14', title: 'main.py aufgeteilt + Health-Endpoint', notes: [] },
-    { v: 'v1.10.0', date: '2026-08-14', title: 'Suche, Presets, Undo/Swipe, Preis-Chart', notes: [] },
-    { v: 'v1.9.0',  date: '2026-08-14', title: 'Preisverlauf-Tab, globale Subnav', notes: [] },
-    { v: 'v1.8.6',  date: '2026-08-14', title: 'Dashboard-Inline-Detail, Upload-Buttons', notes: [] },
-    { v: 'v1.8.5',  date: '2026-08-14', title: 'Gemini 3.5-flash-lite Default', notes: [] },
-    { v: 'v1.8.2',  date: '2026-08-14', title: 'AI liefert category_name', notes: [] },
-    { v: 'v1.7.2',  date: '2026-08-13', title: 'BILLA-Parser (AT-Stores)', notes: [] },
-    { v: 'v1.7.1',  date: '2026-08-13', title: 'SW-redirect-fix (iOS), expense_type', notes: [] },
-    { v: 'v0.x',    date: '2026-08-08', title: 'Projekt-Setup + erste Version', notes: [
+    { v: 'v1.12.0', date: '2026-08-14', title: 'Item-Split, Preisvergleich pro Laden, ~70 Kategorien', notes: [] },
+    { v: 'v1.11.0', date: '2026-08-14', title: 'Reparse-All, 3-Spalten-Items, Produkt-History-Modal', notes: [] },
+    { v: 'v1.10.0', date: '2026-08-14', title: 'Suche, Presets, Undo/Swipe, Preis-Chart, main.py aufgeteilt', notes: [] },
+    { v: 'v1.9.0', date: '2026-08-14', title: 'Preisverlauf-Tab, globale Subnav', notes: [] },
+    { v: 'v1.8.2', date: '2026-08-14', title: 'AI liefert category_name, Gemini-Default, Dashboard-Inline-Detail', notes: [] },
+    { v: 'v1.7.1', date: '2026-08-13', title: 'SW-redirect-fix (iOS), expense_type, BILLA-Parser', notes: [] },
+    { v: 'v0.x', date: '2026-08-08', title: 'Projekt-Setup + erste Version', notes: [
         'Initial commit, erste AI-BON-Erkennung, mehrere Parser-Iterationen.',
     ]},
 ];
