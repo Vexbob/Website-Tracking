@@ -213,32 +213,3 @@ button.danger-outline:hover{background:var(--red-bg)}
     margin-top:2px;line-height:1.2}
 .h-rhythm-val small{font-size:0.75rem;font-weight:600;color:var(--text-muted);margin-left:4px}
 .h-rhythm-sub{font-size:0.6875rem;color:var(--text-muted);margin-top:2px}
-
-/* ---------- Beta-Reiter: Kurzbefehl-Strecke (v1.47.0) ---------- */
-.h-beta-badge{font-size:0.6875rem;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;
-    color:var(--orange);border:1px solid var(--orange);border-radius:5px;padding:0.1rem 0.4rem;
-    vertical-align:middle;margin-left:0.35rem}
-/* Warnbanner fuer den Fuellstand des Import-Protokolls. Zwei Stufen: ab 90 %
-   dezent orange, bei erreichter Grenze rot -- ab da geht wirklich etwas
-   verloren. */
-.h-beta-banner{font-size:0.8125rem;line-height:1.6;color:var(--text);background:var(--surface-2);
-    border:1px solid var(--orange);border-left-width:3px;border-radius:8px;
-    padding:0.65rem 0.8rem;margin-bottom:0.875rem}
-.h-beta-banner.err{border-color:var(--red);background:var(--red-bg)}
-.h-beta-banner code{background:var(--surface);border-radius:5px;padding:0.1rem 0.35rem;font-size:0.75rem}
-
-/* Rohdaten-Tabelle. Scrollt in ihrem eigenen Container, damit die Seite auf
-   dem iPhone nicht seitlich wandert. */
-.h-raw-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.h-raw-table{width:100%;border-collapse:collapse;font-size:0.8125rem}
-.h-raw-table th{text-align:left;font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;
-    color:var(--text-faint);font-weight:600;padding:0.4rem 0.6rem 0.4rem 0;white-space:nowrap;
-    border-bottom:1px solid var(--border)}
-.h-raw-table td{padding:0.45rem 0.6rem 0.45rem 0;border-bottom:1px solid var(--border);
-    color:var(--text);white-space:nowrap}
-.h-raw-table tr:last-child td{border-bottom:none}
-.h-raw-table th.num,.h-raw-table td.num{text-align:right;font-variant-numeric:tabular-nums;
-    font-weight:700;padding-right:1rem}
-.h-raw-table td.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:0.7rem;
-    color:var(--text-muted)}
-.h-raw-dim{color:var(--text-muted);font-weight:400}

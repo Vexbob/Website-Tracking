@@ -48,11 +48,6 @@ LIMIT_WRITE_RARE = "10/minute"
 # Health-Sync (Auto Health Export synct typischerweise mehrmals taeglich
 # automatisiert, aber grosszuegig genug fuer manuelle Re-Syncs/Backfills).
 LIMIT_HEALTH_IMPORT = "20/hour"
-# Beta-Strecke "Apple Health per iPhone-Kurzbefehl" (v1.47.0). Im Betrieb laeuft
-# der Kurzbefehl 1x taeglich; beim Einrichten wird er im Minutentakt getestet,
-# und dabei waeren 20/h im Weg. Bewusst getrennt von LIMIT_HEALTH_IMPORT, damit
-# ein Testlauf der neuen Strecke den produktiven Sync nicht aussperrt.
-LIMIT_SHORTCUT_IMPORT = "60/hour"
 
 # Upload-Grenze für Belegbilder
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024

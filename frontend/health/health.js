@@ -48,18 +48,6 @@ const HEALTH_API = {
     importRaw:     (id) => apiCall(`/api/health/imports/${id}/download`, { raw: true }),
     deleteImport:  (id) => apiCall(`/api/health/imports/${id}`, { method: 'DELETE' }),
     clearImports:  () => apiCall('/api/health/imports', { method: 'DELETE' }),
-    // v1.47.0: Fuellstand des Import-Protokolls. Beide Strecken teilen sich die
-    // Tabelle und damit die Aufbewahrungsgrenze -- ist sie erreicht, verdraengt
-    // jeder neue Aufruf den aeltesten Eintrag.
-    importStatus:  () => apiCall('/api/health/imports/status'),
-    // v1.47.0: Beta-Strecke "iPhone-Kurzbefehl". Eigene Tabelle, eigene
-    // Endpoints -- beruehrt die Auto-Health-Export-Daten nicht.
-    scImports:     (limit) => apiCall(`/api/health/imports?limit=${limit || 50}&kind=shortcut`),
-    scSamples:     (days, metric) => apiCall(`/api/health/shortcut/samples?days=${days}&limit=2000`
-                       + (metric ? `&metric=${encodeURIComponent(metric)}` : '')),
-    scMetrics:     () => apiCall('/api/health/shortcut/metrics'),
-    scDelete:      (qs) => apiCall('/api/health/shortcut/samples' + (qs ? `?${qs}` : ''),
-                       { method: 'DELETE' }),
 };
 
 const METRIC_LABELS = {
@@ -236,14 +224,13 @@ function sparkOptions(color) {
 // ---------- Tabs ----------
 function activateTab(t) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
-    ['dashboard', 'vitalwerte', 'schlaf', 'workouts', 'beta', 'einstellungen'].forEach(id => {
+    ['dashboard', 'vitalwerte', 'schlaf', 'workouts', 'einstellungen'].forEach(id => {
         const el = document.getElementById('tab-' + id);
         if (el) el.style.display = (id === t) ? '' : 'none';
     });
     if (t === 'vitalwerte' && !state.vitalInit) initVitalwerte();
     if (t === 'schlaf' && !state.sleepInit) initSchlaf();
     if (t === 'workouts' && !state.workoutsLoaded) initWorkouts();
-    if (t === 'beta' && !state.betaInit) initBeta();
     if (t === 'einstellungen' && !state.keysLoaded) initEinstellungen();
 }
 
@@ -264,8 +251,6 @@ const state = {
     workoutsLoaded: false, workoutsAll: [], workoutFilter: '', workoutRange: 0,
     keysLoaded: false,
     sparkCharts: [],
-    // v1.47.0: Beta-Reiter (Kurzbefehl-Strecke)
-    betaInit: false, scDays: 30, scMetric: '', scMetricList: [],
 };
 
 // ---------- Dashboard ----------
@@ -1549,232 +1534,6 @@ async function clearImportLog() {
         showToast(`${res.deleted} Einträge gelöscht ✓`);
         loadImportLog();
     } catch (e) { showToast('Löschen fehlgeschlagen: ' + e.message, true); }
-}
-
-// ==========================================================================
-// Beta-Reiter: Apple Health per iPhone-Kurzbefehl (v1.47.0)
-// --------------------------------------------------------------------------
-// Zeigt die Kurzbefehl-Strecke roh: die letzten Aufrufe mit ihrem Roh-Payload
-// und die importierten Werte als Tabelle. Bewusst ohne Diagramme und ohne
-// Aggregation -- die Daten fliessen in keine Auswertung ein, und beim
-// Einrichten will man sehen, was WIRKLICH angekommen ist.
-// ==========================================================================
-const SC_KIND_LABELS = {
-    'shortcut-json':        'JSON',
-    'shortcut-json-array':  'JSON (Array)',
-    'shortcut-json-single': 'JSON (Einzelobjekt)',
-    'shortcut-json-hae':    'JSON (Auto-Health-Export-Struktur)',
-    'shortcut-csv':         'CSV (mit Kopfzeile)',
-    'shortcut-text':        'Textzeilen',
-    'shortcut-empty':       'leerer Aufruf',
-    'shortcut-unreadable':  'nicht lesbar',
-};
-
-function scNum(v) {
-    if (v == null || Number.isNaN(+v)) return '–';
-    return Number.isInteger(Number(v)) ? fmt0(v) : fmt1(v);
-}
-
-function initBeta() {
-    state.betaInit = true;
-    const base = `${API_BASE}/api/health/shortcut/import`;
-    const a = document.getElementById('hScImportUrl');
-    const b = document.getElementById('hScImportUrlMetric');
-    if (a) a.textContent = base;
-    if (b) b.textContent = `${base}?metric=steps`;
-
-    document.querySelectorAll('#hScRangeChips .stat-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            document.querySelectorAll('#hScRangeChips .stat-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            state.scDays = Number(chip.dataset.preset);
-            loadShortcutSamples();
-        });
-    });
-
-    loadShortcutImports();
-    loadShortcutMetrics();
-}
-
-// ---------- Fuellstand des Import-Protokolls ----------
-// Ist die Aufbewahrungsgrenze erreicht, verdraengt jeder neue Aufruf den
-// aeltesten Eintrag. Das ist gewollt, darf aber nicht unbemerkt passieren --
-// sonst sucht man spaeter den Roh-Payload eines Aufrufs, den die Aufbewahrung
-// laengst weggeworfen hat.
-function renderLogStatus(s) {
-    const box = document.getElementById('hScLogStatus');
-    if (!box) return;
-    if (!s || (!s.at_limit && !s.near_limit)) { box.innerHTML = ''; return; }
-    const full = s.at_limit;
-    box.innerHTML = `
-        <div class="h-beta-banner ${full ? 'err' : ''}">
-            <strong>${full ? '⚠️ Import-Protokoll voll' : '⚠️ Import-Protokoll fast voll'}</strong>
-            — ${fmt0(s.count)} von ${fmt0(s.keep)} Einträgen belegt.
-            ${full
-                ? 'Ab jetzt wird bei jedem weiteren Aufruf der jeweils älteste Eintrag verdrängt, auch der von Auto Health Export.'
-                : 'Bei Erreichen der Grenze wird der jeweils älteste Eintrag verdrängt.'}
-            Grenze über die Umgebungsvariable <code>HEALTH_IMPORT_LOG_KEEP</code> anheben, oder
-            unten im Tab ⚙️ Einstellungen das Protokoll leeren.
-        </div>`;
-}
-
-async function loadShortcutImports() {
-    const box = document.getElementById('hScImports');
-    if (!box) return;
-    box.className = 'h-empty';
-    box.innerHTML = '<div class="stat-loading">Lade …</div>';
-    try {
-        const [rows, status] = await Promise.all([
-            HEALTH_API.scImports(50),
-            HEALTH_API.importStatus().catch(() => null),
-        ]);
-        renderLogStatus(status);
-        if (!rows.length) {
-            box.className = 'h-empty';
-            box.innerHTML = 'Noch kein Aufruf vom Kurzbefehl eingegangen.';
-            return;
-        }
-        box.className = '';
-        box.innerHTML = rows.map(r => {
-            const s = r.stats || {};
-            const warn = Array.isArray(s.warnings) && s.warnings.length
-                ? `<div class="h-imp-preview">⚠️ ${escHtml(s.warnings.join(' · '))}</div>` : '';
-            return `
-            <div class="h-imp-row">
-                <div class="h-imp-main">
-                    <div class="h-imp-head">${fmtDateTime(r.created_at)}
-                        <span class="h-imp-kind">${escHtml(SC_KIND_LABELS[r.kind] || r.kind || '?')}</span>
-                        ${r.truncated ? '<span class="h-imp-trunc">gekürzt</span>' : ''}
-                    </div>
-                    <div class="h-imp-meta">${fmtBytes(r.size_bytes)} · ${escHtml(s.summary || 'kein Ergebnis gespeichert')}</div>
-                    ${r.preview ? `<div class="h-imp-preview">${escHtml(r.preview)}</div>` : ''}
-                    ${warn}
-                </div>
-                <div class="h-imp-actions">
-                    <button onclick="downloadImportPayload(${r.id})" ${r.size_bytes ? '' : 'disabled'}>⬇ Payload</button>
-                    <button class="danger" onclick="deleteShortcutImport(${r.id})">✕</button>
-                </div>
-            </div>`;
-        }).join('');
-    } catch (e) {
-        box.className = '';
-        box.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
-    }
-}
-
-async function deleteShortcutImport(id) {
-    try {
-        await HEALTH_API.deleteImport(id);
-        loadShortcutImports();
-    } catch (e) { showToast('Löschen fehlgeschlagen: ' + e.message, true); }
-}
-
-// ---------- Metrik-Filter ----------
-async function loadShortcutMetrics() {
-    const box = document.getElementById('hScMetricChips');
-    const sel = document.getElementById('hScDelMetric');
-    try {
-        const rows = await HEALTH_API.scMetrics();
-        state.scMetricList = rows;
-        const total = rows.reduce((s, r) => s + Number(r.count || 0), 0);
-        if (box) {
-            box.innerHTML = [`<button class="stat-chip${state.scMetric ? '' : ' active'}" data-metric="">Alle (${fmt0(total)})</button>`]
-                .concat(rows.map(r => `
-                    <button class="stat-chip${state.scMetric === r.metric_key ? ' active' : ''}"
-                            data-metric="${escHtml(r.metric_key)}"
-                            title="${escHtml(r.metric_key)}${r.known ? '' : ' — der Registry unbekannt'}">
-                        ${r.known ? '' : '⚠️ '}${escHtml(r.label)} (${fmt0(r.count)})
-                    </button>`)).join('');
-            box.querySelectorAll('.stat-chip').forEach(chip => {
-                chip.addEventListener('click', () => {
-                    box.querySelectorAll('.stat-chip').forEach(c => c.classList.remove('active'));
-                    chip.classList.add('active');
-                    state.scMetric = chip.dataset.metric || '';
-                    loadShortcutSamples();
-                });
-            });
-        }
-        if (sel) {
-            sel.innerHTML = '<option value="">Alle Metriken</option>'
-                + rows.map(r => `<option value="${escHtml(r.metric_key)}">${escHtml(r.label)} (${fmt0(r.count)})</option>`).join('');
-        }
-    } catch (e) {
-        if (box) box.innerHTML = '';
-    }
-    loadShortcutSamples();
-}
-
-// ---------- Rohdaten-Tabelle ----------
-async function loadShortcutSamples() {
-    const box = document.getElementById('hScSamples');
-    if (!box) return;
-    box.className = 'h-empty';
-    box.innerHTML = '<div class="stat-loading">Lade …</div>';
-    try {
-        const rows = await HEALTH_API.scSamples(state.scDays, state.scMetric);
-        if (!rows.length) {
-            box.className = 'h-empty';
-            box.innerHTML = state.scMetric
-                ? 'Keine Werte für diese Metrik im gewählten Zeitraum.'
-                : 'Noch keine Werte über den Kurzbefehl angekommen.';
-            return;
-        }
-        box.className = '';
-        box.innerHTML = `
-            <div class="h-raw-wrap">
-                <table class="h-raw-table">
-                    <thead><tr>
-                        <th>Datum</th><th>Metrik</th><th class="num">Wert</th><th>Einheit</th>
-                        <th>geliefert als</th><th>empfangen</th>
-                    </tr></thead>
-                    <tbody>${rows.map(r => `
-                        <tr>
-                            <td>${fmtDateFull(r.sample_date)}${r.bucket === 'point'
-                                ? ` <span class="h-raw-dim">${fmtHM(r.bucket_start)}</span>` : ''}</td>
-                            <td>${r.known ? '' : '<span title="der Registry unbekannt — der Wert ist trotzdem gespeichert">⚠️ </span>'}${escHtml(r.label)}</td>
-                            <td class="num">${scNum(r.value)}</td>
-                            <td>${escHtml(r.unit || '–')}</td>
-                            <td class="mono">${escHtml(r.raw_date || '–')}</td>
-                            <td class="h-raw-dim">${fmtDateTime(r.updated_at)}</td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-            </div>
-            <div class="h-hint" style="margin:0.6rem 0 0">${fmt0(rows.length)} Zeilen ·
-                „geliefert als" ist der Zeitstempel unverändert so, wie der Kurzbefehl ihn geschickt
-                hat — weicht er vom Datum links ab, hat der Parser ihn umgerechnet.</div>`;
-    } catch (e) {
-        box.className = '';
-        box.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
-    }
-}
-
-// ---------- Loeschen ----------
-async function deleteShortcutSamples() {
-    const metric = document.getElementById('hScDelMetric').value;
-    const from = document.getElementById('hScDelFrom').value;
-    const to = document.getElementById('hScDelTo').value;
-    const resultEl = document.getElementById('hScDelResult');
-
-    const what = metric ? `„${metric}"` : 'ALLE Metriken';
-    const span = (from || to) ? ` von ${from || 'Anfang'} bis ${to || 'heute'}` : ' für alle Zeit';
-    if (!confirm(`Beta-Rohdaten löschen: ${what}${span}?\n\n`
-               + 'Betrifft nur die Kurzbefehl-Strecke — die Daten von Auto Health Export '
-               + 'bleiben unberührt. Nicht rückgängig zu machen.')) return;
-
-    const qs = new URLSearchParams();
-    if (metric) qs.set('metric', metric);
-    if (from) qs.set('date_from', from);
-    if (to) qs.set('date_to', to);
-    try {
-        const res = await HEALTH_API.scDelete(qs.toString());
-        resultEl.innerHTML = `<div class="h-hint" style="margin:0">✅ <strong>${fmt0(res.deleted)}</strong> Zeilen gelöscht.</div>`;
-        showToast(res.deleted > 0 ? `${fmt0(res.deleted)} Zeilen gelöscht ✓` : 'Keine passenden Zeilen');
-        loadShortcutMetrics();
-    } catch (e) {
-        resultEl.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
-        showToast('Löschen fehlgeschlagen', true);
-    }
 }
 
 // v1.28.0: Bulk-Delete

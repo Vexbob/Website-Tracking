@@ -4,6 +4,13 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.49.0', date: '2026-09-06', title: 'Beta-Strecke „Apple Health per iPhone-Kurzbefehl“ wieder entfernt', notes: [
+        'Die in v1.47.0 begonnene zweite Importstrecke ist vollständig zurückgebaut: Endpoints, Parser, Beta-Reiter, Tests und Anleitung sind weg. Sie war als Ausweichweg gedacht, weil der Sync über Auto Health Export unzuverlässig wirkte.',
+        'Der Grund für den Rückbau ist die gefundene Ursache: Das Problem lag nie am Sync, sondern an Auto Health Export selbst — die App exportiert die sportartspezifischen Zusatzmetriken nicht, sobald mehrere Workout-Typen zusammen exportiert werden. Mit einem Workout-Typ je Export läuft der bestehende Weg, und ein zweiter Importkanal löst ein Problem, das es nicht gibt.',
+        'Migration 032 löscht die Tabelle der Beta-Strecke und die zugehörigen Testaufrufe aus dem Import-Protokoll. Migration 031 bleibt unverändert liegen: sie ist bereits angewendet, und der Runner prüft ihre Prüfsumme — eine Rücknahme gehört deshalb in eine eigene, nachfolgende Migration statt in eine Bearbeitung der alten.',
+        'Die Gesundheitsdaten der regulären Strecke sind unberührt; außer der neuen Migration und einer Zeile im Health-Router ist der Code Byte für Byte wieder auf dem Stand von v1.46.5.',
+        'Eine Sache bleibt: Das Import-Protokoll behält 1000 statt 200 Aufrufe je Nutzer. Bei mehreren Syncs täglich reichten 200 Einträge nur wenige Wochen zurück — zu wenig, um einem auffälligen Wert von vor einem Monat noch seinen Roh-Payload gegenüberzustellen, was der einzige Zweck dieses Protokolls ist.',
+    ]},
     { v: 'v1.48.1', date: '2026-09-05', title: 'Roh-Payload der Kurzbefehl-Strecke lädt als .txt statt .bin', notes: [
         'Der Download eines Protokoll-Eintrags leitete seine Dateiendung nur aus „json“ und „csv“ ab; alles andere bekam .bin. Die Kurzbefehl-Aufrufe laufen als shortcut-text beziehungsweise shortcut-unreadable und fielen damit durchs Raster — der Klartext vom iPhone landete als .bin und ließ sich nicht ohne Umweg öffnen. Eine Diagnosedatei, die man nicht aufbekommt, ist als Diagnosewerkzeug wertlos.',
         'Kurzbefehl-Payloads kommen jetzt als .txt mit text/plain, CSV und JSON aus dieser Strecke weiterhin als .csv beziehungsweise .json. Die Endungen der Auto-Health-Export-Einträge sind unverändert, Multipart bleibt .bin.',

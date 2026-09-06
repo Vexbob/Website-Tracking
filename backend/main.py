@@ -1840,13 +1840,6 @@ from routers.health_router import router as health_router
 app.include_router(health_router)
 
 # ==========================================================================
-# Health-Beta (v1.47.0) — Apple-Health-Import per iPhone-Kurzbefehl.
-# Laeuft parallel zur Auto-Health-Export-Strecke und fasst deren Daten nicht an.
-# --------------------------------------------------------------------------
-from routers.health_shortcut_router import router as health_shortcut_router
-app.include_router(health_shortcut_router)
-
-# ==========================================================================
 # Gesamt-Export (v1.23.0) — Sparziel + Ausgaben + Gesundheit in einer CSV
 # --------------------------------------------------------------------------
 from routers.export_router import router as export_router

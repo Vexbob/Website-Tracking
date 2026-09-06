@@ -51,13 +51,10 @@ ALLOWED_METRIC_TYPES = sorted(set(SIMPLE_METRIC_MAP.values()))
 # Jeder Sync-Aufruf der iPhone-App wird mit seinem Roh-Payload gespeichert,
 # damit er im Frontend heruntergeladen und gegen die importierten Werte
 # geprueft werden kann. Zwei ENV-Stellschrauben begrenzen den Platzbedarf:
-# v1.47.0: Default von 200 auf 1000 angehoben. Seit der Kurzbefehl-Beta teilen
-# sich zwei Strecken dasselbe Protokoll, und beim Einrichten eines Kurzbefehls
-# entstehen in kurzer Zeit viele Testaufrufe -- mit 200 waeren dabei die
-# Eintraege der produktiven Auto-Health-Export-Strecke verdraengt worden, also
-# genau die, die man zum Vergleich braucht. Wird die Grenze trotzdem erreicht,
-# sagt das die Antwort des Ingests und der Beta-Reiter ausdruecklich, statt die
-# aeltesten Eintraege still zu verschlucken (siehe ``import_log_status``).
+# v1.49.0: Default von 200 auf 1000 angehoben. Bei mehreren Syncs taeglich
+# reichten 200 Eintraege nur wenige Wochen zurueck -- zu wenig, um einem
+# auffaelligen Wert von vor einem Monat noch seinen Roh-Payload gegenueber-
+# stellen zu koennen, was der einzige Zweck dieses Protokolls ist.
 HEALTH_IMPORT_LOG_KEEP = int(os.getenv("HEALTH_IMPORT_LOG_KEEP") or 1000)
 HEALTH_IMPORT_LOG_MAX_BYTES = int(os.getenv("HEALTH_IMPORT_LOG_MAX_BYTES") or 5 * 1024 * 1024)
 
@@ -205,7 +202,7 @@ async def import_health_data(request: Request,
 
 async def _store_import_log(db, user_id: int, kind: str, filename: Optional[str],
                             ctype: str, headers, raw: Optional[bytes],
-                            stats: Optional[dict]) -> Optional[int]:
+                            stats: Optional[dict]) -> None:
     """Legt einen Sync-Aufruf mitsamt Roh-Payload im Import-Protokoll ab.
 
     Wird pro *Teil* aufgerufen (ein Multipart-Part = ein Eintrag), damit sich
@@ -214,10 +211,6 @@ async def _store_import_log(db, user_id: int, kind: str, filename: Optional[str]
 
     Schluckt bewusst jeden Fehler: das Protokoll ist Diagnose-Beiwerk und darf
     einen laufenden Sync nie scheitern lassen.
-
-    Gibt die ID des Eintrags zurueck (None, wenn das Schreiben scheiterte).
-    Genutzt von der Kurzbefehl-Strecke, die die ID in ihrer Antwort mitschickt,
-    damit ein Testlauf direkt auf seinen Roh-Payload zeigen kann.
     """
     try:
         data = raw or b""
@@ -225,10 +218,10 @@ async def _store_import_log(db, user_id: int, kind: str, filename: Optional[str]
         truncated = size > HEALTH_IMPORT_LOG_MAX_BYTES
         blob = data[:HEALTH_IMPORT_LOG_MAX_BYTES] if data else None
         ua = (headers.get("user-agent") if headers else None) or None
-        row = await db.fetchrow(
+        await db.execute(
             "INSERT INTO health_import_log "
             "(user_id, kind, filename, content_type, user_agent, size_bytes, truncated, payload, stats) "
-            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING id",
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
             user_id, kind[:60], (filename or None) and filename[:255],
             (ctype or None) and ctype[:255], ua and ua[:255],
             size, truncated, blob, json.dumps(stats or {}))
@@ -238,10 +231,8 @@ async def _store_import_log(db, user_id: int, kind: str, filename: Optional[str]
             "  SELECT id FROM health_import_log WHERE user_id=$1 "
             "  ORDER BY created_at DESC, id DESC LIMIT $2)",
             user_id, HEALTH_IMPORT_LOG_KEEP)
-        return row["id"] if row else None
     except Exception as e:
         logger.warning("Import-Protokoll konnte nicht geschrieben werden user_id=%s: %s", user_id, e)
-        return None
 
 
 def _log_incoming(kind: str, ctype: str, headers, parts: list, user_id: int) -> None:
@@ -438,28 +429,17 @@ async def import_health_csv(request: Request, files: List[UploadFile] = File(...
 
 # ---------- Import-Protokoll (v1.40.0, JWT-Auth) ----------
 @router.get("/api/health/imports")
-async def list_import_log(limit: Optional[int] = 50, kind: Optional[str] = None,
-                          db=Depends(get_db), user=Depends(get_current_user)):
+async def list_import_log(limit: Optional[int] = 50, db=Depends(get_db),
+                          user=Depends(get_current_user)):
     """Listet die letzten Sync-Aufrufe der App — Zeitpunkt, Format, Groesse,
     Ingest-Ergebnis und die ersten Zeichen des Payloads als Vorschau. Der
-    komplette Body haengt an ``/api/health/imports/{id}/download``.
-
-    ``kind`` filtert per Praefix (v1.47.0): ``?kind=shortcut`` zeigt nur die
-    Aufrufe der Kurzbefehl-Beta-Strecke, deren Eintraege als
-    ``shortcut-<format>`` abgelegt werden. Ohne den Parameter bleibt das
-    Verhalten unveraendert -- die Liste zeigt beide Strecken, weil sie sich das
-    Protokoll teilen."""
+    komplette Body haengt an ``/api/health/imports/{id}/download``."""
     lim = max(1, min(int(limit or 50), 200))
-    sql = ("SELECT id, created_at, kind, filename, content_type, user_agent, size_bytes, "
-           "       truncated, stats, substring(payload from 1 for 240) AS head "
-           "FROM health_import_log WHERE user_id=$1")
-    args = [user["id"]]
-    if kind:
-        args.append(kind[:60] + "%")
-        sql += f" AND kind LIKE ${len(args)}"
-    args.append(lim)
     rows = await db.fetch(
-        sql + f" ORDER BY created_at DESC, id DESC LIMIT ${len(args)}", *args)
+        "SELECT id, created_at, kind, filename, content_type, user_agent, size_bytes, "
+        "       truncated, stats, substring(payload from 1 for 240) AS head "
+        "FROM health_import_log WHERE user_id=$1 ORDER BY created_at DESC, id DESC LIMIT $2",
+        user["id"], lim)
     out = []
     for r in rows:
         d = _ser_exp(r)
@@ -476,56 +456,13 @@ async def list_import_log(limit: Optional[int] = 50, kind: Optional[str] = None,
     return out
 
 
-async def import_log_status(db, user_id: int) -> dict:
-    """Wie voll ist das Import-Protokoll?
-
-    Das Protokoll ist eine Ringpuffer-artige Tabelle: ist ``HEALTH_IMPORT_LOG_KEEP``
-    erreicht, verdraengt jeder neue Aufruf den aeltesten. Das ist gewollt, darf
-    aber nicht unbemerkt passieren -- sonst sucht man spaeter den Roh-Payload
-    eines Aufrufs, den die Aufbewahrung laengst weggeworfen hat. Der Ingest
-    haengt das Ergebnis an seine Antwort, der Beta-Reiter zeigt es an.
-    """
-    row = await db.fetchrow(
-        "SELECT COUNT(*) AS n, MIN(created_at) AS oldest "
-        "FROM health_import_log WHERE user_id=$1", user_id)
-    n = int(row["n"] or 0) if row else 0
-    keep = HEALTH_IMPORT_LOG_KEEP
-    return {
-        "count": n,
-        "keep": keep,
-        "at_limit": n >= keep,
-        # Vorwarnung ab 90 %, damit man die Grenze anheben kann, BEVOR der erste
-        # Eintrag verloren geht.
-        "near_limit": n >= int(keep * 0.9),
-        "oldest": row["oldest"].isoformat() if row and row["oldest"] else None,
-    }
-
-
-@router.get("/api/health/imports/status")
-async def get_import_log_status(db=Depends(get_db), user=Depends(get_current_user)):
-    """Fuellstand des Import-Protokolls (v1.47.0). Beide Strecken -- Auto Health
-    Export und Kurzbefehl -- teilen sich diese Tabelle und damit die
-    Aufbewahrungsgrenze."""
-    return await import_log_status(db, user["id"])
-
-
 def _import_log_filename(row) -> str:
     """Baut einen sicheren Download-Dateinamen aus Eintrags-ID und Originalname."""
     base = (row["filename"] or "").rsplit("/", 1)[-1].strip()
     base = _re.sub(r"[^A-Za-z0-9._-]", "_", base)[:80]
     if not base or base in (".", ".."):
         kind = (row["kind"] or "").lower()
-        if "json" in kind:
-            ext = ".json"
-        elif "csv" in kind:
-            ext = ".csv"
-        elif "text" in kind or kind.startswith("shortcut"):
-            # v1.48.1: Die Kurzbefehl-Strecke schickt Klartext. Der bekam vorher
-            # ``.bin``, weil die Zuordnung nur JSON und CSV kannte -- eine Datei,
-            # die sich nicht oeffnen laesst, ist als Diagnosewerkzeug wertlos.
-            ext = ".txt"
-        else:
-            ext = ".bin"
+        ext = ".json" if "json" in kind else (".csv" if "csv" in kind else ".bin")
         base = f"payload{ext}"
     ts = row["created_at"].strftime("%Y-%m-%d_%H%M") if row["created_at"] else "unbekannt"
     return f"health-sync_{ts}_{row['id']}_{base}"
@@ -547,8 +484,6 @@ async def download_import_log(lid: int, db=Depends(get_db), user=Depends(get_cur
         media = "application/json; charset=utf-8"
     elif fname.endswith(".csv"):
         media = "text/csv; charset=utf-8"
-    elif fname.endswith(".txt"):
-        media = "text/plain; charset=utf-8"
     else:
         media = "application/octet-stream"
     return Response(
