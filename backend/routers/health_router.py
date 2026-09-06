@@ -457,13 +457,23 @@ async def list_import_log(limit: Optional[int] = 50, db=Depends(get_db),
 
 
 def _import_log_filename(row) -> str:
-    """Baut einen sicheren Download-Dateinamen aus Eintrags-ID und Originalname."""
+    """Baut einen sicheren Download-Dateinamen aus Eintrags-ID und Originalname.
+
+    Die Roh-Payloads sind durchweg Text (JSON, CSV oder — bei Multipart — ein
+    Rumpf mit Trennzeilen dazwischen). Eintraege ohne brauchbare Endung bekommen
+    deshalb ``.txt`` statt ``.bin``, damit sich der Download direkt im Editor
+    oeffnen laesst; eine Diagnosedatei, die man erst umbenennen muss, taugt
+    nicht als Diagnosewerkzeug."""
     base = (row["filename"] or "").rsplit("/", 1)[-1].strip()
     base = _re.sub(r"[^A-Za-z0-9._-]", "_", base)[:80]
     if not base or base in (".", ".."):
         kind = (row["kind"] or "").lower()
-        ext = ".json" if "json" in kind else (".csv" if "csv" in kind else ".bin")
+        ext = ".json" if "json" in kind else (".csv" if "csv" in kind else ".txt")
         base = f"payload{ext}"
+    elif base.lower().endswith(".bin"):
+        base = base[:-4] + ".txt"
+    elif "." not in base:
+        base = base + ".txt"
     ts = row["created_at"].strftime("%Y-%m-%d_%H%M") if row["created_at"] else "unbekannt"
     return f"health-sync_{ts}_{row['id']}_{base}"
 
@@ -484,6 +494,8 @@ async def download_import_log(lid: int, db=Depends(get_db), user=Depends(get_cur
         media = "application/json; charset=utf-8"
     elif fname.endswith(".csv"):
         media = "text/csv; charset=utf-8"
+    elif fname.endswith(".txt"):
+        media = "text/plain; charset=utf-8"
     else:
         media = "application/octet-stream"
     return Response(

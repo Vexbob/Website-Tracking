@@ -4,6 +4,11 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.49.1', date: '2026-09-06', title: 'Import-Protokoll: Roh-Payload lädt als .txt statt .bin', notes: [
+        'Der Download eines Eintrags aus dem Import-Protokoll leitete seine Endung aus dem gespeicherten Dateinamen ab, und der ist bei den Multipart-Aufrufen von Auto Health Export .bin — der Klartext landete damit als Binärdatei und ließ sich nicht ohne Umbenennen öffnen. Genau diese Datei ist aber das Werkzeug, mit dem sich ein auffälliger Wert der Quelle oder Vexbob zuordnen lässt.',
+        'Payloads ohne brauchbare Endung kommen jetzt als .txt mit text/plain, ebenso alles, was bisher .bin hieß. CSV und JSON behalten .csv beziehungsweise .json samt ihrem Content-Type.',
+        'Am gespeicherten Inhalt ändert sich nichts: Der Roh-Payload wird weiterhin vollständig und ungeteilt abgelegt und Byte für Byte unverändert ausgeliefert — nur Dateiname und Content-Type des Downloads sind anders.',
+    ]},
     { v: 'v1.49.0', date: '2026-09-06', title: 'Beta-Strecke „Apple Health per iPhone-Kurzbefehl“ wieder entfernt', notes: [
         'Die in v1.47.0 begonnene zweite Importstrecke ist vollständig zurückgebaut: Endpoints, Parser, Beta-Reiter, Tests und Anleitung sind weg. Sie war als Ausweichweg gedacht, weil der Sync über Auto Health Export unzuverlässig wirkte.',
         'Der Grund für den Rückbau ist die gefundene Ursache: Das Problem lag nie am Sync, sondern an Auto Health Export selbst — die App exportiert die sportartspezifischen Zusatzmetriken nicht, sobald mehrere Workout-Typen zusammen exportiert werden. Mit einem Workout-Typ je Export läuft der bestehende Weg, und ein zweiter Importkanal löst ein Problem, das es nicht gibt.',
