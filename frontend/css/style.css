@@ -620,7 +620,15 @@ input[type="checkbox"] { display: inline; width: auto; }
 .mobile-tabbar .mtab:active { transform: scale(0.94); }
 .mobile-tabbar .mtab.active { color: var(--accent); }
 .mobile-tabbar .mtab svg { display: block; }
-.mobile-tabbar .mtab-lbl { line-height: 1; }
+.mobile-tabbar .mtab-lbl {
+    line-height: 1;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* v1.51.0: Ab fuenf Tabs wird es auf einem schmalen iPhone eng -- kleinere
+   Label statt abgeschnittener. */
+.mobile-tabbar[data-count="5"] .mtab-lbl,
+.mobile-tabbar[data-count="6"] .mtab-lbl { font-size: 0.625rem; }
+.mobile-tabbar[data-count="6"] .mtab { padding: 6px 2px; }
 
 @media (max-width: 720px) {
     .mobile-tabbar { display: flex; }
@@ -758,3 +766,63 @@ input[type="checkbox"] { display: inline; width: auto; }
     line-height: 1.5;
 }
 
+
+/* ==========================================================================
+   v1.51.0 — Einstell-Dialog fuer die mobile Tab-Leiste
+   ========================================================================== */
+/* Der Eintrag im Modul-Switcher ist ein <button> zwischen lauter <a> --
+   die globale Button-Base (voll breit, dunkler Grund) muss hier weg. */
+button.nav-switcher-item {
+    width: 100%; margin: 0.25rem 0 0; padding: 0.5rem 0.625rem;
+    background: transparent; color: var(--text-muted);
+    font-size: 0.875rem; font-weight: 500; text-align: left;
+    border-top: 1px solid var(--border); border-radius: 0;
+}
+button.nav-switcher-item:hover { background: var(--surface-2); opacity: 1; }
+
+.navcfg-box { max-width: 420px; }
+.navcfg-hint {
+    margin: 0 0 0.875rem; color: var(--text-muted);
+    font-size: 0.8125rem; line-height: 1.5;
+}
+.navcfg-sub {
+    margin: 1rem 0 0.5rem; color: var(--text-fainter);
+    font-size: 0.6875rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em;
+}
+.navcfg-list { display: flex; flex-direction: column; gap: 0.375rem; }
+.navcfg-row {
+    display: flex; align-items: center; gap: 0.625rem;
+    padding: 0.5rem 0.625rem;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.navcfg-ico { display: flex; color: var(--text-muted); }
+.navcfg-name { flex: 1; min-width: 0; font-size: 0.875rem; font-weight: 500; }
+.navcfg-btns { display: flex; gap: 0.25rem; }
+.navcfg-mini {
+    width: 34px; height: 34px; margin: 0; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface); color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 8px;
+    font-size: 0.875rem; font-weight: 600; line-height: 1;
+}
+.navcfg-mini:hover { color: var(--text); border-color: var(--border-strong); opacity: 1; }
+.navcfg-mini:disabled { opacity: 0.35; cursor: default; transform: none; }
+.navcfg-mini.navcfg-add { color: var(--accent); }
+.navcfg-actions {
+    display: flex; gap: 0.5rem; justify-content: flex-end;
+    padding: 0.875rem 1rem; border-top: 1px solid var(--border);
+}
+.navcfg-btn {
+    width: auto; margin: 0; padding: 0.5rem 1rem;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    font-size: 0.875rem; font-weight: 600;
+}
+.navcfg-btn:hover { background: var(--surface); opacity: 1; }
+.navcfg-btn.navcfg-save {
+    background: var(--text); color: var(--surface); border-color: var(--text);
+}
+.navcfg-btn.navcfg-save:hover { opacity: 0.9; }
+.navcfg-btn:disabled { opacity: 0.45; cursor: default; transform: none; }

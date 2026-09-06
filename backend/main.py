@@ -1844,3 +1844,9 @@ app.include_router(health_router)
 # --------------------------------------------------------------------------
 from routers.export_router import router as export_router
 app.include_router(export_router)
+
+# ==========================================================================
+# Oberflaechen-Einstellungen (v1.51.0) — Belegung der mobilen Tab-Leiste
+# --------------------------------------------------------------------------
+from routers.ui_router import router as ui_router
+app.include_router(ui_router)

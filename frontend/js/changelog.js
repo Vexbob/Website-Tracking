@@ -4,6 +4,13 @@
  * Neue Releases OBEN einfuegen.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.51.0', date: '2026-09-06', title: 'Tab-Leiste auf dem Handy ist frei belegbar', notes: [
+        'Die Leiste am unteren Bildschirmrand zeigte fest verdrahtet Home, Sparen, Ausgaben und Notizen — welche vier das sind, war eine Annahme im Frontend. Jetzt wählt jeder Nutzer selbst, welche zwei bis sechs Module dort stehen und in welcher Reihenfolge. Zu finden im Modul-Switcher oben rechts unter „Tab-Leiste anpassen“.',
+        'Zur Auswahl stehen alle Module, die das Konto sehen darf — inklusive Gesundheit, Blog und (für Admins) der User-Verwaltung, die vorher gar nicht in die Leiste kamen. Jedes davon hat jetzt ein eigenes Icon im selben Strichstil wie die bisherigen vier.',
+        'Die Belegung liegt am Konto, nicht am Gerät: auf iPhone und iPad steht dieselbe Leiste. Im localStorage liegt nur eine Kopie, damit die Leiste beim Seitenwechsel sofort richtig steht statt nach der Antwort des Servers umzuspringen. Ist ein gewähltes Ziel nicht mehr erreichbar — etwa der Admin-Bereich nach Rechteentzug —, fällt es beim Zeichnen still heraus.',
+        'Sortiert wird mit Hoch-/Runter-Knöpfen statt per Drag & Drop: der Dialog wird fast immer auf dem Handy geöffnet, und dort trifft ein 44-Pixel-Knopf zuverlässig — ein gezogener Finger neben einer scrollbaren Dialogfläche nicht. Ab fünf Tabs werden die Beschriftungen kleiner, damit auch sechs Stück auf einem schmalen iPhone lesbar bleiben.',
+        'Untergrenze sind zwei Einträge (darunter ist es keine Navigation mehr), Obergrenze sechs — beides prüft der Server mit, nicht nur der Dialog. „Standard“ stellt die ursprünglichen vier wieder her.',
+    ]},
     { v: 'v1.50.1', date: '2026-09-06', title: 'Schlaf: Streuung von Zubettgeh- und Aufstehzeit in Stunden', notes: [
         'Die Standardabweichung neben der typischen Zubettgeh- und Aufstehzeit steht jetzt in Stunden statt in Minuten — „± 1,3 h" statt „± 78 min". Die Größenordnung passt damit zur Aussage: eine Streuung von über einer Stunde ist der Normalfall, und die Minutenzahl hat eine Genauigkeit vorgetäuscht, die in der Zahl nicht steckt. Auch die Streuung der Zeit im Bett ist jetzt in derselben Einheit wie der Wert daneben.',
         'Gerechnet wird unverändert: Standardabweichung der Stichprobe auf den 18:00-Offsets, damit 23:30 und 00:30 nicht die Mittagszeit als Mittelwert ergeben. Der Hinweis „stark schwankend" erscheint weiterhin ab zwei Stunden Streuung.',

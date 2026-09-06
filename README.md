@@ -77,6 +77,7 @@ Eine Dashboard-Kachel exportiert alle Module gemeinsam als eine CSV (`GET /api/e
 
 ### 🧭 UX
 - **Globaler Modul-Switcher** in der Navbar für den Sprung zwischen den Modulen.
+- **Anpassbare Tab-Leiste** — auf dem Handy liegt unten eine feste Leiste; welche zwei bis sechs Module dort stehen und in welcher Reihenfolge, stellt jeder Nutzer selbst ein (Modul-Switcher → „Tab-Leiste anpassen“). Die Auswahl hängt am Konto, nicht am Gerät.
 - **Dark-Mode** mit Umschalter, den auch die Diagramme mitmachen.
 - **PWA** — installierbar, Service Worker mit Update-Hinweis, sobald eine neue Version ausgeliefert wurde.
 - **Drag-&-Drop-Sortierung** für Ziele, Achievements und Listen.
