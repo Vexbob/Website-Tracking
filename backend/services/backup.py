@@ -36,6 +36,9 @@ TABLES_ORDERED = [
     "health_sleep",
     "health_workouts",
     "health_workout_metrics",
+    # Puls-Minutenreihe je Workout (v1.50.0) -- haengt wie die Zusatzmetriken
+    # per workout_id am Workout und hat selbst keine user_id.
+    "health_workout_hr_samples",
     # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
     # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
     "user_prefs",

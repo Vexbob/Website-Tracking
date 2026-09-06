@@ -23,9 +23,12 @@ https://github.com/Lybron/health-auto-export/wiki):
            "totalEnergy": {"qty": 300, "units": "kcal"},
            "distance": {"qty": 5000, "units": "m"},
            "avgHeartRate": {"qty": 145}, "maxHeartRate": {"qty": 172},
-           "elevationAscended": {"qty": 30, "units": "m"},
-           "heartRateRecovery": [...], "swimCadence": {...}, ...}
+           "elevation": {"ascent": 30, "descent": 12, "units": "m"},
+           "heartRateData": [...], "heartRateRecovery": [...],
+           "swimCadence": {...}, ...}
         ]
+        # Workouts kommen in ZWEI Exportvarianten mit unterschiedlichen
+        # Feldnamen und je eigener id -- siehe Abschnitt "Workouts (JSON)".
       }
     }
 
@@ -40,7 +43,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 logger = logging.getLogger("vexbob.health_ingest")
@@ -311,39 +314,261 @@ async def _ingest_sleep_point(db, user_id: int, p: dict) -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# Workouts (JSON) — zwei Exportvarianten desselben Trainings
+# ---------------------------------------------------------------------------
+# Auto Health Export liefert dasselbe Workout je nach Exporteinstellung in zwei
+# Auspraegungen. Beide tragen identische Start- und Endzeiten, aber jeweils eine
+# EIGENE, zufaellige "id" -- und jede enthaelt Felder, die der anderen fehlen:
+#
+#   Variante A: avgHeartRate/maxHeartRate/heartRate{min,avg,max}, die
+#               Minutenreihe heartRateData + heartRateRecovery,
+#               activeEnergyBurned, elevationUp, lapLength.
+#   Variante B: activeEnergy + totalEnergy, elevation{ascent,descent},
+#               stepCount/stepCadence/flightsClimbed, swimCadence und
+#               totalSwimmingStrokeCount -- dafuer alle Pulswerte auf 0.
+#
+# Die App-id ist deshalb KEINE Identitaet: zugeordnet wird ueber (Nutzer, Typ,
+# Startzeit), damit beide Exporte dieselbe Zeile fuellen statt zwei halbe
+# anzulegen. Beim Zusammenfuehren gewinnt der belegte Wert; eine fehlende
+# Groesse kommt als 0 oder als leeres Array an und darf einen bereits
+# importierten Wert nie ueberschreiben.
+#
+# Zeitfenster der Zuordnung: beide Varianten liefern die Startzeit auf die
+# Sekunde gleich, die zwei Minuten fangen nur Rundungen der App ab. Groesser
+# darf es nicht werden -- zwei echte Trainings koennen dicht aufeinander folgen.
+_WORKOUT_MATCH_WINDOW = timedelta(seconds=120)
+
+
+def _pos(v: Optional[float]) -> Optional[float]:
+    """None fuer 0. In beiden Exporten heisst 0 "nicht gemessen" (die
+    Puls-Felder der einen Variante stehen durchgehend auf 0, Schrittzahlen
+    beim Schwimmen ebenso). Ein echter Messwert 0 geht dabei verloren -- das
+    ist gewollt, sonst ueberschreibt die leere Variante die volle."""
+    if v is None:
+        return None
+    return None if abs(v) < 1e-9 else v
+
+
+def _qty_unit(w: dict, *keys) -> tuple:
+    """Erster belegter Schluessel als (Wert, Einheit). Mehrere Namen, weil die
+    Varianten dieselbe Groesse unterschiedlich nennen (activeEnergy vs.
+    activeEnergyBurned)."""
+    for k in keys:
+        v = w.get(k)
+        if isinstance(v, dict):
+            n = _pos(_num(v.get("qty")))
+            if n is not None:
+                return n, (v.get("units") or None)
+        elif v is not None:
+            n = _pos(_num(v))
+            if n is not None:
+                return n, None
+    return None, None
+
+
+def _workout_distance_m(w: dict) -> Optional[float]:
+    """Distanz in Metern. Das Einheitenfeld wechselt je Variante und Sportart:
+    dasselbe Bahnschwimmen kommt einmal als 1,825 km und einmal als 1825 m."""
+    qty, unit = _qty_unit(w, "distance")
+    if qty is None:
+        return None
+    if (unit or "").strip().lower() in ("m", "meter", "meters"):
+        return qty
+    # Default km -- ausser die Zahl ist dafuer zu gross: ueber 300 km gibt es
+    # keine einzelne Trainingseinheit mehr, dann sind es schon Meter (vgl.
+    # Migration 026, dieselbe Verwechslung im CSV-Export).
+    return qty if qty > _CSV_DIST_KM_MAX else qty * 1000
+
+
+def _workout_speed_kmh(w: dict) -> Optional[float]:
+    """O-Geschwindigkeit in km/h. Beim Schwimmen tragen BEIDE Varianten das
+    Etikett "m/hr", die eine liefert aber echte Meter pro Stunde (1424,9), die
+    andere denselben Wert bereits in km/h (1,42)."""
+    qty, unit = _qty_unit(w, "speed")
+    if qty is None:
+        return None
+    if (unit or "").strip().lower().startswith("km"):
+        return qty
+    return qty / 1000 if qty > _CSV_SPEED_KMH_MAX else qty
+
+
+def _workout_lap_length_m(w: dict) -> Optional[float]:
+    """Bahnlaenge in Metern. Etikett "m", Wert 0,025 -- gemeint sind
+    Kilometer, also eine 25-m-Bahn."""
+    qty, _unit = _qty_unit(w, "lapLength")
+    if qty is None:
+        return None
+    return qty * 1000 if qty < 1 else qty
+
+
+def _workout_energy_kcal(w: dict, *keys) -> Optional[float]:
+    qty, unit = _qty_unit(w, *keys)
+    if qty is None:
+        return None
+    return round(qty / 4.184, 1) if (unit or "").strip().lower() == "kj" else qty
+
+
+def _workout_elevation(w: dict) -> tuple:
+    """(Aufstieg, Abstieg) in Metern. Variante A liefert elevationUp als
+    einzelnen Wert, Variante B ein Objekt mit ascent/descent."""
+    el = w.get("elevation")
+    if isinstance(el, dict):
+        up = _pos(_num(el.get("ascent")))
+        down = _pos(_num(el.get("descent")))
+        if up is not None or down is not None:
+            return up, down
+    up, _u = _qty_unit(w, "elevationUp", "elevationAscended")
+    down, _d = _qty_unit(w, "elevationDown", "elevationDescended")
+    return up, down
+
+
+def _nested_qty(obj, key) -> Optional[float]:
+    """heartRate: {"avg": {"qty": 134, "units": "bpm"}} -- eine Ebene tiefer
+    als avgHeartRate, sonst identisch."""
+    v = obj.get(key) if isinstance(obj, dict) else None
+    if isinstance(v, dict):
+        return _pos(_num(v.get("qty")))
+    return _pos(_num(v))
+
+
+def _hr_samples(w: dict) -> list:
+    """Puls-Minutenreihe als Liste von Dicts. heartRateData deckt das Training
+    ab, heartRateRecovery die Sekunden danach -- beide mit denselben Feldern
+    (Min/Max/Avg), aber getrennt gehalten, weil die Erholungswerte nach dem
+    Workout-Ende liegen und den Verlauf sonst verzerren."""
+    out: dict = {}
+    for key, kind in (("heartRateData", "workout"), ("heartRateRecovery", "recovery")):
+        for e in (w.get(key) or []):
+            if not isinstance(e, dict):
+                continue
+            at = _parse_dt(e.get("date"))
+            if at is None:
+                continue
+            mn = _plausible_hr(_pos(_num(e.get("Min", e.get("min")))))
+            mx = _plausible_hr(_pos(_num(e.get("Max", e.get("max")))))
+            av = _plausible_hr(_pos(_num(e.get("Avg", e.get("avg")))))
+            if mn is None and mx is None and av is None:
+                continue
+            if av is None:
+                av = mx if mn is None else (mn if mx is None else (mn + mx) / 2)
+            out[(kind, at)] = {"kind": kind, "at": at, "min": mn, "max": mx, "avg": av}
+    return sorted(out.values(), key=lambda s: (s["kind"], s["at"]))
+
+
+def _workout_heart_rate(w: dict, samples: list) -> tuple:
+    """(O, Max, Min) in bpm. Fehlen die Aggregate, werden sie aus der
+    Minutenreihe gerechnet -- ungewichtet, was bei einem Messpunkt je Minute
+    dem Mittel entspricht."""
+    hr = w.get("heartRate") if isinstance(w.get("heartRate"), dict) else {}
+    avg = _qty_unit(w, "avgHeartRate")[0]
+    if avg is None:
+        avg = _nested_qty(hr, "avg")
+    mx = _qty_unit(w, "maxHeartRate")[0]
+    if mx is None:
+        mx = _nested_qty(hr, "max")
+    mn = _qty_unit(w, "minHeartRate")[0]
+    if mn is None:
+        mn = _nested_qty(hr, "min")
+
+    during = [s for s in samples if s["kind"] == "workout"]
+    if during:
+        if avg is None:
+            vals = [s["avg"] for s in during if s["avg"] is not None]
+            avg = sum(vals) / len(vals) if vals else None
+        if mx is None:
+            vals = [v for v in (s["max"] if s["max"] is not None else s["avg"]
+                                for s in during) if v is not None]
+            mx = max(vals) if vals else None
+        if mn is None:
+            vals = [v for v in (s["min"] if s["min"] is not None else s["avg"]
+                                for s in during) if v is not None]
+            mn = min(vals) if vals else None
+    return _plausible_hr(avg), _plausible_hr(mx), _plausible_hr(mn)
+
+
+async def _upsert_workout_head(db, user_id: int, external_id: str, wtype: Optional[str],
+                                start_at: datetime, end_at: Optional[datetime],
+                                duration_min: Optional[float], active_kcal: Optional[float],
+                                total_kcal: Optional[float], distance_m: Optional[float],
+                                avg_hr: Optional[float], max_hr: Optional[float],
+                                min_hr: Optional[float], elevation_m: Optional[float]):
+    """Sucht das Workout ueber (Nutzer, Typ, Startzeit) und fuellt nur die
+    Luecken; existiert keines, wird es angelegt. COALESCE in dieser Richtung
+    heisst: ein neu gelieferter Wert gewinnt, ein fehlender laesst den
+    bestehenden stehen."""
+    row = await db.fetchrow(
+        "SELECT id FROM health_workouts "
+        "WHERE user_id=$1 AND start_at BETWEEN $2 AND $3 "
+        "  AND (workout_type IS NOT DISTINCT FROM $4::text "
+        "       OR workout_type IS NULL OR $4::text IS NULL) "
+        "ORDER BY ABS(EXTRACT(EPOCH FROM (start_at - $5::timestamptz))) LIMIT 1",
+        user_id, start_at - _WORKOUT_MATCH_WINDOW, start_at + _WORKOUT_MATCH_WINDOW,
+        wtype, start_at)
+
+    if row:
+        await db.execute(
+            "UPDATE health_workouts SET "
+            "workout_type=COALESCE(workout_type,$2), end_at=COALESCE($3,end_at), "
+            "duration_min=COALESCE($4,duration_min), "
+            "active_energy_kcal=COALESCE($5,active_energy_kcal), "
+            "total_energy_kcal=COALESCE($6,total_energy_kcal), "
+            "distance_m=COALESCE($7,distance_m), "
+            "avg_heart_rate=COALESCE($8,avg_heart_rate), "
+            "max_heart_rate=COALESCE($9,max_heart_rate), "
+            "min_heart_rate=COALESCE($10,min_heart_rate), "
+            "elevation_m=COALESCE($11,elevation_m) "
+            "WHERE id=$1",
+            row["id"], wtype, end_at, duration_min, active_kcal, total_kcal,
+            distance_m, avg_hr, max_hr, min_hr, elevation_m)
+        return row["id"]
+
+    return await db.fetchval(
+        "INSERT INTO health_workouts "
+        "(user_id, external_id, workout_type, start_at, end_at, duration_min, "
+        "active_energy_kcal, total_energy_kcal, distance_m, avg_heart_rate, "
+        "max_heart_rate, min_heart_rate, elevation_m, source) "
+        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'auto_health_export') "
+        "ON CONFLICT (user_id, external_id) DO UPDATE SET "
+        "end_at=COALESCE(EXCLUDED.end_at, health_workouts.end_at), "
+        "duration_min=COALESCE(EXCLUDED.duration_min, health_workouts.duration_min), "
+        "active_energy_kcal=COALESCE(EXCLUDED.active_energy_kcal, health_workouts.active_energy_kcal), "
+        "total_energy_kcal=COALESCE(EXCLUDED.total_energy_kcal, health_workouts.total_energy_kcal), "
+        "distance_m=COALESCE(EXCLUDED.distance_m, health_workouts.distance_m), "
+        "avg_heart_rate=COALESCE(EXCLUDED.avg_heart_rate, health_workouts.avg_heart_rate), "
+        "max_heart_rate=COALESCE(EXCLUDED.max_heart_rate, health_workouts.max_heart_rate), "
+        "min_heart_rate=COALESCE(EXCLUDED.min_heart_rate, health_workouts.min_heart_rate), "
+        "elevation_m=COALESCE(EXCLUDED.elevation_m, health_workouts.elevation_m) "
+        "RETURNING id",
+        user_id, external_id, wtype, start_at, end_at, duration_min,
+        active_kcal, total_kcal, distance_m, avg_hr, max_hr, min_hr, elevation_m)
+
+
 async def _ingest_workout(db, user_id: int, w: dict) -> bool:
-    """Kopf-Tabelle + flexible Zusatzmetriken. Bewusst OHNE Routendaten
-    (GPS-Punkte werden vom Payload ignoriert, falls die App sie mitschickt)."""
-    external_id = f"{w.get('id') or w.get('name') or ''}:{w.get('start') or ''}"
+    """Kopf-Tabelle + Zusatzmetriken + Puls-Minutenreihe. Bewusst OHNE
+    Routendaten (das ``route``-Array wird ignoriert, auch wenn die App es
+    mitschickt)."""
     start_at = _parse_dt(w.get("start"))
-    if external_id.strip(":") == "" or not start_at:
+    if not start_at:
         return False
+    wtype = (w.get("name") or "").strip() or None
+    external_id = f"{w.get('id') or wtype or 'workout'}:{w.get('start') or ''}"
     end_at = _parse_dt(w.get("end"))
     duration_raw = _num(w.get("duration"))
     # Auto Health Export liefert die Dauer in Sekunden
     duration_min = None if duration_raw is None else round(duration_raw / 60, 1)
 
-    def _qty(key):
-        v = w.get(key)
-        return _num(v.get("qty")) if isinstance(v, dict) else _num(v)
+    samples = _hr_samples(w)
+    avg_hr, max_hr, min_hr = _workout_heart_rate(w, samples)
+    elev_up, elev_down = _workout_elevation(w)
+    active_kcal = _workout_energy_kcal(w, "activeEnergy", "activeEnergyBurned")
+    total_kcal = _workout_energy_kcal(w, "totalEnergy", "totalEnergyBurned")
 
     try:
-        wid = await db.fetchval(
-            "INSERT INTO health_workouts "
-            "(user_id, external_id, workout_type, start_at, end_at, duration_min, "
-            "active_energy_kcal, total_energy_kcal, distance_m, avg_heart_rate, max_heart_rate, "
-            "elevation_m, source) "
-            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'auto_health_export') "
-            "ON CONFLICT (user_id, external_id) DO UPDATE SET "
-            "end_at=EXCLUDED.end_at, duration_min=EXCLUDED.duration_min, "
-            "active_energy_kcal=EXCLUDED.active_energy_kcal, total_energy_kcal=EXCLUDED.total_energy_kcal, "
-            "distance_m=EXCLUDED.distance_m, avg_heart_rate=EXCLUDED.avg_heart_rate, "
-            "max_heart_rate=EXCLUDED.max_heart_rate, elevation_m=EXCLUDED.elevation_m "
-            "RETURNING id",
-            user_id, external_id, w.get("name"), start_at, end_at, duration_min,
-            _qty("activeEnergy"), _qty("totalEnergy"), _qty("distance"),
-            _plausible_hr(_qty("avgHeartRate")), _plausible_hr(_qty("maxHeartRate")),
-            _qty("elevationAscended"))
+        wid = await _upsert_workout_head(
+            db, user_id, external_id, wtype, start_at, end_at, duration_min,
+            active_kcal, total_kcal, _workout_distance_m(w),
+            avg_hr, max_hr, min_hr, elev_up)
     except Exception as e:
         logger.warning("Workout-Insert fehlgeschlagen: %s", e)
         return False
@@ -351,27 +576,53 @@ async def _ingest_workout(db, user_id: int, w: dict) -> bool:
     if not wid:
         return False
 
-    # Zusatzmetriken (je Sportart unterschiedlich) als Key/Value-Zeilen
-    extra_keys = [
-        "swimCadence", "cyclingCadence", "cyclingSpeed", "cyclingPower",
-        "flightsClimbed", "stepCount", "intensity", "humidity", "temperature",
-    ]
-    for k in extra_keys:
-        v = w.get(k)
-        if v is None:
-            continue
-        val = _num(v.get("qty")) if isinstance(v, dict) else _num(v)
-        u = v.get("units") if isinstance(v, dict) else None
-        if val is None:
+    # Zusatzmetriken (je Sportart unterschiedlich) unter denselben kanonischen
+    # Schluesseln wie beim CSV-Import -- sonst stuende dieselbe Groesse je nach
+    # Importweg unter zwei Namen in derselben Tabelle.
+    extras = {
+        "resting_energy_kcal": (None if (total_kcal is None or active_kcal is None)
+                                else round(total_kcal - active_kcal, 1)),
+        "intensity_kcal_h_kg": _qty_unit(w, "intensity")[0],
+        "avg_speed_kmh": _workout_speed_kmh(w),
+        "elevation_descended_m": elev_down,
+        "flights_climbed": _qty_unit(w, "flightsClimbed")[0],
+        "step_count": _qty_unit(w, "stepCount")[0],
+        "cadence_spm": _qty_unit(w, "stepCadence", "cyclingCadence")[0],
+        "swim_stroke_count": _qty_unit(w, "totalSwimmingStrokeCount", "swimStrokeCount")[0],
+        "swim_cadence_spm": _qty_unit(w, "swimCadence")[0],
+        "lap_length_m": _workout_lap_length_m(w),
+        "cycling_speed_kmh": _qty_unit(w, "cyclingSpeed")[0],
+        "cycling_power_w": _qty_unit(w, "cyclingPower")[0],
+        "temperature_c": _qty_unit(w, "temperature")[0],
+        "humidity_pct": _qty_unit(w, "humidity")[0],
+    }
+    for key, val in extras.items():
+        if not val:
             continue
         try:
             await db.execute(
                 "INSERT INTO health_workout_metrics (workout_id, metric_key, value, unit) "
-                "VALUES ($1,$2,$3,$4) "
-                "ON CONFLICT (workout_id, metric_key) DO UPDATE SET value=EXCLUDED.value, unit=EXCLUDED.unit",
-                wid, k, val, u)
+                "VALUES ($1,$2,$3,NULL) "
+                "ON CONFLICT (workout_id, metric_key) DO UPDATE SET "
+                "value=EXCLUDED.value, unit=NULL",
+                wid, key, val)
         except Exception as e:
-            logger.warning("Workout-Metric-Insert fehlgeschlagen (%s): %s", k, e)
+            logger.warning("Workout-Metric-Insert fehlgeschlagen (%s): %s", key, e)
+
+    if samples:
+        try:
+            await db.executemany(
+                "INSERT INTO health_workout_hr_samples "
+                "(workout_id, kind, recorded_at, min_bpm, max_bpm, avg_bpm) "
+                "VALUES ($1,$2,$3,$4,$5,$6) "
+                "ON CONFLICT (workout_id, kind, recorded_at) DO UPDATE SET "
+                "min_bpm=EXCLUDED.min_bpm, max_bpm=EXCLUDED.max_bpm, avg_bpm=EXCLUDED.avg_bpm",
+                [(wid, s["kind"], s["at"], s["min"], s["max"], s["avg"]) for s in samples])
+        except Exception as e:
+            # Der Rest des Workouts steht bereits -- eine fehlgeschlagene
+            # Minutenreihe darf den Import nicht als gescheitert melden.
+            logger.warning("Workout-Pulsreihe fehlgeschlagen (%s Punkte): %s",
+                           len(samples), e)
     return True
 
 

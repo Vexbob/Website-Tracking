@@ -947,7 +947,8 @@ async def _health_section(
     wk_where, wk_params = _build_range_where("start_at", 1, date_from, date_to)
     wk_rows = await db.fetch(
         f"SELECT id, start_at, end_at, workout_type, duration_min, active_energy_kcal, "
-        f"total_energy_kcal, distance_m, elevation_m, avg_heart_rate, max_heart_rate "
+        f"total_energy_kcal, distance_m, elevation_m, avg_heart_rate, max_heart_rate, "
+        f"min_heart_rate "
         f"FROM health_workouts WHERE user_id=$1{wk_where} ORDER BY start_at",
         user_id, *wk_params)
     workout_ids: list[int] = [r["id"] for r in wk_rows]
@@ -956,7 +957,8 @@ async def _health_section(
     else:
         out.append("# SEKTION: Gesundheit - Workouts (ohne Routendaten)")
         out.append("ID;Start;Ende;Typ;Dauer (min);Aktive Energie (kcal);Gesamt-Energie (kcal);"
-                    "Distanz (m);Hoehenmeter (m);O-Herzfrequenz;Max-Herzfrequenz")
+                    "Distanz (m);Hoehenmeter (m);O-Herzfrequenz;Max-Herzfrequenz;"
+                    "Min-Herzfrequenz")
         for r in wk_rows:
             out.append(
                 f'{r["id"]};'
@@ -966,7 +968,7 @@ async def _health_section(
                 f'{_num(r["duration_min"])};{_num(r["active_energy_kcal"])};'
                 f'{_num(r["total_energy_kcal"])};{_num(r["distance_m"])};'
                 f'{_num(r["elevation_m"])};{_num(r["avg_heart_rate"])};'
-                f'{_num(r["max_heart_rate"])}'
+                f'{_num(r["max_heart_rate"])};{_num(r["min_heart_rate"])}'
             )
         out.append("")
 

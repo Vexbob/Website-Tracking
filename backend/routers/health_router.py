@@ -19,6 +19,7 @@ Endpoints:
   GET    /api/health/sleep               — Schlaf-Naechte
   GET    /api/health/workouts            — Workout-Liste (Filter nach Typ)
   GET    /api/health/workouts/{wid}      — Workout-Detail inkl. Zusatzmetriken
+                                            und Puls-Minutenreihe
   GET    /api/health/metric-order        — gespeicherte Reihenfolge der Vitalwerte-Diagramme
   PUT    /api/health/metric-order        — Reihenfolge speichern (Drag & Drop im Frontend)
 
@@ -640,9 +641,12 @@ async def delete_workout(request: Request, wid: int,
     if not row:
         raise HTTPException(404, "Workout nicht gefunden")
     async with db.transaction():
-        # Zusatzmetriken zuerst, falls die Tabelle keinen CASCADE hat
+        # Zusatzmetriken und Pulsreihe zuerst, falls die Tabellen keinen
+        # CASCADE haben
         await db.execute(
             "DELETE FROM health_workout_metrics WHERE workout_id=$1", wid)
+        await db.execute(
+            "DELETE FROM health_workout_hr_samples WHERE workout_id=$1", wid)
         await db.execute(
             "DELETE FROM health_workouts WHERE id=$1 AND user_id=$2", wid, user["id"])
     logger.info("User %s deleted workout %s", user["id"], wid)
@@ -904,11 +908,22 @@ async def list_workouts(workout_type: Optional[str] = None, limit: Optional[int]
 
 @router.get("/api/health/workouts/{wid}")
 async def get_workout_detail(wid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    """Kopfdaten + Zusatzmetriken + Puls-Minutenreihe.
+
+    Die Reihe steckt bewusst NICHT in der Listen-Antwort: sie hat je Workout
+    bis zu ein paar hundert Punkte und wird nur beim Aufklappen gebraucht.
+    ``kind`` trennt den Verlauf waehrend des Trainings von der Erholungsphase
+    danach."""
     w = await db.fetchrow("SELECT * FROM health_workouts WHERE id=$1 AND user_id=$2", wid, user["id"])
     if not w:
         raise HTTPException(404, "Workout nicht gefunden")
     metrics = await db.fetch(
         "SELECT metric_key, value, unit FROM health_workout_metrics WHERE workout_id=$1", wid)
+    hr = await db.fetch(
+        "SELECT kind, recorded_at, min_bpm, max_bpm, avg_bpm "
+        "FROM health_workout_hr_samples WHERE workout_id=$1 ORDER BY recorded_at", wid)
     out = _ser_exp(w)
     out["extra_metrics"] = [dict(m) for m in metrics]
+    out["hr_series"] = [_ser_exp(r) for r in hr if r["kind"] == "workout"]
+    out["hr_recovery"] = [_ser_exp(r) for r in hr if r["kind"] == "recovery"]
     return out

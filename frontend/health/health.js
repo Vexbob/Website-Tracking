@@ -249,6 +249,7 @@ const state = {
     sleepDays: 30, sleepInit: false, chartSleepTimes: null,
     sleepUsable: [], sleepWindows: [],   // Naechte hinter den Balken (Tooltip)
     workoutsLoaded: false, workoutsAll: [], workoutFilter: '', workoutRange: 0,
+    workoutHrCharts: {},
     keysLoaded: false,
     sparkCharts: [],
 };
@@ -1230,6 +1231,7 @@ function renderWorkoutCard(w) {
         paceStr ? { lbl:'Pace', val: paceStr } : null,
         w.avg_heart_rate != null ? { lbl:'Ø Puls', val: fmt0(w.avg_heart_rate) + ' <small>bpm</small>' } : null,
         w.max_heart_rate != null ? { lbl:'Max Puls', val: fmt0(w.max_heart_rate) + ' <small>bpm</small>' } : null,
+        w.min_heart_rate != null ? { lbl:'Min Puls', val: fmt0(w.min_heart_rate) + ' <small>bpm</small>' } : null,
         w.elevation_m != null && w.elevation_m > 0
             ? { lbl:'Aufstieg', val: fmt0(w.elevation_m) + ' <small>m</small>' } : null,
     ].filter(Boolean);
@@ -1254,6 +1256,57 @@ function renderWorkoutCard(w) {
             </div>
             <div class="h-workout-extras-wrap" id="hwx-${w.id}" style="display:none"></div>
         </div>`;
+}
+
+// Puls-Minutenreihe eines Workouts. Die Erholungswerte nach dem Trainingsende
+// bekommen eine eigene, gestrichelte Linie -- sie gehoeren zeitlich dahinter
+// und wuerden den Verlauf sonst als Teil des Trainings ausweisen.
+function mountWorkoutHrChart(id, series, recovery) {
+    const canvas = document.getElementById('hwhr-' + id);
+    if (!canvas || typeof Chart === 'undefined') return;
+    const pts = [
+        ...series.map(r => ({ at: r.recorded_at, v: r.avg_bpm, during: true })),
+        ...recovery.map(r => ({ at: r.recorded_at, v: r.avg_bpm, during: false })),
+    ].filter(p => p.v != null && p.at)
+     .sort((a, b) => new Date(a.at) - new Date(b.at));
+    if (pts.length < 2) return;
+
+    const labels = pts.map(p => fmtHM(p.at));
+    const during = pts.map(p => p.during ? Number(p.v) : null);
+    const after  = pts.map(p => p.during ? null : Number(p.v));
+    // Anschluss ohne Luecke: die Erholungslinie beginnt am letzten Messpunkt
+    // des Trainings statt einen Sprung zu zeigen.
+    const lastDuring = during.reduce((acc, v, i) => v != null ? i : acc, -1);
+    if (lastDuring >= 0 && after.some(v => v != null)) after[lastDuring] = during[lastDuring];
+
+    const th = chartTheme();
+    if (state.workoutHrCharts[id]) state.workoutHrCharts[id].destroy();
+    state.workoutHrCharts[id] = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Puls (bpm)', data: during, borderColor: '#ef4444',
+                  backgroundColor: 'rgba(239,68,68,0.13)', fill: true, tension: 0.3,
+                  pointRadius: 0, borderWidth: 2 },
+                { label: 'Erholung (bpm)', data: after, borderColor: '#f59e0b',
+                  borderDash: [4, 3], fill: false, tension: 0.3,
+                  pointRadius: 0, borderWidth: 2 },
+            ],
+        },
+        options: chartDefaults({
+            plugins: {
+                legend: { labels: { color: th.text, boxWidth: 10, font: { size: 10 } } },
+                tooltip: themedTooltip(),
+            },
+            scales: {
+                x: { ticks: { color: th.muted, maxRotation: 0, autoSkipPadding: 24,
+                              font: { size: 10 } }, grid: { display: false } },
+                y: { ticks: { color: th.muted, font: { size: 10 }, maxTicksLimit: 5 },
+                     grid: { color: th.grid }, beginAtZero: false },
+            },
+        }),
+    });
 }
 
 async function toggleWorkoutExtras(id) {
@@ -1283,12 +1336,24 @@ async function toggleWorkoutExtras(id) {
                 swim_stroke_count: 'Schwimmzüge', swim_cadence_spm: 'Schwimmkadenz (spm)',
                 lap_length_m: 'Rundenlänge (m)', swolf: 'SWOLF',
                 temperature_c: 'Temperatur (°C)', humidity_pct: 'Luftfeuchtigkeit (%)',
+                cycling_speed_kmh: 'Rad-Geschwindigkeit (km/h)', cycling_power_w: 'Rad-Leistung (W)',
             };
-            wrap.innerHTML = extras.length ? `
+            // Der Pulsverlauf kommt nur aus einer der beiden Exportvarianten;
+            // fehlt er, bleibt es bei der Tabelle.
+            const series = w.hr_series || [], recovery = w.hr_recovery || [];
+            const chartHtml = (series.length + recovery.length) >= 2
+                ? `<div class="h-workout-hr">
+                       <div class="h-workout-hr-lbl">Pulsverlauf</div>
+                       <div style="height:170px"><canvas id="hwhr-${id}"></canvas></div>
+                   </div>` : '';
+            const tableHtml = extras.length ? `
                 <div class="h-workout-extras"><table>${extras.map(x => `
                     <tr><td>${escHtml(extraLabels[x.metric_key] || x.metric_key)}</td>
                         <td>${fmt1(x.value)}${x.unit ? ' ' + escHtml(x.unit) : ''}</td></tr>`).join('')}
-                </table></div>` : '<div class="h-empty" style="padding:0.75rem">Keine Zusatzdaten.</div>';
+                </table></div>` : '';
+            wrap.innerHTML = (chartHtml + tableHtml)
+                || '<div class="h-empty" style="padding:0.75rem">Keine Zusatzdaten.</div>';
+            if (chartHtml) mountWorkoutHrChart(id, series, recovery);
             wrap.dataset.loaded = '1';
         } catch (e) {
             wrap.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
