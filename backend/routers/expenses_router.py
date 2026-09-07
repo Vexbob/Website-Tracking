@@ -28,11 +28,44 @@ from deps import (
 from services.expenses import suggest_category, learn_rule, process_image
 from services.ocr import get_ocr_provider
 from services.receipt_parser import parse_receipt
-from services.ai_receipt_parser import ai_parse_receipt
+from services.ai_receipt_parser import ai_parse_receipt, normalize_expense_type
 
 
 router = APIRouter(tags=["expenses"])
 
+
+# ---------- Beleg-Typen ----------
+# Fuenf eingebaute Typen mit fester Beschriftung. Daneben darf jeder eigene
+# Typen haben: seit v1.52.0 entscheidet der KI-Parser den Typ selbst und legt
+# notfalls einen neuen an ("Arztrechnung"). Die eigenen Typen brauchen keine
+# eigene Tabelle -- sie stehen als Klartext in ``expenses.expense_type``, und
+# die Auswahlliste entsteht aus den tatsaechlich benutzten Werten.
+EXPENSE_TYPE_BUILTINS = [
+    {"key": "receipt",      "label": "Kassenbon",         "icon": "🧾"},
+    {"key": "online_order", "label": "Online-Bestellung", "icon": "📦"},
+    {"key": "restaurant",   "label": "Restaurant",        "icon": "🍽️"},
+    {"key": "subscription", "label": "Abo",               "icon": "🔁"},
+    {"key": "other",        "label": "Sonstiges",         "icon": "📌"},
+]
+_BUILTIN_TYPE_KEYS = {t["key"] for t in EXPENSE_TYPE_BUILTINS}
+
+
+async def _resolve_expense_type(db, user_id: int, raw, default: Optional[str] = "receipt"):
+    """Normalisiert einen Beleg-Typ auf einen Schluessel oder einen eigenen Namen.
+
+    Eigene Typen werden nicht angelegt, sondern einfach gespeichert; damit aus
+    "arztrechnung" und "Arztrechnung" nicht zwei Typen werden, gewinnt eine
+    bereits benutzte Schreibweise.
+    """
+    v = normalize_expense_type(raw)
+    if not v:
+        return default
+    if v in _BUILTIN_TYPE_KEYS:
+        return v
+    existing = await db.fetchval(
+        "SELECT expense_type FROM expenses WHERE user_id=$1 AND LOWER(expense_type)=LOWER($2) "
+        "ORDER BY id DESC LIMIT 1", user_id, v)
+    return existing or (v[:1].upper() + v[1:])
 
 
 # ---------- Models: Ausgaben ----------
@@ -152,7 +185,9 @@ class ExpenseCreate(BaseModel):
     is_recurring: Optional[bool] = False
     recurring_pattern: Optional[str] = None
     note: Optional[str] = None
-    expense_type: Optional[str] = "receipt"  # receipt|online_order|restaurant|subscription|other
+    # receipt|online_order|restaurant|subscription|other -- oder ein eigener
+    # Klartext-Name, den der KI-Parser vorgeschlagen hat (v1.52.0).
+    expense_type: Optional[str] = "receipt"
     items: Optional[list[ExpenseItemIn]] = None
 
 class ExpenseUpd(BaseModel):
@@ -214,6 +249,25 @@ async def delete_store(request: Request, sid: int, db=Depends(get_db), user=Depe
     if r == "DELETE 0":
         raise HTTPException(404, "Nicht gefunden")
     return {"status": "deleted"}
+
+
+# ---------- Beleg-Typen ----------
+@router.get("/api/expense-types")
+async def list_expense_types(db=Depends(get_db), user=Depends(get_current_user)):
+    """Alle waehlbaren Beleg-Typen: die fuenf eingebauten, danach die eigenen,
+    die der User (bzw. der KI-Parser) tatsaechlich schon benutzt hat -- haeufigste
+    zuerst. ``count`` sagt, an wie vielen Bons der Typ haengt."""
+    rows = await db.fetch(
+        "SELECT expense_type AS key, COUNT(*) AS n FROM expenses "
+        "WHERE user_id=$1 AND expense_type IS NOT NULL AND expense_type != '' "
+        "GROUP BY expense_type", user["id"])
+    counts = {r["key"]: r["n"] for r in rows}
+    out = [{**t, "builtin": True, "count": counts.get(t["key"], 0)}
+           for t in EXPENSE_TYPE_BUILTINS]
+    custom = [{"key": k, "label": k, "icon": "🏷️", "builtin": False, "count": n}
+              for k, n in counts.items() if k not in _BUILTIN_TYPE_KEYS]
+    custom.sort(key=lambda t: (-t["count"], t["label"].lower()))
+    return out + custom
 
 
 # ---------- Kategorien ----------
@@ -443,9 +497,7 @@ async def create_expense(request: Request, b: ExpenseCreate,
         if not ok:
             raise HTTPException(400, "Bild unbekannt")
 
-    exp_type = (b.expense_type or "receipt").strip()
-    if exp_type not in ("receipt", "online_order", "restaurant", "subscription", "other"):
-        exp_type = "receipt"
+    exp_type = await _resolve_expense_type(db, user["id"], b.expense_type)
 
     async with db.transaction():
         row = await db.fetchrow(
@@ -509,8 +561,10 @@ async def update_expense(request: Request, eid: int, b: ExpenseUpd,
     if b.is_recurring is not None: add("is_recurring", bool(b.is_recurring))
     if b.recurring_pattern is not None: add("recurring_pattern", b.recurring_pattern)
     if b.note is not None: add("note", b.note)
-    if b.expense_type is not None and b.expense_type in ("receipt","online_order","restaurant","subscription","other"):
-        add("expense_type", b.expense_type)
+    if b.expense_type is not None:
+        resolved = await _resolve_expense_type(db, user["id"], b.expense_type, default=None)
+        if resolved:
+            add("expense_type", resolved)
     if not fields:
         return await get_expense(eid, db=db, user=user)
     vals.extend([eid, user["id"]])
@@ -662,16 +716,28 @@ async def upload_receipt(request: Request,
         "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
     brand_rows = await db.fetch(
         "SELECT name FROM brands WHERE user_id=$1", user["id"])
+    # v1.52.0: Der Parser entscheidet den Beleg-Typ selbst. Die eigenen Typen des
+    # Users kommen als Kontext mit, damit er sie wiederverwendet statt neue
+    # Schreibweisen zu erfinden.
+    type_rows = await db.fetch(
+        "SELECT DISTINCT expense_type FROM expenses "
+        "WHERE user_id=$1 AND expense_type IS NOT NULL AND expense_type != ''",
+        user["id"])
+    known_types = [r["expense_type"] for r in type_rows
+                   if r["expense_type"] not in _BUILTIN_TYPE_KEYS]
     try:
         parsed = await ai_parse_receipt(
             ocr_text,
             [{"id": r["id"], "name": r["name"]} for r in cat_rows],
             [{"name": r["name"]} for r in user_stores_rows],
             brands=[{"name": r["name"]} for r in brand_rows],
+            expense_types=known_types,
         )
     except Exception as e:
         logger.warning(f"AI parse failed, falling back to regex: {e}")
         parsed = parse_receipt(ocr_text, user_stores=user_stores)
+        parsed.pop("payment_method", None)
+        parsed.setdefault("expense_type", "receipt")
         parsed["_parser"] = "regex"
         parsed["_fallback_reason"] = f"outer_exception: {e}"
 
@@ -878,6 +944,10 @@ async def get_receipt_ocr(rid: int, db=Depends(get_db), user=Depends(get_current
         "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
     brand_rows = await db.fetch(
         "SELECT name FROM brands WHERE user_id=$1", user["id"])
+    type_rows = await db.fetch(
+        "SELECT DISTINCT expense_type FROM expenses "
+        "WHERE user_id=$1 AND expense_type IS NOT NULL AND expense_type != ''",
+        user["id"])
     ocr_text = row["ocr_raw_text"] or ""
     try:
         parsed = await ai_parse_receipt(
@@ -885,10 +955,14 @@ async def get_receipt_ocr(rid: int, db=Depends(get_db), user=Depends(get_current
             [{"id": r["id"], "name": r["name"]} for r in cat_rows],
             [{"name": r["name"]} for r in user_stores_rows],
             brands=[{"name": r["name"]} for r in brand_rows],
+            expense_types=[r["expense_type"] for r in type_rows
+                           if r["expense_type"] not in _BUILTIN_TYPE_KEYS],
         )
     except Exception as e:
         logger.warning(f"AI parse failed, falling back to regex: {e}")
         parsed = parse_receipt(ocr_text, user_stores=user_stores)
+        parsed.pop("payment_method", None)
+        parsed.setdefault("expense_type", "receipt")
         parsed["_parser"] = "regex"
         parsed["_fallback_reason"] = f"outer_exception: {e}"
     return {

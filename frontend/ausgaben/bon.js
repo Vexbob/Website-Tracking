@@ -19,6 +19,7 @@ async function init() {
             AUSGABEN_API.stores(), AUSGABEN_API.categories(), AUSGABEN_API.getExpense(id)
         ]);
     } catch(e) { showToast('Bon nicht gefunden', 'error'); setTimeout(() => location.href='/ausgaben/', 1500); return; }
+    await loadExpenseTypes();
     await render();
     document.body.classList.add('ready');
     document.body.style.visibility = 'visible';
@@ -28,12 +29,8 @@ async function render() {
     const e = currentExpense;
     const storeOpts = '<option value="">– Kein Laden –</option>' +
         stores.map(s => `<option value="${s.id}"${e.store_id==s.id?' selected':''}>${s.icon || ''} ${escapeHtml(s.name)}</option>`).join('');
-    const paymentVal = e.payment_method || '';
-    const pmts = [['','–'],['cash','Bar'],['card','EC/Karte'],['credit','Kreditkarte'],['paypal','PayPal'],['other','Sonstiges']];
-    const paymentOpts = pmts.map(([v,l]) => `<option value="${v}"${v===paymentVal?' selected':''}>${l}</option>`).join('');
-    const typeVal = e.expense_type || 'receipt';
-    const types = [['receipt','🧾 Kassenbon'],['online_order','📦 Online-Bestellung'],['restaurant','🍽️ Restaurant'],['subscription','🔁 Abo'],['other','📌 Sonstiges']];
-    const typeOpts = types.map(([v,l]) => `<option value="${v}"${v===typeVal?' selected':''}>${l}</option>`).join('');
+    // Typen kommen vom Server (eingebaute + eigene, die der KI-Parser vergeben hat).
+    const typeOpts = expenseTypeOptions(e.expense_type || 'receipt');
 
     let imgHtml = '';
     if (e.receipt_image_id) {
@@ -56,10 +53,7 @@ async function render() {
                 <div><label>Datum</label><input type="date" id="eDate" value="${e.purchase_date || ''}"></div>
                 <div><label>Laden</label><select id="eStore">${storeOpts}</select></div>
             </div>
-            <div class="form-row">
-                <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="eTotal" value="${e.total_amount || ''}"></div>
-                <div><label>Zahlungsart</label><select id="ePayment">${paymentOpts}</select></div>
-            </div>
+            <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="eTotal" value="${e.total_amount || ''}"></div>
             <div style="margin-top:0.5rem"><label>Notiz</label><textarea id="eNote">${escapeHtml(e.note || '')}</textarea></div>
             <div class="actions">
                 <button id="eSave" class="primary">Speichern</button>
@@ -106,8 +100,10 @@ function renderItemRow(item) {
         ? 'Aus der Produktliste ausblenden (z.B. Einmalkauf)'
         : 'Wieder in die Produktliste aufnehmen';
     const cmpIcon = comparable ? '📊' : '🚫';
+    const qty = Math.round(Number(item.quantity));
     row.innerHTML = `
         <input type="text" class="d-desc" value="${escapeAttr(item.description||'')}" placeholder="Beschreibung">
+        <input type="number" min="1" step="1" class="d-qty" value="${Number.isFinite(qty) && qty > 1 ? qty : ''}" placeholder="1×" title="Stückzahl — nur ausfüllen, wenn du den Artikel mehrfach gekauft hast">
         <input type="number" step="0.01" class="d-price" value="${item.total_price || ''}" placeholder="Preis">
         <select class="d-cat">${catOpts}</select>
         <button class="cmp" title="${cmpTitle}">${cmpIcon}</button>
@@ -120,17 +116,21 @@ function renderItemRow(item) {
         const price = parseFloat(row.querySelector('.d-price').value);
         const cat = row.querySelector('.d-cat').value;
         if (!desc || isNaN(price)) return;
+        // Menge ist eine Stückzahl: leeres Feld heißt 1.
+        let q = Math.round(parseFloat((row.querySelector('.d-qty')?.value || '').replace(',', '.')));
+        if (!Number.isFinite(q) || q < 1) q = 1;
+        item.quantity = q;
         try {
             if (item.id) {
                 await AUSGABEN_API.updateItem(item.id, {
                     description: desc, total_price: price,
-                    quantity: item.quantity || 1, quantity_unit: item.quantity_unit || null,
+                    quantity: q,
                     category_id: cat ? +cat : null,
                     price_comparable: item.price_comparable !== false,
                 });
             } else {
                 const created = await AUSGABEN_API.addItem(currentExpense.id, {
-                    description: desc, total_price: price, quantity: 1,
+                    description: desc, total_price: price, quantity: q,
                     category_id: cat ? +cat : null,
                 });
                 item.id = created.id;
@@ -171,7 +171,7 @@ function addNewItem() {
     // Wenn "keine Positionen"-Hinweis da ist, wegräumen
     const c = document.getElementById('itemList');
     if (c.querySelector('.muted')) c.innerHTML = '';
-    renderItemRow({ description: '', total_price: '', category_id: null });
+    renderItemRow({ description: '', total_price: '', category_id: null, quantity: 1 });
 }
 
 async function saveExpense() {
@@ -181,7 +181,6 @@ async function saveExpense() {
             store_id: +document.getElementById('eStore').value || null,
             purchase_date: document.getElementById('eDate').value,
             total_amount: +document.getElementById('eTotal').value || 0,
-            payment_method: document.getElementById('ePayment').value || null,
             is_recurring: false,
             expense_type: document.getElementById('eType').value || 'receipt',
             note: document.getElementById('eNote').value || null,

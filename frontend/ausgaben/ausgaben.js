@@ -6,6 +6,8 @@ const AUSGABEN_API = {
     updateStore: (id, b) => apiCall(`/api/stores/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     deleteStore: (id) => apiCall(`/api/stores/${id}`, { method: 'DELETE' }),
 
+    expenseTypes:    () => apiCall('/api/expense-types'),
+
     categories:      () => apiCall('/api/expense-categories'),
     createCategory:  (b) => apiCall('/api/expense-categories', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     updateCategory:  (id, b) => apiCall(`/api/expense-categories/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
@@ -94,6 +96,55 @@ const AUSGABEN_API = {
     exportCsv:  () => `${API_BASE}/api/expenses/export`,
 };
 
+
+/* ---------- Beleg-Typen ---------- */
+/* Der Typ eines Bons (Kassenbon, Abo, ...) ist seit v1.52.0 nicht mehr fest
+ * verdrahtet: der KI-Parser entscheidet ihn beim Scannen und darf einen eigenen
+ * Namen vergeben ("Arztrechnung"). Die fuenf eingebauten Typen stehen hier
+ * trotzdem, damit Beschriftungen auch ohne Server-Antwort stimmen. */
+const EXPENSE_TYPE_BUILTINS = [
+    { key: 'receipt',      label: 'Kassenbon',         icon: '🧾', builtin: true },
+    { key: 'online_order', label: 'Online-Bestellung', icon: '📦', builtin: true },
+    { key: 'restaurant',   label: 'Restaurant',        icon: '🍽️', builtin: true },
+    { key: 'subscription', label: 'Abo',               icon: '🔁', builtin: true },
+    { key: 'other',        label: 'Sonstiges',         icon: '📌', builtin: true },
+];
+let _expenseTypes = null;
+
+async function loadExpenseTypes(force = false) {
+    if (_expenseTypes && !force) return _expenseTypes;
+    try {
+        const rows = await AUSGABEN_API.expenseTypes();
+        _expenseTypes = (rows && rows.length) ? rows : EXPENSE_TYPE_BUILTINS.slice();
+    } catch (e) {
+        _expenseTypes = EXPENSE_TYPE_BUILTINS.slice();
+    }
+    return _expenseTypes;
+}
+
+function expenseTypeMeta(key) {
+    const list = _expenseTypes || EXPENSE_TYPE_BUILTINS;
+    const hit = list.find(t => t.key === key);
+    if (hit) return hit;
+    // Eigener Typ, der (noch) nicht in der Liste steht: Klartext als Beschriftung.
+    return key ? { key, label: key, icon: '🏷️' } : list[0];
+}
+function expenseTypeLabel(key) { return expenseTypeMeta(key).label; }
+function expenseTypeIcon(key)  { return expenseTypeMeta(key).icon; }
+
+/* <option>-Liste fuer ein Typ-Dropdown. Ein Typ, den es noch nicht gibt (frisch
+ * vom Parser vorgeschlagen), wird hinten angehaengt, damit er auswaehlbar ist. */
+function expenseTypeOptions(selected) {
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const list = (_expenseTypes || EXPENSE_TYPE_BUILTINS).slice();
+    if (selected && !list.some(t => t.key === selected)) {
+        list.push({ key: selected, label: selected, icon: '🏷️' });
+    }
+    return list.map(t =>
+        `<option value="${esc(t.key)}"${t.key === selected ? ' selected' : ''}>${t.icon || '🏷️'} ${esc(t.label)}</option>`
+    ).join('');
+}
 
 /* ---------- Auth Bootstrap ---------- */
 async function ensureLoggedIn() {

@@ -15,7 +15,10 @@ async function init() {
     try {
         [stores, categories] = await Promise.all([AUSGABEN_API.stores(), AUSGABEN_API.categories()]);
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
+    await loadExpenseTypes();
     fillStoreSelects();
+    const mType = document.getElementById('mType');
+    if (mType) mType.innerHTML = expenseTypeOptions('receipt');
     document.getElementById('mDate').value = todayISO();
     setupTabs();
     setupOcrUpload();
@@ -226,7 +229,7 @@ async function handleFile(file) {
             if (p.store_hint) found.push('Laden');
             if (p.purchase_date) found.push('Datum');
             if (p.total_amount) found.push('Summe');
-            if (p.payment_method) found.push('Zahlung');
+            if (p.expense_type) found.push('Typ');
             msg = '✓ OCR: ' + (found.length ? found.join(' + ') + ' erkannt' : 'kein Feld erkannt');
         }
         showToast(msg, ocr.available && p.total_amount ? 'success' : 'error', 4000);
@@ -361,10 +364,10 @@ async function renderOcrEditForm(ocr) {
     const storeOpts = '<option value="">– Kein Laden –</option>' +
         stores.map(s => `<option value="${s.id}"${matchedStore==s.id?' selected':''}>${s.icon || ''} ${escapeHtml(s.name)}</option>`).join('');
 
-    // Payment-Vorauswahl aus OCR
-    const pmethodVal = parsed.payment_method || '';
-    const pmts = [['','–'],['cash','Bar'],['card','EC/Karte'],['credit','Kreditkarte'],['paypal','PayPal'],['other','Sonstiges']];
-    const paymentOpts = pmts.map(([v,l]) => `<option value="${v}"${v===pmethodVal?' selected':''}>${l}</option>`).join('');
+    // Beleg-Typ: der Parser entscheidet ihn (v1.52.0). Ist es ein Typ, den es
+    // beim User noch nicht gibt, haengt expenseTypeOptions ihn als Auswahl an.
+    const typeVal = parsed.expense_type || 'receipt';
+    const typeOpts = expenseTypeOptions(typeVal);
 
     // Diagnose-Zeile für OCR
     let diagBadges = '';
@@ -393,21 +396,12 @@ async function renderOcrEditForm(ocr) {
         </div>
         ${rawSection}
         <div style="margin-bottom:0.5rem"><label>Typ</label>
-        <select id="oType">
-            <option value="receipt" selected>🧾 Kassenbon</option>
-            <option value="online_order">📦 Online-Bestellung</option>
-            <option value="restaurant">🍽️ Restaurant</option>
-            <option value="subscription">🔁 Abo</option>
-            <option value="other">📌 Sonstiges</option>
-        </select></div>
+        <select id="oType">${typeOpts}</select></div>
         <div class="form-row">
             <div><label>Datum</label><input type="date" id="oDate" value="${parsed.purchase_date || todayISO()}"></div>
             <div><label>Laden</label><select id="oStore">${storeOpts}</select></div>
         </div>
-        <div class="form-row">
-            <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="oTotal" value="${parsed.total_amount || ''}"></div>
-            <div><label>Zahlungsart</label><select id="oPayment">${paymentOpts}</select></div>
-        </div>
+        <div><label>Gesamtbetrag (€)</label><input type="number" step="0.01" id="oTotal" value="${parsed.total_amount || ''}"></div>
         <div style="margin-top:1rem;padding:0.625rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
             <label style="display:flex;align-items:center;gap:0.5rem;margin:0;cursor:pointer;font-size:0.875rem">
                 <input type="checkbox" id="oIncludeItems" checked style="width:auto;margin:0">
@@ -445,34 +439,31 @@ async function renderOcrEditForm(ocr) {
 function addOcrItemRow(item) { addItemRow('oItems', item); }
 function addManualItemRow(item) { addItemRow('mItems', item); }
 
-// Zerlegt "Basisname 2kg (Original vom Bon)" in { name, qty, unit, original }.
-// Bei Formaten wie "Milch" oder "Milch 1L" wird trotzdem sinnvoll geparst.
+// Zerlegt eine Position in { name, qty, original }.
+// Bevorzugt die strukturierten Felder des Items; nur wenn die fehlen (alte
+// Bons, manuelle Zeilen), wird die Legacy-Beschreibung "Name 2kg (Original)"
+// auseinandergenommen. ``qty`` ist eine reine Stückzahl und bleibt leer, wenn
+// der Artikel nur einmal gekauft wurde — Gewicht und Packungsgröße stehen im
+// Original-Text vom Bon und werden nicht mehr als Menge geführt (v1.52.0).
 function splitProductDescription(desc, item) {
-    const out = { name: '', qty: '', unit: '', original: '' };
-    if (!desc) return out;
-    let s = String(desc).trim();
-    // Original in Klammern extrahieren
-    const parenMatch = s.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
-    if (parenMatch) {
-        s = parenMatch[1].trim();
-        out.original = parenMatch[2].trim();
-    }
-    // Menge+Einheit am Ende: "2kg", "1L", "500g", "10x180 Blatt", "10 Stk"
-    const qtyMatch = s.match(/^(.*?)[\s]+(\d+(?:[.,]\d+)?)\s*(kg|g|L|ml|Stk|Pack|Btl|Blatt)\b\s*$/i);
-    if (qtyMatch) {
-        out.name = qtyMatch[1].trim();
-        out.qty = qtyMatch[2].replace(',', '.');
-        out.unit = qtyMatch[3];
-    } else {
-        out.name = s;
-    }
-    // Falls das Item-Objekt strukturierte Werte hat, überschreiben (Priorität)
-    if (item) {
-        if (item.quantity != null && item.quantity !== 1 && !out.qty) {
-            out.qty = String(item.quantity).replace(',', '.');
+    const out = { name: '', qty: '', original: '' };
+    if (item && item.base_name) {
+        out.name = String(item.base_name).trim();
+        out.original = (item.original_text || '').trim();
+    } else if (desc) {
+        let s = String(desc).trim();
+        const parenMatch = s.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+        if (parenMatch) {
+            s = parenMatch[1].trim();
+            out.original = parenMatch[2].trim();
         }
-        if (item.quantity_unit && !out.unit) out.unit = item.quantity_unit;
+        // Alte Beschreibungen tragen die Menge im Namen ("Haferflocken 500g") —
+        // die gehört nicht mehr ins Namensfeld.
+        const qtyMatch = s.match(/^(.*?)[\s]+(\d+(?:[.,]\d+)?)\s*(kg|g|L|ml|Stk|Pack|Btl|Blatt)\b\s*$/i);
+        out.name = qtyMatch ? qtyMatch[1].trim() : s;
     }
+    const q = item ? Math.round(Number(item.quantity)) : NaN;
+    if (Number.isFinite(q) && q > 1 && q <= 99) out.qty = String(q);
     return out;
 }
 
@@ -494,8 +485,7 @@ function addItemRow(containerId, item) {
 
     row.innerHTML = `
         <input type="text" class="d-desc" placeholder="Produkt (z.B. Vollmilch)" value="${escapeAttr(parts.name)}">
-        <input type="text" class="d-qty" placeholder="Menge" value="${escapeAttr(parts.qty)}">
-        <input type="text" class="d-unit" placeholder="Einheit" value="${escapeAttr(parts.unit)}" list="unitList">
+        <input type="number" min="1" step="1" class="d-qty" placeholder="1×" title="Stückzahl — nur ausfüllen, wenn du den Artikel mehrfach gekauft hast" value="${escapeAttr(parts.qty)}">
         <input type="number" step="0.01" class="d-price" placeholder="Preis" value="${item?item.total_price||'':''}">
         <select class="d-cat">${catOpts}</select>
         <button class="del" title="Entfernen">✕</button>
@@ -551,21 +541,17 @@ function collectItems(containerId) {
     rows.forEach(r => {
         const name = r.querySelector('.d-desc').value.trim();
         const qtyStr = r.querySelector('.d-qty')?.value.trim() || '';
-        const unit = r.querySelector('.d-unit')?.value.trim() || '';
         const price = parseFloat(r.querySelector('.d-price').value);
         if (!name || isNaN(price)) return;
 
-        const qty = qtyStr ? parseFloat(qtyStr.replace(',', '.')) : null;
+        // Menge ist eine Stückzahl: leer oder Unsinn heißt 1.
+        let qty = qtyStr ? Math.round(parseFloat(qtyStr.replace(',', '.'))) : 1;
+        if (!Number.isFinite(qty) || qty < 1) qty = 1;
 
-        // Description im einheitlichen Format bauen: "Name qty+unit (Original)"
-        let descParts = [name];
-        if (qty && qty !== 1 && unit) descParts.push(`${qtyStr}${unit}`);
-        else if (qty && qty !== 1) descParts.push(qtyStr);
-        else if (unit && !qty) descParts.push(unit);
-        // Original aus Dataset (nur bei OCR-Bons)
+        // Description: "Name (Original vom Bon)" — die Menge steht in ihrem
+        // eigenen Feld und wird nicht mehr in den Namen geschrieben.
         const origText = r.querySelector('.d-orig')?.textContent?.replace(/^📄\s*/, '').replace(/\s·\s.*$/, '').trim();
-        let description = descParts.join(' ').trim();
-        if (origText) description += ` (${origText})`;
+        const description = origText ? `${name} (${origText})` : name;
 
         const cat = r.querySelector('.d-cat').value;
         const it = {
@@ -574,8 +560,7 @@ function collectItems(containerId) {
             original_text: origText || null,    // dito
             total_price: price,
             category_id: (cat && cat !== '__new__') ? +cat : null,
-            quantity: qty && qty > 0 ? qty : 1,
-            quantity_unit: unit || null,
+            quantity: qty,
             price_comparable: r.dataset.comparable !== '0',
             user_edited: true,                  // manuelle Eingabe -> vor Reparse schützen
         };
@@ -598,7 +583,6 @@ async function saveOcrExpense() {
             receipt_image_id: uploadedReceipt.id,
             purchase_date: document.getElementById('oDate').value,
             total_amount: +document.getElementById('oTotal').value || 0,
-            payment_method: document.getElementById('oPayment').value || null,
             is_recurring:   false,
             expense_type:   document.getElementById('oType').value || 'receipt',
             note: document.getElementById('oNote').value || null,
@@ -629,7 +613,6 @@ function setupManualForm() {
                 store_id:  (document.getElementById('mStore').value && document.getElementById('mStore').value !== '__new__') ? +document.getElementById('mStore').value : null,
                 purchase_date: document.getElementById('mDate').value,
                 total_amount: +document.getElementById('mTotal').value || 0,
-                payment_method: document.getElementById('mPayment').value || null,
                 is_recurring:   false,
                 expense_type:   document.getElementById('mType').value || 'receipt',
                 note: document.getElementById('mNote').value || null,

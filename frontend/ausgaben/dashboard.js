@@ -6,6 +6,7 @@ async function loadInit() {
     try {
         [stores, categories] = await Promise.all([AUSGABEN_API.stores(), AUSGABEN_API.categories()]);
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
+    await loadExpenseTypes();
     populateFilters();
     setupFilterPopover();
     setupQuickNew();
@@ -15,6 +16,9 @@ async function loadInit() {
 }
 
 function populateFilters() {
+    // Typ-Filter: eingebaute + eigene Typen, wie sie der Server kennt.
+    const t = document.getElementById('filterType');
+    if (t) t.innerHTML = '<option value="">Alle Typen</option>' + expenseTypeOptions('');
     const s = document.getElementById('filterStore');
     stores.forEach(x => s.insertAdjacentHTML('beforeend', `<option value="${x.id}">${x.icon || ''} ${x.name}</option>`));
     const c = document.getElementById('filterCategory');
@@ -37,10 +41,6 @@ async function loadKpis() {
         ).join('');
     } catch(e) { console.error(e); }
 }
-
-const TYPE_ICONS = { receipt:'🧾', online_order:'📦', restaurant:'🍽️', subscription:'🔁', other:'📌' };
-const TYPE_LABELS = { receipt:'Kassenbon', online_order:'Online', restaurant:'Restaurant', subscription:'Abo', other:'Sonstiges' };
-const PAYMENT_LABELS = { cash:'Bar', card:'EC/Karte', credit:'Kreditkarte', paypal:'PayPal', other:'Sonstiges' };
 
 // Cache pro Bon-ID: { detail: fullExpense, imgUrl: blobUrl|null, expanded: bool }
 const expDetailCache = new Map();
@@ -148,8 +148,8 @@ function renderDateHeader(g) {
 function renderExpItem(r) {
     const initial = (r.store_name || '€').slice(0,1).toUpperCase();
     const color = r.store_color || '#6b7280';
-    const typeIcon = TYPE_ICONS[r.expense_type] || '🧾';
-    const typeLabel = TYPE_LABELS[r.expense_type] || 'Kassenbon';
+    const typeIcon = expenseTypeIcon(r.expense_type);
+    const typeLabel = expenseTypeLabel(r.expense_type);
     // Foto-Icon wenn der Bon ein Bild im Anhang hat (aus OCR-Upload)
     const photoBadge = r.has_image
         ? `<span class="exp-photo-badge" title="Foto vorhanden">📷</span>`
@@ -159,7 +159,7 @@ function renderExpItem(r) {
             <div class="exp-store" style="background:${color}">${r.store_icon || initial}</div>
             <div class="exp-info">
                 <div class="exp-name">${typeIcon} ${escapeHtml(r.store_name || typeLabel)}${r.is_recurring?' 🔁':''}${photoBadge}</div>
-                <div class="exp-meta">${fmtDate(r.purchase_date)} · ${r.item_count||0} Position${r.item_count===1?'':'en'}${r.expense_type && r.expense_type !== 'receipt' ? ' · ' + typeLabel : ''}</div>
+                <div class="exp-meta">${fmtDate(r.purchase_date)} · ${r.item_count||0} Position${r.item_count===1?'':'en'}${r.expense_type && r.expense_type !== 'receipt' ? ' · ' + escapeHtml(typeLabel) : ''}</div>
             </div>
             <div class="exp-amount">${fmtEur(r.total_amount)}</div>
             <span class="exp-chevron">▶</span>
@@ -213,23 +213,24 @@ function renderExpDetail(e, imgUrl) {
         ? items.map(it => {
             const catIcon = it.category_icon || (it.category_id ? '🏷️' : '');
             const catName = it.category_name ? `${catIcon ? catIcon + ' ' : ''}${escapeHtml(it.category_name)}` : '';
+            // Stückzahl nur zeigen, wenn der Artikel mehrfach gekauft wurde.
+            const q = Math.round(Number(it.quantity));
+            const qtyPrefix = (Number.isFinite(q) && q > 1) ? `<span class="it-qty">${q}× </span>` : '';
             return `<div class="it">
-                <span class="it-desc">${escapeHtml(it.description || '')}${catName ? '<span class="it-cat">· ' + catName + '</span>' : ''}</span>
+                <span class="it-desc">${qtyPrefix}${escapeHtml(it.description || '')}${catName ? '<span class="it-cat">· ' + catName + '</span>' : ''}</span>
                 <span class="it-price">${fmtEur(it.total_price)}</span>
             </div>`;
         }).join('')
         : '<div class="muted" style="font-size:0.75rem">Keine Einzelpositionen gespeichert.</div>';
 
-    const pm = e.payment_method ? PAYMENT_LABELS[e.payment_method] || e.payment_method : '–';
-    const typeLabel = TYPE_LABELS[e.expense_type] || 'Kassenbon';
+    const typeLabel = expenseTypeLabel(e.expense_type);
 
     return `
         ${imgUrl ? `<img src="${imgUrl}" class="thumb" alt="Bon-Foto" data-fullscreen="1" style="cursor:zoom-in">` : ''}
         <div class="grid">
-            <div class="k">Typ</div><div class="v">${TYPE_ICONS[e.expense_type] || '🧾'} ${typeLabel}</div>
+            <div class="k">Typ</div><div class="v">${expenseTypeIcon(e.expense_type)} ${escapeHtml(typeLabel)}</div>
             <div class="k">Datum</div><div class="v">${fmtDate(e.purchase_date)}</div>
             <div class="k">Laden</div><div class="v">${escapeHtml(e.store_name || '–')}</div>
-            <div class="k">Zahlungsart</div><div class="v">${pm}</div>
             <div class="k">Gesamt</div><div class="v"><strong>${fmtEur(e.total_amount)}</strong></div>
             ${e.note ? `<div class="k">Notiz</div><div class="v">${escapeHtml(e.note)}</div>` : ''}
         </div>

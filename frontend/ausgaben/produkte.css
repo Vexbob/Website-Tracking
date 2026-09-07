@@ -31,6 +31,11 @@
 .merge-sub{font-size:0.75rem;color:var(--text-muted);margin-top:2px}
 .merge-variants{list-style:none;margin:0.625rem 0 0.75rem;padding:0;display:flex;flex-direction:column;gap:2px}
 .merge-variants li{font-size:0.8125rem;color:var(--text)}
+.merge-variant{display:flex;align-items:center;gap:0.5rem;margin:0;padding:2px 0;cursor:pointer;font-weight:400}
+.merge-variant input{width:auto;margin:0;flex:0 0 auto;accent-color:var(--blue);cursor:pointer}
+.merge-variant-name{font-weight:600}
+.merge-variant:has(input:not(:checked)) .merge-variant-name{font-weight:400;text-decoration:line-through;color:var(--text-muted)}
+.merge-do:disabled{opacity:0.55;cursor:not-allowed}
 .merge-meta{color:var(--text-faint);font-size:0.75rem;margin-left:0.375rem}
 .merge-actions{display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center}
 .merge-name{flex:0 1 16rem;min-width:0;padding:0.375rem 0.5rem;font-size:0.8125rem;margin:0}
@@ -43,7 +48,6 @@
 .pv-stores{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:0.75rem}
 .pv-store-chip{display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);
     border-radius:12px;padding:2px 9px;font-size:0.75rem;color:var(--text-muted);white-space:nowrap}
-.pv-hist-nounit{color:var(--text-fainter);font-style:italic}
 
 @media(max-width:640px){
     .prod-stores{max-width:none}

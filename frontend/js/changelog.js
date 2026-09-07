@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.52.0', date: '2026-09-07', title: 'Bon-Scan: Typ automatisch, Zahlungsart und Einheiten raus', notes: [
+        'Die Zahlungsart ist weg — beim Scannen, beim manuellen Eintrag und in der Bon-Ansicht.',
+        'Der KI-Parser entscheidet den Beleg-Typ jetzt selbst und darf einen eigenen vergeben (z.B. „Arztrechnung“), der danach überall zur Auswahl steht.',
+        'Positionen haben keine Einheit mehr: die Menge ist eine reine Stückzahl und steht nur da, wenn ein Artikel mehrfach gekauft wurde — Gewicht und Packungsgröße bleiben im Bon-Text.',
+        'Zusammenführen-Vorschläge bei den Produkten sind bearbeitbar: Name ändern und einzelne Schreibweisen abwählen, bevor du zusammenführst.',
+        'Der Parser-Prompt wurde aufgeräumt, u.a. nutzen seine Beispiele jetzt die Kategorienamen aus der eigenen Liste.',
+    ]},
     { v: 'v1.51.1', date: '2026-09-06', title: 'Changelog zusammengefasst und gekürzt', notes: [
         'Der Zeitstrahl hatte 86 Einträge, darunter ein Tag mit sieben Hotfix-Versionen — ein README-Aufräumen wog darin so viel wie ein neues Modul. Folgekorrekturen stehen jetzt als „Nachgezogen“-Stichpunkt in dem Eintrag, zu dem sie gehören; übrig bleiben 39 Versionen, hinter denen etwas Erkennbares steht.',
         'Die Texte der letzten Releases sind auf ein bis fünf Stichpunkte à einem Satz gekürzt, ältere Einträge bleiben im Wortlaut. Künftig hebt eine Korrektur die Patch-Nummer des bestehenden Eintrags an, statt eine eigene Zeile zu bekommen.',

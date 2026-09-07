@@ -106,6 +106,10 @@ async function loadMergeSuggestions() {
     renderMergeSuggestions();
 }
 
+/* Ein Vorschlag ist ein Angebot, kein Befehl: der Name ist frei änderbar und
+ * jede Schreibweise lässt sich abwählen, wenn sie doch ein anderes Produkt ist.
+ * Zusammengeführt wird nur, was angehakt bleibt (mindestens zwei Einträge) —
+ * der Rest bleibt als eigene Produktzeile stehen. */
 function renderMergeSuggestions() {
     const box = document.getElementById('mergeBox');
     if (!box) return;
@@ -114,15 +118,20 @@ function renderMergeSuggestions() {
     box.innerHTML = mergeSuggestions.map((s, i) => {
         const variants = s.variants.map(v => {
             const stores = (v.stores || []).join(', ');
-            return `<li><strong>${escHtml(v.title)}</strong>
-                <span class="merge-meta">${v.count}× ${stores ? '· ' + escHtml(stores) : ''}</span></li>`;
+            return `<li>
+                <label class="merge-variant">
+                    <input type="checkbox" class="merge-pick" data-key="${escHtml(v.key)}" data-title="${escHtml(v.title)}" checked>
+                    <span class="merge-variant-name">${escHtml(v.title)}</span>
+                    <span class="merge-meta">${v.count}× ${stores ? '· ' + escHtml(stores) : ''}</span>
+                </label>
+            </li>`;
         }).join('');
         return `<div class="merge-card" data-idx="${i}">
             <div class="merge-head">
                 <span class="merge-icon">🔗</span>
                 <div>
                     <div class="merge-title">${s.variants.length} Schreibweisen von „${escHtml(s.suggested_title)}"?</div>
-                    <div class="merge-sub">Zusammengeführt werden sie zu einer Produktzeile — auch für künftige Käufe.</div>
+                    <div class="merge-sub">Wird eine Produktzeile — auch für künftige Käufe. Name änderbar, einzelne Schreibweisen kannst du abwählen.</div>
                 </div>
             </div>
             <ul class="merge-variants">${variants}</ul>
@@ -136,10 +145,42 @@ function renderMergeSuggestions() {
 
     box.querySelectorAll('.merge-card').forEach(card => {
         const s = mergeSuggestions[+card.dataset.idx];
-        card.querySelector('.merge-do').onclick = async () => {
-            const title = card.querySelector('.merge-name').value.trim() || s.suggested_title;
+        const nameInput = card.querySelector('.merge-name');
+        const doBtn = card.querySelector('.merge-do');
+        const picks = () => [...card.querySelectorAll('.merge-pick:checked')];
+        let nameTouched = false;
+        nameInput.addEventListener('input', () => { nameTouched = true; });
+
+        // Solange der Name nicht von Hand geändert wurde, folgt er der Auswahl:
+        // der kürzeste angehakte Name ist in aller Regel der generische.
+        const sync = () => {
+            const sel = picks();
+            doBtn.disabled = sel.length < 2;
+            doBtn.textContent = sel.length < 2
+                ? 'Mindestens zwei wählen'
+                : (sel.length === s.variants.length ? 'Zusammenführen' : `${sel.length} zusammenführen`);
+            if (!nameTouched && sel.length) {
+                nameInput.value = sel
+                    .map(cb => cb.dataset.title)
+                    .sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
+            }
+        };
+        card.querySelectorAll('.merge-pick').forEach(cb => cb.addEventListener('change', sync));
+        sync();
+
+        doBtn.onclick = async () => {
+            const sel = picks();
+            if (sel.length < 2) return;
+            const keys = sel.map(cb => cb.dataset.key);
+            const dropped = [...card.querySelectorAll('.merge-pick:not(:checked)')].map(cb => cb.dataset.key);
+            const title = nameInput.value.trim() || s.suggested_title;
             try {
-                const r = await AUSGABEN_API.mergeProducts(s.keys, title);
+                const r = await AUSGABEN_API.mergeProducts(keys, title);
+                // Abgewaehltes ist eine Entscheidung, kein Uebersehen: sonst
+                // schlaegt der naechste Seitenaufruf dieselbe Gruppe wieder vor.
+                if (dropped.length && r.product_group) {
+                    try { await AUSGABEN_API.dismissMerge([r.product_group, ...dropped]); } catch (_) {}
+                }
                 showToast(`Zusammengeführt (${r.items} Positionen)`, 'success');
                 await Promise.all([loadProducts(), loadMergeSuggestions()]);
             } catch (e) { showToast('Fehler: ' + e.message, 'error'); }
@@ -404,9 +445,7 @@ function renderChart(items) {
                 tooltip: { callbacks: {
                     afterLabel: (c) => {
                         const h = sorted[c.dataIndex];
-                        const menge = h.quantity && h.quantity_unit
-                            ? `${String(h.quantity).replace('.', ',')} ${h.quantity_unit}` : null;
-                        return [h.store_name, menge].filter(Boolean).join(' · ');
+                        return [h.store_name, mengeLabel(h)].filter(Boolean).join(' · ');
                     }
                 } }
             },
@@ -418,6 +457,13 @@ function renderChart(items) {
     });
 }
 
+// Menge heißt seit v1.52.0 Stückzahl: sie steht nur da, wenn derselbe Artikel
+// mehrfach gekauft wurde. Gewicht und Packungsgröße stehen im Bon-Text darüber.
+function mengeLabel(h) {
+    const q = Math.round(Number(h.quantity));
+    return (Number.isFinite(q) && q > 1) ? `${q}× gekauft` : '';
+}
+
 function renderHistList(items) {
     const wrap = document.getElementById('pvHistList');
     if (!items.length) {
@@ -425,15 +471,13 @@ function renderHistList(items) {
         return;
     }
     wrap.innerHTML = items.slice().reverse().map(h => {
-        const menge = h.quantity && h.quantity_unit
-            ? `${String(h.quantity).replace('.', ',')} ${escHtml(h.quantity_unit)}`
-            : '<span class="pv-hist-nounit" title="Auf dem Bon war keine Menge erkennbar">ohne Menge</span>';
+        const menge = mengeLabel(h);
         return `
         <div class="pv-hist-item">
             <span class="pv-hist-date">${fmtDate(h.date)}</span>
             <div class="pv-hist-body">
                 <div class="pv-hist-desc">${escHtml(h.original_text || h.description || h.base_name || '')}</div>
-                <div class="pv-hist-store" style="color:${h.store_color}">${h.store_icon} ${escHtml(h.store_name)} · ${menge}</div>
+                <div class="pv-hist-store" style="color:${h.store_color}">${h.store_icon} ${escHtml(h.store_name)}${menge ? ' · ' + menge : ''}</div>
             </div>
             <span class="pv-hist-price">${fmtEur(h.total_price)}</span>
         </div>`;

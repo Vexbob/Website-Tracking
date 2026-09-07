@@ -1,15 +1,18 @@
-"""KI-gestützter Kassenbon-Parser (Gemini 3.5 Flash-Lite).
+"""KI-gestützter Kassenbon-Parser (Gemini).
 
-Nimmt OCR-Rohtext + User-Kategorien + User-Läden entgegen und gibt ein
-strukturiertes Dict im gleichen Format wie ``services.receipt_parser.parse_receipt``
-zurück — zusätzlich mit den Feldern ``currency`` sowie pro Item
-``quantity``, ``quantity_unit`` und ``category_id``.
+Nimmt OCR-Rohtext + User-Kategorien + User-Läden + bekannte Beleg-Typen entgegen
+und gibt ein strukturiertes Dict im gleichen Format wie
+``services.receipt_parser.parse_receipt`` zurück — zusätzlich mit den Feldern
+``currency`` und ``expense_type`` sowie pro Item ``quantity`` (Stückzahl),
+``brand_name`` und ``category_id``.
+
+Die Zahlungsart wird bewusst NICHT mehr erkannt, und eine Mengeneinheit gibt es
+nicht mehr: ``quantity`` ist die Stückzahl (fast immer 1), Gewicht und
+Packungsgröße bleiben im ``original_text`` stehen.
 
 Konfiguration per ENV:
     GEMINI_API_KEY   API-Key von Google AI Studio (https://aistudio.google.com/apikey)
-    GEMINI_MODEL     Optional. Modellname, default ``gemini-3.5-flash-lite``.
-                     Weitere Optionen: ``gemini-3.6-flash`` (mehr Qualität),
-                     ``gemini-3.7-flash`` (aktuellstes), ``gemini-flash-latest`` (Alias).
+    GEMINI_MODEL     Optional. Modellname, default ``gemini-flash-latest``.
 
 Fehlt ``GEMINI_API_KEY`` oder schlägt der Aufruf fehl, wird transparent auf
 den regex-basierten Parser (``receipt_parser.parse_receipt``) zurückgefallen.
@@ -88,6 +91,9 @@ USER-LÄDEN (matche case-insensitive gegen Namen, sonst erkannten Ladennamen vom
 USER-MARKEN (bekannte Eigenmarken und Herstellermarken — case-insensitive matchen):
 {brands_json}
 
+BEKANNTE BELEG-TYPEN des Users (für expense_type bevorzugt EXAKT einen davon nehmen):
+{expense_types_json}
+
 ===== KOPFDATEN (top-level Felder) =====
 
 - store_hint (string|null): Name des Geschäfts. Wenn ein User-Laden case-insensitive matcht, exakt dessen Namen zurückgeben. Sonst: den Namen vom Bon lesbar formatieren ("BAECKEREI MUELLER" → "Bäckerei Müller"; "REWE" bleibt "Rewe"). Bei Online-Shops: Shop-Name (z.B. "Amazon", "Zalando"). Nicht erkennbar → null.
@@ -100,13 +106,21 @@ USER-MARKEN (bekannte Eigenmarken und Herstellermarken — case-insensitive matc
 
 - vat_amount (float|null): Summe aller absoluten MwSt-Beträge (nicht Prozente). Bei mehreren Steuersätzen alle addieren. Beispiel: "10% MwSt = 0.06" + "20% MwSt = 1.84" → 1.90. Nicht erkennbar → null.
 
-- payment_method (string|null): einer von
-    "cash"   → Bar/Cash/Bargeld
-    "card"   → EC/Maestro/Girocard/Bankomat/Debit/Contactless/Apple Pay/Google Pay/Debit Mastercard
-    "credit" → Visa Credit, Mastercard Credit, Amex, "Kredit"
-    "paypal" → PayPal
-    "other"  → sonstige (Gutschein, Rechnung, etc.)
-  Debit Mastercard IMMER als "card", NIE als "credit". Nicht erkennbar → null.
+- expense_type (string): PFLICHT. Die grobe Art des Belegs — eine Ebene ÜBER den Positions-Kategorien.
+  Nimm bevorzugt EXAKT einen dieser fünf Standard-Schlüssel:
+    "receipt"       → Einkauf im Laden: Supermarkt, Drogerie, Bäcker, Tankstelle,
+                      Baumarkt, Kiosk, Apotheke — der Normalfall.
+    "online_order"  → Versandhandel / Online-Bestellung (Amazon, Zalando, Shop-Rechnung,
+                      Beleg mit Bestellnummer und Versandadresse).
+    "restaurant"    → Vor Ort verzehrt oder geliefert: Restaurant, Café, Bar, Imbiss,
+                      Lieferdienst. Erkennbar an Tisch-/Kellner-Nummer, Gedeck, Trinkgeld.
+    "subscription"  → Wiederkehrende Rechnung: Streaming, Mobilfunk, Internet, Strom, Gas,
+                      Miete, Versicherung, Vereinsbeitrag, Software-Abo.
+    "other"         → nur wenn nichts passt UND kein eigener Name sinnvoll ist.
+  Passt keiner der fünf, hat der Beleg aber eine klar benennbare Art, dann gib stattdessen
+  einen kurzen deutschen Namen im Singular zurück (z.B. "Arztrechnung", "Handwerker",
+  "Ticket", "Spende", "Reparatur"). Steht diese Art schon in den BEKANNTEN BELEG-TYPEN
+  oben, dann exakt deren Schreibweise nutzen — keine zweite Variante desselben Typs erfinden.
 
 ===== ITEMS (Array von Positions-Objekten) =====
 
@@ -124,7 +138,8 @@ Pflichtfelder pro Item:
       laktosefrei, glutenfrei, vollkorn, halbfett, dunkel/hell, süß/sauer, ...)
       MÜSSEN erhalten bleiben.
     · Keine Marke im base_name (die kommt separat in ``brand_name``).
-    · Keine Menge / Einheit / Verpackung (die kommen separat in quantity/quantity_unit).
+    · Keine Menge, keine Einheit, keine Packungsgröße — die bleiben im
+      ``original_text`` stehen und werden sonst nicht ausgewertet.
     · Bei etablierten deutschen Bezeichnungen (Klopapier, Vollmilch) diese verwenden.
     · Bei generischen Kategorien wie "Diesel", "Zeitschrift", "Trinkgeld"
       steht dort nur die Gattung.
@@ -141,7 +156,8 @@ Pflichtfelder pro Item:
     · Bon "Diesel"                              → "Diesel"
 
 - original_text (string): der bereinigte Text vom Kassenbon (ohne Steuer-Buchstaben,
-  ohne Zeilenrauschen). Bei zweizeiligen Artikeln beide Zeilen zusammenführen.
+  ohne Zeilenrauschen), MIT Menge und Packungsgröße. Bei zweizeiligen Artikeln beide
+  Zeilen zusammenführen.
   Beispiele:
     · Bon "C1. ESL-Vollm. 1L"   → "ESL-Vollm. 1L"
     · Bon "A Clever Äpfel 2kg"  → "Clever Äpfel 2kg"
@@ -156,24 +172,23 @@ Pflichtfelder pro Item:
     · Eigenmarken sollen NICHT als base_name auftauchen. Beispiel:
         Bon "Clever Äpfel 2kg" → base_name="Äpfel", brand_name="clever"
 
-- quantity (float): Menge als Zahl. Default 1 wenn nicht angegeben.
-  "2kg"→2, "10X180"→10, "1L"→1, "500g"→500, "3 Stk"→3.
-- quantity_unit (string|null): EINE von "kg", "g", "L", "ml", "Stk", "Pack", "Btl", "Blatt".
-  null NUR wenn auf dem Bon wirklich keine Menge steht.
-  WICHTIG — die Menge ist der haeufigste Verlust beim Parsen:
-    · Steht die Menge im Artikelnamen ("Bio Haferflocken 500g"), gehoert sie
-      TROTZDEM nach quantity/quantity_unit — der Name wird ohne sie gespeichert.
-    · Gewichtsware mit Waage-Zeile ("0,652 kg x 2,99 EUR/kg") → quantity=0.652,
-      quantity_unit="kg", unit_price=2.99.
-    · Multipacks ("6x1,5L", "8x100g") → quantity = Gesamtmenge (9 bzw. 800),
-      Einheit "L" bzw. "g". Nicht die Anzahl der Packungen.
-    · Nur diese acht Einheiten sind erlaubt — "Rolle", "Dose", "Glas", "Becher"
-      werden zu "Stk", "Liter"/"Gramm" zu "L"/"g".
+- quantity (int): STÜCKZAHL dieser Position — wie oft derselbe Artikel gekauft wurde.
+  Standard ist 1, und 1 ist auch fast immer richtig.
+  Größer als 1 NUR, wenn der Bon denselben Artikel in EINER Zeile mehrfach abrechnet:
+    · "3 x 1,49        4,47"   → quantity=3, total_price=4.47
+    · "2 Stk Butter"           → quantity=2
+  Gewicht, Volumen und Packungsgröße sind KEINE Menge in diesem Sinn — sie bleiben
+  im original_text und ergeben quantity=1:
+    · "Äpfel 2kg"              → quantity=1
+    · "0,652 kg x 2,99 EUR/kg" → quantity=1
+    · "Haferflocken 500g"      → quantity=1
+    · "Wasser 6x1,5L"          → quantity=1 (eine Packung)
+  Es gibt kein Einheiten-Feld mehr. Gib niemals 500 (Gramm) oder 1.5 (Liter) zurück.
 
-- unit_price (float|null): Einzelpreis pro Stück/kg/L. Wenn nicht direkt sichtbar aber
-  quantity>1 UND total_price gegeben: total_price/quantity. Sonst null.
+- unit_price (float|null): Preis pro Stück. Bei quantity=1 identisch mit total_price,
+  bei "3 x 1,49" also 1.49. Nicht ermittelbar → null.
 
-- total_price (float): Preis DIESER Position (was für sie bezahlt wurde).
+- total_price (float): Preis DIESER Position insgesamt (was für sie bezahlt wurde).
   Bei "3x1,49 = 4,47" → 4.47.
 
 - price_comparable (bool): TRUE für Verbrauchsgüter, die man regelmäßig neu kauft und die
@@ -271,17 +286,20 @@ Pflichtfelder pro Item:
     · "Küchenzubehör (Verbrauch)" = Schwämme, Backpapier, Alufolie, Frischhaltefolie, Papiertüten.
     · "Haushaltsgeräte (Anschaffung)" = Kaffeemaschine, Wasserkocher, Toaster (mit price_comparable=false).
     · "Möbel" und "Dekoration" nur bei tatsächlich langlebigen Möbeln/Deko (price_comparable=false).
+    · Diese Namen exakt so schreiben — also "Snacks & Chips", nicht "Snacks & Knabberzeug".
     · Wenn NICHTS passt: eigener kurzer Name (Singular). "Sonstiges" nur als absolut letzter Fallback.
 
 ===== SCHWIERIGE FÄLLE =====
 
-· Mehrere gleiche Artikel (2× Milch je 1,29): als 2 separate Items, NICHT zusammenfassen.
+· Derselbe Artikel mehrfach: steht er als Multiplikator-Zeile auf dem Bon ("3 x 1,49  4,47"),
+  ist das EIN Item mit quantity=3. Stehen die Artikel als getrennte Zeilen untereinander,
+  bleiben es getrennte Items mit quantity=1 — nicht zusammenrechnen.
 · Rabatt-Zeile am Ende (z.B. "-5% Rabatt -2,50"): eigenes Item mit base_name="Rabatt",
   price_comparable=false, negativem total_price.
 · Pfand: eigenes Item mit base_name="Pfand", price_comparable=false.
 · Trinkgeld: eigenes Item, base_name="Trinkgeld", price_comparable=false.
-· Tankstelle: Kraftstoff als Item, quantity=Liter, quantity_unit="L", price_comparable=true,
-  category_name="Kraftstoff & Auto".
+· Tankstelle: Kraftstoff als Item, quantity=1 (die Liter stehen im original_text),
+  price_comparable=true, category_name="Kraftstoff", expense_type="receipt".
 · Zweizeilige Positionen: Name in Zeile N, Preis in Zeile N+1 → zu einem Item zusammenführen.
 · Beleg ohne erkennbare Einzelpositionen: items=[]. Keine Fake-Items erfinden.
 · OCR-Fehler bei Preisen: "l.32" → 1.32, "0.6Q" → 0.69, "1,ЗЗ" → 1.33 (kyrillisch).
@@ -292,7 +310,8 @@ Pflichtfelder pro Item:
 Ignoriere alles was nicht zu Kopfdaten oder Positionen gehört: Belegnummern, Trace-/Terminal-IDs,
 Kassen-/Bediener-/Filialnummern, Steuer-IDs (ATU/USt-Id), Adressen, Telefon, Websites,
 Werbetexte ("Vielen Dank", "Kundenbeleg"), Karten-Dummies (####1743), Zeitstempel,
-Öffnungszeiten, Rückgeld-Betrag (NICHT mit total_amount verwechseln!).
+Öffnungszeiten, die Zahlungsart (Bar/EC/Karte/PayPal — wird bewusst nicht mehr erfasst),
+Rückgeld-Betrag (NICHT mit total_amount verwechseln!).
 
 ===== JSON-STRUKTUR (Beispiel Billa-Bon) =====
 
@@ -302,15 +321,14 @@ Werbetexte ("Vielen Dank", "Kundenbeleg"), Karten-Dummies (####1743), Zeitstempe
   "currency": "EUR",
   "total_amount": 17.72,
   "vat_amount": 2.18,
-  "payment_method": "card",
+  "expense_type": "receipt",
   "items": [
     {{
       "base_name": "Äpfel",
       "brand_name": "clever",
       "original_text": "Clever Äpfel 2kg",
-      "quantity": 2,
-      "quantity_unit": "kg",
-      "unit_price": 1.66,
+      "quantity": 1,
+      "unit_price": 3.32,
       "total_price": 3.32,
       "price_comparable": true,
       "is_reduced": false,
@@ -322,29 +340,27 @@ Werbetexte ("Vielen Dank", "Kundenbeleg"), Karten-Dummies (####1743), Zeitstempe
       "base_name": "Klopapier",
       "brand_name": "BI HOME",
       "original_text": "BI HOME TOPA 10X180 BLATT",
-      "quantity": 10,
-      "quantity_unit": "Blatt",
-      "unit_price": 0.499,
+      "quantity": 1,
+      "unit_price": 4.99,
       "total_price": 4.99,
       "price_comparable": true,
       "is_reduced": false,
       "original_price": null,
       "category_id": null,
-      "category_name": "Haushalt & Reinigung"
+      "category_name": "Toilettenpapier & Küchentücher"
     }},
     {{
       "base_name": "Mais geröstet gesalzen",
       "brand_name": null,
-      "original_text": "Ye! Salted Roasted Corn 200g",
-      "quantity": 200,
-      "quantity_unit": "g",
+      "original_text": "3 x Ye! Salted Roasted Corn 200g",
+      "quantity": 3,
       "unit_price": 1.99,
-      "total_price": 1.99,
+      "total_price": 5.97,
       "price_comparable": true,
       "is_reduced": false,
       "original_price": null,
       "category_id": null,
-      "category_name": "Snacks & Knabberzeug"
+      "category_name": "Snacks & Chips"
     }}
   ]
 }}"""
@@ -353,45 +369,65 @@ Werbetexte ("Vielen Dank", "Kundenbeleg"), Karten-Dummies (####1743), Zeitstempe
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-_VALID_PAYMENTS = {"cash", "card", "credit", "paypal", "other"}
-_VALID_UNITS = {"kg", "g", "L", "ml", "Stk", "Pack", "Btl", "Blatt"}
+# Die fünf eingebauten Beleg-Typen. Alles andere, was das Modell liefert, ist ein
+# frei benannter Typ des Users (z.B. "Arztrechnung") und wird als Klartext
+# gespeichert -- der Router baut die Auswahlliste aus genau diesen Werten.
+_BUILTIN_EXPENSE_TYPES = {"receipt", "online_order", "restaurant", "subscription", "other"}
 
-# Synonyme -> kanonische Einheit. Alles was hier nicht drinsteht, wurde bisher
-# still auf ``None`` gesetzt -- der Artikel galt danach als "1 Stueck" und die
-# Menge vom Bon war weg. Die Liste deckt die Schreibweisen ab, die Gemini und
-# die Bons tatsaechlich liefern; unbekannte Einheiten werden weiterhin
-# verworfen, aber protokolliert statt lautlos zu verschwinden.
-_UNIT_SYNONYMS = {
-    "kg": "kg", "kilo": "kg", "kilogramm": "kg", "kgr": "kg",
-    "g": "g", "gr": "g", "gramm": "g",
-    "l": "L", "ltr": "L", "liter": "L",
-    "ml": "ml", "milliliter": "ml", "cl": "ml",
-    "stk": "Stk", "stk.": "Stk", "st": "Stk", "st.": "Stk",
-    "stueck": "Stk", "stück": "Stk", "stuck": "Stk", "x": "Stk",
-    "pack": "Pack", "packung": "Pack", "pkg": "Pack", "pck": "Pack",
-    "btl": "Btl", "beutel": "Btl", "flasche": "Btl", "fl": "Btl",
-    "blatt": "Blatt", "bl": "Blatt", "rolle": "Stk", "rollen": "Stk",
-    "dose": "Stk", "glas": "Stk", "becher": "Stk", "tube": "Stk",
+# Deutsche Schreibweisen, die das Modell statt des Schlüssels liefern kann.
+_EXPENSE_TYPE_ALIASES = {
+    "kassenbon": "receipt", "bon": "receipt", "einkauf": "receipt",
+    "supermarkt": "receipt", "beleg": "receipt", "kassenzettel": "receipt",
+    "online": "online_order", "online-bestellung": "online_order",
+    "onlinebestellung": "online_order", "bestellung": "online_order",
+    "versandhandel": "online_order", "online_order": "online_order",
+    "restaurant": "restaurant", "gastronomie": "restaurant", "lokal": "restaurant",
+    "cafe": "restaurant", "café": "restaurant", "lieferdienst": "restaurant",
+    "abo": "subscription", "abonnement": "subscription", "subscription": "subscription",
+    "rechnung": "subscription", "fixkosten": "subscription",
+    "sonstiges": "other", "sonstige": "other", "other": "other",
 }
+_MAX_EXPENSE_TYPE_LEN = 40
 
 
-def _canonical_unit(raw):
-    """Bringt eine Einheit auf eine der kanonischen Schreibweisen (oder None)."""
-    if not raw:
+def normalize_expense_type(raw) -> Optional[str]:
+    """Bringt den vom Modell gelieferten Typ auf einen Schlüssel oder einen
+    kurzen Klartext-Namen. Gibt None zurück, wenn nichts Brauchbares kam."""
+    v = _str_or_none(raw)
+    if not v:
         return None
-    u = str(raw).strip()
-    if u in _VALID_UNITS:
-        return u
-    mapped = _UNIT_SYNONYMS.get(u.lower().rstrip("."))
-    if mapped is None:
-        logger.info("Unbekannte Mengeneinheit vom Parser verworfen: %r", raw)
-    return mapped
+    low = v.strip().lower()
+    if low in _BUILTIN_EXPENSE_TYPES:
+        return low
+    mapped = _EXPENSE_TYPE_ALIASES.get(low)
+    if mapped:
+        return mapped
+    # Eigener Typ: Klartext behalten, aber gedeckelt und ohne Zeilenumbrüche.
+    clean = re.sub(r"\s+", " ", v).strip()[:_MAX_EXPENSE_TYPE_LEN].strip()
+    return clean or None
+
+
+def _clean_quantity(raw) -> int:
+    """``quantity`` ist seit v1.52.0 eine reine Stückzahl.
+
+    Frühere Prompts liessen Gewichte zu ("500" mit Einheit "g"), und auch das
+    aktuelle Modell rutscht gelegentlich noch dahin zurück. Alles, was keine
+    plausible Stückzahl ist, wird deshalb auf 1 zurückgesetzt -- lieber ein
+    verlorenes "3x" als eine Position, die als 500 Stück gezählt wird.
+    """
+    q = _to_float(raw)
+    if q is None:
+        return 1
+    q = round(q)
+    if q < 1 or q > 99:
+        return 1
+    return int(q)
 
 
 # Menge + Einheit am Ende eines Artikelnamens ("Haferflocken 500g", "Milch 1 L").
-# Wird gebraucht, weil die KI die Menge oft NUR im Namen liefert und
-# ``quantity``/``quantity_unit`` leer laesst -- der Name wird unten um genau
-# diesen Teil gekuerzt, ohne den Wert waere er danach ersatzlos weg.
+# Der Name wird darum gekuerzt, damit "Haferflocken 500g" und "Haferflocken 1kg"
+# zur selben Produktgruppe gehoeren. Der Wert selbst geht nicht verloren: er
+# steht im ``original_text``, der den Bon-Text unveraendert mitfuehrt.
 _NAME_QTY_RE = re.compile(
     r"(\d+(?:[.,]\d+)?)\s*(kg|kilogramm|kilo|gramm|gr|g|liter|ltr|l|milliliter|ml|cl|"
     r"stk\.?|st\.?|stueck|stück|pack(?:ung)?|pck|btl|beutel|flasche|blatt|rolle|dose|glas)"
@@ -446,13 +482,9 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
         "currency": _str_or_none(raw.get("currency")),
         "total_amount": _to_float(raw.get("total_amount")),
         "vat_amount": _to_float(raw.get("vat_amount")),
-        "payment_method": None,
+        "expense_type": normalize_expense_type(raw.get("expense_type")) or "receipt",
         "items": [],
     }
-
-    pm = _str_or_none(raw.get("payment_method"))
-    if pm and pm.lower() in _VALID_PAYMENTS:
-        out["payment_method"] = pm.lower()
 
     items_raw = raw.get("items") or []
     if not isinstance(items_raw, list):
@@ -481,15 +513,10 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
             continue
 
         # Fuer die Produkt-Gruppierung brauchen wir den Basisnamen OHNE
-        # eingebettete Menge/Einheit. Die wird dabei NICHT weggeworfen: liefert
-        # die KI "Haferflocken 500g" im Namen, aber quantity/quantity_unit leer,
-        # dann sind 500 g der einzige Ort, an dem die Menge steht -- frueher hat
-        # dieses re.sub sie ersatzlos geloescht und der Artikel galt als 1 Stueck.
-        name_qty, name_unit = None, None
+        # eingebettete Menge/Einheit ("Haferflocken 500g" -> "Haferflocken").
+        # Die Angabe geht nicht verloren, sie steht im original_text.
         m_qty = _NAME_QTY_RE.search(base_name)
         if m_qty:
-            name_qty = _to_float(m_qty.group(1))
-            name_unit = _canonical_unit(m_qty.group(2))
             stripped = base_name[:m_qty.start()].strip(" -,;")
             if stripped:
                 base_name = stripped
@@ -500,21 +527,7 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
         else:
             description = base_name
 
-        qty = _to_float(it.get("quantity"))
-        unit = _canonical_unit(_str_or_none(it.get("quantity_unit")))
-
-        # Fallback: Menge/Einheit standen nur im Artikelnamen. Nur einsetzen
-        # wenn das strukturierte Feld nichts (bzw. den Default 1) hergibt --
-        # eine explizite Angabe der KI hat immer Vorrang.
-        if name_unit and not unit:
-            unit = name_unit
-            if name_qty and (qty is None or qty == 1):
-                qty = name_qty
-        elif name_qty and qty is None:
-            qty = name_qty
-
-        if qty is None or qty == 0:
-            qty = 1.0
+        qty = _clean_quantity(it.get("quantity"))
 
         unit_price = _to_float(it.get("unit_price"))
         if unit_price is None and qty:
@@ -563,7 +576,6 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
             "original_text": original_text,
             "description": description,  # Legacy für Bestandscode
             "quantity": qty,
-            "quantity_unit": unit,
             "unit_price": unit_price,
             "total_price": total_price,
             "category_id": cat_id,
@@ -577,7 +589,7 @@ def _normalize_parsed(raw: dict, valid_cat_ids: set) -> dict:
 
 
 def _fallback_regex(ocr_text: str, stores: list, reason: str = "unknown") -> dict:
-    """Regex-Fallback + Anreicherung mit currency/quantity_unit/category_id.
+    """Regex-Fallback + Anreicherung mit currency/expense_type/category_id.
 
     Der ``reason``-Parameter wird in die Response als ``_parser`` und ``_fallback_reason``
     aufgenommen, damit man vom Client aus sehen kann warum kein AI-Parsing lief.
@@ -585,6 +597,10 @@ def _fallback_regex(ocr_text: str, stores: list, reason: str = "unknown") -> dic
     user_store_names = [s.get("name") for s in (stores or []) if isinstance(s, dict) and s.get("name")]
     parsed = _regex_parse_receipt(ocr_text or "", user_stores=user_store_names)
     parsed.setdefault("currency", None)
+    # Die Zahlungsart wird nicht mehr erfasst; der Regex-Parser liefert sie noch.
+    parsed.pop("payment_method", None)
+    # Ohne KI keine Typ-Erkennung -- der haeufigste Fall ist ein Kassenbon.
+    parsed.setdefault("expense_type", "receipt")
     for it in parsed.get("items") or []:
         # Regex-Parser liefert nur description -> base_name/original_text ableiten
         desc = it.get("description") or ""
@@ -597,8 +613,8 @@ def _fallback_regex(ocr_text: str, stores: list, reason: str = "unknown") -> dic
             it.setdefault("original_text", None)
         it.setdefault("category_id", None)
         it.setdefault("category_name", None)
-        it.setdefault("quantity_unit", None)
         it.setdefault("brand_name", None)  # v1.16.0
+        it["quantity"] = _clean_quantity(it.get("quantity"))
         # Regex kann price_comparable nicht schätzen -> Default TRUE, außer Pfand/Rabatt
         low = (it.get("base_name") or "").lower()
         it.setdefault("price_comparable",
@@ -648,6 +664,7 @@ async def ai_parse_receipt(
     categories: list,
     stores: list,
     brands: list | None = None,
+    expense_types: list | None = None,
 ) -> dict:
     """Parst OCR-Text via Gemini (Modell laut GEMINI_MODEL, default flash-latest v1.16.0).
     Faellt bei Fehler auf Regex-Parser zurueck.
@@ -659,15 +676,20 @@ async def ai_parse_receipt(
         brands: Optionale Liste von ``{"name": str}`` bekannter Marken/Eigenmarken.
                 Wird dem Modell als Kontext gegeben, damit es Marken sauber
                 aus dem base_name heraushebt (v1.16.0).
+        expense_types: Optionale Liste der beim User schon vorhandenen
+                Beleg-Typen (Strings). Damit waehlt das Modell einen bestehenden
+                eigenen Typ, statt jedesmal eine neue Schreibweise zu erfinden
+                (v1.52.0).
 
     Returns:
-        Dict analog ``receipt_parser.parse_receipt`` + Felder ``currency``
-        sowie pro Item ``quantity``, ``quantity_unit``, ``category_id`` und
-        ``brand_name`` (neu v1.16.0).
+        Dict analog ``receipt_parser.parse_receipt`` + Felder ``currency`` und
+        ``expense_type`` sowie pro Item ``quantity`` (Stueckzahl),
+        ``category_id`` und ``brand_name``.
     """
     categories = categories or []
     stores = stores or []
     brands = brands or []
+    expense_types = expense_types or []
 
     if not ocr_text or not ocr_text.strip():
         return _fallback_regex("", stores, reason="empty_ocr")
@@ -688,6 +710,9 @@ async def ai_parse_receipt(
             categories_json=json.dumps(categories, ensure_ascii=False),
             stores_json=json.dumps(stores, ensure_ascii=False),
             brands_json=json.dumps(brands_for_prompt, ensure_ascii=False),
+            expense_types_json=json.dumps(
+                [t for t in expense_types if isinstance(t, str) and t.strip()][:50],
+                ensure_ascii=False),
         )
     except Exception as e:
         logger.warning("Prompt-Erstellung fehlgeschlagen: %s", e)
@@ -732,11 +757,12 @@ async def ai_parse_receipt(
     parsed["_parser"] = "ai"
     parsed["_model"] = _get_model_name()
     logger.info(
-        "AI-Parser OK (Modell=%s, Tokens=%s, Items=%d, Total=%s)",
+        "AI-Parser OK (Modell=%s, Tokens=%s, Items=%d, Total=%s, Typ=%s)",
         _get_model_name(),
         tokens if tokens is not None else "?",
         len(parsed.get("items") or []),
         parsed.get("total_amount"),
+        parsed.get("expense_type"),
     )
     return parsed
 
