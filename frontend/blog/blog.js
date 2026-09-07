@@ -174,7 +174,7 @@ async function renderDetail(slug) {
         document.title = `${p.title} — Vexbob Blog`;
         const rt = readingTime(p.content_html);
         view.querySelector('.blog-post').innerHTML = `
-            ${p.cover_url ? `<img class="cover" src="${escapeHtml(p.cover_url)}" alt="">` : ''}
+            ${p.cover_url ? `<img class="cover" src="${escapeHtml(mediaUrl(p.cover_url))}" alt="">` : ''}
             <h1>${escapeHtml(p.title)}</h1>
             ${p.subtitle ? `<div class="subtitle">${escapeHtml(p.subtitle)}</div>` : ''}
             <div class="meta">
@@ -184,7 +184,7 @@ async function renderDetail(slug) {
                 <span class="dot"></span>
                 <span>⏱ ${rt} min Lesezeit</span>
             </div>
-            <div class="content">${sanitizeHtml(p.content_html || '')}</div>
+            <div class="content">${sanitizeHtml(absolutizeMedia(p.content_html || ''))}</div>
             ${p.tags && p.tags.length ? `<div class="tags-inline">${p.tags.map(t => `<span class="t">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
         `;
     } catch (e) {

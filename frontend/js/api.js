@@ -168,6 +168,37 @@ const VexPrefs = {
     },
 };
 
+/* Bild-Adressen aus der eigenen API — v1.62.1
+ *
+ * Frontend und Backend liegen auf verschiedenen Hosts. Ein
+ * ``<img src="/api/public/blog/media/7">`` löst der Browser gegen den
+ * FRONTEND-Host auf und findet dort nichts — das Bild bleibt kaputt, obwohl
+ * der Upload geklappt hat.
+ *
+ * Gespeichert wird trotzdem der RELATIVE Pfad: ein Beitrag soll einen Umzug
+ * des Backends überstehen, und eine im Text eingemauerte Railway-Adresse
+ * würde beim nächsten Hostwechsel jeden alten Beitrag stillschweigend
+ * zerlegen. Der Host kommt deshalb erst beim Anzeigen davor und vor dem
+ * Speichern wieder weg.
+ *
+ * Bewusst als Textersetzung und nicht über den DOMParser: der würde das
+ * gespeicherte Markup bei jedem Speichern neu formatieren. ``innerHTML``
+ * serialisiert Attribute laut Spezifikation immer mit doppelten
+ * Anführungszeichen, ``src="`` ist also verlässlich.
+ */
+function mediaUrl(u) {
+    const s = String(u == null ? '' : u);
+    return s.startsWith('/api/') ? API_BASE + s : s;
+}
+function absolutizeMedia(html) {
+    return String(html == null ? '' : html)
+        .split('src="/api/').join('src="' + API_BASE + '/api/');
+}
+function relativizeMedia(html) {
+    return String(html == null ? '' : html)
+        .split('src="' + API_BASE + '/api/').join('src="/api/');
+}
+
 // Haptic Feedback (nur wenn vom Gerät unterstützt)
 function haptic(pattern) {
     try {

@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.63.0', date: '2026-09-07', title: 'Bilder im Blog funktionieren', notes: [
+        'Der Bild-Upload im Blog-Editor lief seit jeher in eine Anmeldefehler-Meldung — er hat den Anmelde-Schlüssel unter einem Namen gesucht, den es nicht gibt.',
+        'Hochgeladene Bilder werden jetzt auch angezeigt: ihre Adresse zeigte auf den Webserver statt auf das Backend, das die Bilder ausliefert.',
+        'Rechtsklick auf ein Bild löscht es aus Beitrag und Datenbank — der Bildtitel hat das versprochen, gebaut war es nie.',
+        'Schlägt ein Upload fehl, steht jetzt der Grund da statt einer HTTP-Nummer.',
+    ]},
     { v: 'v1.62.0', date: '2026-09-07', title: 'Statistik neu, Produkte sortierbar, Blog schreibt sich selbst', notes: [
         'Die Ausgaben-Statistik hat jetzt eine Hauptzahl statt vier gleich lauter Kacheln, und Kategorien wie Läden stehen als Rangliste statt als Ringdiagramm mit Tabelle darunter.',
         'Der Zeitverlauf zeigt Tage ohne Einkäufe endlich als Lücke — vorher standen die Balken gleichmäßig verteilt und der Ø mittelte über Einkaufstage statt über Kalendertage.',

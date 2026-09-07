@@ -68,6 +68,10 @@ function bindUI() {
     const editorEl = document.getElementById('baContent');
     editorEl.addEventListener('dragover', (e) => { e.preventDefault(); editorEl.classList.add('img-drop-active'); });
     editorEl.addEventListener('dragleave', () => editorEl.classList.remove('img-drop-active'));
+    // Der Titel jedes hochgeladenen Bildes verspricht seit v1.18.1
+    // "Rechtsklick: Loeschen" -- gebaut war es nie. Der Endpunkt gibt es
+    // laengst, es fehlte nur der Aufrufer.
+    editorEl.addEventListener('contextmenu', onImageContextMenu);
     editorEl.addEventListener('drop', (e) => {
         e.preventDefault(); editorEl.classList.remove('img-drop-active');
         const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
@@ -149,7 +153,7 @@ function renderDetail() {
     document.getElementById('baTags').value = (p.tags || []).join(', ');
     document.getElementById('baIsPublic').checked = !!p.is_public;
     document.getElementById('baShowOnLogin').checked = !!p.show_on_login;
-    document.getElementById('baContent').innerHTML = p.content_html || '';
+    document.getElementById('baContent').innerHTML = absolutizeMedia(p.content_html || '');
     normalizeTasks(document.getElementById('baContent'));
     renderState();
     setStatus('idle');
@@ -198,7 +202,7 @@ async function flushSave() {
     const body = {
         title: document.getElementById('baTitle').value || '',
         subtitle: document.getElementById('baSubtitle').value || null,
-        content_html: document.getElementById('baContent').innerHTML || '',
+        content_html: relativizeMedia(document.getElementById('baContent').innerHTML || ''),
         cover_url: document.getElementById('baCover').value || null,
         tags,
         is_public: document.getElementById('baIsPublic').checked,
@@ -454,13 +458,22 @@ async function uploadAndInsertImage(file) {
         if (S.selectedId) fd.append('post_id', S.selectedId);
         const res = await fetch(API_BASE + '/api/blog/upload-image' + (S.selectedId ? '?post_id=' + S.selectedId : ''), {
             method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('vexbob_token') },
+            // getToken() aus api.js -- der Schluessel heisst 'token'. Hier stand
+            // 'vexbob_token', die einzige Stelle im Projekt: der Header war
+            // damit "Bearer null" und der Upload endete immer in einer 401.
+            headers: { 'Authorization': 'Bearer ' + getToken() },
             body: fd,
         });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        if (!res.ok) {
+            // Der Server sagt, WAS nicht ging ("Datei zu gross", "Bild konnte
+            // nicht verarbeitet werden"). Ein blankes "HTTP 400" zwingt zum Raten.
+            let detail = 'HTTP ' + res.status;
+            try { const j = await res.json(); if (j && j.detail) detail = j.detail; } catch (_) {}
+            throw new Error(detail);
+        }
         const data = await res.json();
         const img = document.createElement('img');
-        img.src = data.url;
+        img.src = mediaUrl(data.url);
         img.alt = file.name || 'Bild';
         img.dataset.mediaId = data.id;
         img.title = 'Klick: Alt-Text bearbeiten · Rechtsklick: Löschen';
@@ -471,6 +484,32 @@ async function uploadAndInsertImage(file) {
         placeholder.textContent = '⚠️ Upload fehlgeschlagen: ' + e.message;
         placeholder.style.borderColor = 'var(--red)';
         setTimeout(() => placeholder.remove(), 3000);
+    }
+}
+
+async function onImageContextMenu(e) {
+    const img = e.target && e.target.closest ? e.target.closest('img') : null;
+    if (!img) return;   // ausserhalb eines Bildes bleibt das Browser-Menue
+    e.preventDefault();
+    const ok = await askConfirm({
+        title: 'Bild l\u00f6schen?',
+        text: 'Es verschwindet aus dem Beitrag und aus der Datenbank.',
+        ok: 'L\u00f6schen', danger: true,
+    });
+    if (!ok) return;
+    // Aeltere Bilder haben kein data-media-id -- dann steht die Nummer in der
+    // Adresse.
+    const src = img.getAttribute('src') || '';
+    const match = src.match(/\/api\/public\/blog\/media\/(\d+)/);
+    const mid = img.dataset.mediaId || (match ? match[1] : null);
+    img.remove();
+    scheduleSave();
+    if (!mid) return;
+    try {
+        await apiCall('/api/blog/media/' + mid, { method: 'DELETE' });
+    } catch (err) {
+        // Aus dem Beitrag ist es weg; nur der Datenbank-Eintrag blieb liegen.
+        if (window.Toast) Toast.error('Bild blieb auf dem Server liegen: ' + err.message);
     }
 }
 
