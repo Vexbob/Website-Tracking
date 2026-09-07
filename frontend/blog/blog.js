@@ -63,7 +63,6 @@ function sanitizeHtml(html) {
 // Routing
 // ==========================================================
 async function boot() {
-    document.getElementById('themeBtn').onclick = () => (typeof toggleTheme === 'function') && toggleTheme();
     if (typeof isLoggedIn === 'function' && isLoggedIn()) {
         document.getElementById('loginLink').style.display = 'none';
         document.getElementById('homeLink').style.display = '';

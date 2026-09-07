@@ -1714,15 +1714,6 @@ async function uploadHealthFile() {
 
     document.getElementById('logoutBtn').addEventListener('click',
         () => { clearToken(); location.href = '/private/login.html'; });
-    document.getElementById('themeBtn').addEventListener('click', () => {
-        toggleTheme();
-        // Charts neu einfärben
-        [state.chartBp, state.chartGlucose,
-         state.chartSleepTimes, state.activityChart,
-         ...Object.values(state.metricChartMap)].forEach(c => {
-            if (c) { Object.assign(c.options, chartDefaults(c.options)); c.update(); }
-        });
-    });
     document.querySelectorAll('.tab-btn').forEach(b =>
         b.addEventListener('click', () => activateTab(b.dataset.tab)));
 

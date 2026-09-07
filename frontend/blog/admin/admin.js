@@ -24,7 +24,6 @@ async function boot() {
         document.getElementById('userLabel').textContent = '👤 ' + me.username;
     } catch (e) { window.location.href = '/private/login.html'; return; }
     document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
-    document.getElementById('themeBtn').onclick = toggleTheme;
     bindUI();
     await loadPosts();
     document.body.style.visibility = 'visible';

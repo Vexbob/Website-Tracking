@@ -169,7 +169,6 @@ async function ensureLoggedIn() {
         const label = document.getElementById('userLabel');
         if (label) label.textContent = '👤 ' + me.username;
         const logout = document.getElementById('logoutBtn'); if (logout) logout.onclick = () => { clearToken(); location.reload(); };
-        const theme = document.getElementById('themeBtn'); if (theme) theme.onclick = toggleTheme;
         return me;
     } catch (e) { return null; }
 }

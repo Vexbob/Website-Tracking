@@ -383,30 +383,6 @@
         requestAnimationFrame(() => overlay.classList.add('show'));
     }
 
-    // v1.37.0 — Theme-Toggle-Button: Emoji 🌓 durch sauberes SVG ersetzen
-    // (nur wenn der Button noch das Emoji enthaelt -- respektiert individuelle
-    // Anpassungen). Aktualisiert das Icon zusaetzlich passend zum aktiven Theme.
-    function upgradeThemeToggle() {
-        const btn = document.getElementById('themeBtn');
-        if (!btn) return;
-        const raw = (btn.textContent || '').trim();
-        // Nur ersetzen, wenn wirklich nur das Emoji drinsteht.
-        if (raw !== '🌓' && raw !== '') return;
-        const render = () => {
-            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
-            const icon = dark
-                ? '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
-                : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>';
-            btn.innerHTML = icon;
-            btn.setAttribute('aria-label', dark ? 'Zu hellem Design' : 'Zu dunklem Design');
-        };
-        render();
-        // Beobachte Theme-Wechsel (data-theme aendert sich via toggleTheme in api.js).
-        try {
-            new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-        } catch (e) {}
-    }
-
     // v1.37.0 — UI-Utilities (Toast, Confirm) lazy nachladen.
     // Kein HTML-Touch pro Seite noetig; jede Modul-Seite bekommt Toast/Confirm.
     function loadUIUtils() {
@@ -431,7 +407,6 @@
         await build();
         attachScrollShadow();
         startTabBar();
-        upgradeThemeToggle();
         loadUIUtils();
     }
 

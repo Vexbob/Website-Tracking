@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.55.0', date: '2026-09-07', title: 'Designsprache: Fundament', notes: [
+        'Vexbob hat jetzt eine geschriebene Designsprache — docs/DESIGN.md legt Ebenen, Textrollen, Zustände, Bewegung, leere Zustände und Diagramme fest, /design.html zeigt jeden Baustein in jedem Zustand.',
+        'Nur noch dunkel: Umschalter, helle Farbwerte und Druckansicht sind raus, dadurch ist jedes Token einmal definiert statt zweimal.',
+        'Neue Tokens für vier Flächenebenen, vier Textrollen mit gemessenen Kontrasten, Modultöne, Statusfarben, drei Bewegungsdauern und eine Diagrammpalette; die alten Namen bleiben als Aliasse gültig, damit keine Seite bricht.',
+        'Erste Komponenten mit allen Zuständen: Knopf, Chip, Karte, Zeile, leerer Zustand, Skeleton, Statusmarke, Icon-Kachel — und die vier Toast-Varianten sehen ab sofort gleich aus.',
+        'Login und Aktivierung haben endlich App-Icon, Manifest und passende Statusleistenfarbe.',
+    ]},
     { v: 'v1.54.0', date: '2026-09-07', title: 'Statistik aufgeräumt, Marken aus der Leiste', notes: [
         'Die Erkenntnis-Karten der Statistik stehen jetzt ganz unten statt zwischen Kennzahlen und Diagrammen — der erste Bildschirm zeigt wieder Zahlen und Verlauf.',
         'Marken sind aus der Ausgaben-Leiste raus, weil auf Kassenbons selten eine Marke steht; die Seite bleibt unter /ausgaben/marken.html erreichbar und alle Daten bleiben.',

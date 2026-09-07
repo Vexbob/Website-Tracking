@@ -50,7 +50,6 @@ async function boot() {
         document.getElementById('userLabel').textContent = '👤 ' + me.username;
     } catch (e) { return; }
     document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
-    document.getElementById('themeBtn').onclick = toggleTheme;
     bindUI();
     await loadNotes();
     const m = location.hash.match(/^#note-(\d+)$/);

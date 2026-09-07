@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0c10">
+<title>Designsprache — Vexbob</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/version.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<style>
+/* Nur Aufbau dieser Musterseite — alles Gestaltete kommt aus style.css. */
+.sg-sec { margin: 0 0 var(--space-6); }
+.sg-sec > h2 {
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--text-4);
+    margin: 0 0 var(--space-3); padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--line);
+}
+.sg-note { color: var(--text-3); font-size: 0.8125rem; line-height: 1.6; max-width: 62ch; margin: 0 0 var(--space-3); }
+.sg-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.sg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-3); }
+.sg-swatch { border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; }
+.sg-swatch .fill { height: 56px; }
+.sg-swatch .lbl { padding: 0.5rem 0.625rem; background: var(--surface-1); font-size: 0.75rem; }
+.sg-swatch .lbl b { display: block; color: var(--text-1); font-weight: 600; }
+.sg-swatch .lbl span { color: var(--text-4); font-variant-numeric: tabular-nums; }
+.sg-stack { display: flex; flex-direction: column; gap: var(--space-2); }
+.sg-label { font-size: 0.6875rem; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.08em; }
+.sg-motion-demo {
+    width: 100%; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden;
+}
+.sg-motion-demo i { display: block; height: 100%; width: 35%; background: var(--grad-accent); }
+.sg-do-dont { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+@media (max-width: 600px) { .sg-do-dont { grid-template-columns: 1fr; } }
+.sg-chart { height: 200px; }
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/" class="nav-title">← Designsprache</a>
+    <div class="nav-right"><span class="nav-btn" style="cursor:default">nur zum Nachschlagen</span></div>
+</nav>
+<main class="wide">
+
+    <header class="page-head">
+        <h1>Designsprache</h1>
+        <p class="page-sub">Vexbob ist ein Werkzeug zum Nachschlagen, kein Schaufenster. Die Oberfläche
+        tritt zurück, die Zahlen treten vor. Diese Seite zeigt jeden Baustein in jedem Zustand — wenn
+        etwas hier nicht steht, gibt es keine Regel dafür, und dann wird sie hier ergänzt statt in einer
+        Seite erfunden. Die Regeln im Wortlaut stehen in <code>docs/DESIGN.md</code>.</p>
+    </header>
+
+    <section class="sg-sec">
+        <h2>Ebenen</h2>
+        <p class="sg-note">Im Dunkeln trennen Schatten nichts. Ebenen entstehen durch Helligkeit plus
+        Haarlinie. Eine Fläche liegt nie auf einer Fläche derselben Stufe.</p>
+        <div class="sg-grid">
+            <div class="sg-swatch"><div class="fill" style="background:var(--bg)"></div><div class="lbl"><b>Grund</b><span>--bg</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--surface-1)"></div><div class="lbl"><b>Fläche</b><span>--surface-1</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--surface-2)"></div><div class="lbl"><b>Erhoben</b><span>--surface-2</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--surface-3)"></div><div class="lbl"><b>Schwebend</b><span>--surface-3</span></div></div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Textrollen</h2>
+        <p class="sg-note">Vier Rollen, feste Kontrastuntergrenzen. Die schwächste trägt nie Information,
+        die man lesen muss.</p>
+        <div class="v-card sg-stack">
+            <div style="color:var(--text-1);font-size:1.375rem;font-weight:700;letter-spacing:-0.02em">Titel und Beträge — 16,9:1</div>
+            <div style="color:var(--text-2);font-size:0.9375rem">Fließtext, Beschreibungen, Erklärsätze — 10,0:1</div>
+            <div style="color:var(--text-3);font-size:0.8125rem">Meta-Zeile, Datum, Einheit, Achsenbeschriftung — 5,9:1</div>
+            <div style="color:var(--text-4);font-size:0.75rem">Nur Dekoration: Trennzeichen, Platzhalter, Versionsnummer — 3,8:1</div>
+            <div style="color:var(--text-1);font-size:1.75rem;font-weight:700;font-variant-numeric:tabular-nums">1.284,90 €</div>
+            <div class="sg-label">Zahlen immer mit tabellarischen Ziffern, damit Spalten stehen</div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Farbe</h2>
+        <p class="sg-note">Der Akzent gehört dem Aktiven. Modultöne sind Identität. Statusfarben sind
+        helle Töne für Text auf dunklem Grund — sie tragen niemals weiße Schrift.</p>
+        <div class="sg-grid">
+            <div class="sg-swatch"><div class="fill" style="background:var(--grad-accent)"></div><div class="lbl"><b>Akzent</b><span>--grad-accent</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--m-ausgaben)"></div><div class="lbl"><b>Ausgaben</b><span>--m-ausgaben</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--m-health)"></div><div class="lbl"><b>Gesundheit</b><span>--m-health</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--m-sparziel)"></div><div class="lbl"><b>Sparziel</b><span>--m-sparziel</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--m-notizen)"></div><div class="lbl"><b>Notizen</b><span>--m-notizen</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--m-blog)"></div><div class="lbl"><b>Blog</b><span>--m-blog</span></div></div>
+        </div>
+        <div class="sg-row" style="margin-top:var(--space-3)">
+            <span class="v-tag">neutral</span>
+            <span class="v-tag v-tag--ok">bezahlt</span>
+            <span class="v-tag v-tag--warn">geprüft</span>
+            <span class="v-tag v-tag--danger">überzogen</span>
+            <span class="v-tag v-tag--info">geplant</span>
+        </div>
+        <div class="sg-row" style="margin-top:var(--space-4)">
+            <span class="v-icon-tile" style="--tone:var(--m-ausgaben)">💶</span>
+            <span class="v-icon-tile" style="--tone:var(--m-health)">🏋️</span>
+            <span class="v-icon-tile" style="--tone:var(--m-sparziel)">💰</span>
+            <span class="v-icon-tile" style="--tone:var(--m-notizen)">📝</span>
+            <span class="v-icon-tile" style="--tone:var(--m-blog)">📰</span>
+            <span class="sg-label">Icon-Kacheln sind eine der vier Stellen mit Verlauf — sie tragen keinen Text</span>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Knöpfe — alle Zustände</h2>
+        <div class="v-card">
+            <div class="sg-label" style="margin-bottom:0.5rem">Varianten</div>
+            <div class="sg-row">
+                <button class="v-btn v-btn--primary">Bon speichern</button>
+                <button class="v-btn">Abbrechen</button>
+                <button class="v-btn v-btn--ghost">Mehr anzeigen</button>
+                <button class="v-btn v-btn--danger">Löschen</button>
+                <button class="v-btn v-btn--icon" aria-label="Bearbeiten">✏️</button>
+            </div>
+            <div class="sg-label" style="margin:1rem 0 0.5rem">Zustände</div>
+            <div class="sg-row">
+                <button class="v-btn">Ruhe</button>
+                <button class="v-btn" style="background:var(--surface-3)">Hover</button>
+                <button class="v-btn" style="transform:scale(.97)">Gedrückt</button>
+                <button class="v-btn" style="box-shadow:var(--focus-ring)">Fokus</button>
+                <button class="v-btn" disabled>Deaktiviert</button>
+                <button class="v-btn is-loading">Lädt</button>
+            </div>
+            <div class="sg-label" style="margin:1rem 0 0.5rem">Chips</div>
+            <div class="sg-row">
+                <button class="v-chip">7 Tage</button>
+                <button class="v-chip is-active">30 Tage</button>
+                <button class="v-chip">90 Tage</button>
+                <button class="v-chip" disabled>1 Jahr</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Leere Zustände und Laden</h2>
+        <p class="sg-note">Der Satz sagt, <em>warum</em> es leer ist, nicht dass es leer ist. Geladen wird
+        mit Skeletons — „Lade …" als Fließtext gibt es nicht mehr.</p>
+        <div class="sg-do-dont">
+            <div class="empty">
+                <span class="empty-mark">🏷️</span>
+                <p class="empty-text">Noch keine Kategorien. Beim ersten gescannten Bon legt der Parser sie selbst an.</p>
+                <button class="v-btn v-btn--sm">Bon scannen</button>
+            </div>
+            <div class="v-card">
+                <span class="skel skel-line long"></span>
+                <span class="skel skel-line"></span>
+                <span class="skel skel-line short"></span>
+                <span class="skel skel-block" style="margin-top:0.75rem"></span>
+            </div>
+        </div>
+        <div class="empty is-error" style="margin-top:var(--space-3)">
+            <span class="empty-mark">⚠️</span>
+            <p class="empty-text">Die Ausgaben konnten nicht geladen werden.</p>
+            <button class="v-btn v-btn--sm">Erneut versuchen</button>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Flächen und Zeilen</h2>
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Letzte Bons</h3>
+                <span class="v-card-sub">30 Tage</span>
+            </div>
+            <div class="sg-stack">
+                <div class="v-row" style="display:flex;align-items:center;gap:0.75rem">
+                    <span class="v-icon-tile" style="--tone:var(--m-ausgaben);width:34px;height:34px;font-size:1rem;border-radius:10px">🛒</span>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-weight:600">Billa</div>
+                        <div style="color:var(--text-3);font-size:0.75rem">13.08. · 7 Positionen</div>
+                    </div>
+                    <div style="font-weight:700;font-variant-numeric:tabular-nums">17,72 €</div>
+                </div>
+                <div class="v-row" style="display:flex;align-items:center;gap:0.75rem">
+                    <span class="v-icon-tile" style="--tone:var(--m-blog);width:34px;height:34px;font-size:1rem;border-radius:10px">🥐</span>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-weight:600">Bäckerei Müller</div>
+                        <div style="color:var(--text-3);font-size:0.75rem">12.08. · 2 Positionen</div>
+                    </div>
+                    <div style="font-weight:700;font-variant-numeric:tabular-nums">6,40 €</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Diagramme</h2>
+        <p class="sg-note">Kein Gitter außer waagerechten Linien, keine Rahmen, keine Achsentitel. Die
+        erste Reihe trägt den Modulton, nicht den Akzent — der Akzent markiert Auswahl, nicht Daten.</p>
+        <div class="v-card"><div class="sg-chart"><canvas id="demoLine"></canvas></div></div>
+        <div class="v-card"><div class="sg-chart"><canvas id="demoBar"></canvas></div></div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Bewegung</h2>
+        <p class="sg-note">Drei Dauern, eine Kurve: 120 ms für Zustandswechsel, 200 ms für Ein- und
+        Ausblenden, 280 ms für Overlays. Kein Federn, kein Nachschwingen. Nichts bewegt sich beim
+        reinen Betrachten.</p>
+        <div class="v-card sg-stack">
+            <span class="sg-label">--dur-1 120ms · Zustand</span><div class="sg-motion-demo"><i style="width:20%"></i></div>
+            <span class="sg-label">--dur-2 200ms · Einblenden</span><div class="sg-motion-demo"><i style="width:55%"></i></div>
+            <span class="sg-label">--dur-3 280ms · Overlay</span><div class="sg-motion-demo"><i style="width:85%"></i></div>
+        </div>
+    </section>
+
+</main>
+<div class="version-tag"></div>
+<script>
+document.querySelector('.version-tag').textContent = typeof APP_VERSION !== 'undefined' ? APP_VERSION : '';
+window.addEventListener('load', () => {
+    if (typeof Chart === 'undefined') return;
+    const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    const axis = css('--chart-axis'), grid = css('--chart-grid');
+    const base = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: css('--surface-3'), borderColor: css('--line-strong'), borderWidth: 1,
+                titleColor: css('--text-1'), bodyColor: css('--text-2'),
+                cornerRadius: 12, padding: 10, displayColors: false,
+            },
+        },
+        scales: {
+            x: { ticks: { color: axis, font: { size: 11 } }, grid: { display: false }, border: { display: false } },
+            y: { ticks: { color: axis, font: { size: 11 } }, grid: { color: grid }, border: { display: false } },
+        },
+    };
+    const ctxL = document.getElementById('demoLine');
+    const g = ctxL.getContext('2d').createLinearGradient(0, 0, 0, 200);
+    g.addColorStop(0, 'rgba(45,212,191,0.18)');
+    g.addColorStop(1, 'rgba(45,212,191,0)');
+    new Chart(ctxL, {
+        type: 'line',
+        data: {
+            labels: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
+            datasets: [{
+                data: [12, 19, 8, 24, 17, 41, 6],
+                borderColor: css('--chart-1'), backgroundColor: g,
+                fill: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2,
+            }],
+        },
+        options: base,
+    });
+    new Chart(document.getElementById('demoBar'), {
+        type: 'bar',
+        data: {
+            labels: ['Lebensmittel', 'Drogerie', 'Mobilität', 'Freizeit', 'Haushalt'],
+            datasets: [{
+                data: [312, 84, 156, 61, 39],
+                backgroundColor: [css('--chart-1'), css('--chart-2'), css('--chart-3'), css('--chart-4'), css('--chart-5')],
+                borderRadius: 6, borderSkipped: false, barPercentage: 0.7,
+            }],
+        },
+        options: base,
+    });
+});
+</script>
+</body>
+</html>

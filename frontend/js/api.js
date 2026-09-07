@@ -82,21 +82,11 @@ function isAdmin() {
     } catch (e) { return false; }
 }
 
-// Theme
-function applyTheme(t) {
-    document.documentElement.setAttribute('data-theme', t);
-    localStorage.setItem('theme', t);
-}
-function currentTheme() {
-    // v1.36.0: Standard ist jetzt Dark-Mode (auch wenn OS auf hell steht).
-    // Nutzer koennen ueber den Theme-Toggle weiterhin manuell wechseln;
-    // die Praeferenz wird in localStorage persistiert.
-    return localStorage.getItem('theme') || 'dark';
-}
-function toggleTheme() {
-    applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
-}
-applyTheme(currentTheme());
+// Theme — seit v1.55.0 gibt es nur noch das dunkle. Das Attribut bleibt
+// trotzdem gesetzt: rund 50 CSS-Selektoren und die Diagramm-Farbwahl in den
+// Modulen fragen es ab. Es zu entfernen waere ein Umbau ohne Gewinn.
+document.documentElement.setAttribute('data-theme', 'dark');
+try { localStorage.removeItem('theme'); } catch (e) {}
 
 // German locale helpers
 const _eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -1443,7 +1443,6 @@ async function submitNote(){
 });
 
 document.getElementById('logoutBtn').addEventListener('click',()=>{clearToken();location.href='/private/login.html';});
-document.getElementById('themeBtn').addEventListener('click',()=>{toggleTheme();if(chartSavings)renderSparzielChart();});
 document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>activateTab(b.dataset.tab)));
 document.querySelectorAll('.preset-btn').forEach(b=>{b.addEventListener('click',()=>{document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');const p=PRESETS[b.dataset.preset];if(!p)return;Object.keys(p).forEach(id=>{const el=document.getElementById(id);if(el)el.value=p[id];});});});
 document.querySelectorAll('.log-chip').forEach(c=>c.addEventListener('click',()=>{document.querySelectorAll('.log-chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');logFilter=c.dataset.filter;renderLog();}));

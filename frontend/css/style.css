@@ -1,73 +1,118 @@
 :root {
-    color-scheme: light dark;
-    --bg: #f8f9fa; --surface: #fff; --surface-2: #f9fafb;
-    --border: #e8e8e8; --border-strong: #d1d5db;
-    /* Kontraste gegen Weiss (gemessen): --text-muted 5.7:1, --text-faint 4.8:1
-       (WCAG-AA fuer Fliesstext), --text-fainter 3.7:1 (nur Deko/Grossschrift).
-       Vorher lagen faint/fainter bei 2.9:1 bzw. 2.5:1 und waren auf hellem
-       Grund kaum lesbar -- im Dark Mode gelten die Werte im Block darunter. */
-    --text: #1a1a1a; --text-muted: #666; --text-faint: #6b7280; --text-fainter: #7c8593;
-    --accent: #e94560;
-    /* Sekundäre Akzentfarbe (früher versteckter Fallback in blog.css/notizen.css) */
-    --accent-blue: #3b82f6; --accent-blue-dark: #2563eb;
-    /* Die -dark-Varianten tragen weisse Schrift (Buttons, Chips, Toasts) und
-       dienen zugleich als Textfarbe -- deshalb dunkel genug fuer beides. */
-    --green: #22c55e; --green-dark: #15803d; --green-bg: #dcfce7;
-    --blue: #3b82f6; --blue-dark: #2563eb; --blue-bg: #dbeafe;
-    --red: #ef4444; --red-dark: #dc2626; --red-bg: #fef2f2;
-    --orange: #f59e0b; --orange-dark: #d97706;
-    --purple: #8b5cf6; --purple-dark: #7c3aed;
-    --teal: #14b8a6; --teal-dark: #0f766e;
-    --pink: #ec4899; --pink-dark: #db2777;
-    --gold: #eab308; --gold-dark: #ca8a04;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
-    --shadow: 0 2px 8px rgba(0,0,0,0.06);
-    --shadow-lg: 0 10px 30px rgba(15,23,42,0.08), 0 2px 8px rgba(15,23,42,0.04);
-    --shadow-glow: 0 8px 24px rgba(233,69,96,0.18);
+    /* =====================================================================
+       Vexbob Design-Tokens — v1.55.0, nur dunkel.
+       Die Regeln dazu stehen in docs/DESIGN.md; hier stehen nur die Werte.
+       Alles unter "Alt-Namen" ist Uebergang: die Namen bleiben gueltig, bis
+       das jeweilige Modul auf die Komponenten oben umgestellt ist.
+       ===================================================================== */
+    color-scheme: dark;
+
+    /* --- Ebenen: Helligkeit + Haarlinie, nie Schatten allein --- */
+    --bg: #0a0c10;
+    --surface-1: #12151c;
+    --surface-2: #171b23;
+    --surface-3: #1e232d;
+    --line: rgba(255,255,255,0.07);
+    --line-strong: rgba(255,255,255,0.14);
+
+    /* --- Textrollen (Kontrast gegen --surface-1) --- */
+    --text-1: #f4f6fa;   /* 16.9:1  Titel, Betraege */
+    --text-2: #b9c0cc;   /* 10.0:1  Fliesstext */
+    --text-3: #8b93a1;   /*  5.9:1  Meta, Achsen */
+    --text-4: #6b7280;   /*  3.8:1  nur Dekoration */
+
+    /* --- Akzent: gehoert dem Aktiven --- */
+    --accent: #e94560;          /* Text/Icon/Rahmen auf dunkel (4.8:1) */
+    --accent-strong: #cc3350;   /* Flaeche mit weisser Schrift (5.1:1) */
+    --accent-soft: rgba(233,69,96,0.14);
+    --grad-accent: linear-gradient(135deg, #ff5c7a 0%, #cc3350 100%);
+    --glow-accent: 0 10px 30px rgba(233,69,96,0.28);
+
+    /* --- Modultoene: Identitaet, keine Vollflaechen --- */
+    --m-ausgaben: #2dd4bf;
+    --m-health:   #f472b6;
+    --m-sparziel: #4ade80;
+    --m-notizen:  #60a5fa;
+    --m-blog:     #fbbf24;
+    --m-admin:    #a78bfa;
+
+    /* --- Status: helle Toene fuer Text/Marken, NIE mit weisser Schrift --- */
+    --ok: #4ade80;      --ok-soft: rgba(74,222,128,0.14);
+    --warn: #fbbf24;    --warn-soft: rgba(251,191,36,0.14);
+    --danger: #fb7185;  --danger-soft: rgba(251,113,133,0.14);
+    --info: #60a5fa;    --info-soft: rgba(96,165,250,0.14);
+
+    /* --- Form --- */
     --radius-sm: 8px; --radius: 12px; --radius-lg: 16px; --radius-xl: 20px;
-    --focus-ring: 0 0 0 3px rgba(59,130,246,0.35);
-    /* v1.36.0 - Glass Surfaces */
-    --glass-bg: rgba(255,255,255,0.72);
-    --glass-border: rgba(15,23,42,0.06);
-    /* v1.36.0 - dezenter Body-Backdrop (Apple-like) */
-    --backdrop:
-        radial-gradient(1200px 600px at 8% -10%, rgba(233,69,96,0.06), transparent 60%),
-        radial-gradient(900px 500px at 100% 10%, rgba(59,130,246,0.06), transparent 60%),
-        radial-gradient(700px 500px at 50% 110%, rgba(139,92,246,0.05), transparent 60%);
-}
-:root[data-theme="dark"] {
-    --bg: #0b0d12; --surface: #161a22; --surface-2: #1e232c;
-    --border: #262b36; --border-strong: #363c4a;
-    --text: #f2f4f8; --text-muted: #a4abb8; --text-faint: #8b93a3; --text-fainter: #6b7280;
-    --green-bg: #14532d; --blue-bg: #1e3a8a; --red-bg: #7f1d1d;
-    /* Auf dunklem Grund braucht es die helleren Toene: #15803d/#0f766e kaemen
-       hier nur auf 3,5:1 bzw. 3,2:1. */
-    --green-dark: #16a34a; --teal-dark: #0d9488;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
-    --shadow: 0 2px 10px rgba(0,0,0,0.5);
-    --shadow-lg: 0 20px 40px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.4);
-    --shadow-glow: 0 10px 30px rgba(233,69,96,0.28);
-    --focus-ring: 0 0 0 3px rgba(96,165,250,0.5);
-    --glass-bg: rgba(22,26,34,0.62);
-    --glass-border: rgba(255,255,255,0.06);
+    --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+    --space-4: 1rem; --space-5: 1.5rem; --space-6: 2rem;
+
+    /* --- Bewegung: drei Dauern, eine Kurve --- */
+    --dur-1: 120ms; --dur-2: 200ms; --dur-3: 280ms;
+    --ease: cubic-bezier(.2,.7,.2,1);
+
+    /* --- Schatten: erst ab "schwebend" --- */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+    --shadow: 0 2px 10px rgba(0,0,0,0.45);
+    --shadow-float: 0 20px 44px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.4);
+
+    /* --- Diagramme --- */
+    --chart-1: #2dd4bf; --chart-2: #60a5fa; --chart-3: #f472b6;
+    --chart-4: #fbbf24; --chart-5: #a78bfa; --chart-6: #4ade80;
+    --chart-grid: rgba(255,255,255,0.08);
+    --chart-axis: #8b93a1;
+
+    /* --- Milchglas: nur Navigation, Menues, Overlays --- */
+    --glass-bg: rgba(18,21,28,0.72);
+    --glass-border: rgba(255,255,255,0.08);
+
+    /* --- Backdrop: drei sehr leise Lichter, damit der Grund nicht tot wirkt --- */
     --backdrop:
         radial-gradient(1200px 600px at 8% -10%, rgba(233,69,96,0.10), transparent 60%),
-        radial-gradient(900px 500px at 100% 10%, rgba(59,130,246,0.10), transparent 60%),
-        radial-gradient(700px 500px at 50% 110%, rgba(139,92,246,0.09), transparent 60%);
-}
+        radial-gradient(900px 500px at 100% 10%, rgba(96,165,250,0.08), transparent 60%),
+        radial-gradient(700px 500px at 50% 110%, rgba(167,139,250,0.07), transparent 60%);
 
+    --focus-ring: 0 0 0 3px rgba(233,69,96,0.45);
+
+    /* =====================================================================
+       Alt-Namen (Uebergang). Zeigen auf die Werte oben, damit die noch nicht
+       migrierten Module unveraendert funktionieren.
+       ===================================================================== */
+    --surface: var(--surface-1);
+    --border: var(--line);
+    --border-strong: var(--line-strong);
+    --text: var(--text-1);
+    --text-muted: var(--text-2);
+    --text-faint: var(--text-3);
+    --text-fainter: var(--text-4);
+    --shadow-lg: var(--shadow-float);
+    --shadow-glow: var(--glow-accent);
+    --accent-blue: #60a5fa; --accent-blue-dark: #3b82f6;
+    /* Die -dark-Varianten sind Fuellfarben fuer weisse Schrift, die Basis ist
+       die Textfarbe auf dunklem Grund. Reihenfolge nicht vertauschen. */
+    --green: #4ade80; --green-dark: #16a34a; --green-bg: rgba(74,222,128,0.14);
+    --blue: #60a5fa;  --blue-dark: #3b82f6;  --blue-bg: rgba(96,165,250,0.14);
+    --red: #fb7185;   --red-dark: #dc2626;   --red-bg: rgba(251,113,133,0.14);
+    --orange: #fbbf24; --orange-dark: #d97706;
+    --purple: #a78bfa; --purple-dark: #7c3aed;
+    --teal: #2dd4bf;  --teal-dark: #0d9488;
+    --pink: #f472b6;  --pink-dark: #db2777;
+    --gold: #fbbf24;  --gold-dark: #ca8a04;
+}
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg); color: var(--text);
+    background: var(--bg); color: var(--text-1);
     background-image: var(--backdrop);
     background-attachment: fixed;
     min-height: 100vh; -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    transition: background 0.2s, color 0.2s;
 }
+/* Betraege, Messwerte, Zeiten stehen untereinander -- also tabellarische
+   Ziffern, damit die Spalten stehen. Gilt global fuer Tabellenzellen. */
+td, .num, .amount, [data-num] { font-variant-numeric: tabular-nums; }
 
 .navbar {
     display: flex; justify-content: space-between; align-items: center;
@@ -79,8 +124,7 @@ body {
     position: sticky; top: 0; z-index: 50;
     transition: box-shadow .2s, border-color .2s, background .2s;
 }
-.navbar.scrolled { box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
-:root[data-theme="dark"] .navbar.scrolled { box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+.navbar.scrolled { box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
 /* Fallback fuer Browser ohne backdrop-filter (aeltere Android-WebViews) */
 @supports not ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) {
     .navbar { background: var(--surface); }
@@ -295,8 +339,8 @@ button:active { transform: scale(0.98); }
 .btn:active { transform: translateY(1px); }
 .btn-primary { background: var(--text); color: var(--surface); border-color: var(--text); }
 .btn-primary:hover { opacity: 0.9; background: var(--text); border-color: var(--text); }
-.btn-accent { background: var(--accent); color: #fff; border-color: var(--accent); }
-.btn-accent:hover { opacity: 0.9; background: var(--accent); border-color: var(--accent); }
+.btn-accent { background: var(--grad-accent); color: #fff; border-color: transparent; box-shadow: var(--glow-accent); }
+.btn-accent:hover { filter: brightness(1.06); background: var(--grad-accent); border-color: transparent; }
 .btn-success { background: var(--green-dark); color: #fff; border-color: var(--green-dark); }
 .btn-success:hover { opacity: 0.9; background: var(--green-dark); border-color: var(--green-dark); }
 .btn-danger { background: var(--red-bg); color: var(--red); border-color: transparent; }
@@ -529,10 +573,6 @@ input[type="checkbox"] { display: inline; width: auto; }
     background: var(--surface);
     box-shadow: var(--shadow-sm), 0 0 0 1px var(--border);
 }
-:root[data-theme="dark"] .tab-btn.active {
-    background: #2a2f3a;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
-}
 .tab-btn:active { transform: scale(0.97); }
 /* Falls .tabs als volle Zeile gewünscht: .tabs.full { display: flex; } */
 .tabs.full { display: flex; width: 100%; }
@@ -587,24 +627,6 @@ input[type="checkbox"] { display: inline; width: auto; }
 @media (hover: none) and (pointer: coarse) {
     .nav-btn { min-height: 44px; padding: 0.5rem 0.65rem; }
     .tab-btn { min-height: 44px; }
-}
-
-/* Print-Styles: sauberes Ausdrucken von Blog-Artikeln.
-   Navigation, Toast, Version-Tag u. a. verschwinden. */
-@media print {
-    :root { --bg: #fff; --surface: #fff; --text: #000; --text-muted: #333; --border: #ccc; }
-    .navbar, .version-tag, .toast, .nz-toast, .ausg-toast,
-    .blog-back, .blog-tags, .blog-search-wrap, .nav-switcher,
-    .modal-overlay, .img-fullscreen { display: none !important; }
-    body { background: #fff; color: #000; }
-    a { color: #000; text-decoration: underline; }
-    .blog-post, .card, .stat-card, .tile {
-        box-shadow: none !important;
-        border-color: #ccc !important;
-        break-inside: avoid;
-    }
-    .blog-post .content pre { border: 1px solid #ccc; }
-    h1, h2, h3 { break-after: avoid; }
 }
 
 /* Placeholder-Seiten (z. B. photos/, rezeptbuch/) — bewusst schlicht. */
@@ -796,19 +818,6 @@ input[type="checkbox"] { display: inline; width: auto; }
     0%   { background-position: -200px 0; }
     100% { background-position: calc(200px + 100%) 0; }
 }
-.skel {
-    display: block;
-    background: linear-gradient(90deg, var(--surface-2) 0%, var(--border) 50%, var(--surface-2) 100%);
-    background-size: 200px 100%;
-    background-repeat: no-repeat;
-    border-radius: 8px;
-    animation: skelPulse 1.4s ease-in-out infinite;
-    color: transparent !important;
-    user-select: none;
-}
-.skel-line { height: 0.875rem; margin: 0.375rem 0; }
-.skel-line.short { width: 40%; }
-.skel-line.long  { width: 80%; }
 @media (prefers-reduced-motion: reduce) {
     .skel { animation: none; }
     .ui-toast { transition: opacity .15s; transform: none; }
@@ -920,3 +929,173 @@ button.nav-switcher-item:hover { background: var(--surface-2); opacity: 1; }
 }
 .navcfg-btn.navcfg-save:hover { opacity: 0.9; }
 .navcfg-btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+
+/* ==========================================================================
+   KOMPONENTEN v2 — v1.55.0
+   Die Bausteine, aus denen neue Seiten gebaut werden. Regeln: docs/DESIGN.md.
+   Jede Komponente kennt alle Zustaende; wer eine Variante braucht, erweitert
+   hier, statt in einer Seite eine zweite zu erfinden.
+   ========================================================================== */
+
+/* ---------- Flaeche ---------- */
+.v-card {
+    background: var(--surface-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+}
+.v-card + .v-card { margin-top: var(--space-4); }
+.v-card-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--space-3); margin-bottom: var(--space-3); flex-wrap: wrap;
+}
+.v-card-head h2, .v-card-head h3 {
+    margin: 0; font-size: 1.0625rem; font-weight: 650; letter-spacing: -0.02em;
+}
+.v-card-sub { color: var(--text-3); font-size: 0.8125rem; }
+/* Eine Zeile INNERHALB einer Karte liegt eine Ebene hoeher. */
+.v-row {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: var(--space-3);
+}
+
+/* ---------- Knopf: vier Varianten, sieben Zustaende ---------- */
+.v-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+    width: auto; margin: 0;
+    padding: 0.5rem 0.9rem;
+    font: inherit; font-size: 0.875rem; font-weight: 600; line-height: 1.2;
+    border-radius: 10px; border: 1px solid var(--line-strong);
+    background: var(--surface-2); color: var(--text-1);
+    cursor: pointer; white-space: nowrap;
+    transition: background var(--dur-1) var(--ease),
+                border-color var(--dur-1) var(--ease),
+                opacity var(--dur-1) var(--ease),
+                transform var(--dur-1) var(--ease);
+}
+.v-btn:hover { background: var(--surface-3); }
+.v-btn:active { transform: scale(0.97); }
+.v-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.v-btn[disabled], .v-btn.is-disabled {
+    opacity: 0.45; cursor: default; transform: none; pointer-events: none;
+}
+.v-btn.is-loading { color: transparent; position: relative; pointer-events: none; }
+.v-btn.is-loading::after {
+    content: ""; position: absolute; width: 14px; height: 14px;
+    border: 2px solid currentColor; border-top-color: transparent;
+    border-radius: 50%; color: var(--text-2);
+    animation: vSpin 0.7s linear infinite;
+}
+@keyframes vSpin { to { transform: rotate(360deg); } }
+
+.v-btn--primary {
+    background: var(--grad-accent); border-color: transparent; color: #fff;
+    box-shadow: var(--glow-accent);
+}
+.v-btn--primary:hover { background: var(--grad-accent); filter: brightness(1.06); }
+.v-btn--ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+.v-btn--ghost:hover { background: var(--surface-2); color: var(--text-1); }
+.v-btn--danger { background: transparent; border-color: transparent; color: var(--danger); }
+.v-btn--danger:hover { background: var(--danger-soft); }
+.v-btn--sm { padding: 0.3125rem 0.625rem; font-size: 0.75rem; border-radius: 8px; }
+.v-btn--lg { padding: 0.6875rem 1.25rem; font-size: 1rem; border-radius: 12px; }
+/* Icon-Knopf: quadratisch, Trefferflaeche statt nacktem Zeichen */
+.v-btn--icon { padding: 0; width: 34px; height: 34px; }
+
+/* ---------- Chip / Segmentwahl ---------- */
+.v-chip {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    width: auto; margin: 0; padding: 0.4375rem 0.8125rem;
+    font: inherit; font-size: 0.8125rem; font-weight: 600;
+    color: var(--text-3); background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: 999px;
+    cursor: pointer;
+    transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
+                border-color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+}
+.v-chip:hover { color: var(--text-1); border-color: var(--line-strong); }
+.v-chip:active { transform: scale(0.96); }
+.v-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.v-chip.is-active {
+    color: #fff; background: var(--accent-strong); border-color: var(--accent-strong);
+}
+.v-chip[disabled] { opacity: 0.45; cursor: default; pointer-events: none; }
+
+/* ---------- Leerer Zustand: ein Muster fuer die ganze App ---------- */
+.empty {
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+    padding: var(--space-6) var(--space-4);
+    text-align: center;
+    background: var(--surface-2);
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius-lg);
+    color: var(--text-3); font-size: 0.875rem; line-height: 1.5;
+}
+.empty .empty-mark { font-size: 1.75rem; line-height: 1; opacity: 0.7; }
+.empty .empty-text { max-width: 46ch; }
+.empty .empty-text strong { color: var(--text-2); font-weight: 600; }
+.empty.is-error { border-style: solid; border-color: var(--danger-soft); color: var(--danger); }
+
+/* ---------- Skeleton: der einzige erlaubte Ladezustand ---------- */
+.skel {
+    display: block;
+    background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+    background-size: 200px 100%;
+    background-repeat: no-repeat;
+    border-radius: var(--radius-sm);
+    animation: skelPulse 1.4s ease-in-out infinite;
+    color: transparent !important;
+    user-select: none;
+}
+.skel-line { height: 0.875rem; margin: 0.375rem 0; }
+.skel-line.short { width: 40%; }
+.skel-line.long  { width: 80%; }
+.skel-block { height: 4.5rem; border-radius: var(--radius); }
+
+/* ---------- Statusmarke ---------- */
+.v-tag {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.125rem 0.5rem; border-radius: 999px;
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.02em;
+    background: var(--surface-2); color: var(--text-3); border: 1px solid var(--line);
+}
+.v-tag--ok     { background: var(--ok-soft);     color: var(--ok);     border-color: transparent; }
+.v-tag--warn   { background: var(--warn-soft);   color: var(--warn);   border-color: transparent; }
+.v-tag--danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.v-tag--info   { background: var(--info-soft);   color: var(--info);   border-color: transparent; }
+
+/* ---------- Modul-Icon-Kachel: eine der vier Stellen mit Verlauf ---------- */
+.v-icon-tile {
+    width: 44px; height: 44px; border-radius: 13px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.25rem; color: #fff;
+    background: linear-gradient(150deg,
+        color-mix(in srgb, var(--tone, var(--accent)) 85%, #fff 15%),
+        color-mix(in srgb, var(--tone, var(--accent)) 70%, #000 30%));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22),
+                0 6px 18px color-mix(in srgb, var(--tone, var(--accent)) 35%, transparent);
+}
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+    .v-icon-tile { background: var(--tone, var(--accent)); }
+}
+
+/* ---------- Toasts: ein Aussehen fuer alle vier Implementierungen ----------
+   Die JS-seitige Zusammenlegung kommt in einer spaeteren Etappe; damit die App
+   aber ab sofort einheitlich aussieht, teilen sich alle vier dieselbe Optik:
+   schwebende Flaeche, farbige Marke links, keine weisse Schrift auf Farbe. */
+.ui-toast, .ausg-toast, .nz-toast, .toast {
+    background: var(--surface-3) !important;
+    color: var(--text-1) !important;
+    border: 1px solid var(--line-strong);
+    border-left: 3px solid var(--text-3);
+    border-radius: var(--radius) !important;
+    box-shadow: var(--shadow-float) !important;
+    font-size: 0.875rem; font-weight: 500;
+}
+.ui-toast-success, .ausg-toast-success, .toast.ok    { border-left-color: var(--ok); }
+.ui-toast-error, .ausg-toast-error, .toast.err       { border-left-color: var(--danger); }
+.ui-toast-action { background: var(--surface-2); border-color: var(--line-strong); color: var(--text-1); }
+.ui-toast-action:hover { background: var(--surface-1); }
