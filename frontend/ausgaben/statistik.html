@@ -51,8 +51,6 @@
         <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
     </div>
 
-    <div class="stat-insights" id="statInsights"></div>
-
     <div class="stat-card">
         <div class="stat-card-head">
             <h3>📈 Zeitverlauf <span id="statSeriesRange" class="stat-range-lbl"></span></h3>
@@ -101,6 +99,14 @@
             <span>mehr</span>
         </div>
     </div>
+
+    <!-- Erkenntnisse stehen bewusst hier unten: sie sind Kommentar zu den
+         Zahlen, nicht der Einstieg. Oben zwischen Kennzahlen und Zeitverlauf
+         haben sie die Diagramme aus dem ersten Bildschirm gedrängt. -->
+    <section class="stat-card" id="statInsightsCard" hidden>
+        <h3>💡 Erkenntnisse</h3>
+        <div class="stat-insights" id="statInsights"></div>
+    </section>
 </main>
 <div class="version-tag"></div>
 <script src="/ausgaben/statistik.js"></script>

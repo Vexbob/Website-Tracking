@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.54.0', date: '2026-09-07', title: 'Statistik aufgeräumt, Marken aus der Leiste', notes: [
+        'Die Erkenntnis-Karten der Statistik stehen jetzt ganz unten statt zwischen Kennzahlen und Diagrammen — der erste Bildschirm zeigt wieder Zahlen und Verlauf.',
+        'Marken sind aus der Ausgaben-Leiste raus, weil auf Kassenbons selten eine Marke steht; die Seite bleibt unter /ausgaben/marken.html erreichbar und alle Daten bleiben.',
+        'Der KI-Prompt schickt nicht mehr bis zu 800 Markennamen mit — erkannte Marken werden weiterhin gespeichert.',
+    ]},
     { v: 'v1.53.0', date: '2026-09-07', title: 'Kategorien und Läden neu, Zusammenführen überall erreichbar', notes: [
         'Kategorien und Läden sind keine Wand aus Formularfeldern mehr, sondern Karten mit Nutzung — wie viele Positionen und wie viel Geld daran hängen —, dazu Suche, Sortierung und ein Sammel-Löschen für nie benutzte Einträge.',
         'Beide Seiten haben jetzt eine echte Überschrift mit einem Satz Erklärung, bearbeitet wird im Dialog statt in dauerhaft offenen Zeilen.',

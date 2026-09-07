@@ -233,6 +233,10 @@ function renderInsights(data){
         }
     }
     el.innerHTML = out.join('');
+    // Die Karte drumherum nur zeigen, wenn wirklich etwas drinsteht --
+    // eine leere Ueberschrift "Erkenntnisse" waere schlimmer als nichts.
+    const card = document.getElementById('statInsightsCard');
+    if (card) card.hidden = out.length === 0;
 }
 
 function renderWeekday(data){

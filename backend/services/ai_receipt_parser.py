@@ -88,9 +88,6 @@ USER-KATEGORIEN (nutze exakt diese ID+Name wenn passend):
 USER-LÄDEN (matche case-insensitive gegen Namen, sonst erkannten Ladennamen vom Bon nutzen):
 {stores_json}
 
-USER-MARKEN (bekannte Eigenmarken und Herstellermarken — case-insensitive matchen):
-{brands_json}
-
 BEKANNTE BELEG-TYPEN des Users (für expense_type bevorzugt EXAKT einen davon nehmen):
 {expense_types_json}
 
@@ -162,13 +159,12 @@ Pflichtfelder pro Item:
     · Bon "C1. ESL-Vollm. 1L"   → "ESL-Vollm. 1L"
     · Bon "A Clever Äpfel 2kg"  → "Clever Äpfel 2kg"
 
-- brand_name (string|null): Erkannte Marke. Regeln:
-    · Wenn der Artikel eine der USER-MARKEN oben enthält, exakt diesen Marken-Namen
-      zurückgeben (case-preserving vom Kontext, also "Milbona" statt "MILBONA").
-    · Wenn der Artikel eine bekannte Marke enthält, die NICHT in USER-MARKEN ist,
-      trotzdem den Marken-Namen zurückgeben (der Server legt sie ggf. neu an).
+- brand_name (string|null): Erkannte Marke, wenn sie im Artikeltext steht.
+  Regeln:
+    · Marken-Namen in lesbarer Schreibweise zurückgeben ("Milbona" statt "MILBONA").
     · Bei generischen Waren ohne Marke (Obst/Gemuese lose, Backwaren aus der Theke,
       Kraftstoff, Trinkgeld, Rabatt, Pfand): null.
+    · Im Zweifel null — auf den meisten Bons steht keine Marke.
     · Eigenmarken sollen NICHT als base_name auftauchen. Beispiel:
         Bon "Clever Äpfel 2kg" → base_name="Äpfel", brand_name="clever"
 
@@ -663,7 +659,6 @@ async def ai_parse_receipt(
     ocr_text: str,
     categories: list,
     stores: list,
-    brands: list | None = None,
     expense_types: list | None = None,
 ) -> dict:
     """Parst OCR-Text via Gemini (Modell laut GEMINI_MODEL, default flash-latest v1.16.0).
@@ -673,9 +668,6 @@ async def ai_parse_receipt(
         ocr_text: Der von OCR extrahierte Rohtext.
         categories: Liste von ``{"id": int, "name": str}``.
         stores: Liste von ``{"name": str}``.
-        brands: Optionale Liste von ``{"name": str}`` bekannter Marken/Eigenmarken.
-                Wird dem Modell als Kontext gegeben, damit es Marken sauber
-                aus dem base_name heraushebt (v1.16.0).
         expense_types: Optionale Liste der beim User schon vorhandenen
                 Beleg-Typen (Strings). Damit waehlt das Modell einen bestehenden
                 eigenen Typ, statt jedesmal eine neue Schreibweise zu erfinden
@@ -688,7 +680,6 @@ async def ai_parse_receipt(
     """
     categories = categories or []
     stores = stores or []
-    brands = brands or []
     expense_types = expense_types or []
 
     if not ocr_text or not ocr_text.strip():
@@ -700,16 +691,10 @@ async def ai_parse_receipt(
 
     ocr_input = ocr_text[:_MAX_OCR_CHARS]
 
-    # Brands-Liste kann sehr gross werden (>800). Fuer den Prompt reichen die
-    # Namen — wir kappen bei den ersten 800 (Alphabet-neutral, keine Prio).
-    brands_for_prompt = [b.get("name") for b in brands if isinstance(b, dict) and b.get("name")]
-    brands_for_prompt = brands_for_prompt[:800]
-
     try:
         prompt = _SYSTEM_PROMPT_TEMPLATE.format(
             categories_json=json.dumps(categories, ensure_ascii=False),
             stores_json=json.dumps(stores, ensure_ascii=False),
-            brands_json=json.dumps(brands_for_prompt, ensure_ascii=False),
             expense_types_json=json.dumps(
                 [t for t in expense_types if isinstance(t, str) and t.strip()][:50],
                 ensure_ascii=False),

@@ -322,13 +322,15 @@ function renderSubnav() {
     const active = el.dataset.active || '';
     // v1.38.4: "+ Neuer Bon"-Eintrag entfernt — der Zugang laeuft jetzt
     // ausschliesslich ueber die Quick-Action-Tiles auf dem Dashboard.
+    // v1.54.0: "Marken" ist raus. Auf Kassenbons steht selten eine Marke, die
+    // Seite war entsprechend leer. Sie existiert weiterhin unter
+    // /ausgaben/marken.html, nur eben nicht mehr als Dauergast in der Leiste.
     const links = [
         { key: 'dashboard',    href: '/ausgaben/',                   label: '📋 Übersicht' },
         { key: 'statistik',    href: '/ausgaben/statistik.html',     label: '📊 Statistik' },
         { key: 'produkte',     href: '/ausgaben/produkte.html',      label: '🛒 Produkte' },
         { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
         { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },
-        { key: 'marken',       href: '/ausgaben/marken.html',        label: '🏭 Marken' },
         { key: 'duplikate',    href: '/ausgaben/duplikate.html',     label: '♻️ Duplikate' },
     ];
     el.className = 'subnav';

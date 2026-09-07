@@ -714,8 +714,6 @@ async def upload_receipt(request: Request,
     user_stores = [r["name"] for r in user_stores_rows]
     cat_rows = await db.fetch(
         "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
-    brand_rows = await db.fetch(
-        "SELECT name FROM brands WHERE user_id=$1", user["id"])
     # v1.52.0: Der Parser entscheidet den Beleg-Typ selbst. Die eigenen Typen des
     # Users kommen als Kontext mit, damit er sie wiederverwendet statt neue
     # Schreibweisen zu erfinden.
@@ -730,7 +728,6 @@ async def upload_receipt(request: Request,
             ocr_text,
             [{"id": r["id"], "name": r["name"]} for r in cat_rows],
             [{"name": r["name"]} for r in user_stores_rows],
-            brands=[{"name": r["name"]} for r in brand_rows],
             expense_types=known_types,
         )
     except Exception as e:
@@ -827,9 +824,6 @@ async def reparse_all_receipts(request: Request,
             store_rows = await conn.fetch(
                 "SELECT name FROM stores WHERE user_id=$1", user_id)
             stores = [{"name": r["name"]} for r in store_rows]
-            brand_rows_re = await conn.fetch(
-                "SELECT name FROM brands WHERE user_id=$1", user_id)
-            brands_ctx = [{"name": r["name"]} for r in brand_rows_re]
             valid_cat_ids = {c["id"] for c in categories}
 
             yield _json.dumps({"type": "start", "total": total}) + "\n"
@@ -851,7 +845,7 @@ async def reparse_all_receipts(request: Request,
                            WHERE expense_id=$1 AND user_id=$2 AND user_edited=TRUE""",
                         eid, user_id)
 
-                    parsed = await ai_parse_receipt(ocr_text, categories, stores, brands=brands_ctx)
+                    parsed = await ai_parse_receipt(ocr_text, categories, stores)
                     items = parsed.get("items") or []
                     await conn.execute(
                         "DELETE FROM expense_items WHERE expense_id=$1 AND user_id=$2",
@@ -942,8 +936,6 @@ async def get_receipt_ocr(rid: int, db=Depends(get_db), user=Depends(get_current
     user_stores = [r["name"] for r in user_stores_rows]
     cat_rows = await db.fetch(
         "SELECT id, name FROM expense_categories WHERE user_id=$1", user["id"])
-    brand_rows = await db.fetch(
-        "SELECT name FROM brands WHERE user_id=$1", user["id"])
     type_rows = await db.fetch(
         "SELECT DISTINCT expense_type FROM expenses "
         "WHERE user_id=$1 AND expense_type IS NOT NULL AND expense_type != ''",
@@ -954,7 +946,6 @@ async def get_receipt_ocr(rid: int, db=Depends(get_db), user=Depends(get_current
             ocr_text,
             [{"id": r["id"], "name": r["name"]} for r in cat_rows],
             [{"name": r["name"]} for r in user_stores_rows],
-            brands=[{"name": r["name"]} for r in brand_rows],
             expense_types=[r["expense_type"] for r in type_rows
                            if r["expense_type"] not in _BUILTIN_TYPE_KEYS],
         )
