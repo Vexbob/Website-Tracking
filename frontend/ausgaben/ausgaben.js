@@ -333,8 +333,11 @@ function renderSubnav() {
     // /ausgaben/marken.html, nur eben nicht mehr als Dauergast in der Leiste.
     const links = [
         { key: 'dashboard',    href: '/ausgaben/',                   label: '📋 Übersicht' },
+        // v1.64.0: "Produkte" ist keine eigene Seite mehr -- die Tabelle ist
+        // eine der vier Aufschluesselungen auf der Statistik-Seite. Sie
+        // beantwortete dieselbe Frage wie die Statistik, nur nach Artikel,
+        // und hatte dafuer einen zweiten Zeitraum-Filter.
         { key: 'statistik',    href: '/ausgaben/statistik.html',     label: '📊 Statistik' },
-        { key: 'produkte',     href: '/ausgaben/produkte.html',      label: '🛒 Produkte' },
         { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
         { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },
         { key: 'duplikate',    href: '/ausgaben/duplikate.html',     label: '♻️ Duplikate' },

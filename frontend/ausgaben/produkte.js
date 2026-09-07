@@ -22,8 +22,10 @@ let allCategories = [];
 let allStores = [];
 let mergeSuggestions = [];
 
-// escHtml lokal definieren statt sich auf ein zufällig vorher geladenes Script
-// zu verlassen (produkte.html lädt keine weiteren Seiten-Scripts).
+// escHtml lokal definieren, falls diese Datei einmal ohne statistik.js
+// geladen wird. Auf der Statistik-Seite laeuft produkte.js VOR statistik.js;
+// dessen gleichnamige Funktion ueberschreibt die hier danach mit derselben
+// Umsetzung.
 if (typeof escHtml === 'undefined') {
     window.escHtml = function escHtml(s) {
         if (!s) return '';
@@ -31,20 +33,32 @@ if (typeof escHtml === 'undefined') {
     };
 }
 
-async function init() {
-    // statistik.css setzt body{visibility:hidden} und erwartet, dass JS nach dem
-    // Laden 'ready' setzt. finally sorgt dafür, dass die Seite auch bei einem
-    // Fehler sichtbar wird, statt für immer leer zu bleiben.
+/* v1.64.0: Diese Datei ist kein Seiten-Skript mehr, sondern der
+ * Produkte-Abschnitt der Statistik-Seite. Zeitraum, Anmeldung und Subnav
+ * kommen von dort; hier bleibt nur, was mit Produkten zu tun hat.
+ *
+ * Der Abschnitt wird erst aufgebaut, wenn man ihn zum ersten Mal ansieht --
+ * er kostet zwei Anfragen, und die meisten Besuche der Statistik-Seite
+ * enden bei Kategorien. */
+let productsPanelReady = false;
+
+async function initProductsPanel() {
+    if (productsPanelReady) return;
+    productsPanelReady = true;
     try {
-        const me = await ensureLoggedIn();
-        if (!me) return;
-        renderSubnav();
         await Promise.all([loadCategories(), loadStores()]);
         bindFilters();
         await Promise.all([loadProducts(), loadMergeSuggestions()]);
-    } finally {
-        document.body.classList.add('ready');
+    } catch (e) {
+        productsPanelReady = false;   // beim naechsten Wechsel neu versuchen
+        console.error('Produkte-Abschnitt:', e);
     }
+}
+
+/* Der Zeitraum oben hat sich geaendert. Nur nachladen, wenn der Abschnitt
+ * schon steht -- sonst holt initProductsPanel die Daten ohnehin frisch. */
+function refreshProductsPanel() {
+    if (productsPanelReady) loadProducts();
 }
 
 async function loadCategories() {
@@ -65,16 +79,15 @@ async function loadStores() {
     } catch (e) { console.error(e); }
 }
 
-// Gewaehlter Zeitraum (VexRange). Wird in bindFilters() gesetzt.
-let prodRange = null;
-
 function currentFilters() {
     const filters = {};
-    // Neu seit v1.60.2: auch ein Ende. Vorher ging der Zeitraum immer bis
-    // heute, ein zurueckliegendes Fenster war gar nicht ausdrueckbar.
-    const r = prodRange || VexRange.resolve('90');
-    if (r.from) filters.date_from = r.from;
-    if (r.to) filters.date_to = r.to;
+    // Der Zeitraum ist der der ganzen Seite (STAT aus statistik.js). Vorher
+    // hatte diese Ansicht einen eigenen -- man stellte denselben Zeitraum
+    // zweimal ein und bekam trotzdem zwei verschiedene Zahlen zu sehen.
+    if (typeof STAT === 'object' && STAT) {
+        if (STAT.from) filters.date_from = STAT.from;
+        if (STAT.to) filters.date_to = STAT.to;
+    }
     const catId = document.getElementById('prodCategory').value;
     if (catId) filters.category_id = catId;
     const storeId = document.getElementById('prodStore').value;
@@ -402,28 +415,21 @@ async function splitProduct(product) {
     } catch (e) { showToast('Fehler: ' + e.message, 'error'); }
 }
 
+/* Eine Zeile statt vier Kacheln: die Gesamtsumme steht schon gross oben auf
+ * der Seite, und Kacheln in einer Karte waeren Karte in Karte. */
 function updateKpis(products) {
+    const el = document.getElementById('prodSummary');
+    if (!el) return;
     const count = products.length;
-    const buys = products.reduce((a, p) => a + (p.count || 0), 0);
-    // Echte Summe der bezahlten Preise (früher: Ø-Einheitspreis × Anzahl —
-    // eine Hochrechnung, die mit €/kg-Werten grob danebenlag).
-    const total = products.reduce((a, p) => a + (p.total_spent || 0), 0);
-    const avg = buys > 0 ? total / buys : 0;
-
-    document.getElementById('kpiCount').textContent = count;
-    document.getElementById('kpiTotal').textContent = fmtEur(total);
-    document.getElementById('kpiAvg').textContent = fmtEur(avg);
-    document.getElementById('kpiBuys').textContent = buys;
+    const buys = products.reduce((s, p) => s + (Number(p.count) || 0), 0);
+    const total = products.reduce((s, p) => s + (Number(p.total_spent) || 0), 0);
+    if (!count) { el.textContent = ''; return; }
+    const perBuy = buys > 0 ? total / buys : 0;
+    el.textContent = `${count} Produkte \u00b7 ${buys} K\u00e4ufe \u00b7 `
+        + `${fmtEur(total)} \u00b7 \u00d8 ${fmtEur(perBuy)} pro Kauf`;
 }
 
 function bindFilters() {
-    // fire:false -- init() laedt gleich selbst; sonst gaebe es zwei Ladungen
-    // direkt hintereinander.
-    const rf = VexRange.mount(document.getElementById('prodRange'), {
-        fire: false,
-        onChange: (r) => { prodRange = r; loadProducts(); },
-    });
-    prodRange = rf.get();
     ['prodCategory', 'prodStore'].forEach(id => {
         document.getElementById(id).addEventListener('change', loadProducts);
     });
@@ -727,4 +733,3 @@ function renderHistList(items) {
     }).join('');
 }
 
-init();

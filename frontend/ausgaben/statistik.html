@@ -9,6 +9,7 @@
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/css/style.css">
 <link rel="stylesheet" href="/css/statistics.css">
+<link rel="stylesheet" href="/ausgaben/produkte.css">
 <script src="/js/config.js"></script>
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
@@ -31,7 +32,8 @@
     <div id="subnav" data-active="statistik"></div>
 
     <!-- v1.60.0: Der Zeitraum liegt hinter einem Knopf (js/range-filter.js);
-         vorher standen fünf Chips und zwei Datumsfelder dauerhaft im Weg. -->
+         vorher standen fünf Chips und zwei Datumsfelder dauerhaft im Weg.
+         Seit v1.64.0 gilt er für die ganze Seite, Produkte eingeschlossen. -->
     <div class="stat-filterbar">
         <span class="stat-filter-title">Zeitraum</span>
         <span class="stat-range-lbl" id="statRangeInfo"></span>
@@ -59,33 +61,69 @@
         <div class="chart-wrap tall"><canvas id="chartSeries"></canvas></div>
     </div>
 
-    <!-- v1.62.0: Rangliste statt Ringdiagramm + Tabelle darunter. Beide
-         sagten dasselbe; der Ring war ab etwa sechs Posten unlesbar. -->
-    <div class="split-2">
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>🥧 Nach Kategorie</h3>
-                <span class="stat-range-lbl" id="catNote"></span>
+    <!-- v1.64.0: Kategorie, Laden, Produkt und Wochentag sind vier
+         Aufschlüsselungen DERSELBEN Summe. Sie gehören deshalb unter einen
+         Umschalter und nicht auf zwei Seiten mit je eigenem Zeitraum-Filter —
+         Kopf und Verlauf darüber bleiben beim Wechsel stehen. -->
+    <div class="stat-card">
+        <div class="stat-card-head">
+            <h3>🧭 Aufschlüsselung</h3>
+            <div class="stat-mini-toggle" id="statBreakdown">
+                <button data-view="kategorien" class="active">Kategorien</button>
+                <button data-view="laeden">Läden</button>
+                <button data-view="produkte">Produkte</button>
+                <button data-view="zeiten">Zeiten</button>
             </div>
+        </div>
+
+        <div class="bd-panel" id="viewKategorien">
+            <div class="bd-head"><span class="stat-range-lbl" id="catNote"></span></div>
             <div id="rankCategory" class="rank-list"></div>
         </div>
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>🏪 Nach Laden</h3>
-                <span class="stat-range-lbl" id="storeNote"></span>
-            </div>
+
+        <div class="bd-panel" id="viewLaeden" hidden>
+            <div class="bd-head"><span class="stat-range-lbl" id="storeNote"></span></div>
             <div id="rankStore" class="rank-list"></div>
         </div>
-    </div>
 
-    <div class="split-3-2">
-        <div class="stat-card">
-            <h3>📅 Ausgaben nach Wochentag</h3>
-            <div class="chart-wrap"><canvas id="chartWeekday"></canvas></div>
+        <div class="bd-panel" id="viewProdukte" hidden>
+            <div class="bd-tools">
+                <select id="prodCategory" class="v-select">
+                    <option value="">Alle Kategorien</option>
+                </select>
+                <select id="prodStore" class="v-select">
+                    <option value="">Alle Läden</option>
+                </select>
+                <button id="prodReparse" class="prod-reparse-btn"
+                        title="Alle Bons mit Foto neu von der KI parsen — aktualisiert Namen, Kategorien und Mengeneinheiten">🔄 Alle neu parsen</button>
+            </div>
+            <!-- Zusammenführen-Vorschläge: erscheint nur, wenn der Server
+                 Schreibvarianten desselben Artikels gefunden hat. -->
+            <div id="mergeBox" class="merge-box" style="display:none"></div>
+            <div class="bd-head"><span class="stat-range-lbl" id="prodSummary"></span></div>
+            <div style="overflow-x:auto">
+                <table class="stat-table" id="prodTable">
+                    <thead>
+                        <tr id="prodHead">
+                            <th class="sort" data-sort="title">Produkt</th>
+                            <th class="sort" data-sort="category_name">Kategorie</th>
+                            <th>Läden</th>
+                            <th class="sort num" data-sort="count">Käufe</th>
+                            <th class="sort num" data-sort="total_spent">Gesamt</th>
+                            <th class="sort num" data-sort="avg_price">Ø Preis</th>
+                            <th class="sort num" data-sort="last_date">Letzter Kauf</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prodBody">
+                        <tr><td colspan="7"><span class="skel skel-block"></span></td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <div class="stat-card">
-            <h3>🏆 Top-Artikel</h3>
-            <div id="tableItems" class="stat-scroll-y"></div>
+
+        <div class="bd-panel" id="viewZeiten" hidden>
+            <div class="bd-head"><span class="stat-range-lbl">Summe je Wochentag im gewählten Zeitraum</span></div>
+            <div class="chart-wrap"><canvas id="chartWeekday"></canvas></div>
         </div>
     </div>
 
@@ -98,6 +136,7 @@
     </section>
 </main>
 <div class="version-tag"></div>
+<script src="/ausgaben/produkte.js"></script>
 <script src="/ausgaben/statistik.js"></script>
 </body>
 </html>

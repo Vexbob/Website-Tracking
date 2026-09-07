@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.64.0', date: '2026-09-07', title: 'Statistik und Produkte sind eine Seite', notes: [
+        'Kategorien, Läden, Produkte und Wochentage stehen jetzt als vier Aufschlüsselungen derselben Summe unter einem Umschalter — Zeitraum, Gesamtsumme und Verlauf darüber bleiben beim Wechsel stehen.',
+        'Die Produkt-Seite ist damit weg: sie beantwortete dieselbe Frage nach Artikel und hatte dafür einen zweiten Zeitraum-Filter, den man getrennt einstellen musste.',
+        'Die Produkt-Tabelle liest jetzt eine Zusammenfassungszeile statt vier Kacheln, deren Gesamtsumme ohnehin schon oben stand.',
+        '„Top-Artikel“ ist entfallen — die vollständige Produkt-Tabelle sagt dasselbe.',
+    ]},
     { v: 'v1.63.0', date: '2026-09-07', title: 'Bilder im Blog funktionieren', notes: [
         'Der Bild-Upload im Blog-Editor lief seit jeher in eine Anmeldefehler-Meldung — er hat den Anmelde-Schlüssel unter einem Namen gesucht, den es nicht gibt.',
         'Hochgeladene Bilder werden jetzt auch angezeigt: ihre Adresse zeigte auf den Webserver statt auf das Backend, das die Bilder ausliefert.',

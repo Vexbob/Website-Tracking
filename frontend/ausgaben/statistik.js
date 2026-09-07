@@ -1,7 +1,13 @@
-/* Statistik — v1.18.0 Redesign
- * Modularer Aufbau: State (Datumsbereich + Granularity) → loadAll()
- * lädt Insights + Serie + Verteilung parallel. Alle Charts re-rendern
- * bei Filter-Aenderung.
+/* Statistik — v1.64.0
+ * Eine Seite fuer alles, was die Ausgaben in Zahlen beantwortet: ein
+ * Zeitraum, eine Hauptzahl, ein Verlauf — und darunter vier
+ * Aufschluesselungen DERSELBEN Summe (Kategorien, Laeden, Produkte, Zeiten)
+ * unter einem Umschalter.
+ *
+ * Die Produkt-Tabelle war bis v1.63.x eine eigene Seite mit eigenem
+ * Zeitraum-Filter. Man stellte denselben Zeitraum zweimal ein und bekam
+ * trotzdem zwei verschiedene Zahlen zu sehen. Ihr Code lebt weiter in
+ * produkte.js, wird von hier aber als Abschnitt eingehaengt.
  */
 
 // --------- State ---------
@@ -10,6 +16,7 @@ const STAT = {
     to:   null,
     preset: '30',   // '7' | '30' | '90' | '365' | 'all' | 'custom'
     granularity: 'daily',
+    view: 'kategorien',   // welche Aufschluesselung offen ist
     charts: {},
     insightsCache: null,
     firstExpenseDate: null,
@@ -56,10 +63,38 @@ async function init(){
     document.body.style.visibility = 'visible';
 }
 
+const VIEW_KEY = 'vexbob_stat_view';
+const VIEWS = ['kategorien', 'laeden', 'produkte', 'zeiten'];
+
+function panelOf(view){
+    return document.getElementById('view' + view.charAt(0).toUpperCase() + view.slice(1));
+}
+
+/* Chart.js kann kein Diagramm in einem ausgeblendeten Container vermessen --
+ * es kaeme mit Breite 0 heraus. Das Wochentags-Diagramm wird deshalb erst
+ * gezeichnet, wenn sein Feld sichtbar ist, und beim Wechsel dorthin neu. */
+function showBreakdown(view){
+    if(VIEWS.indexOf(view) === -1) view = 'kategorien';
+    STAT.view = view;
+    try { localStorage.setItem(VIEW_KEY, view); } catch(e) {}
+    document.querySelectorAll('#statBreakdown button').forEach(b => {
+        b.classList.toggle('active', b.dataset.view === view);
+    });
+    VIEWS.forEach(v => { const el = panelOf(v); if(el) el.hidden = (v !== view); });
+    if(view === 'zeiten' && STAT.insightsCache) renderWeekday(STAT.insightsCache);
+    if(view === 'produkte' && typeof initProductsPanel === 'function') initProductsPanel();
+}
+
 function bindFilterUI(){
     // Der Zeitraum-Knopf zeichnet sich selbst und meldet den fertigen
     // Zeitraum zurück — diese Seite rechnet nichts mehr aus.
     VexRange.mount(document.getElementById('statRange'), { onChange: applyRange });
+    document.querySelectorAll('#statBreakdown button').forEach(b => {
+        b.addEventListener('click', () => showBreakdown(b.dataset.view));
+    });
+    let start = 'kategorien';
+    try { start = localStorage.getItem(VIEW_KEY) || start; } catch(e) {}
+    showBreakdown(start);
     document.querySelectorAll('#statGranularity button').forEach(b => {
         b.addEventListener('click', () => {
             document.querySelectorAll('#statGranularity button').forEach(x => x.classList.remove('active'));
@@ -92,6 +127,10 @@ function applyRange(range){
         b.classList.toggle('active', b.dataset.gran === STAT.granularity);
     });
     loadAll();
+    // Die Produkt-Tabelle haengt am selben Zeitraum. Sie laedt nur nach, wenn
+    // sie schon aufgebaut ist -- sonst holt sie ihre Daten ohnehin frisch,
+    // sobald man sie das erste Mal ansieht.
+    if(typeof refreshProductsPanel === 'function') refreshProductsPanel();
 }
 
 function rangeParams(){
@@ -127,7 +166,6 @@ async function loadInsights(){
         renderKPI(data);
         renderInsights(data);
         renderWeekday(data);
-        renderTopItems(data);
         renderRanks(data);
     } catch(e) { console.error('insights failed:', e); }
 }
@@ -240,6 +278,11 @@ function renderInsights(data){
 function renderWeekday(data){
     const canvas = document.getElementById('chartWeekday');
     if(!canvas) return;
+    // Ausgeblendet hat der Canvas die Breite 0 -- Chart.js wuerde ein
+    // Diagramm bauen, das beim Aufklappen leer aussieht. showBreakdown()
+    // holt das Zeichnen nach, sobald das Feld offen ist.
+    const panel = panelOf('zeiten');
+    if(panel && panel.hidden) return;
     if(STAT.charts.weekday) STAT.charts.weekday.destroy();
     const days = ['Mo','Di','Mi','Do','Fr','Sa','So'];
     const totals = data.by_weekday.map(x => x.total);
@@ -261,22 +304,6 @@ function renderWeekday(data){
     });
 }
 
-
-function renderTopItems(data){
-    const box = document.getElementById('tableItems');
-    if(!data.top_items || !data.top_items.length){
-        box.innerHTML = '<div class="stat-empty">Keine Artikel-Daten</div>';
-        return;
-    }
-    let html = `<table class="stat-table"><thead><tr>
-        <th>Artikel</th><th style="text-align:right">×</th><th style="text-align:right">Ø</th><th style="text-align:right">Total</th>
-    </tr></thead><tbody>`;
-    data.top_items.forEach(it => {
-        html += `<tr><td>${escHtml(it.name)}</td><td class="num">${it.count}</td><td class="num">${fmtEur(it.avg)}</td><td class="num">${fmtEur(it.total)}</td></tr>`;
-    });
-    html += `</tbody></table>`;
-    box.innerHTML = html;
-}
 
 /* Eine Zeile je Posten: Marke, Name, Betrag, darunter der Anteil als Balken
  * und die Veraenderung. Die Entitaetsfarbe faerbt nur Marke und Balken --

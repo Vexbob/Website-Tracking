@@ -41,6 +41,12 @@ body{visibility:hidden}body.ready{visibility:visible}
 .stat-mini-toggle button:hover{color:var(--text-1)}
 .stat-mini-toggle button.active{background:var(--accent-strong);color:var(--accent-ink)}
 .stat-scroll-y{max-height:340px;overflow-y:auto}
+/* Die vier Aufschluesselungen liegen uebereinander in EINER Karte --
+   der Umschalter sitzt in deren Kopfzeile. */
+.bd-panel[hidden]{display:none}
+.bd-head{display:flex;justify-content:flex-end;min-height:1rem;margin-bottom:0.5rem}
+.bd-tools{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.875rem}
+@media(max-width:560px){.bd-tools>*{flex:1 1 100%}}
 
 .chart-wrap{position:relative;height:280px}
 .chart-wrap.small{height:220px}
