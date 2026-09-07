@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.65.0', date: '2026-09-07', title: 'Sicherheits-Durchsicht', notes: [
+        'Ein Backup enthielt bei zwei Gesundheits-Tabellen die Zeilen ALLER Konten statt nur der eigenen — sie haben als einzige keine Zuordnung zum Nutzer und fielen deshalb durchs Raster.',
+        'Beim Wiederherstellen wurden die Spaltennamen ungeprüft aus der hochgeladenen Datei in die Datenbank-Abfrage übernommen; sie werden jetzt gegen das echte Schema gefiltert.',
+        'Fehlermeldungen von Bereitschaftsprüfung und Wiederherstellung nennen nach außen keine Server-Interna mehr — der volle Text steht im Log.',
+        'Die automatische API-Dokumentation ist nicht mehr öffentlich erreichbar (ENABLE_DOCS=1 schaltet sie zurück).',
+    ]},
     { v: 'v1.64.0', date: '2026-09-07', title: 'Statistik und Produkte sind eine Seite', notes: [
         'Kategorien, Läden, Produkte und Wochentage stehen jetzt als vier Aufschlüsselungen derselben Summe unter einem Umschalter — Zeitraum, Gesamtsumme und Verlauf darüber bleiben beim Wechsel stehen.',
         'Die Produkt-Seite ist damit weg: sie beantwortete dieselbe Frage nach Artikel und hatte dafür einen zweiten Zeitraum-Filter, den man getrennt einstellen musste.',

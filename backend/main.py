@@ -170,7 +170,17 @@ async def lifespan(app: FastAPI):
         logger.info("Shutdown complete")
 
 
-app = FastAPI(lifespan=lifespan)
+# /docs, /redoc und /openapi.json legen die komplette API-Oberflaeche offen --
+# jeden Pfad, jedes Feld, jede Rolle. Das ist fuer eine private Anwendung eine
+# Landkarte fuer Fremde und wird deshalb nur auf ausdruecklichen Wunsch
+# ausgeliefert: ENABLE_DOCS=1 setzen, dann sind sie wie frueher erreichbar.
+_DOCS_ON = os.getenv("ENABLE_DOCS", "").strip() in ("1", "true", "yes")
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs" if _DOCS_ON else None,
+    redoc_url="/redoc" if _DOCS_ON else None,
+    openapi_url="/openapi.json" if _DOCS_ON else None,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -363,6 +373,11 @@ async def readiness():
 
     Der Endpoint ist bewusst unauthentifiziert (kein PII), aber liefert
     keine Details ueber Tabellen-Inhalte -- nur harte Infrastruktur-Signale.
+
+    v1.65.0: Auch im Fehlerfall kein Fehlertext mehr nach aussen. Eine
+    asyncpg-Verbindungsmeldung nennt Host, Port und Datenbanknamen; das ist
+    genau die Art Detail, die dieser Endpunkt laut Absatz oben NICHT liefern
+    soll. Die Meldung steht im Log.
     """
     from fastapi.responses import JSONResponse
     try:
@@ -385,7 +400,6 @@ async def readiness():
                 "status": "not-ready",
                 "backend_version": BACKEND_VERSION,
                 "db": "error",
-                "error": str(e)[:200],
             },
         )
 
@@ -1727,9 +1741,11 @@ async def restore(request: Request, b: RestoreBody, db=Depends(get_db), user=Dep
         return {"status": "ok", "stats": stats}
     except ValueError as e:
         raise HTTPException(400, str(e))
-    except Exception as e:
+    except Exception:
+        # Der Text kann Tabellen-, Spalten- und Constraint-Namen enthalten.
+        # Er steht vollstaendig im Log; nach aussen reicht die Tatsache.
         logger.exception("Restore failed")
-        raise HTTPException(500, f"Restore fehlgeschlagen: {e}")
+        raise HTTPException(500, "Restore fehlgeschlagen — Details stehen im Server-Log")
 
 @app.get("/api/backup/snapshots")
 async def list_snapshots(db=Depends(get_db), user=Depends(get_current_user)):

@@ -52,6 +52,19 @@ BYTEA_COLUMNS = {
 # Tabellen, die eine user_id haben (users selber nicht)
 USER_SCOPED_TABLES = {t for t in TABLES_ORDERED if t != "users"}
 
+# Tabellen OHNE eigene user_id-Spalte. Sie haengen ueber einen Fremdschluessel
+# an einer Tabelle, die eine hat.
+#
+# Sicherheitsrelevant (gefunden v1.65.0): ohne diese Zuordnung fiel die
+# Abfrage in den "alles lesen"-Zweig, und im Backup EINES Nutzers landeten
+# saemtliche Zeilen dieser Tabellen -- also die Pulsreihen und Zusatzmetriken
+# aller Konten. Beim Restore galt dasselbe umgekehrt: fremde workout_id
+# durfte unbesehen eingefuegt werden.
+PARENT_SCOPE = {
+    "health_workout_metrics":    ("workout_id", "health_workouts"),
+    "health_workout_hr_samples": ("workout_id", "health_workouts"),
+}
+
 def _ser_value(v):
     if v is None:
         return None
@@ -77,6 +90,22 @@ async def _table_exists(conn: asyncpg.Connection, table: str) -> bool:
         "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=$1",
         table))
 
+async def _table_columns(conn: asyncpg.Connection, table: str) -> set:
+    """Die echten Spaltennamen einer Tabelle.
+
+    Sicherheitsrelevant (gefunden v1.65.0): der Restore hat die Spaltenliste
+    fuer sein INSERT aus den Schluesseln der hochgeladenen JSON-Datei gebaut
+    und in den SQL-Text interpoliert. Bezeichner lassen sich nicht als
+    Parameter binden -- also muessen sie gegen das echte Schema gefiltert
+    werden. Nebeneffekt: ein Backup aus einer aelteren Schema-Version mit
+    inzwischen entfernten Spalten laesst sich weiterhin einspielen.
+    """
+    rows = await conn.fetch(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema='public' AND table_name=$1", table)
+    return {r["column_name"] for r in rows}
+
+
 async def _column_exists(conn: asyncpg.Connection, table: str, column: str) -> bool:
     return bool(await conn.fetchval(
         "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 AND column_name=$2",
@@ -95,6 +124,12 @@ async def create_snapshot(conn: asyncpg.Connection, trigger_type: str = "manual"
         try:
             if user_id is not None and t in USER_SCOPED_TABLES and await _column_exists(conn, t, "user_id"):
                 rows = await conn.fetch(f"SELECT * FROM {t} WHERE user_id=$1", user_id)
+            elif user_id is not None and t in PARENT_SCOPE:
+                # Keine eigene user_id -- ueber die Elterntabelle einschraenken.
+                fk, parent = PARENT_SCOPE[t]
+                rows = await conn.fetch(
+                    f"SELECT c.* FROM {t} c JOIN {parent} p ON p.id = c.{fk} "
+                    f"WHERE p.user_id=$1", user_id)
             elif user_id is not None and t == "users":
                 # Beim User-Backup: nur eigenen User-Datensatz mitnehmen
                 rows = await conn.fetch("SELECT * FROM users WHERE id=$1", user_id)
@@ -196,9 +231,28 @@ async def restore_snapshot(conn: asyncpg.Connection, payload: dict,
             if not wipe:
                 if user_id is not None and has_user_col:
                     existing = await conn.fetch(f"SELECT id FROM {t} WHERE user_id=$1", user_id)
+                elif user_id is not None and t in PARENT_SCOPE:
+                    fk, parent = PARENT_SCOPE[t]
+                    existing = await conn.fetch(
+                        f"SELECT c.id FROM {t} c JOIN {parent} p ON p.id = c.{fk} "
+                        f"WHERE p.user_id=$1", user_id)
                 else:
                     existing = await conn.fetch(f"SELECT id FROM {t}")
                 existing_ids = {r["id"] for r in existing}
+
+            # Zeilen ohne eigene user_id duerfen nur an EIGENEN Elternzeilen
+            # haengen -- sonst haengt man mit einem praeparierten Backup seine
+            # Pulsreihe an das Workout eines fremden Kontos.
+            own_parent_ids = None
+            if user_id is not None and t in PARENT_SCOPE:
+                fk, parent = PARENT_SCOPE[t]
+                own_parent_ids = {r["id"] for r in await conn.fetch(
+                    f"SELECT id FROM {parent} WHERE user_id=$1", user_id)}
+
+            # Nur echte Spalten der Tabelle einsetzen. Die Schluessel kommen
+            # aus der hochgeladenen Datei; ungeprueft landeten sie direkt im
+            # SQL-Text (INSERT INTO t (<hier>) ...).
+            allowed_cols = await _table_columns(conn, t)
 
             restored = 0
             skipped = 0
@@ -210,12 +264,18 @@ async def restore_snapshot(conn: asyncpg.Connection, payload: dict,
                 # Bei User-Restore: user_id im Row überschreiben
                 if user_id is not None and has_user_col:
                     row = {**row, "user_id": user_id}
+                if own_parent_ids is not None and row.get(PARENT_SCOPE[t][0]) not in own_parent_ids:
+                    skipped += 1
+                    continue
                 if not wipe and row.get("id") in existing_ids:
                     # v1.34.0: eigener Bucket -- Konflikt heisst hier "ID war
                     # schon belegt", nicht "Datei kaputt".
                     skipped_conflict += 1
                     continue
-                cols = list(row.keys())
+                cols = [c for c in row.keys() if c in allowed_cols]
+                if not cols:
+                    skipped += 1
+                    continue
                 placeholders = [f"${i+1}" for i in range(len(cols))]
                 vals = [row[c] for c in cols]
                 sql = (
