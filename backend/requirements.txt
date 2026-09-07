@@ -10,6 +10,10 @@ slowapi==0.1.9
 pytest==8.0.0
 pytest-asyncio==0.23.5
 Pillow==10.2.0
+# HEIC/HEIF (iPhone-Fotos). Ohne dieses Paket kann Pillow HEIC nicht
+# oeffnen; services/expenses.py faengt das Fehlen ab, dann sind HEIC-
+# Uploads eben nicht moeglich.
+pillow-heif==0.15.0
 google-cloud-vision==3.7.4
 google-genai>=1.0.0
 # v1.35.0: optional -- nur ziehen, wenn SENTRY_DSN gesetzt werden soll.

@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.66.0', date: '2026-09-08', title: 'Bild-Upload im Blog: die eigentliche Ursache', notes: [
+        'Ein nicht lesbares Bild wurde stillschweigend als Rohdatei gespeichert — der Upload meldete Erfolg, der Browser konnte daraus aber nie ein Bild zeichnen.',
+        'HEIC-Fotos vom iPhone kann der Server jetzt öffnen; vorher landete jedes davon in genau diesem stillen Rückfall.',
+        'Ein fehlgeschlagener Upload sagt jetzt, woran es lag, und die Meldung bleibt stehen statt nach drei Sekunden zu verschwinden.',
+    ]},
     { v: 'v1.65.0', date: '2026-09-07', title: 'Sicherheits-Durchsicht', notes: [
         'Ein Backup enthielt bei zwei Gesundheits-Tabellen die Zeilen ALLER Konten statt nur der eigenen — sie haben als einzige keine Zuordnung zum Nutzer und fielen deshalb durchs Raster.',
         'Beim Wiederherstellen wurden die Spaltennamen ungeprüft aus der hochgeladenen Datei in die Datenbank-Abfrage übernommen; sie werden jetzt gegen das echte Schema gefiltert.',

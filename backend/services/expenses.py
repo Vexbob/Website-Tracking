@@ -70,6 +70,16 @@ def _extract_keyword(desc: str) -> Optional[str]:
 
 # ---------- Bild-Processing ----------
 
+# iPhones liefern HEIC. Pillow allein kann das NICHT oeffnen -- ohne diesen
+# Opener endet jede HEIC-Datei im Fehlerzweig von process_image(). Der Import
+# ist optional: fehlt das Paket, laeuft alles weiter, nur eben ohne HEIC.
+try:
+    from pillow_heif import register_heif_opener as _register_heif
+    _register_heif()
+    HEIF_SUPPORTED = True
+except Exception:      # pragma: no cover - haengt an der Installation
+    HEIF_SUPPORTED = False
+
 MAX_IMAGE_DIM = 1600      # px – längste Kante nach Kompression
 JPEG_QUALITY = 82
 THUMB_DIM = 320
@@ -108,5 +118,26 @@ def process_image(raw_bytes: bytes) -> tuple:
         return main_bytes, thumb_bytes, "image/jpeg", len(main_bytes)
     except Exception as e:
         logger.exception(f"Image processing failed: {e}")
-        # Fallback: Rohdaten ohne Verarbeitung
+        # Fallback: Rohdaten ohne Verarbeitung. Fuer den Bon-Scan ist das
+        # richtig -- das Original bleibt erhalten und die KI kommt damit
+        # zurecht. Wer ein <img> daraus bauen will, nimmt process_image_strict:
+        # ein Bild mit mime=application/octet-stream zeigt kein Browser an.
         return raw_bytes, None, "application/octet-stream", len(raw_bytes)
+
+
+def process_image_strict(raw_bytes: bytes) -> tuple:
+    """Wie ``process_image``, aber wirft, statt still durchzuwinken.
+
+    Hintergrund (v1.66.0): der Blog-Upload hat ``process_image`` benutzt und
+    dessen Rueckfallwert gespeichert. Ergebnis: HTTP 200, ein Eintrag mit
+    ``mime_type=application/octet-stream`` -- und ein Bild, das im Browser
+    nie erscheint. Ein fehlgeschlagener Upload muss fehlschlagen.
+    """
+    main_bytes, thumb_bytes, mime, size = process_image(raw_bytes)
+    if mime != "image/jpeg":
+        hint = ("Das Format konnte nicht gelesen werden."
+                if HEIF_SUPPORTED else
+                "Das Format konnte nicht gelesen werden \u2014 fuer HEIC-Dateien "
+                "vom iPhone fehlt auf dem Server das Paket 'pillow-heif'.")
+        raise ValueError(hint)
+    return main_bytes, thumb_bytes, mime, size

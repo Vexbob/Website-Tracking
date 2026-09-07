@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field
 
 from database import get_db
 from auth import require_admin
-from deps import limiter, LIMIT_WRITE_STANDARD
-from services.expenses import process_image
+from deps import logger, limiter, LIMIT_WRITE_STANDARD
+from services.expenses import process_image_strict
 
 MAX_BLOG_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB Rohupload
 
@@ -258,9 +258,12 @@ async def admin_upload_image(request: Request,
     if len(raw) > MAX_BLOG_IMAGE_BYTES:
         raise HTTPException(400, f"Datei zu groß (max {MAX_BLOG_IMAGE_BYTES // 1024 // 1024} MB)")
     try:
-        main_bytes, thumb_bytes, mime, size = process_image(raw)
-    except Exception as e:
-        raise HTTPException(400, f"Bild konnte nicht verarbeitet werden: {e}")
+        main_bytes, thumb_bytes, mime, size = process_image_strict(raw)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception:
+        logger.exception("Blog-Bild konnte nicht verarbeitet werden")
+        raise HTTPException(400, "Bild konnte nicht verarbeitet werden")
     row = await db.fetchrow(
         """INSERT INTO blog_media (post_id, filename, mime_type, size_bytes, image_data, thumbnail_data)
            VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, filename, mime_type, size_bytes""",

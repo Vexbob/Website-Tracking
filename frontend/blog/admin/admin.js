@@ -481,9 +481,15 @@ async function uploadAndInsertImage(file) {
         // Bild anklickbar für Alt-Text-Bearbeitung
         scheduleSave();
     } catch (e) {
-        placeholder.textContent = '⚠️ Upload fehlgeschlagen: ' + e.message;
-        placeholder.style.borderColor = 'var(--red)';
-        setTimeout(() => placeholder.remove(), 3000);
+        // Der Platzhalter verschwand nach drei Sekunden -- die Meldung war
+        // damit praktisch unsichtbar, und ein fehlgeschlagener Upload sah aus
+        // wie "es passiert einfach nichts". Sie bleibt jetzt stehen, bis man
+        // sie wegklickt, und kommt zusaetzlich als Toast.
+        placeholder.textContent = '⚠️ Upload fehlgeschlagen: ' + e.message + ' (klicken zum Ausblenden)';
+        placeholder.style.borderColor = 'var(--danger)';
+        placeholder.style.cursor = 'pointer';
+        placeholder.addEventListener('click', () => placeholder.remove(), { once: true });
+        if (window.Toast) Toast.error('Bild-Upload fehlgeschlagen: ' + e.message);
     }
 }
 
