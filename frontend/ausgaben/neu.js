@@ -68,7 +68,7 @@ function consumeDashboardHandoff() {
         if (ocrBtn) ocrBtn.click();
         handleFile(file);
     } catch (e) {
-        showToast('Bild-Uebergabe fehlgeschlagen: ' + (e.message || e), 'error');
+        showToast('Bild-Übergabe fehlgeschlagen: ' + (e.message || e), 'error');
     }
 }
 

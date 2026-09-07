@@ -19,7 +19,7 @@
             '<div class="modal-box exp-dialog">',
             '  <div class="modal-head">',
             '    <h3>Gesamt-Export</h3>',
-            '    <button class="modal-close" id="expClose" type="button" aria-label="Schliessen">✕</button>',
+            '    <button class="modal-close" id="expClose" type="button" aria-label="Schließen">✕</button>',
             '  </div>',
             '  <div class="modal-body exp-body">',
             '    <div>',
@@ -40,7 +40,7 @@
             '    <div>',
             '      <div class="exp-label">Aggregation</div>',
             '      <div class="exp-chip-row" id="expAgg">',
-            '        <button type="button" data-agg="none" class="active">Alle Einzel-Eintraege</button>',
+            '        <button type="button" data-agg="none" class="active">Alle Einzel-Einträge</button>',
             '        <button type="button" data-agg="week">Wochenweise</button>',
             '        <button type="button" data-agg="month">Monatsweise</button>',
             '      </div>',
@@ -93,7 +93,7 @@
         const updateHint = () => {
             const el = overlay.querySelector('#expHint');
             if (state.agg === 'week') el.textContent = 'Ausgaben werden pro Woche summiert (Anzahl Bons, Summe, Durchschnitt) — dazu jeder Einkauf einzeln mit Datum, Laden, Anzahl Positionen und Kategorien, aber ohne Einzelpositionen. Vitalwerte als Wochendurchschnitt inkl. min/max.';
-            else if (state.agg === 'month') el.textContent = 'Ausgaben werden pro Monat summiert — dazu jeder Einkauf einzeln mit Datum, Laden, Anzahl Positionen und Kategorien, aber ohne Einzelpositionen. Vitalwerte als Monatsdurchschnitt inkl. min/max. Ideal fuer lange Zeitraeume.';
+            else if (state.agg === 'month') el.textContent = 'Ausgaben werden pro Monat summiert — dazu jeder Einkauf einzeln mit Datum, Laden, Anzahl Positionen und Kategorien, aber ohne Einzelpositionen. Vitalwerte als Monatsdurchschnitt inkl. min/max. Ideal für lange Zeiträume.';
             else el.textContent = 'Ausgaben und Vitalwerte werden nicht zusammengefasst.';
         };
         overlay.querySelector('#expRange').addEventListener('click', (e) => {

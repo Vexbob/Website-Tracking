@@ -578,6 +578,8 @@ function renderChart(items) {
 
     const sorted = items.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
     const labels = sorted.map(h => fmtDate(h.date));
+    // Achse kurz, Tooltip mit Jahr -- die Preishistorie geht ueber Jahre.
+    const fullLabels = sorted.map(h => VexCharts.fullDay(h.date));
     // Bezahlter Preis, nicht hochgerechnet: eine 500-g-Packung und eine
     // 1-kg-Packung sind zwei ehrliche Punkte, keine vergleichbaren €/kg-Werte.
     const prices = sorted.map(h => h.total_price);
@@ -587,8 +589,8 @@ function renderChart(items) {
     // Flaeche unter der Linie: Verlauf von 18 % auf 0 derselben Farbe.
     const line = cssVar('--chart-1');
     const g = ctx.getContext('2d').createLinearGradient(0, 0, 0, 220);
-    g.addColorStop(0, 'rgba(45,212,191,0.18)');
-    g.addColorStop(1, 'rgba(45,212,191,0)');
+    g.addColorStop(0, line + '2e');   // 18 % derselben Farbe, wie in DESIGN.md
+    g.addColorStop(1, line + '00');
 
     currentChartInstance = new Chart(ctx, {
         type: 'line',
@@ -616,6 +618,7 @@ function renderChart(items) {
                     borderWidth: 1, titleColor: cssVar('--text-1'), bodyColor: cssVar('--text-2'),
                     cornerRadius: 12, padding: 10, displayColors: false,
                     callbacks: {
+                    title: VexCharts.titleFrom(fullLabels),
                     afterLabel: (c) => {
                         const h = sorted[c.dataIndex];
                         return [h.store_name, mengeLabel(h)].filter(Boolean).join(' · ');

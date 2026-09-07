@@ -43,7 +43,7 @@
     border-radius: 50%; background: var(--surface); border: 2px solid var(--text-faint);
     box-shadow: 0 0 0 3px var(--surface); }
 .vtl-item.current .vtl-dot { background: var(--accent); border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px rgba(233,69,96,0.18); }
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--accent-soft); }
 .vtl-vhdr { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
 .vtl-ver { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8125rem;
     font-weight: 700; color: var(--text); background: var(--surface-2);
@@ -93,7 +93,7 @@
 
 
     function renderList(entries, currentV) {
-        if (!entries || !entries.length) return '<div class="vtl-empty">Keine Versions-Historie verfuegbar.</div>';
+        if (!entries || !entries.length) return '<div class="vtl-empty">Keine Versions-Historie verfügbar.</div>';
         const cur = (currentV || '').trim();
         const items = entries.map(e => {
             const isCur = e.v === cur;
@@ -130,7 +130,7 @@
                         '<h3>Versions-Historie</h3>' +
                         '<div class="vtl-sub">Was seit dem ersten Commit alles passiert ist</div>' +
                     '</div>' +
-                    '<button type="button" class="vtl-close" aria-label="Schliessen">✕</button>' +
+                    '<button type="button" class="vtl-close" aria-label="Schließen">✕</button>' +
                 '</div>' +
                 '<div class="vtl-body">' + renderList(entries, cur) + '</div>' +
             '</div>';

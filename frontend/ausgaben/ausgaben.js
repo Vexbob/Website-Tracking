@@ -56,7 +56,6 @@ const AUSGABEN_API = {
     statsWeekly:     (p={}) => { const q = new URLSearchParams(typeof p==='object'?p:{weeks:p}).toString(); return apiCall('/api/expenses/stats/weekly' + (q ? '?' + q : '')); },
     statsDaily:      (p={}) => { const q = new URLSearchParams(typeof p==='object'?p:{days:p}).toString(); return apiCall('/api/expenses/stats/daily' + (q ? '?' + q : '')); },
     statsInsights:   (p={}) => { const q = new URLSearchParams(p).toString(); return apiCall('/api/expenses/stats/insights' + (q ? '?' + q : '')); },
-    heatmap:         () => apiCall('/api/expenses/heatmap'),
     products:        (minCount, filters) => {
         const params = new URLSearchParams();
         if (minCount) params.set('min_count', minCount);

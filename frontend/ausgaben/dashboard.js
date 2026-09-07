@@ -501,7 +501,7 @@ async function handoffToNeu(file) {
         return;
     }
     if (file.size > 8 * 1024 * 1024) {
-        showToast('Bild zu gross (max 8 MB)', 'error');
+        showToast('Bild zu groß (max 8 MB)', 'error');
         return;
     }
     try {
@@ -518,7 +518,7 @@ async function handoffToNeu(file) {
                 dataUrl,
             }));
         } catch (e) {
-            showToast('Bild zu gross fuer Uebergabe — nutze die Vollansicht', 'error');
+            showToast('Bild zu groß für die Übergabe — nutze die Vollansicht', 'error');
             location.href = '/ausgaben/neu.html';
             return;
         }

@@ -21,26 +21,31 @@
     --text-3: #8b93a1;   /*  5.9:1  Meta, Achsen */
     --text-4: #6b7280;   /*  3.8:1  nur Dekoration */
 
-    /* --- Akzent: gehoert dem Aktiven --- */
-    --accent: #e94560;          /* Text/Icon/Rahmen auf dunkel (4.8:1) */
-    --accent-strong: #cc3350;   /* Flaeche mit weisser Schrift (5.1:1) */
-    --accent-soft: rgba(233,69,96,0.14);
-    --grad-accent: linear-gradient(135deg, #ff5c7a 0%, #cc3350 100%);
-    --glow-accent: 0 10px 30px rgba(233,69,96,0.28);
+    /* --- Akzent: gehoert dem Aktiven ---
+       v1.59.0: heller und waermer. Die Akzentflaeche traegt seitdem DUNKLE
+       Schrift (--accent-ink) statt weisser -- nur so darf der Ton hell genug
+       sein, um aktiv zu wirken, und die Regel ist dieselbe wie bei den
+       Statusfarben: helle Farbe, dunkle Schrift. */
+    --accent: #ff5c7a;          /* Text/Icon/Rahmen auf dunkel (6.1:1) */
+    --accent-strong: #ff4d72;   /* Flaeche mit --accent-ink darauf (6.1:1) */
+    --accent-ink: #0a0c10;      /* Schrift auf jeder Akzentflaeche */
+    --accent-soft: rgba(255,92,122,0.16);
+    --grad-accent: linear-gradient(135deg, #ff8a5c 0%, #ff5c7a 52%, #ff4d9e 100%);
+    --glow-accent: 0 10px 30px rgba(255,92,122,0.30);
 
     /* --- Modultoene: Identitaet, keine Vollflaechen --- */
-    --m-ausgaben: #2dd4bf;
-    --m-health:   #f472b6;
-    --m-sparziel: #4ade80;
-    --m-notizen:  #60a5fa;
-    --m-blog:     #fbbf24;
-    --m-admin:    #a78bfa;
+    --m-ausgaben: #34e2cd;
+    --m-health:   #fb85c4;
+    --m-sparziel: #5eea92;
+    --m-notizen:  #7ab8ff;
+    --m-blog:     #ffcb45;
+    --m-admin:    #b79cff;
 
     /* --- Status: helle Toene fuer Text/Marken, NIE mit weisser Schrift --- */
-    --ok: #4ade80;      --ok-soft: rgba(74,222,128,0.14);
-    --warn: #fbbf24;    --warn-soft: rgba(251,191,36,0.14);
-    --danger: #fb7185;  --danger-soft: rgba(251,113,133,0.14);
-    --info: #60a5fa;    --info-soft: rgba(96,165,250,0.14);
+    --ok: #5eea92;      --ok-soft: rgba(94,234,146,0.16);
+    --warn: #ffcb45;    --warn-soft: rgba(255,203,69,0.16);
+    --danger: #ff8a99;  --danger-soft: rgba(255,138,153,0.16);
+    --info: #7ab8ff;    --info-soft: rgba(122,184,255,0.16);
 
     /* --- Form --- */
     --radius-sm: 8px; --radius: 12px; --radius-lg: 16px; --radius-xl: 20px;
@@ -57,8 +62,8 @@
     --shadow-float: 0 20px 44px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.4);
 
     /* --- Diagramme --- */
-    --chart-1: #2dd4bf; --chart-2: #60a5fa; --chart-3: #f472b6;
-    --chart-4: #fbbf24; --chart-5: #a78bfa; --chart-6: #4ade80;
+    --chart-1: #34e2cd; --chart-2: #7ab8ff; --chart-3: #fb85c4;
+    --chart-4: #ffcb45; --chart-5: #b79cff; --chart-6: #5eea92;
     --chart-grid: rgba(255,255,255,0.08);
     --chart-axis: #8b93a1;
 
@@ -68,11 +73,11 @@
 
     /* --- Backdrop: drei sehr leise Lichter, damit der Grund nicht tot wirkt --- */
     --backdrop:
-        radial-gradient(1200px 600px at 8% -10%, rgba(233,69,96,0.10), transparent 60%),
-        radial-gradient(900px 500px at 100% 10%, rgba(96,165,250,0.08), transparent 60%),
-        radial-gradient(700px 500px at 50% 110%, rgba(167,139,250,0.07), transparent 60%);
+        radial-gradient(1200px 600px at 8% -10%, rgba(255,92,122,0.12), transparent 60%),
+        radial-gradient(900px 500px at 100% 10%, rgba(122,184,255,0.09), transparent 60%),
+        radial-gradient(700px 500px at 50% 110%, rgba(183,156,255,0.08), transparent 60%);
 
-    --focus-ring: 0 0 0 3px rgba(233,69,96,0.45);
+    --focus-ring: 0 0 0 3px rgba(255,92,122,0.45);
 
     /* =====================================================================
        Alt-Namen (Uebergang). Zeigen auf die Werte oben, damit die noch nicht
@@ -87,17 +92,17 @@
     --text-fainter: var(--text-4);
     --shadow-lg: var(--shadow-float);
     --shadow-glow: var(--glow-accent);
-    --accent-blue: #60a5fa; --accent-blue-dark: #3b82f6;
+    --accent-blue: #7ab8ff; --accent-blue-dark: #3b82f6;
     /* Die -dark-Varianten sind Fuellfarben fuer weisse Schrift, die Basis ist
        die Textfarbe auf dunklem Grund. Reihenfolge nicht vertauschen. */
-    --green: #4ade80; --green-dark: #16a34a; --green-bg: rgba(74,222,128,0.14);
-    --blue: #60a5fa;  --blue-dark: #3b82f6;  --blue-bg: rgba(96,165,250,0.14);
-    --red: #fb7185;   --red-dark: #dc2626;   --red-bg: rgba(251,113,133,0.14);
-    --orange: #fbbf24; --orange-dark: #d97706;
-    --purple: #a78bfa; --purple-dark: #7c3aed;
-    --teal: #2dd4bf;  --teal-dark: #0d9488;
-    --pink: #f472b6;  --pink-dark: #db2777;
-    --gold: #fbbf24;  --gold-dark: #ca8a04;
+    --green: #5eea92; --green-dark: #16a34a; --green-bg: rgba(94,234,146,0.16);
+    --blue: #7ab8ff;  --blue-dark: #3b82f6;  --blue-bg: rgba(122,184,255,0.16);
+    --red: #ff8a99;   --red-dark: #dc2626;   --red-bg: rgba(255,138,153,0.16);
+    --orange: #ffcb45; --orange-dark: #d97706;
+    --purple: #b79cff; --purple-dark: #7c3aed;
+    --teal: #34e2cd;  --teal-dark: #0d9488;
+    --pink: #fb85c4;  --pink-dark: #db2777;
+    --gold: #ffcb45;  --gold-dark: #ca8a04;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -141,6 +146,40 @@ td, .num, .amount, [data-num] { font-variant-numeric: tabular-nums; }
     font-weight: 500;
 }
 .nav-btn:hover { color: var(--text); background: var(--surface-2); }
+
+/* Modul-Leiste in der Navigationszeile — v1.59.0.
+   Am Rechner stehen die Module offen da statt hinter dem Punkte-Schalter.
+   Was nicht mehr in die Zeile passt, blendet nav-switcher.js vom Ende her aus
+   und laesst den Schalter als Ueberlauf stehen — ein neues Modul braucht
+   deshalb hier keine Regel. Unter 900 px uebernimmt die Tab-Leiste unten. */
+.nav-modules { display: none; }
+.navbar .nav-settings { padding: 0.45rem 0.5rem; }
+/* Genau dort, wo die Tab-Leiste unten verschwindet (720 px), uebernimmt
+   die Zeile oben -- so ist immer genau eine Navigation sichtbar. */
+@media (min-width: 721px) {
+    .nav-modules {
+        display: flex; align-items: center; gap: 2px;
+        flex: 1 1 auto; min-width: 0; overflow: hidden;
+        margin-left: var(--space-5);
+    }
+    .navbar .nav-mod {
+        display: inline-flex; align-items: center; gap: 0.4375rem;
+        padding: 0.4375rem 0.6875rem; border-radius: 10px;
+        white-space: nowrap; text-decoration: none;
+        font-size: 0.875rem; font-weight: 600;
+        color: var(--text-3); border: 1px solid transparent;
+        transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+    }
+    .navbar .nav-mod:hover { color: var(--text-1); background: var(--surface-2); text-decoration: none; }
+    .navbar .nav-mod:active { transform: scale(0.97); }
+    .navbar .nav-mod:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    .navbar .nav-mod svg { flex: none; }
+    /* Das aktive Modul traegt den Akzent — als Text auf getoenter Flaeche,
+       nicht als Vollflaeche: in einer Milchglas-Leiste waere das zu laut. */
+    .navbar .nav-mod.active { color: var(--accent); background: var(--accent-soft); }
+    /* Passt alles hinein, hat der Punkte-Schalter keine Aufgabe mehr. */
+    body.nav-row-complete .nav-switcher { display: none; }
+}
 
 /* Modul-Switcher — v1.36.1: Icon-only-Button + iOS-artiges Panel-Menü */
 .nav-switcher { position: relative; margin-right: 0.25rem; }
@@ -205,7 +244,7 @@ td, .num, .amount, [data-num] { font-variant-numeric: tabular-nums; }
 .nav-switcher-item .nsi-dot {
     width: 6px; height: 6px; border-radius: 50%;
     background: var(--accent); flex-shrink: 0;
-    box-shadow: 0 0 0 3px rgba(233,69,96,0.15);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .nav-switcher-item.active { color: var(--text); font-weight: 600; background: var(--surface-2); }
 .nav-switcher-item.active .nsi-icon { background: var(--surface); }
@@ -339,7 +378,7 @@ button:active { transform: scale(0.98); }
 .btn:active { transform: translateY(1px); }
 .btn-primary { background: var(--text); color: var(--surface); border-color: var(--text); }
 .btn-primary:hover { opacity: 0.9; background: var(--text); border-color: var(--text); }
-.btn-accent { background: var(--grad-accent); color: #fff; border-color: transparent; box-shadow: var(--glow-accent); }
+.btn-accent { background: var(--grad-accent); color: var(--accent-ink); border-color: transparent; box-shadow: var(--glow-accent); }
 .btn-accent:hover { filter: brightness(1.06); background: var(--grad-accent); border-color: transparent; }
 .btn-success { background: var(--green-dark); color: #fff; border-color: var(--green-dark); }
 .btn-success:hover { opacity: 0.9; background: var(--green-dark); border-color: var(--green-dark); }
@@ -999,7 +1038,7 @@ button.nav-switcher-item:hover { background: var(--surface-2); opacity: 1; }
 @keyframes vSpin { to { transform: rotate(360deg); } }
 
 .v-btn--primary {
-    background: var(--grad-accent); border-color: transparent; color: #fff;
+    background: var(--grad-accent); border-color: transparent; color: var(--accent-ink);
     box-shadow: var(--glow-accent);
 }
 .v-btn--primary:hover { background: var(--grad-accent); filter: brightness(1.06); }
@@ -1027,7 +1066,7 @@ button.nav-switcher-item:hover { background: var(--surface-2); opacity: 1; }
 .v-chip:active { transform: scale(0.96); }
 .v-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .v-chip.is-active {
-    color: #fff; background: var(--accent-strong); border-color: var(--accent-strong);
+    color: var(--accent-ink); background: var(--accent-strong); border-color: var(--accent-strong);
 }
 .v-chip[disabled] { opacity: 0.45; cursor: default; pointer-events: none; }
 

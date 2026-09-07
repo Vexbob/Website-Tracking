@@ -70,11 +70,13 @@ Vier Rollen, mehr braucht es nicht. Gemessene Kontraste gelten gegen
 
 Farbe ist Information, nicht Dekoration.
 
-- **Akzent** `--accent` `#e94560` — gehört dem Aktiven: ausgewählter Tab, Fokus,
+- **Akzent** `--accent` `#ff5c7a` — gehört dem Aktiven: ausgewählter Tab, Fokus,
   primäre Aktion, der Punkt am aktuellen Modul. Nichts anderes.
-  Als Text/Icon auf dunkel erlaubt (4,8:1) ab 15 px halbfett.
-  Als **Fläche mit weißer Schrift** nur `--accent-strong` `#cc3350` (5,1:1) bzw.
-  der Verlauf `--grad-accent` — der endet dunkel genug für weiße Labels.
+  Als Text/Icon auf dunkel erlaubt (6,1:1) ab 15 px halbfett.
+  Als **Fläche** `--accent-strong` `#ff4d72` oder der Verlauf `--grad-accent`.
+  Beide tragen **dunkle** Schrift `--accent-ink` (6,1:1) — nie weiße. Damit
+  gilt in der ganzen App dieselbe Regel wie bei den Statusfarben: helle
+  Farbe, dunkle Schrift.
 - **Modultöne**: Ausgaben Türkis, Gesundheit Rosa, Sparziel Grün, Notizen Blau,
   Blog Bernstein, Verwaltung Violett. Sie färben Modul-Icons, die aktive
   Diagrammreihe und kleine Identitätsmarken — nie ganze Flächen.
@@ -101,7 +103,7 @@ nicht fertig.
 | Ruhe | Basisfläche, `--line` |
 | Hover | eine Ebene heller **oder** `--line-strong`, nie beides |
 | Aktiv/Gedrückt | `transform: scale(.97)`, `--dur-1` |
-| Ausgewählt | Akzent trägt die Bedeutung (Fläche `--accent-strong`, Text weiß) |
+| Ausgewählt | Akzent trägt die Bedeutung (Fläche `--accent-strong`, Text `--accent-ink`) |
 | Fokus | `--focus-ring`, sichtbar nur bei `:focus-visible` |
 | Deaktiviert | `opacity:.45`, `cursor:default`, keine Transformation |
 | Lädt | Skeleton (`.skel`) statt Text; nie ein „Lade …" als Fließtext |
@@ -151,6 +153,16 @@ Reduziert, ruhig, dieselbe Farbwelt.
   ist. Sonst beschriften wir am Punkt.
 - Tooltip sieht aus wie ein schwebendes Element der App: `--surface-3`,
   Haarlinie, 12 px Radius — nicht wie Chart.js-Standard.
+- **Ein Datum im Tooltip trägt immer die Jahreszahl**, auch wenn die Achse aus
+  Platzgründen nur `05.09.` zeigt. Die ausgeschriebene Fassung kommt aus
+  `VexCharts.fullDay/fullWeek/fullMonth` (`js/charts.js`).
+- **Der Tooltip verschwindet, wenn man daneben tippt.** Auf dem Handy gibt es
+  kein „Maus verlässt die Fläche"; `js/charts.js` erledigt das global für alle
+  Diagramme. Deshalb gehört die Datei auf jede Seite mit einem Diagramm.
+- **Die Durchschnitts-/Trendlinie liegt über der Wertlinie**: `order`
+  `VexCharts.ORDER.TREND` gegen `VexCharts.ORDER.VALUE`. Chart.js zeichnet die
+  kleinere `order` weiter vorn — unter einer gefüllten Wertlinie wäre die
+  Trendlinie bei sprunghaften Daten unsichtbar.
 
 ## 8. Was wir nicht tun
 

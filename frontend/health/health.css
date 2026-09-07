@@ -1,3 +1,32 @@
+/* Metrik-Palette des Gesundheitsmoduls (v1.59.0).
+   Dreizehn Messgroessen brauchen dreizehn unterscheidbare Toene -- das sind
+   Identitaetsfarben wie die Modultoene, nur modul-intern. Sie stehen hier als
+   Tokens statt als Hex-Werte in health.js, damit sie an EINER Stelle liegen
+   und die Regel "keine Hex-Werte im JS" auch hier gilt. Alle Werte sind auf
+   dunklem Grund gedacht und mit dem uebrigen System auf Helligkeit gebracht. */
+:root {
+    --h-steps:     #7ab8ff;
+    --h-energy:    #ffb04d;
+    --h-resthr:    #fb85c4;
+    --h-hr:        #ff8a99;
+    --h-walkhr:    #34e2cd;
+    --h-hrv:       #b79cff;
+    --h-recovery:  #5eea92;
+    --h-weight:    #4fd6c4;
+    --h-vo2:       #8fa8ff;
+    --h-swim:      #5cc8ff;
+    --h-oxygen:    #45d9f0;
+    --h-distance:  #b6e84a;
+    --h-speed:     #ff9d5c;
+    /* Schlafphasen sind eine Skala, keine Kategorien: ein Farbton, fuenf
+       Helligkeiten -- "Wach" faellt bewusst heraus. */
+    --h-sleep-deep:  #7c74f0;
+    --h-sleep-core:  #969bff;
+    --h-sleep-rem:   #bcc6ff;
+    --h-sleep-rest:  #dbe1ff;
+    --h-sleep-awake: #ffcb45;
+}
+
 /* Gesundheit-Modul (v1.25.0) — nutzt Statistik-Grundraster (.stat-kpi, .stat-card,
    .split-2, .split-3-2, .chart-wrap, .stat-insights, .stat-mini-toggle) und
    erweitert um Health-spezifische Elemente. */
@@ -11,7 +40,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .stat-kpi{cursor:default}
 .stat-kpi.clickable{cursor:pointer}
 .stat-kpi.clickable:hover{border-color:var(--accent)}
-.stat-kpi.active-tile{border-color:var(--accent);box-shadow:0 0 0 2px rgba(233,69,96,0.12)}
+.stat-kpi.active-tile{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .stat-kpi.empty-tile{opacity:0.55}
 .stat-kpi.empty-tile:hover{opacity:0.9}
 .h-kpi-spark{margin-top:0.5rem;height:32px;position:relative}
@@ -113,7 +142,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 /* Drag & Drop-Zone */
 .h-dropzone{border:2px dashed var(--line-strong);border-radius:12px;padding:1.5rem 1rem;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface-2)}
 .h-dropzone:hover{border-color:var(--accent);background:var(--surface-1)}
-.h-dropzone.drag{border-color:var(--accent);background:rgba(233,69,96,0.06)}
+.h-dropzone.drag{border-color:var(--accent);background:var(--accent-soft)}
 .h-dropzone.has-files{border-style:solid;border-color:var(--green-dark);background:rgba(34,197,94,0.06)}
 .h-dropzone-icon{font-size:1.75rem;opacity:0.7;margin-bottom:0.25rem}
 .h-dropzone-title{font-weight:600;font-size:0.9375rem;color:var(--text-1)}

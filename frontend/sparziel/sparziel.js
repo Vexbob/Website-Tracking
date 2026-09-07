@@ -1,15 +1,14 @@
 let chartSavings=null, chartData=[], glGoalId=null, glTarget=0, glTotal=0;
 let achData=[], pgData=[], logRaw=[], logFilter='all', logView='weekly';
-let heatmapData=[], trophyData=[];
+let trophyData=[];
 let bufferInfo=null;            // v1.43.0: Puffer-Konto {id,name,saved_amount}
-let loadErrors={ach:false,pg:false,log:false,hm:false,trophies:false};
+let loadErrors={ach:false,pg:false,log:false,trophies:false};
 const pendingDeletes = new Map();
 let toastTimer=null;
 let msTargetId=null;
 let noteTarget=null; // {type: 'checkin'|'milestone'|'initial'|'streak_bonus', id: number}
 
 // --- Zahl-Animation & Konfetti-State ---
-let hmMetric = localStorage.getItem('vex_hm_metric') || 'all';
 let prevGlTotal = null;   // vorheriger Sparbetrag (für Delta-Animation)
 let prevGlPct = null;     // vorheriger Prozentwert
 let prevWasComplete = false; // bereits >= 100 % erreicht?
@@ -171,13 +170,12 @@ function updatePeriodLabel(){
 
 function activateTab(t){
     document.querySelectorAll('.tab-btn').forEach(x=>x.classList.toggle('active',x.dataset.tab===t));
-    ['dashboard','log','heatmap','trophies','ideen'].forEach(id=>{
+    ['dashboard','log','trophies','ideen'].forEach(id=>{
         const el=document.getElementById('tab-'+id);
         if(el) el.style.display = id===t?'':'none';
     });
     history.replaceState(null,'','#'+t);
     if(t==='log') loadLog();
-    if(t==='heatmap') loadHeatmap();
     if(t==='trophies') loadTrophies();
     if(t==='ideen'){loadSavingsGoals();loadPotentialGoals();loadFutureIdeas();}
 }
@@ -202,7 +200,7 @@ function toggleHeroEdit(){
         document.getElementById('sgTarget').value=glTarget;
     }
 }
-async function loadAll(){await Promise.all([loadSparziel(),loadAchievements(),loadProgressGoals(),loadSavingsGoals()]);updatePeriodLabel();}
+async function loadAll(){await Promise.all([loadSparziel(),loadAchievements(),loadProgressGoals(),loadSavingsGoals(),loadActivityStats()]);updatePeriodLabel();}
 
 async function loadSparziel(){
     try{
@@ -296,9 +294,11 @@ function renderSparzielChart(){
         const tick=cssVar('--chart-axis');
         chartSavings=new Chart(ctx,{
             type:'line',
-            data:{labels:chartData.map(x=>fmtDate(x.date)),datasets:[{data:chartData.map(x=>Number(x.cumulative||0)),borderColor:cssVar('--m-sparziel'),backgroundColor:'rgba(74,222,128,0.16)',fill:true,tension:0.35,pointRadius:0,pointHoverRadius:4,borderWidth:2}]},
+            data:{labels:chartData.map(x=>fmtShortDate(x.date)),datasets:[{data:chartData.map(x=>Number(x.cumulative||0)),borderColor:cssVar('--m-sparziel'),backgroundColor:cssVar('--ok-soft'),fill:true,tension:0.35,pointRadius:0,pointHoverRadius:4,borderWidth:2}]},
             options:{responsive:true,maintainAspectRatio:false,
-                plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtEur(c.parsed.y)}}},
+                plugins:{legend:{display:false},tooltip:{callbacks:{
+                    title:VexCharts.titleFrom(chartData.map(x=>VexCharts.fullDay(x.date))),
+                    label:c=>' '+fmtEur(c.parsed.y)}}},
                 scales:{x:{display:false},y:{beginAtZero:true,ticks:{color:tick,font:{size:11},callback:v=>fmtEur(v)},grid:{color:cssVar('--chart-grid')},border:{display:false}}}
             }
         });
@@ -1215,90 +1215,36 @@ async function downloadBackup(){
     }catch(e){haptic('error');showToast('Backup fehlgeschlagen',true);}
 }
 
-// --- Heatmap ---
-async function loadHeatmap(){
-    const range=parseInt(document.getElementById('hmRange').value,10)||365;
-    try{
-        heatmapData=await apiCall('/api/stats/heatmap?days='+range)||[];
-        loadErrors.hm=false;
-        renderHeatmap();
-    }catch(e){
-        loadErrors.hm=true;
-        document.getElementById('hmGrid').innerHTML='<div class="muted" style="padding:1rem">Laden fehlgeschlagen.</div>';
-    }
-}
-// Bestimmt den Level (0..4) für einen Tag anhand der aktiven Metrik.
-// Bei "all" wird das vom Server gelieferte level verwendet.
-// Bei den anderen Metriken werden Schwellen quantil-basiert aus den positiven Werten abgeleitet.
-function computeMetricLevels(metric){
-    if(metric==='all') return heatmapData.map(d=>d.level);
-    const getVal = d => metric==='amount' ? Number(d.amount||0)
-                     : metric==='checkins' ? Number(d.checkins||0)
-                     : Number(d.milestones||0);
-    const positives = heatmapData.map(getVal).filter(v => v>0).sort((a,b)=>a-b);
-    if(!positives.length) return heatmapData.map(()=>0);
-    // Quantile 25/50/75/95 -> Level 1..4
-    const q = p => positives[Math.min(positives.length-1, Math.floor(positives.length*p))];
-    const q1=q(0.25), q2=q(0.5), q3=q(0.75), q4=q(0.95);
-    return heatmapData.map(d=>{
-        const v=getVal(d);
-        if(v<=0) return 0;
-        if(v<=q1) return 1;
-        if(v<=q2) return 2;
-        if(v<=q3) return 3;
-        return v<=q4 ? 4 : 4;
-    });
-}
+// --- Aktivitaets-Kennzahlen (v1.59.0) ---
+// Frueher stand hier eine 365-Tage-Heatmap. Sie hat viel Platz fuer wenig
+// Erkenntnis gebraucht: abgelesen wurden ohnehin nur die Zahlen darunter.
+// Die bleiben -- als Zeile auf dem Dashboard, aus derselben Quelle.
+async function loadActivityStats(){
+    const box=document.getElementById('actStats');
+    if(!box) return;
+    let data=[];
+    try{ data=await apiCall('/api/stats/heatmap?days=365')||[]; }
+    catch(e){ box.hidden=true; return; }
+    if(!data.length){ box.hidden=true; return; }
 
-function renderHeatmap(){
-    const grid=document.getElementById('hmGrid');
-    if(!heatmapData.length){grid.innerHTML='';document.getElementById('hmStats').innerHTML='';return;}
-    const levels = computeMetricLevels(hmMetric);
-    const first=new Date(heatmapData[0].date);
-    const padDays=(first.getDay()||7)-1;
-    const cells=[];
-    for(let i=0;i<padDays;i++)cells.push(`<div class="hm-day l0" style="visibility:hidden"></div>`);
-    heatmapData.forEach((d,idx)=>{
-        const parts=d.date.split('-');
-        const dateFmt=`${parts[2]}.${parts[1]}.${parts[0]}`;
-        const tip=`${dateFmt} · ${d.checkins} Check-ins · ${d.milestones} Meilensteine · ${fmtEur(d.amount)}`;
-        cells.push(`<div class="hm-day l${levels[idx]}" data-tip="${esc(tip)}" data-date="${d.date}"></div>`);
-    });
-    grid.innerHTML=cells.join('');
-
-    const activeDays=heatmapData.filter(d=>d.total>0).length;
+    const activeDays=data.filter(d=>d.total>0).length;
     let maxStreak=0,tmp=0,curStreak=0;
-    heatmapData.forEach(d=>{if(d.total>0){tmp++;if(tmp>maxStreak)maxStreak=tmp;}else tmp=0;});
-    for(let i=heatmapData.length-1;i>=0;i--){if(heatmapData[i].total>0)curStreak++;else break;}
-    const totalCi=heatmapData.reduce((a,d)=>a+d.checkins,0);
-    const totalMl=heatmapData.reduce((a,d)=>a+d.milestones,0);
-    const totalAmt=heatmapData.reduce((a,d)=>a+d.amount,0);
+    data.forEach(d=>{if(d.total>0){tmp++;if(tmp>maxStreak)maxStreak=tmp;}else tmp=0;});
+    for(let i=data.length-1;i>=0;i--){if(data[i].total>0)curStreak++;else break;}
+    const totalCi=data.reduce((a,d)=>a+d.checkins,0);
+    const totalMl=data.reduce((a,d)=>a+d.milestones,0);
+    const totalAmt=data.reduce((a,d)=>a+d.amount,0);
 
-    document.getElementById('hmStats').innerHTML=`
-        <div class="hm-stat"><div class="lbl">Aktive Tage</div><div class="val">${activeDays}</div></div>
-        <div class="hm-stat"><div class="lbl">Aktuelle Serie</div><div class="val">${curStreak} 🔥</div></div>
-        <div class="hm-stat"><div class="lbl">Beste Serie</div><div class="val">${maxStreak}</div></div>
-        <div class="hm-stat"><div class="lbl">Check-ins</div><div class="val">${totalCi}</div></div>
-        <div class="hm-stat"><div class="lbl">Meilensteine</div><div class="val">${totalMl}</div></div>
-        <div class="hm-stat"><div class="lbl">Summe</div><div class="val">${fmtEur(totalAmt)}</div></div>
-    `;
-
-    const tip=document.getElementById('hmTooltip');
-    grid.querySelectorAll('.hm-day').forEach(cell=>{
-        const show=()=>{
-            const t=cell.getAttribute('data-tip');if(!t)return;
-            tip.textContent=t;
-            const rect=cell.getBoundingClientRect();
-            tip.style.left=Math.min(window.innerWidth-260,rect.left)+'px';
-            tip.style.top=(rect.top-32)+'px';
-            tip.classList.add('show');
-        };
-        const hide=()=>tip.classList.remove('show');
-        cell.addEventListener('mouseenter',show);
-        cell.addEventListener('mouseleave',hide);
-        cell.addEventListener('touchstart',(e)=>{show();},{passive:true});
-        cell.addEventListener('touchend',hide);
-    });
+    const cell=(lbl,val)=>`<div class="act-stat"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`;
+    box.innerHTML=[
+        cell('Aktive Tage', activeDays),
+        cell('Aktuelle Serie', curStreak+' 🔥'),
+        cell('Beste Serie', maxStreak),
+        cell('Check-ins', totalCi),
+        cell('Meilensteine', totalMl),
+        cell('Summe (365 T.)', fmtEur(totalAmt)),
+    ].join('');
+    box.hidden=false;
 }
 
 // --- Trophies ---
@@ -1456,22 +1402,6 @@ document.querySelectorAll('.log-view-toggle button').forEach(b=>b.addEventListen
     document.querySelectorAll('.log-view-toggle button').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');logView=b.dataset.view;renderLog();
 }));
-document.getElementById('hmRange').addEventListener('change',loadHeatmap);
-// Heatmap-Metrik-Toggle (Alle / Check-ins / Meilensteine / €)
-(function(){
-    const chips = document.querySelectorAll('#hmMetricChips .hm-chip');
-    // gespeicherte Auswahl beim Boot in UI übernehmen
-    chips.forEach(c => c.classList.toggle('active', c.dataset.metric === hmMetric));
-    chips.forEach(c => c.addEventListener('click', () => {
-        chips.forEach(x => x.classList.remove('active'));
-        c.classList.add('active');
-        hmMetric = c.dataset.metric;
-        try { localStorage.setItem('vex_hm_metric', hmMetric); } catch(_){}
-        haptic('tap');
-        renderHeatmap();
-    }));
-})();
-
 let sortableAch=null, sortablePg=null;
 function initSortables(){
     if(typeof Sortable==='undefined')return;
@@ -1519,7 +1449,7 @@ function initSortables(){
         document.getElementById('userLabel').textContent='👤 '+me.username;
     }catch(e){return;}
     const initialTab=(location.hash||'#dashboard').slice(1);
-    if(['dashboard','log','heatmap','trophies','ideen'].includes(initialTab))activateTab(initialTab);
+    if(['dashboard','log','trophies','ideen'].includes(initialTab))activateTab(initialTab);
     try{await loadAll();}catch(e){showToast('Laden fehlgeschlagen',true);console.error(e);}
     initSortables();
 })();

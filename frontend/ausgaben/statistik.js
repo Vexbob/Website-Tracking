@@ -1,7 +1,7 @@
 /* Statistik — v1.18.0 Redesign
  * Modularer Aufbau: State (Datumsbereich + Granularity) → loadAll()
- * lädt Insights + Serie + Verteilung + Heatmap parallel. Alle Charts
- * re-rendern bei Filter-Aenderung.
+ * lädt Insights + Serie + Verteilung parallel. Alle Charts re-rendern
+ * bei Filter-Aenderung.
  */
 
 // --------- State ---------
@@ -130,7 +130,6 @@ async function loadAll(){
         loadInsights(),
         loadSeries(),
         loadDistribution(),
-        loadHeatmap(),
     ]);
 }
 
@@ -358,12 +357,16 @@ async function loadSeries(){
 function renderSeriesChart(data, gran){
     const canvas = document.getElementById('chartSeries');
     if(STAT.charts.series) STAT.charts.series.destroy();
-    let labels, values;
+    // Achse bleibt kurz, der Tooltip bekommt die ausgeschriebene Fassung mit
+    // Jahr -- in einer Jahresansicht ist ein blosses "05.09." wertlos.
+    let labels, fullLabels, values;
     if(gran === 'daily'){
         labels = data.map(d => new Date(d.date + 'T00:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}));
+        fullLabels = data.map(d => VexCharts.fullDay(d.date));
         values = data.map(d => d.total);
     } else if(gran === 'weekly'){
         labels = data.map(d => 'KW ' + (d.week ? d.week.split('KW').pop() : '?'));
+        fullLabels = data.map(d => VexCharts.fullWeek(d.week));
         values = data.map(d => d.total);
     } else {
         labels = data.map(d => {
@@ -371,6 +374,7 @@ function renderSeriesChart(data, gran){
             const dt = new Date(parseInt(y),parseInt(m)-1,1);
             return dt.toLocaleDateString('de-DE',{month:'short',year:'2-digit'});
         });
+        fullLabels = data.map(d => VexCharts.fullMonth(d.month));
         values = data.map(d => d.total);
     }
     const win = gran === 'daily' ? 7 : (gran === 'weekly' ? 4 : 3);
@@ -387,10 +391,12 @@ function renderSeriesChart(data, gran){
                 // die Trendlinie ist eine Anmerkung und bleibt zurueckhaltend.
                 { type: 'bar', label: 'Ausgaben', data: values,
                   backgroundColor: cssVar('--chart-1'),
-                  borderRadius: 4, borderSkipped: false, order: 2 },
+                  borderRadius: 4, borderSkipped: false, order: VexCharts.ORDER.VALUE },
+                // Die Ø-Linie liegt oben, damit sie auch bei sprunghaften
+                // Balken lesbar bleibt (kleinere `order` = weiter vorn).
                 { type: 'line', label: `Ø (${win} Perioden)`, data: trend,
-                  borderColor: cssVar('--text-3'), borderWidth: 2, borderDash: [4, 4],
-                  pointRadius: 0, tension: 0.35, fill: false, order: 1 },
+                  borderColor: cssVar('--text-2'), borderWidth: 2, borderDash: [4, 4],
+                  pointRadius: 0, tension: 0.35, fill: false, order: VexCharts.ORDER.TREND },
             ],
         },
         options: (() => {
@@ -398,6 +404,7 @@ function renderSeriesChart(data, gran){
             o.plugins.legend = { display: true, position: 'top',
                 labels: { color: textColor(), font: { size: 11 }, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'circle' } };
             o.plugins.tooltip.callbacks = { label: (c) => `${c.dataset.label}: ${fmtEur(c.parsed.y)}` };
+            VexCharts.applyFullDates(o, fullLabels);
             o.scales.x.ticks = Object.assign(o.scales.x.ticks, { maxRotation: 0, autoSkip: true, autoSkipPadding: 10 });
             o.scales.y.ticks.callback = v => fmtEur(v);
             return o;
@@ -476,27 +483,6 @@ function renderStoreChart(data){
             return o;
         })(),
     });
-}
-
-// ========== HEATMAP ==========
-async function loadHeatmap(){
-    try {
-        const data = await AUSGABEN_API.heatmap();
-        renderHeatmap(data);
-    } catch(e) { console.error('heatmap failed:', e); }
-}
-
-function renderHeatmap(data){
-    const box = document.getElementById('statHeatmap');
-    if(!data || !data.length){ box.innerHTML = '<div class="stat-empty">Keine Daten</div>'; return; }
-    // Auf 371 Tage padden (53 Wochen × 7), so dass eine saubere 7-Reihen-Grid entsteht
-    const cells = data.map(d => {
-        const dt = new Date(d.date + 'T00:00:00');
-        const de = dt.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
-        const tt = `${de}: ${fmtEur(d.amount||0)}${d.count?` · ${d.count} Bon${d.count===1?'':'s'}`:''}`;
-        return `<div class="stat-hm-cell${d.level?' l'+d.level:''}" title="${tt}"></div>`;
-    }).join('');
-    box.innerHTML = cells;
 }
 
 // ========== BOOT ==========

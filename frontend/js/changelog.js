@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.59.0', date: '2026-09-07', title: 'Module offen in der Leiste, hellere Akzente', notes: [
+        'Am Rechner stehen die Module jetzt offen in der Navigationszeile statt hinter dem Punkte-Symbol — was nicht mehr hineinpasst, rutscht von selbst ins Menü.',
+        'Neue Seite „Einstellungen“: Reihenfolge der Leiste am Rechner, Belegung der Tab-Leiste am Handy und der Gesamt-Export an einem Ort.',
+        'Die Akzentfarben sind heller und wärmer; ausgewählte Flächen tragen dafür dunkle statt weißer Schrift.',
+        'Beide Heatmaps sind raus — die Serien- und Aktivitätszahlen aus der Sparziel-Heatmap stehen jetzt auf dessen Dashboard.',
+        'In Diagrammen trägt der Tooltip die Jahreszahl, verschwindet beim Tippen daneben, und die Ø-Linie liegt über der Wertlinie.',
+    ]},
     { v: 'v1.58.1', date: '2026-09-07', title: 'Gesundheit, Sparziel, Notizen und Blog ziehen nach', notes: [
         'Die restlichen Module laufen jetzt über dieselben Farben und Ebenen wie der Rest — damit ist die Umstellung auf die neue Designsprache überall durch.',
         'Auch ihre Diagramme folgen den Regeln: Achsen und Gitter aus den Tokens, Tooltips wie schwebende Elemente der App, kein senkrechtes Gitter.',

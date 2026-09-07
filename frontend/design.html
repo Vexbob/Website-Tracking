@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/css/style.css">
 <script src="/js/version.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="/js/charts.js"></script>
 <style>
 /* Nur Aufbau dieser Musterseite — alles Gestaltete kommt aus style.css. */
 .sg-sec { margin: 0 0 var(--space-6); }
@@ -81,9 +82,12 @@
     <section class="sg-sec">
         <h2>Farbe</h2>
         <p class="sg-note">Der Akzent gehört dem Aktiven. Modultöne sind Identität. Statusfarben sind
-        helle Töne für Text auf dunklem Grund — sie tragen niemals weiße Schrift.</p>
+        helle Töne für Text auf dunklem Grund — sie tragen niemals weiße Schrift.
+        Seit v1.59.0 gilt das auch für den Akzent: seine Fläche trägt <code>--accent-ink</code>,
+        also dunkle Schrift, damit der Ton hell genug für „aktiv" sein darf.</p>
         <div class="sg-grid">
-            <div class="sg-swatch"><div class="fill" style="background:var(--grad-accent)"></div><div class="lbl"><b>Akzent</b><span>--grad-accent</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--grad-accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.75rem">Aa</div><div class="lbl"><b>Akzent</b><span>--grad-accent</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--accent-strong);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.75rem">Aa</div><div class="lbl"><b>Akzentfläche</b><span>--accent-strong</span></div></div>
             <div class="sg-swatch"><div class="fill" style="background:var(--m-ausgaben)"></div><div class="lbl"><b>Ausgaben</b><span>--m-ausgaben</span></div></div>
             <div class="sg-swatch"><div class="fill" style="background:var(--m-health)"></div><div class="lbl"><b>Gesundheit</b><span>--m-health</span></div></div>
             <div class="sg-swatch"><div class="fill" style="background:var(--m-sparziel)"></div><div class="lbl"><b>Sparziel</b><span>--m-sparziel</span></div></div>

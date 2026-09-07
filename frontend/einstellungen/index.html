@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0c10">
+<meta name="description" content="Persönliche Einstellungen: Navigation am Rechner, Tab-Leiste am Handy, Daten-Export.">
+<title>Einstellungen — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav-switcher.js"></script>
+<script src="/js/sw-update.js"></script>
+<style>
+/* Nur was es sonst nirgends gibt. Alles andere kommt aus style.css:
+   .v-card, .v-btn, .navcfg-list/-row/-mini. */
+.set-actions { display: flex; gap: var(--space-2); justify-content: flex-end;
+    margin-top: var(--space-4); flex-wrap: wrap; }
+.set-hint { margin: 0 0 var(--space-4); color: var(--text-3);
+    font-size: 0.8125rem; line-height: 1.55; }
+.set-pos { width: 1.5rem; text-align: right; color: var(--text-4);
+    font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body style="visibility:hidden">
+<nav class="navbar">
+    <a href="/" class="nav-title">← Einstellungen</a>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main>
+    <div class="section-header">
+        <span class="eyebrow">Persönlich</span>
+        <h2>Einstellungen</h2>
+        <div class="sub">Was hier steht, hängt am Konto — nicht am Browser — und gilt deshalb auf jedem Gerät.</div>
+    </div>
+
+    <div class="v-card">
+        <div class="v-card-head">
+            <h3>Leiste am Rechner</h3>
+            <span class="v-card-sub">Reihenfolge der Module</span>
+        </div>
+        <p class="set-hint">Ab etwa 900 Pixeln Fensterbreite stehen die Module offen in der
+            Navigationszeile. Was nicht mehr hineinpasst, rutscht von selbst ins Punkte-Menü —
+            diese Reihenfolge entscheidet also, was als Erstes weicht. Neue Module hängen sich
+            hinten an, ohne dass du hier etwas tun musst.</p>
+        <div class="navcfg-list" id="deskList"></div>
+        <div class="set-actions">
+            <button type="button" class="v-btn" id="deskReset">Standard</button>
+            <button type="button" class="v-btn v-btn--primary" id="deskSave">Speichern</button>
+        </div>
+    </div>
+
+    <div class="v-card">
+        <div class="v-card-head">
+            <h3>Tab-Leiste am Handy</h3>
+            <span class="v-card-sub">Zwei bis sechs Module</span>
+        </div>
+        <p class="set-hint">Die Leiste am unteren Bildschirmrand. Sie erscheint nur auf schmalen
+            Bildschirmen; am Rechner übernimmt die Zeile oben.</p>
+        <button type="button" class="v-btn" id="tabCfg">Tab-Leiste anpassen</button>
+    </div>
+
+    <div class="v-card">
+        <div class="v-card-head">
+            <h3>Daten</h3>
+            <span class="v-card-sub">Gesamt-Export</span>
+        </div>
+        <p class="set-hint">Eine CSV über alle Module — Zeitraum und Zusammenfassung wählst du
+            im Dialog.</p>
+        <button type="button" class="v-btn" id="expBtn">Alles exportieren</button>
+    </div>
+</main>
+<div class="version-tag"></div>
+<script src="/js/export-dialog.js"></script>
+<script src="/einstellungen/einstellungen.js"></script>
+</body>
+</html>

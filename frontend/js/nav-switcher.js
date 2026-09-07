@@ -1,5 +1,12 @@
-/* nav-switcher.js — v1.37.0
- * Injiziert einen Modul-Switcher (Dropdown) in jede .navbar.
+/* nav-switcher.js — v1.59.0
+ * Injiziert die Navigation in jede .navbar: am Rechner eine offene Leiste mit
+ * allen Modulen, dazu den Punkte-Schalter fuer das, was nicht mehr hineinpasst.
+ *
+ * Bis v1.58.x lagen die Module ausschliesslich hinter dem Punkte-Schalter --
+ * am Rechner ist dafuer reichlich Platz, und zwei Klicks fuer einen
+ * Modulwechsel waren zwei zu viel. Die Leiste blendet vom Ende her aus, was
+ * nicht mehr passt; ein neues Modul in MODULES braucht deshalb keine Regel und
+ * keine Breitenangabe, es rutscht bei Bedarf von selbst ins Menue.
  * Läuft automatisch beim DOM-Ready. Erkennt die aktuelle Sektion anhand
  * der URL und markiert sie aktiv. Berücksichtigt Login-Status (für
  * geschützte Module) und is_admin (für Admin-Bereich).
@@ -113,6 +120,9 @@
         wrapper.appendChild(menu);
         navbar.appendChild(wrapper);
 
+        await buildModuleRow(navbar, visible);
+        buildSettingsLink(navbar);
+
         const cfgBtn = menu.querySelector('.nav-switcher-cfg');
         if (cfgBtn) cfgBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -142,6 +152,133 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeMenu();
         });
+    }
+
+    // ---------------------------------------------------------------------
+    // v1.59.0 — Offene Modul-Leiste am Rechner
+    // ---------------------------------------------------------------------
+    // Reihenfolge und Auswahl kommen aus der Einstellung ``ui_nav_desktop``;
+    // ohne gespeicherte Einstellung stehen alle sichtbaren Module in der
+    // Reihenfolge von MODULES. Der localStorage-Eintrag ist nur ein Cache,
+    // damit die Leiste beim Seitenwechsel nicht erst umspringt.
+    const NAV_DESKTOP_CACHE = 'vexbob_nav_desktop';
+    let moduleRow = null;
+
+    function readDesktopCache() {
+        try {
+            const arr = JSON.parse(localStorage.getItem(NAV_DESKTOP_CACHE) || 'null');
+            return (Array.isArray(arr) && arr.length) ? arr : null;
+        } catch (e) { return null; }
+    }
+    function writeDesktopCache(list) {
+        try { localStorage.setItem(NAV_DESKTOP_CACHE, JSON.stringify(list)); } catch (e) {}
+    }
+
+    /* Die Wunschreihenfolge auf das, was dieses Konto sehen darf. Module, die
+       in der Einstellung fehlen, haengen hinten an: ein neu dazugekommenes
+       Modul soll auftauchen, ohne dass man die Einstellung anfassen muss. */
+    function desktopOrder(visible, wish) {
+        const byHref = new Map(visible.map(m => [m.href, m]));
+        const out = [];
+        (wish || []).forEach(href => {
+            const m = byHref.get(href);
+            if (m && out.indexOf(m) === -1) out.push(m);
+        });
+        visible.forEach(m => { if (out.indexOf(m) === -1) out.push(m); });
+        return out;
+    }
+
+    function moduleIconSvg(m) {
+        const path = TAB_ICONS[m.icon];
+        if (!path) return '';
+        return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" ' +
+               'stroke="currentColor" stroke-width="1.7" stroke-linecap="round" ' +
+               'stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
+    }
+
+    function renderModuleRow(visible) {
+        if (!moduleRow) return;
+        const items = desktopOrder(visible, readDesktopCache());
+        moduleRow.innerHTML = items.map(m => {
+            const parts = m.label.split(' ');
+            parts.shift();                       // Emoji weg, das Icon kommt als SVG
+            const text = parts.join(' ');
+            const active = isActive(m.href) ? ' active' : '';
+            return '<a href="' + m.href + '" class="nav-mod' + active + '"' +
+                   (active ? ' aria-current="page"' : '') + '>' +
+                   moduleIconSvg(m) + '<span>' + text + '</span></a>';
+        }).join('');
+        fitModuleRow();
+        // Beim ersten Zeichnen steht die Breite der Leiste noch nicht fest.
+        requestAnimationFrame(fitModuleRow);
+    }
+
+    /* Vom Ende her ausblenden, bis die Zeile passt. Das aktive Modul bleibt
+       immer stehen -- es ist die einzige Anzeige, wo man gerade ist. */
+    function fitModuleRow() {
+        if (!moduleRow) return;
+        const links = Array.prototype.slice.call(moduleRow.children);
+        links.forEach(el => { el.hidden = false; });
+        if (!moduleRow.clientWidth) return;      // Leiste ist gerade ausgeblendet
+        for (let i = links.length - 1; i >= 0; i--) {
+            if (moduleRow.scrollWidth <= moduleRow.clientWidth + 1) break;
+            if (links[i].classList.contains('active')) continue;
+            links[i].hidden = true;
+        }
+        const hidden = links.some(el => el.hidden);
+        // Der Punkte-Schalter ist am Rechner nur noch der Ueberlauf. Passt
+        // alles hinein, waere er ein Knopf ohne Aufgabe.
+        document.body.classList.toggle('nav-row-complete', !hidden);
+    }
+
+    async function buildModuleRow(navbar, visible) {
+        if (navbar.querySelector('.nav-modules')) return;
+        moduleRow = document.createElement('nav');
+        moduleRow.className = 'nav-modules';
+        moduleRow.setAttribute('aria-label', 'Module');
+        const title = navbar.querySelector('.nav-title');
+        if (title && title.parentNode === navbar) title.after(moduleRow);
+        else navbar.insertBefore(moduleRow, navbar.firstChild);
+        renderModuleRow(visible);
+
+        let t = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(t);
+            t = setTimeout(fitModuleRow, 120);
+        });
+
+        // Serverstand nachziehen: die Leiste steht schon aus dem Cache, hier
+        // wird nur korrigiert, wenn er veraltet ist. Bewusst abgewartet --
+        // die Einstellungsseite liest den Cache, sobald wir bereit melden.
+        try {
+            if (typeof apiCall !== 'function') return;
+            const res = await apiCall('/api/ui/prefs');
+            const wish = res && res.prefs && res.prefs.ui_nav_desktop;
+            if (Array.isArray(wish) && wish.length) {
+                writeDesktopCache(wish);
+                renderModuleRow(visible);
+            }
+        } catch (e) { /* offline: der Cache steht */ }
+    }
+
+    // Der Zahnrad-Knopf steht links vom Konto -- auf jeder Seite an derselben
+    // Stelle, damit man ihn nicht suchen muss.
+    function buildSettingsLink(navbar) {
+        const right = navbar.querySelector('.nav-right');
+        if (!right || right.querySelector('.nav-settings')) return;
+        if (isActive('/einstellungen/')) return;
+        const a = document.createElement('a');
+        a.className = 'nav-btn nav-settings';
+        a.href = '/einstellungen/';
+        a.title = 'Einstellungen';
+        a.setAttribute('aria-label', 'Einstellungen');
+        a.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" ' +
+            'stroke="currentColor" stroke-width="1.7" stroke-linecap="round" ' +
+            'stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/>' +
+            '<path d="M12 3.6v2M12 18.4v2M3.6 12h2M18.4 12h2' +
+            'M6.05 6.05l1.45 1.45M16.5 16.5l1.45 1.45' +
+            'M17.95 6.05L16.5 7.5M7.5 16.5l-1.45 1.45"/></svg>';
+        right.insertBefore(a, right.firstChild);
     }
 
     // v1.36.0 — Navbar bekommt beim Scrollen eine dezente Schatten-Kante,
@@ -401,6 +538,21 @@
         }
     }
 
+    // Die Einstellungsseite baut ihre Bedienung aus denselben Daten -- deshalb
+    // liegen Modul-Liste, Icons und der Tab-Leisten-Dialog hier offen statt in
+    // einer zweiten Liste, die mit der Zeit auseinanderlaeuft.
+    window.VexNav = {
+        modules: () => (visibleModules || MODULES).filter(m => TAB_ICONS[m.icon]),
+        iconSvg: moduleIconSvg,
+        openTabBarSettings: openNavSettings,
+        readDesktopOrder: readDesktopCache,
+        applyDesktopOrder: (list) => {
+            writeDesktopCache(list);
+            if (visibleModules) renderModuleRow(visibleModules);
+        },
+        DESKTOP_PREF: 'ui_nav_desktop',
+    };
+
     async function boot() {
         // build() ermittelt nebenbei, welche Module dieses Konto sehen darf --
         // die Tab-Leiste braucht das, also erst danach.
@@ -408,6 +560,9 @@
         attachScrollShadow();
         startTabBar();
         loadUIUtils();
+        // Wer auf die Modul-Liste angewiesen ist (die Einstellungsseite),
+        // wartet auf dieses Signal statt zu pollen.
+        document.dispatchEvent(new CustomEvent('vexnav:ready'));
     }
 
     if (document.readyState === 'loading') {

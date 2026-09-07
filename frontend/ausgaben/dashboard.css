@@ -11,6 +11,12 @@ body{visibility:hidden}body.ready{visibility:visible}
    leises Licht am oberen Rand, das die Karte vom Grund abhebt. */
 .kpi-hero::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
     background:var(--grad-accent);opacity:0.85}
+/* Hero und Mini-Zeile sind EIN Block. Sobald die Zeile darunter steht, hoert
+   die Rundung unten auf -- sonst schneidet die Kante des oberen Rechtecks
+   sichtbar in die Kacheln, obwohl beides zusammengehoert. Ohne Mini-Zeile
+   (Ladezustand) bleibt der Hero rundum gerundet. */
+.kpi-hero:not(:last-child){border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom:none}
 .kpi-hero-main{min-width:0}
 .kpi-hero .lbl{font-size:0.6875rem;color:var(--text-4);text-transform:uppercase;
     letter-spacing:0.12em;font-weight:700;margin-bottom:0.375rem}
@@ -45,7 +51,7 @@ body{visibility:hidden}body.ready{visibility:visible}
     width:auto;margin:0;font-weight:600;
     transition:color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease)}
 .presets button:hover{color:var(--text-1);border-color:var(--line-strong)}
-.presets button.active{background:var(--accent-strong);color:#fff;border-color:var(--accent-strong)}
+.presets button.active{background:var(--accent-strong);color:var(--accent-ink);border-color:var(--accent-strong)}
 .exp-photo-badge{font-size:0.9rem;opacity:0.85;margin-left:0.25rem;flex-shrink:0}
 /* Total-Row bei aktivem Filter */
 .filter-total{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.75rem;margin:0.5rem 0;font-size:0.8125rem;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center}
@@ -86,7 +92,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .filter-bar{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:1rem}
 .filter-bar select,.filter-bar input{padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;width:auto;min-width:130px}
 .filter-bar button{padding:0.4375rem 0.75rem;font-size:0.8125rem;width:auto;margin:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
-.filter-bar button.primary{background:var(--accent-strong);color:#fff;border-color:var(--accent-strong)}
+.filter-bar button.primary{background:var(--accent-strong);color:var(--accent-ink);border-color:var(--accent-strong)}
 
 /* v1.38.0 — kompakte Filter-Zeile mit Popover */
 .filter-bar-v2{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap}
@@ -109,7 +115,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .filter-badge{
     display:inline-flex;align-items:center;justify-content:center;
     min-width:18px;height:18px;padding:0 5px;border-radius:9px;
-    background:var(--accent-strong);color:#fff;font-size:0.6875rem;font-weight:700;
+    background:var(--accent-strong);color:var(--accent-ink);font-size:0.6875rem;font-weight:700;
     line-height:1;font-variant-numeric:tabular-nums;
 }
 .filter-popover{

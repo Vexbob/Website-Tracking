@@ -15,6 +15,7 @@
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/sw-update.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="/js/charts.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
 <link rel="stylesheet" href="/sparziel/sparziel.css">
 </head>
@@ -30,7 +31,6 @@
     <div class="tabs">
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
         <button class="tab-btn" data-tab="log">Log</button>
-        <button class="tab-btn" data-tab="heatmap">Heatmap</button>
         <button class="tab-btn" data-tab="trophies">Trophäen</button>
         <button class="tab-btn" data-tab="ideen">Ideen &amp; Ziele</button>
     </div>
@@ -50,7 +50,9 @@
                 <div class="hero-radial">
                     <svg viewBox="0 0 100 100">
                         <defs><linearGradient id="gradGreen" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0%" stop-color="#16a34a"/><stop offset="100%" stop-color="#22c55e"/>
+                            <!-- Ein Ton, zwei Deckungen: die Farbe kommt aus dem Modulton,
+                                 nicht aus zwei fest verdrahteten Gruens. -->
+                            <stop offset="0%" stop-color="var(--m-sparziel)" stop-opacity="0.6"/><stop offset="100%" stop-color="var(--m-sparziel)"/>
                         </linearGradient></defs>
                         <circle class="track" cx="50" cy="50" r="42"/>
                         <circle class="fill" cx="50" cy="50" r="42" id="radialFill" stroke-dasharray="263.9" stroke-dashoffset="263.9"/>
@@ -81,6 +83,11 @@
             </div>
             <div class="hero-chart"><canvas id="chartSavings"></canvas></div>
         </div>
+
+        <!-- v1.59.0: Die Heatmap ist raus. Ihre Kennzahlen bleiben hier auf dem
+             Dashboard -- Serie und aktive Tage waren das Einzige an ihr, was man
+             wirklich abgelesen hat; das Farbraster daneben war Dekoration. -->
+        <div class="act-row" id="actStats" hidden></div>
 
         <div class="sh">
             <h2>Wochenziele <span class="period-lbl" id="pgPeriodLbl"></span></h2>
@@ -145,36 +152,6 @@
         </div>
         <div class="log-sum" id="logSum" style="display:none"></div>
         <div id="logBody"></div>
-    </div>
-
-    <div id="tab-heatmap" style="display:none">
-        <div class="sh">
-            <h2>Aktivitäts-Heatmap</h2>
-            <select id="hmRange" class="log-btn" style="padding:0.4375rem 0.75rem">
-                <option value="90">3 Monate</option>
-                <option value="180">6 Monate</option>
-                <option value="365" selected>1 Jahr</option>
-            </select>
-        </div>
-        <div class="hm-metric-chips" id="hmMetricChips">
-            <button class="hm-chip active" data-metric="all">Alle</button>
-            <button class="hm-chip" data-metric="checkins">Check-ins</button>
-            <button class="hm-chip" data-metric="milestones">Meilensteine</button>
-            <button class="hm-chip" data-metric="amount">€ Zuwachs</button>
-        </div>
-        <div class="hm-legend">
-            <span>Weniger</span>
-            <div class="hm-legend-cells">
-                <span class="hm-cell l0"></span>
-                <span class="hm-cell l1"></span>
-                <span class="hm-cell l2"></span>
-                <span class="hm-cell l3"></span>
-                <span class="hm-cell l4"></span>
-            </div>
-            <span>Mehr</span>
-        </div>
-        <div class="hm-scroll"><div id="hmGrid" class="hm-grid"></div></div>
-        <div class="hm-stats" id="hmStats"></div>
     </div>
 
     <div id="tab-trophies" style="display:none">
@@ -342,7 +319,6 @@
     </div>
 </div>
 
-<div class="hm-tooltip" id="hmTooltip"></div>
 <div class="version-tag"></div>
 <div id="toast" class="toast"></div>
 <canvas id="confettiCanvas" aria-hidden="true"></canvas>

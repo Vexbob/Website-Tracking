@@ -50,20 +50,24 @@ const HEALTH_API = {
     clearImports:  () => apiCall('/api/health/imports', { method: 'DELETE' }),
 };
 
+// Farben kommen aus den Tokens in health.css -- der Helfer steht deshalb
+// vor den Tabellen, die ihn brauchen.
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
 const METRIC_LABELS = {
-    steps:           { label: 'Schritte', unit: '', icon: '👟', color: '#3b82f6', cumulative: true },
-    active_energy:   { label: 'Aktive Energie', unit: 'kcal', icon: '🔥', color: '#f59e0b', cumulative: true },
-    resting_hr:      { label: 'Ruhepuls', unit: 'bpm', icon: '🛋️', color: '#ec4899' },
-    heart_rate:      { label: 'Herzfrequenz', unit: 'bpm', icon: '❤️', color: '#ef4444' },
-    walking_hr_avg:  { label: 'Ø-HF Gehen', unit: 'bpm', icon: '🚶', color: '#14b8a6' },
-    hrv:             { label: 'HRV', unit: 'ms', icon: '📈', color: '#8b5cf6' },
-    cardio_recovery: { label: 'Kardio-Erholung', unit: 'bpm', icon: '💪', color: '#22c55e' },
-    weight:          { label: 'Gewicht', unit: 'kg', icon: '⚖️', color: '#0d9488' },
-    vo2_max:         { label: 'VO2max', unit: 'ml/kg/min', icon: '🫁', color: '#2563eb' },
-    swim_distance:   { label: 'Schwimmdistanz', unit: 'm', icon: '🏊', color: '#3b82f6', cumulative: true },
-    blood_oxygen:    { label: 'Blutsauerstoff', unit: '%', icon: '🫧', color: '#06b6d4' },
-    walking_distance:{ label: 'Geh-/Laufstrecke', unit: 'km', icon: '🛣️', color: '#84cc16', cumulative: true },
-    walking_speed:   { label: 'Gehgeschwindigkeit', unit: 'km/h', icon: '💨', color: '#f97316' },
+    steps:           { label: 'Schritte', unit: '', icon: '👟', color: cssVar('--h-steps'), cumulative: true },
+    active_energy:   { label: 'Aktive Energie', unit: 'kcal', icon: '🔥', color: cssVar('--h-energy'), cumulative: true },
+    resting_hr:      { label: 'Ruhepuls', unit: 'bpm', icon: '🛋️', color: cssVar('--h-resthr') },
+    heart_rate:      { label: 'Herzfrequenz', unit: 'bpm', icon: '❤️', color: cssVar('--h-hr') },
+    walking_hr_avg:  { label: 'Ø-HF Gehen', unit: 'bpm', icon: '🚶', color: cssVar('--h-walkhr') },
+    hrv:             { label: 'HRV', unit: 'ms', icon: '📈', color: cssVar('--h-hrv') },
+    cardio_recovery: { label: 'Kardio-Erholung', unit: 'bpm', icon: '💪', color: cssVar('--h-recovery') },
+    weight:          { label: 'Gewicht', unit: 'kg', icon: '⚖️', color: cssVar('--h-weight') },
+    vo2_max:         { label: 'VO2max', unit: 'ml/kg/min', icon: '🫁', color: cssVar('--h-vo2') },
+    swim_distance:   { label: 'Schwimmdistanz', unit: 'm', icon: '🏊', color: cssVar('--h-swim'), cumulative: true },
+    blood_oxygen:    { label: 'Blutsauerstoff', unit: '%', icon: '🫧', color: cssVar('--h-oxygen') },
+    walking_distance:{ label: 'Geh-/Laufstrecke', unit: 'km', icon: '🛣️', color: cssVar('--h-distance'), cumulative: true },
+    walking_speed:   { label: 'Gehgeschwindigkeit', unit: 'km/h', icon: '💨', color: cssVar('--h-speed') },
 };
 
 const WORKOUT_META = {
@@ -171,7 +175,6 @@ function trendWindow(n) {
 
 // ---------- Chart-Theme ----------
 // Farben kommen aus den Tokens (docs/DESIGN.md), nicht aus Hex-Werten im JS.
-const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 function chartTheme() {
     return {
         text:    cssVar('--text-1'),
@@ -194,6 +197,7 @@ function chartDefaults(overrides) {
                 backgroundColor: th.surface, borderColor: th.border, borderWidth: 1,
                 titleColor: th.text, bodyColor: cssVar('--text-2'), padding: 10, cornerRadius: 12,
                 displayColors: true, boxPadding: 3,
+                callbacks: { title: vexFullTitle },
             },
         },
         scales: {
@@ -211,11 +215,31 @@ function chartDefaults(overrides) {
 // (und damit die Dark-Mode-Farben). Dieser Helfer liefert es zum Wiedereinsetzen.
 function themedTooltip(extra) {
     const th = chartTheme();
-    return Object.assign({
+    const e = extra || {};
+    const out = Object.assign({
         backgroundColor: th.surface, borderColor: th.border, borderWidth: 1,
         titleColor: th.text, bodyColor: th.text, padding: 10, cornerRadius: 8,
         displayColors: true, boxPadding: 3,
-    }, extra || {});
+    }, e);
+    // callbacks muss zusammengefuehrt werden, nicht ersetzt: sonst nimmt ein
+    // eigener label-Callback den Datums-Titel mit ins Grab.
+    out.callbacks = Object.assign({ title: vexFullTitle }, e.callbacks || {});
+    return out;
+}
+
+// Die Achse zeigt "05.09.", der Tooltip zeigt "Fr, 05.09.2026". Die
+// ausgeschriebene Fassung haengt als $vexFull am Diagramm, damit sie beim
+// Aktualisieren mitwandert, ohne dass die Optionen neu gebaut werden muessen.
+function vexFullTitle(items) {
+    if (!items || !items.length) return '';
+    const full = items[0].chart && items[0].chart.$vexFull;
+    const i = items[0].dataIndex;
+    if (full && full[i] != null && full[i] !== '') return full[i];
+    return items[0].label || '';
+}
+function setChartDates(chart, isoList) {
+    if (!chart || !window.VexCharts) return;
+    chart.$vexFull = (isoList || []).map(v => VexCharts.fullDay(v));
 }
 
 function sparkOptions(color) {
@@ -288,16 +312,16 @@ async function loadDashboard() {
         const tiles = [
             { icon: '👟', label: 'Schritte (7 Tage)', value: fmt0(stepsSum),
               delta: pctDelta(stepsSum, stepsPrev), higherIsBetter: true,
-              spark: stepsRows.slice(-14).map(r => Number(r.qty) || 0), color: '#3b82f6' },
+              spark: stepsRows.slice(-14).map(r => Number(r.qty) || 0), color: cssVar('--h-steps') },
             { icon: '🔥', label: 'Aktive Energie (7 Tage)', value: fmt0(enSum) + ' kcal',
               delta: pctDelta(enSum, enPrev), higherIsBetter: true,
-              spark: energyRows.slice(-14).map(r => Number(r.qty) || 0), color: '#f59e0b' },
+              spark: energyRows.slice(-14).map(r => Number(r.qty) || 0), color: cssVar('--h-energy') },
             { icon: '🛋️', label: 'Ø Ruhepuls (7 Tage)',
               value: restAvg != null ? fmt0(restAvg) + ' bpm' : '–',
               delta: pctDelta(restAvg, restPrev), higherIsBetter: false,
-              spark: restRows.slice(-14).map(r => Number(r.qty) || 0), color: '#ec4899' },
+              spark: restRows.slice(-14).map(r => Number(r.qty) || 0), color: cssVar('--h-resthr') },
             { icon: '🏋️', label: 'Workouts diese Woche',
-              value: fmt0(summary.workouts_this_week), delta: null, spark: null, color: '#14b8a6' },
+              value: fmt0(summary.workouts_this_week), delta: null, spark: null, color: cssVar('--h-walkhr') },
         ];
 
         state.sparkCharts.forEach(c => c && c.destroy());
@@ -464,7 +488,8 @@ function renderActivityChart() {
                     backgroundColor: chartTheme().surface, borderColor: chartTheme().border,
                     borderWidth: 1, titleColor: chartTheme().text, bodyColor: chartTheme().text,
                     padding: 10, cornerRadius: 8,
-                    callbacks: { label: (ctx) => ` ${fmt0(ctx.raw)} ${meta.unit || ''}`.trim() },
+                    callbacks: { title: vexFullTitle,
+                                 label: (ctx) => ` ${fmt0(ctx.raw)} ${meta.unit || ''}`.trim() },
                 },
             },
             scales: {
@@ -473,6 +498,7 @@ function renderActivityChart() {
             },
         }),
     });
+    setChartDates(state.activityChart, data.map(r => r.sample_date || r.recorded_at));
 }
 
 // ---------- Vitalwerte ----------
@@ -489,16 +515,16 @@ function initVitalwerte() {
     state.chartBp = new Chart(document.getElementById('hChartBp').getContext('2d'), {
         type: 'line',
         data: { labels: [], datasets: [
-            { label: 'Systolisch', data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.3, pointRadius: 2, fill: false },
-            { label: 'Diastolisch', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', tension: 0.3, pointRadius: 2, fill: false },
+            { label: 'Systolisch', data: [], borderColor: cssVar('--danger'), backgroundColor: cssVar('--danger-soft'), tension: 0.3, pointRadius: 2, fill: false },
+            { label: 'Diastolisch', data: [], borderColor: cssVar('--info'), backgroundColor: cssVar('--info-soft'), tension: 0.3, pointRadius: 2, fill: false },
         ] },
         options: chartDefaults(),
     });
     state.chartGlucose = new Chart(document.getElementById('hChartGlucose').getContext('2d'), {
         type: 'line',
         data: { labels: [], datasets: [{
-            label: 'Blutzucker', data: [], borderColor: '#f59e0b',
-            backgroundColor: 'rgba(245,158,11,0.12)', tension: 0.3, pointRadius: 2, fill: true,
+            label: 'Blutzucker', data: [], borderColor: cssVar('--warn'),
+            backgroundColor: cssVar('--warn-soft'), tension: 0.3, pointRadius: 2, fill: true,
         }] },
         options: chartDefaults({
             plugins: { legend: { display: false }, tooltip: themedTooltip() },
@@ -623,9 +649,11 @@ function updateMetricCard(key, rows, days) {
     if (!ch) {
         ch = mountMetricChart(key, labels, data, trend, win);
         if (!ch) return;
+        setChartDates(ch, rows.map(r => r.sample_date || r.recorded_at));
         state.metricChartMap[key] = ch;
         return;
     }
+    setChartDates(ch, rows.map(r => r.sample_date || r.recorded_at));
     ch.data.labels = labels;
     ch.data.datasets[0].data = data;
     ch.data.datasets[1].data = trend;
@@ -685,12 +713,17 @@ function mountMetricChart(key, labels, data, trend, win) {
                     label: `${meta.label}${meta.unit ? ' (' + meta.unit + ')' : ''}`,
                     data, borderColor: meta.color, backgroundColor: meta.color + '1f',
                     tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2,
+                    order: VexCharts.ORDER.VALUE,
                 },
-                // Gleitende Ø-/Trendlinie (ohne Messluecken, siehe rollingAverage)
+                // Gleitende Ø-/Trendlinie (ohne Messluecken, siehe rollingAverage).
+                // Sie liegt UEBER der Wertlinie: bei sprunghaften Daten
+                // verschwand sie sonst unter deren Flaeche. Eine kleinere
+                // `order` heisst bei Chart.js weiter oben (siehe js/charts.js).
                 {
                     label: `Ø gleitend (${win})`, data: trend,
-                    borderColor: th.muted, borderWidth: 1.5, borderDash: [5, 4],
+                    borderColor: th.text, borderWidth: 2, borderDash: [5, 4],
                     tension: 0.35, fill: false, pointRadius: 0, spanGaps: true,
+                    order: VexCharts.ORDER.TREND,
                 },
             ],
         },
@@ -710,6 +743,7 @@ async function loadBpGlucoseCharts() {
     try {
         const bp = await HEALTH_API.bloodPressure(state.vitalDays);
         state.chartBp.data.labels = bp.map(r => fmtDate(r.recorded_at));
+        setChartDates(state.chartBp, bp.map(r => r.recorded_at));
         state.chartBp.data.datasets[0].data = bp.map(r => r.systolic);
         state.chartBp.data.datasets[1].data = bp.map(r => r.diastolic);
         state.chartBp.update();
@@ -717,6 +751,7 @@ async function loadBpGlucoseCharts() {
     try {
         const gl = await HEALTH_API.bloodGlucose(state.vitalDays);
         state.chartGlucose.data.labels = gl.map(r => fmtDate(r.recorded_at));
+        setChartDates(state.chartGlucose, gl.map(r => r.recorded_at));
         state.chartGlucose.data.datasets[0].data = gl.map(r => r.value);
         state.chartGlucose.update();
     } catch (e) {}
@@ -746,11 +781,11 @@ function sleepOffsetToClock(v) {
 // Nacht nur Summen. Die Laenge jedes Abschnitts stimmt daher, seine Position im
 // Balken ist eine feste Reihenfolge und keine Messung -- kein Hypnogramm.
 const SLEEP_SEGMENTS = [
-    { key: 'deep',   label: 'Tief',              color: '#4338ca' },
-    { key: 'core',   label: 'Kern',              color: '#6366f1' },
-    { key: 'rem',    label: 'REM',               color: '#a5b4fc' },
-    { key: 'rest',   label: 'ohne Phasendetail', color: '#c7d2fe' },
-    { key: 'awake',  label: 'Wach',              color: '#f59e0b' },
+    { key: 'deep',   label: 'Tief',              color: cssVar('--h-sleep-deep') },
+    { key: 'core',   label: 'Kern',              color: cssVar('--h-sleep-core') },
+    { key: 'rem',    label: 'REM',               color: cssVar('--h-sleep-rem') },
+    { key: 'rest',   label: 'ohne Phasendetail', color: cssVar('--h-sleep-rest') },
+    { key: 'awake',  label: 'Wach',              color: cssVar('--h-sleep-awake') },
 ];
 
 function initSchlaf() {
@@ -797,10 +832,10 @@ function initSchlaf() {
             })),
             // Die beiden duennen gruenen Kanten: unten, wo der Balken die
             // 18:00-Grenze reisst, und oben, wo er wieder einsetzt.
-            { label: 'über 18:00 hinaus', data: [], backgroundColor: '#22c55e',
+            { label: 'über 18:00 hinaus', data: [], backgroundColor: cssVar('--ok'),
               marker: true, borderSkipped: false,
               barPercentage: 0.8, categoryPercentage: 0.9 },
-            { label: 'über 18:00 hinaus (oben)', data: [], backgroundColor: '#22c55e',
+            { label: 'über 18:00 hinaus (oben)', data: [], backgroundColor: cssVar('--ok'),
               marker: true, wrap: true, borderSkipped: false,
               barPercentage: 0.8, categoryPercentage: 0.9 },
         ] },
@@ -994,6 +1029,7 @@ async function loadSleepChart() {
         const ds = state.chartSleepTimes.data.datasets;
         const N = SLEEP_SEGMENTS.length;
         state.chartSleepTimes.data.labels = plotted.map(r => fmtDate(r.sleep_date));
+        setChartDates(state.chartSleepTimes, plotted.map(r => r.sleep_date));
         ds[0].data = clipped;
         segData.forEach((d, si) => { ds[si + 1].data = d; });
         ds[N + 1].data = wrapped;
@@ -1281,6 +1317,8 @@ function mountWorkoutHrChart(id, series, recovery) {
     if (pts.length < 2) return;
 
     const labels = pts.map(p => fmtHM(p.at));
+    // Achse zeigt die Uhrzeit, der Tooltip zusaetzlich den Tag mit Jahr.
+    const fullLabels = pts.map(p => (window.VexCharts ? VexCharts.fullDay(p.at) + ' · ' : '') + fmtHM(p.at));
     const during = pts.map(p => p.during ? Number(p.v) : null);
     const after  = pts.map(p => p.during ? null : Number(p.v));
     // Anschluss ohne Luecke: die Erholungslinie beginnt am letzten Messpunkt
@@ -1295,10 +1333,10 @@ function mountWorkoutHrChart(id, series, recovery) {
         data: {
             labels,
             datasets: [
-                { label: 'Puls (bpm)', data: during, borderColor: '#ef4444',
-                  backgroundColor: 'rgba(239,68,68,0.13)', fill: true, tension: 0.3,
+                { label: 'Puls (bpm)', data: during, borderColor: cssVar('--danger'),
+                  backgroundColor: cssVar('--danger-soft'), fill: true, tension: 0.3,
                   pointRadius: 0, borderWidth: 2 },
-                { label: 'Erholung (bpm)', data: after, borderColor: '#f59e0b',
+                { label: 'Erholung (bpm)', data: after, borderColor: cssVar('--warn'),
                   borderDash: [4, 3], fill: false, tension: 0.3,
                   pointRadius: 0, borderWidth: 2 },
             ],
@@ -1316,6 +1354,7 @@ function mountWorkoutHrChart(id, series, recovery) {
             },
         }),
     });
+    state.workoutHrCharts[id].$vexFull = fullLabels;
 }
 
 async function toggleWorkoutExtras(id) {
