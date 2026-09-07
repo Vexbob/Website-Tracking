@@ -8,38 +8,39 @@
  * geladen und kann von beiden Modulen sauber referenziert werden. */
 body{visibility:hidden}body.ready{visibility:visible}
 
-.stat-filterbar{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:0.875rem 1rem;margin-bottom:1.25rem;box-shadow:var(--shadow-sm);display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap}
+.stat-filterbar{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:0.875rem 1rem;margin-bottom:1.25rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap}
 .stat-preset-chips{display:flex;gap:5px;flex-wrap:wrap}
-.stat-chip{padding:0.4375rem 0.85rem;font-size:0.8125rem;border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);border-radius:20px;cursor:pointer;font-weight:600;width:auto;margin:0;transition:all .15s}
-.stat-chip:hover{border-color:var(--accent)}
-.stat-chip.active{background:var(--text);color:var(--surface);border-color:var(--text)}
+.stat-chip{padding:0.4375rem 0.85rem;font-size:0.8125rem;border:1px solid var(--line);background:var(--surface-2);color:var(--text-3);border-radius:999px;cursor:pointer;font-weight:600;width:auto;margin:0;
+    transition:color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease),background var(--dur-1) var(--ease)}
+.stat-chip:hover{color:var(--text-1);border-color:var(--line-strong)}
+.stat-chip.active{background:var(--accent-strong);color:#fff;border-color:var(--accent-strong)}
 .stat-custom{display:flex;gap:0.4rem;align-items:center;font-size:0.8125rem;color:var(--text-muted);margin-left:auto;flex-wrap:wrap}
 .stat-custom label{display:inline-flex;align-items:center;gap:0.35rem}
 .stat-custom input[type=date]{padding:0.375rem 0.5rem;font-size:0.8125rem;margin:0;border-radius:6px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);width:auto}
 
 .stat-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.25rem}
 @media(max-width:900px){.stat-kpi-grid{grid-template-columns:repeat(2,1fr)}}
-.stat-kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.125rem;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;transition:transform .15s;min-height:110px}
-.stat-kpi:hover{transform:translateY(-2px)}
+.stat-kpi{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:1.125rem;position:relative;overflow:hidden;transition:border-color var(--dur-1) var(--ease);min-height:110px}
+.stat-kpi:hover{border-color:var(--line-strong)}
 .stat-kpi-label{font-size:0.6875rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;margin-bottom:0.25rem}
 .stat-kpi-value{font-size:1.75rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.1;letter-spacing:-0.02em}
 .stat-kpi-sub{font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;display:flex;align-items:center;gap:0.375rem;flex-wrap:wrap}
 .stat-kpi-delta{display:inline-flex;align-items:center;gap:0.15rem;font-weight:700;padding:0.125rem 0.4375rem;border-radius:6px;font-size:0.6875rem}
-.stat-kpi-delta.up{background:var(--red-bg);color:var(--red)}
-.stat-kpi-delta.down{background:rgba(34,197,94,0.12);color:var(--green-dark)}
-:root[data-theme="dark"] .stat-kpi-delta.down{background:rgba(34,197,94,0.18)}
-.stat-kpi-delta.neutral{background:var(--surface-2);color:var(--text-muted)}
+.stat-kpi-delta.up{background:var(--danger-soft);color:var(--danger)}
+.stat-kpi-delta.down{background:var(--ok-soft);color:var(--ok)}
+.stat-kpi-delta.neutral{background:var(--surface-2);color:var(--text-3)}
 .stat-kpi-icon{position:absolute;top:0.75rem;right:0.75rem;font-size:1.5rem;opacity:0.22}
 .stat-kpi.clickable{cursor:pointer}
 
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.stat-card{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1rem}
 .stat-card h3{font-size:1rem;margin:0 0 0.875rem;font-weight:700;display:flex;align-items:center;gap:0.5rem;color:var(--text)}
 .stat-card-head{display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.875rem}
 .stat-card-head h3{margin:0}
 .stat-range-lbl{font-weight:400;color:var(--text-muted);font-size:0.8125rem}
-.stat-mini-toggle{display:flex;gap:0;border:1px solid var(--border);border-radius:7px;overflow:hidden}
-.stat-mini-toggle button{padding:0.375rem 0.75rem;font-size:0.75rem;background:var(--surface);color:var(--text-muted);border:none;font-weight:600;width:auto;margin:0;border-radius:0;cursor:pointer}
-.stat-mini-toggle button.active{background:var(--text);color:var(--surface)}
+.stat-mini-toggle{display:flex;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.stat-mini-toggle button{padding:0.375rem 0.75rem;font-size:0.75rem;background:var(--surface-2);color:var(--text-3);border:none;font-weight:600;width:auto;margin:0;border-radius:0;cursor:pointer;transition:color var(--dur-1) var(--ease),background var(--dur-1) var(--ease)}
+.stat-mini-toggle button:hover{color:var(--text-1)}
+.stat-mini-toggle button.active{background:var(--accent-strong);color:#fff}
 .stat-scroll-y{max-height:340px;overflow-y:auto}
 
 .chart-wrap{position:relative;height:280px}
@@ -51,13 +52,13 @@ body{visibility:hidden}body.ready{visibility:visible}
 
 .stat-insights{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem;margin-top:0.75rem}
 .stat-insights:empty{display:none}
-.insight{background:linear-gradient(135deg,var(--surface),var(--surface-2));border:1px solid var(--border);border-radius:12px;padding:0.875rem 1rem;font-size:0.8125rem;color:var(--text);line-height:1.5;display:flex;gap:0.625rem;align-items:flex-start}
+.insight{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:0.875rem 1rem;font-size:0.8125rem;color:var(--text-2);line-height:1.5;display:flex;gap:0.625rem;align-items:flex-start}
 .insight .icon{font-size:1.375rem;flex-shrink:0}
-.insight strong{color:var(--text);font-weight:700}
+.insight strong{color:var(--text-1);font-weight:700}
 
 .stat-table{width:100%;font-size:0.8125rem;border-collapse:collapse;margin-top:0.5rem}
-.stat-table th{text-align:left;font-size:0.6875rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;padding:0.4375rem 0.5rem;border-bottom:1px solid var(--border);font-weight:600}
-.stat-table td{padding:0.5rem;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums;color:var(--text)}
+.stat-table th{text-align:left;font-size:0.6875rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;padding:0.4375rem 0.5rem;border-bottom:1px solid var(--border);font-weight:600}
+.stat-table td{padding:0.5rem;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;color:var(--text-2)}
 .stat-table tr:last-child td{border-bottom:none}
 .stat-table td.num{text-align:right;font-weight:600}
 .stat-table td.name{display:flex;align-items:center;gap:0.5rem}
@@ -68,15 +69,13 @@ body{visibility:hidden}body.ready{visibility:visible}
 
 .stat-heatmap{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,12px);gap:3px;overflow-x:auto;padding-bottom:0.375rem}
 .stat-hm-cell{width:12px;height:12px;border-radius:3px;background:var(--surface-2);border:1px solid transparent;cursor:pointer;transition:transform .1s}
-.stat-hm-cell:hover{transform:scale(1.4);border-color:var(--text);z-index:2;position:relative}
-.stat-hm-cell.l1{background:#dcfce7}
-.stat-hm-cell.l2{background:#86efac}
-.stat-hm-cell.l3{background:#22c55e}
-.stat-hm-cell.l4{background:#15803d}
-:root[data-theme="dark"] .stat-hm-cell.l1{background:#14532d}
-:root[data-theme="dark"] .stat-hm-cell.l2{background:#166534}
-:root[data-theme="dark"] .stat-hm-cell.l3{background:#22c55e}
-:root[data-theme="dark"] .stat-hm-cell.l4{background:#86efac}
+.stat-hm-cell:hover{transform:scale(1.4);border-color:var(--text-1);z-index:2;position:relative}
+/* Eine Farbe in vier Stufen statt vier Farben: die Intensitaet liest man
+   dadurch als Menge, nicht als Kategorie. Ton ist der des Moduls. */
+.stat-hm-cell.l1{background:rgba(45,212,191,0.16)}
+.stat-hm-cell.l2{background:rgba(45,212,191,0.34)}
+.stat-hm-cell.l3{background:rgba(45,212,191,0.62)}
+.stat-hm-cell.l4{background:var(--m-ausgaben)}
 .stat-heatmap-legend{display:flex;align-items:center;gap:0.375rem;font-size:0.6875rem;color:var(--text-muted);margin-top:0.5rem;justify-content:flex-end}
 .stat-heatmap-legend .stat-hm-cell{cursor:default}
 

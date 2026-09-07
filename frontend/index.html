@@ -8,6 +8,33 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/css/style.css">
+    <style>
+    /* Startseite: eine Zeile echter Zahlen ueber den Modulen. Vorher war die
+       Seite ein reiner Absprungpunkt -- man musste in jedes Modul hinein, um
+       zu sehen, ob ueberhaupt etwas passiert ist. */
+    .home-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+        gap:1px;background:var(--line);border:1px solid var(--line);
+        border-radius:var(--radius-lg);overflow:hidden;margin-bottom:var(--space-6)}
+    .home-stat{background:var(--surface-1);padding:var(--space-4);text-decoration:none;
+        color:inherit;display:block;transition:background var(--dur-1) var(--ease)}
+    a.home-stat:hover{background:var(--surface-2);text-decoration:none}
+    .home-stat .lbl{font-size:0.6875rem;color:var(--text-4);text-transform:uppercase;
+        letter-spacing:0.1em;font-weight:700}
+    .home-stat .val{font-size:1.5rem;font-weight:700;letter-spacing:-0.02em;
+        color:var(--text-1);font-variant-numeric:tabular-nums;margin-top:0.25rem;line-height:1.1}
+    .home-stat .sub{font-size:0.75rem;color:var(--text-3);margin-top:0.25rem}
+    .home-stat .bar{height:3px;border-radius:2px;background:var(--surface-3);
+        margin-top:0.5rem;overflow:hidden}
+    .home-stat .bar i{display:block;height:100%;background:var(--grad-accent)}
+    /* Die Nebenmodule (Blog, Export, Verwaltung) standen in drei eigenen
+       Abschnitten mit je genau einer Kachel -- viel Vertikale fuer wenig. */
+    .home-more{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+    .home-more a{display:inline-flex;align-items:center;gap:0.5rem;
+        padding:0.5rem 0.875rem;background:var(--surface-1);border:1px solid var(--line);
+        border-radius:999px;color:var(--text-2);font-size:0.875rem;font-weight:600;
+        text-decoration:none;transition:border-color var(--dur-1) var(--ease),color var(--dur-1) var(--ease)}
+    .home-more a:hover{border-color:var(--line-strong);color:var(--text-1);text-decoration:none}
+    </style>
     <meta name="description" content="Vexbob — persönliches Dashboard für Sparziele, Ausgaben, Notizen und Gesundheit.">
     <script src="/js/config.js"></script>
     <script src="/js/version.js"></script>
@@ -36,6 +63,10 @@
                 <div class="sub" id="dashSubtitle">Dein persönliches Dashboard</div>
             </div>
         </div>
+        <div class="home-stats" id="homeStats">
+            <div class="home-stat"><div class="lbl">Diesen Monat</div><span class="skel" style="display:block;width:6rem;height:1.5rem;margin-top:0.25rem"></span></div>
+            <div class="home-stat"><div class="lbl">Sparziel</div><span class="skel" style="display:block;width:6rem;height:1.5rem;margin-top:0.25rem"></span></div>
+        </div>
         <section class="section">
             <div class="section-header">
                 <span class="eyebrow">Meine Tools</span>
@@ -43,57 +74,31 @@
             </div>
             <div class="tile-grid" id="tileGrid">
                 <a href="/sparziel/" class="tile">
-                    <div class="tile-icon green">💰</div>
+                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-sparziel)">💰</div>
                     <div class="tile-text"><div class="tile-title">Sparziel-Tracker</div><div class="tile-sub">Achievements & Wochenziele</div></div>
                 </a>
                 <a href="/ausgaben/" class="tile">
-                    <div class="tile-icon teal">💶</div>
+                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-ausgaben)">💶</div>
                     <div class="tile-text"><div class="tile-title">Ausgaben</div><div class="tile-sub">Kassenbons scannen &amp; analysieren</div></div>
                 </a>
                 <a href="/notizen/" class="tile">
-                    <div class="tile-icon blue">📝</div>
+                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-notizen)">📝</div>
                     <div class="tile-text"><div class="tile-title">Notizen</div><div class="tile-sub">Schnelle Notizen, einzeln aufrufbar</div></div>
                 </a>
                 <a href="/health/" class="tile">
-                    <div class="tile-icon pink">🏋️</div>
+                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-health)">🏋️</div>
                     <div class="tile-text"><div class="tile-title">Gesundheit</div><div class="tile-sub">Vitalwerte, Schlaf &amp; Workouts</div></div>
                 </a>
             </div>
         </section>
         <section class="section">
             <div class="section-header">
-                <span class="eyebrow">Öffentlich</span>
-                <h2>Blog</h2>
+                <h2>Mehr</h2>
             </div>
-            <div class="tile-grid">
-                <a href="/blog/" class="tile">
-                    <div class="tile-icon orange">📰</div>
-                    <div class="tile-text"><div class="tile-title">Blog</div><div class="tile-sub">Öffentlich lesbare Beiträge</div></div>
-                </a>
-            </div>
-        </section>
-        <section class="section">
-            <div class="section-header">
-                <span class="eyebrow">Daten</span>
-                <h2>Export</h2>
-            </div>
-            <div class="tile-grid">
-                <a href="#" class="tile" id="exportAllTile" onclick="exportAll();return false;">
-                    <div class="tile-icon purple">⬇</div>
-                    <div class="tile-text"><div class="tile-title">Alles exportieren</div><div class="tile-sub">Sparziel, Ausgaben &amp; Gesundheit in einer CSV</div></div>
-                </a>
-            </div>
-        </section>
-        <section class="section" id="adminSection" style="display:none">
-            <div class="section-header">
-                <span class="eyebrow">Administration</span>
-                <h2>Verwaltung</h2>
-            </div>
-            <div class="tile-grid">
-                <a href="/admin/" class="tile">
-                    <div class="tile-icon purple">👥</div>
-                    <div class="tile-text"><div class="tile-title">User-Verwaltung</div><div class="tile-sub">Accounts anlegen &amp; verwalten</div></div>
-                </a>
+            <div class="home-more">
+                <a href="/blog/">📰 Blog</a>
+                <a href="#" id="exportAllTile" onclick="exportAll();return false;">⬇ Alles exportieren</a>
+                <a href="/admin/" id="adminLink" hidden>👥 User-Verwaltung</a>
             </div>
         </section>
     </main>
@@ -122,9 +127,7 @@
                 const h = new Date().getHours();
                 const greet = h < 5 ? 'Gute Nacht' : h < 11 ? 'Guten Morgen' : h < 18 ? 'Hallo' : h < 22 ? 'Guten Abend' : 'Späten Abend';
                 document.getElementById('dashGreeting').textContent = `${greet}, ${me.username} 👋`;
-                if (me.is_admin) {
-                    document.getElementById('adminSection').style.display = '';
-                }
+                if (me.is_admin) document.getElementById('adminLink').hidden = false;
             } catch (e) {
                 clearTimeout(bootTimeout);
                 document.body.style.visibility = 'visible';
@@ -139,7 +142,56 @@
             clearTimeout(bootTimeout);
             document.body.style.visibility = 'visible';
             document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
+            loadHomeStats();
         })();
+    </script>
+    <script>
+    /* Zwei Zahlen, mehr braucht die Startseite nicht: was dieser Monat gekostet
+     * hat und wie weit das Sparziel ist. Beide kommen aus vorhandenen
+     * Endpoints; faellt einer aus, verschwindet nur seine Kachel. */
+    async function loadHomeStats() {
+        const box = document.getElementById('homeStats');
+        const fmtEur = (v) => (Number(v) || 0).toLocaleString('de-DE',
+            { style: 'currency', currency: 'EUR' });
+        const [exp, sav] = await Promise.all([
+            apiCall('/api/expenses/stats/summary').catch(() => null),
+            apiCall('/api/savings-goal').catch(() => null),
+        ]);
+        const cards = [];
+        if (exp) {
+            const prev = Number(exp.prev_month) || 0;
+            const now = Number(exp.this_month) || 0;
+            const pct = prev > 0 ? Math.round((now / prev - 1) * 100) : null;
+            cards.push(`<a class="home-stat" href="/ausgaben/">
+                <div class="lbl">Diesen Monat</div>
+                <div class="val">${fmtEur(now)}</div>
+                <div class="sub">${pct === null ? `${exp.count || 0} Bons insgesamt`
+                    : `${pct > 0 ? '+' : ''}${pct} % gegenüber dem Vormonat`}</div>
+            </a>`);
+        }
+        if (sav) {
+            const goal = sav.goal;
+            const saved = Number(sav.total_saved) || 0;
+            if (goal) {
+                const target = Number(goal.target_amount) || 0;
+                const pct = target > 0 ? Math.min(100, Math.round(saved / target * 100)) : 0;
+                cards.push(`<a class="home-stat" href="/sparziel/">
+                    <div class="lbl">${String(goal.name || 'Sparziel').replace(/[<>&]/g, '')}</div>
+                    <div class="val">${fmtEur(saved)}</div>
+                    <div class="sub">${pct} % von ${fmtEur(target)}</div>
+                    <div class="bar"><i style="width:${pct}%"></i></div>
+                </a>`);
+            } else if (sav.buffer) {
+                cards.push(`<a class="home-stat" href="/sparziel/">
+                    <div class="lbl">Puffer</div>
+                    <div class="val">${fmtEur(sav.buffer.saved_amount)}</div>
+                    <div class="sub">kein aktives Sparziel</div>
+                </a>`);
+            }
+        }
+        if (!cards.length) { box.remove(); return; }
+        box.innerHTML = cards.join('');
+    }
     </script>
 </body>
 </html>

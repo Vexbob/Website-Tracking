@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.56.0', date: '2026-09-07', title: 'Startseite und Ausgaben im neuen Gewand', notes: [
+        'Die Startseite zeigt jetzt Zahlen statt nur Kacheln: was dieser Monat gekostet hat, im Vergleich zum Vormonat, und wie weit das Sparziel ist.',
+        'Im Ausgaben-Dashboard gibt es eine Hauptzahl statt sechs gleich lauter Kacheln — der laufende Monat groß, alles andere ordnet sich darunter.',
+        'Die Diagramme folgen der Designsprache: kein senkrechtes Gitter, keine Achsenrahmen, Tooltips wie schwebende Elemente der App, Balken mit Radius und Flächen als Verlauf.',
+        'Blog, Export und Verwaltung standen in drei Abschnitten mit je einer Kachel — daraus ist eine Zeile geworden.',
+    ]},
     { v: 'v1.55.0', date: '2026-09-07', title: 'Designsprache: Fundament', notes: [
         'Vexbob hat jetzt eine geschriebene Designsprache — docs/DESIGN.md legt Ebenen, Textrollen, Zustände, Bewegung, leere Zustände und Diagramme fest, /design.html zeigt jeden Baustein in jedem Zustand.',
         'Nur noch dunkel: Umschalter, helle Farbwerte und Druckansicht sind raus, dadurch ist jedes Token einmal definiert statt zweimal.',

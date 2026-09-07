@@ -25,21 +25,48 @@ function populateFilters() {
     categories.forEach(x => c.insertAdjacentHTML('beforeend', `<option value="${x.id}">${x.icon || ''} ${x.name}</option>`));
 }
 
+/* Eine Hauptzahl, der Rest ordnet sich unter. Der laufende Monat ist die
+ * Zahl, wegen der man diese Seite aufmacht; alles andere ist Einordnung. */
 async function loadKpis() {
+    const box = document.getElementById('kpiGrid');
+    box.innerHTML = `<div class="kpi-hero"><div class="kpi-hero-main">
+        <div class="lbl">Dieser Monat</div>
+        <span class="skel" style="display:block;width:9rem;height:2.5rem"></span>
+    </div></div>`;
     try {
         const s = await AUSGABEN_API.statsSummary();
-        const kpis = [
+        const prev = Number(s.prev_month) || 0;
+        const now = Number(s.this_month) || 0;
+        let delta = '';
+        if (prev > 0) {
+            const pct = Math.round((now / prev - 1) * 100);
+            const cls = Math.abs(pct) < 5 ? 'flat' : (pct > 0 ? 'up' : 'down');
+            const sign = pct > 0 ? '+' : '';
+            delta = `<span class="kpi-delta ${cls}">${sign}${pct} %</span>`;
+        }
+        const minis = [
             { lbl: 'Heute',       val: fmtEur(s.today) },
             { lbl: 'Diese Woche', val: fmtEur(s.this_week) },
-            { lbl: 'Dieser Monat',val: fmtEur(s.this_month), accent: true },
             { lbl: 'Vormonat',    val: fmtEur(s.prev_month) },
             { lbl: 'Dieses Jahr', val: fmtEur(s.this_year) },
-            { lbl: 'Gesamt',      val: fmtEur(s.total), sub: s.count + ' Bons' },
+            { lbl: `Gesamt · ${s.count} Bons`, val: fmtEur(s.total) },
         ];
-        document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
-            `<div class="kpi${k.accent?' accent':''}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div>${k.sub?`<div class="sub">${k.sub}</div>`:''}</div>`
-        ).join('');
-    } catch(e) { console.error(e); }
+        box.innerHTML = `
+            <div class="kpi-hero">
+                <div class="kpi-hero-main">
+                    <div class="lbl">Dieser Monat</div>
+                    <div class="val">${fmtEur(s.this_month)}</div>
+                    <div class="sub">${delta} ${prev > 0 ? `gegenüber ${fmtEur(prev)} im Vormonat` : 'kein Vormonat zum Vergleich'}</div>
+                </div>
+            </div>
+            <div class="kpi-mini-row">
+                ${minis.map(m => `<div class="kpi-mini"><div class="lbl">${m.lbl}</div><div class="val">${m.val}</div></div>`).join('')}
+            </div>`;
+    } catch(e) {
+        box.innerHTML = `<div class="empty is-error"><span class="empty-mark">⚠️</span>
+            <p class="empty-text">Kennzahlen konnten nicht geladen werden.</p></div>`;
+        console.error(e);
+    }
 }
 
 // Cache pro Bon-ID: { detail: fullExpense, imgUrl: blobUrl|null, expanded: bool }

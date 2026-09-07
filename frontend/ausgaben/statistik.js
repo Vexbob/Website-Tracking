@@ -16,9 +16,37 @@ const STAT = {
 };
 
 function escHtml(s){if(s==null)return'';return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
-const gridColor = () => isDark() ? '#2a2e37' : '#e8e8e8';
-const textColor = () => isDark() ? '#a0a5b0' : '#666';
+/* Diagrammfarben kommen aus den Tokens, nicht aus verstreuten Hex-Werten —
+ * Regeln dazu in docs/DESIGN.md: kein senkrechtes Gitter, keine Rahmen, erste
+ * Reihe im Modulton, Achsen in der sekundaeren Textrolle. */
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const gridColor = () => cssVar('--chart-grid');
+const textColor = () => cssVar('--chart-axis');
+const chartSeriesColors = () => ['--chart-1','--chart-2','--chart-3','--chart-4','--chart-5','--chart-6'].map(cssVar);
+
+/* Gemeinsame Grundeinstellungen: Tooltip sieht aus wie ein schwebendes Element
+ * der App, Achsen ohne Rahmen, Gitter nur waagerecht. */
+function chartBase(extra) {
+    const base = {
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: cssVar('--surface-3'),
+                borderColor: cssVar('--line-strong'), borderWidth: 1,
+                titleColor: cssVar('--text-1'), bodyColor: cssVar('--text-2'),
+                cornerRadius: 12, padding: 10, displayColors: false,
+            },
+        },
+        scales: {
+            x: { ticks: { color: textColor(), font: { size: 11 } },
+                 grid: { display: false }, border: { display: false } },
+            y: { ticks: { color: textColor(), font: { size: 11 } },
+                 grid: { color: gridColor() }, border: { display: false }, beginAtZero: true },
+        },
+    };
+    return Object.assign(base, extra || {});
+}
 
 // --------- Init ---------
 async function init(){
@@ -251,18 +279,15 @@ function renderWeekday(data){
         data: {
             labels: days,
             datasets: [{ label: 'Ausgaben (€)', data: totals,
-                backgroundColor: ['#3b82f6','#60a5fa','#93c5fd','#a78bfa','#f472b6','#f59e0b','#22c55e'],
-                borderRadius: 6 }],
+                backgroundColor: cssVar('--chart-1'), hoverBackgroundColor: cssVar('--chart-2'),
+                borderRadius: 6, borderSkipped: false, barPercentage: 0.72 }],
         },
-        options: {
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false },
-                tooltip: { callbacks: { label: (c) => `${fmtEur(c.parsed.y)} · ${counts[c.dataIndex]} Bons` } } },
-            scales: {
-                x: { ticks: { color: textColor(), font:{weight:'600'} }, grid: { display:false } },
-                y: { ticks: { color: textColor(), callback:v=>fmtEur(v) }, grid: { color: gridColor() }, beginAtZero:true },
-            },
-        },
+        options: (() => {
+            const o = chartBase();
+            o.plugins.tooltip.callbacks = { label: (c) => `${fmtEur(c.parsed.y)} · ${counts[c.dataIndex]} Bons` };
+            o.scales.y.ticks.callback = v => fmtEur(v);
+            return o;
+        })(),
     });
 }
 
@@ -358,26 +383,25 @@ function renderSeriesChart(data, gran){
         data: {
             labels,
             datasets: [
+                // Die Balken sind die Daten und tragen deshalb den Modulton;
+                // die Trendlinie ist eine Anmerkung und bleibt zurueckhaltend.
                 { type: 'bar', label: 'Ausgaben', data: values,
-                  backgroundColor: gran === 'daily' ? '#3b82f6' : (gran === 'weekly' ? '#8b5cf6' : '#14b8a6'),
-                  borderRadius: 4, order: 2 },
+                  backgroundColor: cssVar('--chart-1'),
+                  borderRadius: 4, borderSkipped: false, order: 2 },
                 { type: 'line', label: `Ø (${win} Perioden)`, data: trend,
-                  borderColor: '#f59e0b', borderWidth: 2, borderDash: [4, 4],
+                  borderColor: cssVar('--text-3'), borderWidth: 2, borderDash: [4, 4],
                   pointRadius: 0, tension: 0.35, fill: false, order: 1 },
             ],
         },
-        options: {
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: { display: true, position: 'top', labels: { color: textColor(), font: { size: 11 }, boxWidth: 12 } },
-                tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtEur(c.parsed.y)}` } },
-            },
-            scales: {
-                x: { ticks: { color: textColor(), maxRotation: 0, autoSkip: true, autoSkipPadding: 10 }, grid: { display: false } },
-                y: { ticks: { color: textColor(), callback: v => fmtEur(v) }, grid: { color: gridColor() }, beginAtZero: true },
-            },
-        },
+        options: (() => {
+            const o = chartBase({ interaction: { mode: 'index', intersect: false } });
+            o.plugins.legend = { display: true, position: 'top',
+                labels: { color: textColor(), font: { size: 11 }, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'circle' } };
+            o.plugins.tooltip.callbacks = { label: (c) => `${c.dataset.label}: ${fmtEur(c.parsed.y)}` };
+            o.scales.x.ticks = Object.assign(o.scales.x.ticks, { maxRotation: 0, autoSkip: true, autoSkipPadding: 10 });
+            o.scales.y.ticks.callback = v => fmtEur(v);
+            return o;
+        })(),
     });
 }
 
@@ -408,16 +432,19 @@ function renderCategoryChart(data){
         type: 'doughnut',
         data: {
             labels: data.map(d => d.name),
-            datasets: [{ data: data.map(d => Number(d.total||0)), backgroundColor: data.map(d => d.color), borderWidth: 2, borderColor: isDark()?'#0f1115':'#fff' }],
+            datasets: [{ data: data.map(d => Number(d.total||0)),
+                backgroundColor: data.map(d => d.color),
+                borderWidth: 2, borderColor: cssVar('--surface-1') }],
         },
-        options: {
-            maintainAspectRatio: false,
-            cutout: '62%',
-            plugins: {
-                legend: { position: 'right', labels: { color: textColor(), font: { size: 11 }, boxWidth: 10, padding: 8 } },
-                tooltip: { callbacks: { label: (c) => `${c.label}: ${fmtEur(c.parsed)}` } },
-            },
-        },
+        options: (() => {
+            const o = chartBase();
+            delete o.scales;
+            o.cutout = '68%';
+            o.plugins.legend = { position: 'right',
+                labels: { color: textColor(), font: { size: 11 }, boxWidth: 8, boxHeight: 8, padding: 8, usePointStyle: true, pointStyle: 'circle' } };
+            o.plugins.tooltip.callbacks = { label: (c) => `${c.label}: ${fmtEur(c.parsed)}` };
+            return o;
+        })(),
     });
 }
 
@@ -436,17 +463,18 @@ function renderStoreChart(data){
         type: 'bar',
         data: {
             labels: top.map(d => d.name),
-            datasets: [{ label: 'Ausgaben (€)', data: top.map(d => Number(d.total||0)), backgroundColor: top.map(d => d.color), borderRadius: 5 }],
+            datasets: [{ label: 'Ausgaben (€)', data: top.map(d => Number(d.total||0)),
+                backgroundColor: top.map(d => d.color), borderRadius: 6, borderSkipped: false }],
         },
-        options: {
-            indexAxis: 'y',
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => fmtEur(c.parsed.x) } } },
-            scales: {
-                x: { ticks: { color: textColor(), callback: v => fmtEur(v) }, grid: { color: gridColor() } },
-                y: { ticks: { color: textColor(), font:{size:11} }, grid: { display: false } },
-            },
-        },
+        options: (() => {
+            const o = chartBase({ indexAxis: 'y' });
+            o.plugins.tooltip.callbacks = { label: (c) => fmtEur(c.parsed.x) };
+            o.scales.x = { ticks: { color: textColor(), font: { size: 11 }, callback: v => fmtEur(v) },
+                           grid: { color: gridColor() }, border: { display: false }, beginAtZero: true };
+            o.scales.y = { ticks: { color: textColor(), font: { size: 11 } },
+                           grid: { display: false }, border: { display: false } };
+            return o;
+        })(),
     });
 }
 

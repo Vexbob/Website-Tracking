@@ -579,8 +579,13 @@ function renderChart(items) {
     // 1-kg-Packung sind zwei ehrliche Punkte, keine vergleichbaren €/kg-Werte.
     const prices = sorted.map(h => h.total_price);
 
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const tick = isDark ? '#a0a5b0' : '#666';
+    const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    const tick = cssVar('--chart-axis');
+    // Flaeche unter der Linie: Verlauf von 18 % auf 0 derselben Farbe.
+    const line = cssVar('--chart-1');
+    const g = ctx.getContext('2d').createLinearGradient(0, 0, 0, 220);
+    g.addColorStop(0, 'rgba(45,212,191,0.18)');
+    g.addColorStop(1, 'rgba(45,212,191,0)');
 
     currentChartInstance = new Chart(ctx, {
         type: 'line',
@@ -589,11 +594,13 @@ function renderChart(items) {
             datasets: [{
                 label: 'Bezahlt',
                 data: prices,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59,130,246,0.1)',
+                borderColor: line,
+                backgroundColor: g,
+                borderWidth: 2,
                 fill: true,
-                tension: 0.3,
-                pointRadius: 3,
+                tension: 0.35,
+                pointRadius: 0,
+                pointHoverRadius: 4,
             }]
         },
         options: {
@@ -601,7 +608,11 @@ function renderChart(items) {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                tooltip: { callbacks: {
+                tooltip: {
+                    backgroundColor: cssVar('--surface-3'), borderColor: cssVar('--line-strong'),
+                    borderWidth: 1, titleColor: cssVar('--text-1'), bodyColor: cssVar('--text-2'),
+                    cornerRadius: 12, padding: 10, displayColors: false,
+                    callbacks: {
                     afterLabel: (c) => {
                         const h = sorted[c.dataIndex];
                         return [h.store_name, mengeLabel(h)].filter(Boolean).join(' · ');
@@ -609,8 +620,9 @@ function renderChart(items) {
                 } }
             },
             scales: {
-                x: { ticks: { color: tick, font: { size: 10 } }, grid: { display: false } },
-                y: { beginAtZero: false, ticks: { color: tick, font: { size: 10 }, callback: v => fmtEur(v) }, grid: { color: isDark ? '#2a2e37' : '#f0f0f0' } }
+                x: { ticks: { color: tick, font: { size: 11 } }, grid: { display: false }, border: { display: false } },
+                y: { beginAtZero: false, ticks: { color: tick, font: { size: 11 }, callback: v => fmtEur(v) },
+                     grid: { color: cssVar('--chart-grid') }, border: { display: false } }
             }
         }
     });
