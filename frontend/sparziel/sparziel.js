@@ -292,14 +292,14 @@ function renderSparzielChart(){
     try{
         const ctx=document.getElementById('chartSavings').getContext('2d');
         if(chartSavings)chartSavings.destroy();
-        const isDark=document.documentElement.getAttribute('data-theme')==='dark';
-        const tick=isDark?'#a0a5b0':'#666';
+        const cssVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+        const tick=cssVar('--chart-axis');
         chartSavings=new Chart(ctx,{
             type:'line',
-            data:{labels:chartData.map(x=>fmtDate(x.date)),datasets:[{data:chartData.map(x=>Number(x.cumulative||0)),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.12)',fill:true,tension:0.3,pointRadius:2,borderWidth:2}]},
+            data:{labels:chartData.map(x=>fmtDate(x.date)),datasets:[{data:chartData.map(x=>Number(x.cumulative||0)),borderColor:cssVar('--m-sparziel'),backgroundColor:'rgba(74,222,128,0.16)',fill:true,tension:0.35,pointRadius:0,pointHoverRadius:4,borderWidth:2}]},
             options:{responsive:true,maintainAspectRatio:false,
                 plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtEur(c.parsed.y)}}},
-                scales:{x:{display:false},y:{beginAtZero:true,ticks:{color:tick,font:{size:10},callback:v=>fmtEur(v)},grid:{color:isDark?'#2a2e37':'#f0f0f0'}}}
+                scales:{x:{display:false},y:{beginAtZero:true,ticks:{color:tick,font:{size:11},callback:v=>fmtEur(v)},grid:{color:cssVar('--chart-grid')},border:{display:false}}}
             }
         });
     }catch(e){console.error(e);}

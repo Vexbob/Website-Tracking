@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.58.0', date: '2026-09-07', title: 'Gesundheit, Sparziel, Notizen und Blog ziehen nach', notes: [
+        'Die restlichen Module laufen jetzt über dieselben Farben und Ebenen wie der Rest — damit ist die Umstellung auf die neue Designsprache überall durch.',
+        'Auch ihre Diagramme folgen den Regeln: Achsen und Gitter aus den Tokens, Tooltips wie schwebende Elemente der App, kein senkrechtes Gitter.',
+        'Statt „Lade …“ erscheinen jetzt Skeletons, und die fünfzehn verschiedenen Leer-Zustände sehen endlich gleich aus.',
+        'Der Login trägt den Verlauf der Marke, und Toasts kommen überall aus derselben Quelle.',
+    ]},
     { v: 'v1.57.0', date: '2026-09-07', title: 'Ausgaben-Modul fertig umgestellt', notes: [
         'Die nativen Browser-Dialoge sind weg: Löschen fragt jetzt in einem gestalteten Fenster nach, und neue Läden oder Kategorien legst du im selben Stil an statt in einem grauen Systemkasten.',
         'Bon-Formular und Bon-Ansicht folgen der Designsprache — ruhige Flächen ohne Schatten, der Akzent nur auf der Hauptaktion, das Foto kleiner, damit die Positionen darunter sichtbar bleiben.',

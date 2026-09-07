@@ -169,15 +169,17 @@ function trendWindow(n) {
     return Math.max(2, Math.min(win, n));
 }
 
-// ---------- Chart-Theme (reagiert auf data-theme-Wechsel) ----------
+// ---------- Chart-Theme ----------
+// Farben kommen aus den Tokens (docs/DESIGN.md), nicht aus Hex-Werten im JS.
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 function chartTheme() {
-    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
     return {
-        text:    dark ? '#f0f0f0' : '#1a1a1a',
-        muted:   dark ? '#a0a5b0' : '#666',
-        grid:    dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-        border:  dark ? '#2a2e37' : '#e8e8e8',
-        surface: dark ? '#1a1d24' : '#fff',
+        text:    cssVar('--text-1'),
+        muted:   cssVar('--chart-axis'),
+        grid:    cssVar('--chart-grid'),
+        border:  cssVar('--line-strong'),
+        surface: cssVar('--surface-3'),
+        series:  ['--chart-1','--chart-2','--chart-3','--chart-4','--chart-5','--chart-6'].map(cssVar),
     };
 }
 function chartDefaults(overrides) {
@@ -186,16 +188,20 @@ function chartDefaults(overrides) {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-            legend: { labels: { color: th.text, boxWidth: 12, font: { size: 11 } } },
+            legend: { labels: { color: th.muted, boxWidth: 8, boxHeight: 8, font: { size: 11 },
+                                usePointStyle: true, pointStyle: 'circle' } },
             tooltip: {
                 backgroundColor: th.surface, borderColor: th.border, borderWidth: 1,
-                titleColor: th.text, bodyColor: th.text, padding: 10, cornerRadius: 8,
+                titleColor: th.text, bodyColor: cssVar('--text-2'), padding: 10, cornerRadius: 12,
                 displayColors: true, boxPadding: 3,
             },
         },
         scales: {
-            x: { ticks: { color: th.muted, maxRotation: 0, autoSkipPadding: 12 }, grid: { color: th.grid } },
-            y: { ticks: { color: th.muted }, grid: { color: th.grid }, beginAtZero: false },
+            // Kein senkrechtes Gitter, keine Achsenrahmen -- die Linie zaehlt.
+            x: { ticks: { color: th.muted, font: { size: 11 }, maxRotation: 0, autoSkipPadding: 12 },
+                 grid: { display: false }, border: { display: false } },
+            y: { ticks: { color: th.muted, font: { size: 11 } }, grid: { color: th.grid },
+                 border: { display: false }, beginAtZero: false },
         },
     }, overrides || {});
 }
@@ -1439,7 +1445,7 @@ function setupDropzone(dropId, inputId, subId, multiple) {
 
 async function loadApiKeys() {
     const list = document.getElementById('hApiKeyList');
-    list.className = 'h-empty'; list.innerHTML = '<div class="stat-loading">Lade …</div>';
+    list.className = ''; list.innerHTML = '<span class="skel skel-block"></span>';
     try {
         const keys = await HEALTH_API.apiKeys();
         if (!keys.length) { list.className = 'h-empty'; list.innerHTML = 'Noch kein API-Key erzeugt.'; return; }
@@ -1539,7 +1545,7 @@ function importStatsSummary(s) {
 async function loadImportLog() {
     const box = document.getElementById('hImportLog');
     if (!box) return;
-    box.className = 'h-empty'; box.innerHTML = '<div class="stat-loading">Lade …</div>';
+    box.className = ''; box.innerHTML = '<span class="skel skel-block"></span>';
     try {
         const rows = await HEALTH_API.imports(50);
         if (!rows.length) {

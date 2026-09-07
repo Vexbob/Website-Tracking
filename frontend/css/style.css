@@ -1062,6 +1062,35 @@ button.nav-switcher-item:hover { background: var(--surface-2); opacity: 1; }
 .skel-line.long  { width: 80%; }
 .skel-block { height: 4.5rem; border-radius: var(--radius); }
 
+/* ---------- Alt-Klassen auf das eine Muster ziehen ----------
+   Vexbob hatte fuenfzehn Empty-State-Klassen und ueber hundert "Lade …"-
+   Texte. Statt jede Textstelle anzufassen, erben die vorhandenen Klassen
+   hier die Optik: leere Zustaende sehen aus wie .empty, Ladezustaende wie
+   ein Skeleton. Die Namen selbst raeumen wir auf, wenn ein Modul sowieso
+   umgebaut wird. */
+.stat-empty, .h-empty, .pv-empty, .sg-empty, .blog-empty, .trophy-empty,
+.log-empty, .nz-list-empty, .nz-detail-empty, .vtl-empty, .h-metric-empty,
+.ba-empty, .empty-note {
+    display: block; padding: var(--space-5) var(--space-4);
+    text-align: center; color: var(--text-3);
+    font-size: 0.875rem; line-height: 1.5;
+    background: var(--surface-2);
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius-lg);
+}
+/* In Tabellenzellen darf keine zweite Flaeche entstehen. */
+td .stat-empty, td.stat-empty, .stat-table .stat-empty {
+    background: transparent; border: none; padding: var(--space-4);
+}
+.stat-loading, .blog-loading, .h-loading {
+    display: block; height: 1.125rem; width: 60%; margin: 0.25rem 0;
+    color: transparent !important; user-select: none;
+    background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+    background-size: 200px 100%; background-repeat: no-repeat;
+    border-radius: var(--radius-sm);
+    animation: skelPulse 1.4s ease-in-out infinite;
+}
+
 /* ---------- Statusmarke ---------- */
 .v-tag {
     display: inline-flex; align-items: center; gap: 0.25rem;

@@ -189,6 +189,14 @@ async function askPrompt(opts) {
 
 /* ---------- Toast ---------- */
 function showToast(msg, type='info', ms=2500) {
+    // Seit v1.58.0 gibt es einen Toast fuer die ganze App (ui.js). Nur wenn
+    // der noch nicht geladen ist, baut diese Funktion ihren eigenen.
+    if (window.Toast) {
+        const fn = type === 'success' ? Toast.success : (type === 'error' ? Toast.error : Toast.info);
+        fn(msg, { timeout: ms });
+        if (type === 'error') haptic('error'); else if (type === 'success') haptic('success');
+        return;
+    }
     const t = document.createElement('div');
     t.className = 'ausg-toast ausg-toast-' + type;
     t.textContent = msg;

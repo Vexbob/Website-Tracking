@@ -64,7 +64,7 @@
 
         <div class="stat-card">
             <h3>❤️ Herz-Übersicht <span class="stat-range-lbl">· 7 Tage</span></h3>
-            <div id="hDashHeart" class="h-empty">Lade …</div>
+            <div id="hDashHeart"><span class="skel skel-block"></span></div>
         </div>
 
         <div class="stat-insights" id="hDashInsights"></div>
@@ -138,7 +138,7 @@
                 <h3>🏋️ Workouts</h3>
                 <div class="stat-range-lbl" id="hWorkoutRangeLbl"></div>
             </div>
-            <div id="hWorkoutList" class="h-empty">Lade …</div>
+            <div id="hWorkoutList"><span class="skel skel-block"></span></div>
         </div>
     </div>
 
@@ -151,7 +151,7 @@
                 <strong>Automations → REST API</strong> als Header
                 <code>Authorization: Bearer &lt;Key&gt;</code> ein. Ziel-URL:
                 <code id="hImportUrl">–</code></p>
-            <div id="hApiKeyList" class="h-empty">Lade …</div>
+            <div id="hApiKeyList"><span class="skel skel-line long"></span></div>
             <div class="h-form-row">
                 <input id="hNewKeyLabel" placeholder="Bezeichnung (z.B. iPhone)">
                 <button class="primary" onclick="createApiKey()">+ Key erzeugen</button>
@@ -169,7 +169,7 @@
                 <button onclick="loadImportLog()">🔄 Aktualisieren</button>
                 <button class="danger-outline" onclick="clearImportLog()">🗑️ Protokoll leeren</button>
             </div>
-            <div id="hImportLog" class="h-empty" style="margin-top:0.5rem">Lade …</div>
+            <div id="hImportLog" style="margin-top:0.5rem"><span class="skel skel-block"></span></div>
         </div>
 
         <div class="stat-card">
@@ -232,7 +232,7 @@
                 die Löschung ein.</p>
             <div class="h-form-row" style="align-items:flex-end">
                 <div style="flex:1;min-width:180px">
-                    <label style="display:block;font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.25rem">Bereich</label>
+                    <label style="display:block;font-size:0.75rem;color:var(--text-2);font-weight:600;margin-bottom:0.25rem">Bereich</label>
                     <select id="hDelScope" style="margin:0;width:100%">
                         <option value="all">Alles (alle Kategorien)</option>
                         <option value="metrics">Vitalwerte (Schritte, Puls, Gewicht, …)</option>
@@ -243,11 +243,11 @@
                     </select>
                 </div>
                 <div style="min-width:130px">
-                    <label style="display:block;font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.25rem">Von (optional)</label>
+                    <label style="display:block;font-size:0.75rem;color:var(--text-2);font-weight:600;margin-bottom:0.25rem">Von (optional)</label>
                     <input type="date" id="hDelFrom" style="margin:0;width:100%">
                 </div>
                 <div style="min-width:130px">
-                    <label style="display:block;font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.25rem">Bis (optional)</label>
+                    <label style="display:block;font-size:0.75rem;color:var(--text-2);font-weight:600;margin-bottom:0.25rem">Bis (optional)</label>
                     <input type="date" id="hDelTo" style="margin:0;width:100%">
                 </div>
             </div>
