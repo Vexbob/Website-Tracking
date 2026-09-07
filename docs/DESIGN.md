@@ -161,6 +161,14 @@ Reduziert, ruhig, dieselbe Farbwelt.
 - Reihenfolge der Reihenfarben: `--chart-1` … `--chart-6`. Die erste Reihe
   trägt den Modulton, nicht den Akzent — der Akzent markiert Auswahl, nicht
   Daten.
+- **Ein Ringdiagramm trägt höchstens fünf, sechs Posten.** Darüber wird es zur
+  Farbrateübung und braucht eine Legende, die es doppelt so groß macht — dann
+  ist eine **Rangliste** (`.rank-list`) richtig: Name, Anteil als Balken,
+  Betrag. Sie ersetzt Ring *und* Tabelle darunter, nicht nur den Ring.
+- **Eine Zeitreihe wird lückenlos gezeichnet.** Endpunkte liefern meist nur
+  Perioden mit Daten; ungefüllt stehen die Balken gleichmäßig verteilt, die
+  Lücken sind unsichtbar, und ein gleitender Durchschnitt mittelt über
+  Einträge statt über Tage. Auffüllen ist Aufgabe der Seite.
 - Kein Gitter außer waagerechten Linien in `--chart-grid` (8 % Weiß).
   Keine senkrechten Linien, keine Rahmen, keine Achsentitel.
 - Achsenbeschriftung `--text-3`, 11 px, tabellarische Ziffern.

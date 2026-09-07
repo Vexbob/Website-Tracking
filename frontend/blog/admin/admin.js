@@ -30,6 +30,13 @@ async function boot() {
     bindUI();
     await loadPosts();
     document.body.style.visibility = 'visible';
+    // Von "+ Neuer Beitrag" auf der Blog-Seite kommt man mit #neu hierher und
+    // steht dann gleich in einem frischen Entwurf. Der Anker wird entfernt,
+    // damit ein Neuladen nicht einen zweiten anlegt.
+    if (location.hash === '#neu') {
+        history.replaceState(null, '', location.pathname);
+        await newPost();
+    }
 }
 
 function bindUI() {

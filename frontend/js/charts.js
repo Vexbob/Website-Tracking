@@ -11,7 +11,8 @@
  *      in einer Jahresansicht wertlos.
  *   3. Die Durchschnitts-/Trendlinie liegt ueber der Wertlinie. Chart.js
  *      zeichnet die Datensaetze nach `order` von hinten nach vorne: der
- *      NIEDRIGSTE Wert liegt oben. Deshalb ORDER.TREND < ORDER.VALUE.
+ *      NIEDRIGSTE Wert liegt oben. Deshalb ORDER.TREND < ORDER.VALUE, und
+ *      Vergleichslinien liegen mit ORDER.CONTEXT dazwischen.
  *
  * Einbindung: <script src="/js/charts.js"></script> vor dem Modul-Skript,
  * nach chart.js. Idempotent, braucht Chart.js nicht zum Zeitpunkt des Ladens.
@@ -19,10 +20,13 @@
 (function () {
     if (window.VexCharts) return;
 
-    /* Reihenfolge beim Zeichnen. Wer eine Trendlinie ueber Balken oder ueber
-       eine gefuellte Wertlinie legen will, nimmt diese beiden Konstanten und
-       nicht wieder eigene Zahlen. */
-    var ORDER = { TREND: 1, VALUE: 2 };
+    /* Reihenfolge beim Zeichnen, von vorn nach hinten. Wer eine Trendlinie
+       ueber Balken oder ueber eine gefuellte Wertlinie legen will, nimmt diese
+       Konstanten und nicht wieder eigene Zahlen.
+         TREND   die Anmerkung, immer obenauf
+         CONTEXT Vergleichswerte (Vorperiode, Zielmarke) darunter
+         VALUE   die Daten selbst, ganz hinten */
+    var ORDER = { TREND: 1, CONTEXT: 2, VALUE: 3 };
 
     function chartOf(canvas) {
         try {

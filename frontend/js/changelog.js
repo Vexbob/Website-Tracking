@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.62.0', date: '2026-09-07', title: 'Statistik neu, Produkte sortierbar, Blog schreibt sich selbst', notes: [
+        'Die Ausgaben-Statistik hat jetzt eine Hauptzahl statt vier gleich lauter Kacheln, und Kategorien wie Läden stehen als Rangliste statt als Ringdiagramm mit Tabelle darunter.',
+        'Der Zeitverlauf zeigt Tage ohne Einkäufe endlich als Lücke — vorher standen die Balken gleichmäßig verteilt und der Ø mittelte über Einkaufstage statt über Kalendertage.',
+        'Dahinter liegt neu die Vorperiode als feine Linie: der Balken allein beantwortet nicht, ob das viel ist.',
+        'Die Produkt-Tabelle lässt sich über jede Spalte sortieren.',
+        'Auf der Blog-Seite steht ein Knopf für einen neuen Beitrag; Fotos und Rezeptbuch sind entfernt.',
+    ]},
     { v: 'v1.61.0', date: '2026-09-07', title: 'Leiste ausblendbar, Export-Fehler behoben', notes: [
         'In der Navigationsleiste am Rechner lassen sich einzelne Module jetzt ausblenden — über das Punkte-Menü bleiben sie erreichbar.',
         'Im Export hat die Wahl einer Zusammenfassung das ganze Modul abgehakt; jetzt bleibt die Auswahl stehen.',

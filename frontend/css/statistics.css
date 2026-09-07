@@ -60,6 +60,20 @@ body{visibility:hidden}body.ready{visibility:visible}
 .stat-table td{padding:0.5rem;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;color:var(--text-2)}
 .stat-table tr:last-child td{border-bottom:none}
 .stat-table td.num{text-align:right;font-weight:600}
+/* Sortierbare Spalte: der ganze Kopf ist der Knopf, damit das Ziel auf
+   dem Handy gross genug ist. Der Pfeil steht nur an der aktiven Spalte. */
+.stat-table th.sort{padding:0}
+.stat-table th .sort-btn{display:flex;align-items:center;gap:0.25rem;width:100%;
+    margin:0;padding:0.4375rem 0.5rem;background:transparent;border:none;color:inherit;
+    font:inherit;font-size:0.6875rem;font-weight:600;text-transform:uppercase;
+    letter-spacing:0.5px;cursor:pointer;border-radius:6px;min-height:34px;
+    transition:color var(--dur-1) var(--ease),background var(--dur-1) var(--ease)}
+.stat-table th .sort-btn:hover{color:var(--text-1);background:var(--surface-2)}
+.stat-table th .sort-btn:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.stat-table th.num .sort-btn{justify-content:flex-end}
+.stat-table th .sort-arrow{font-size:0.625rem;opacity:0}
+.stat-table th.is-sorted .sort-btn{color:var(--accent)}
+.stat-table th.is-sorted .sort-arrow{opacity:1}
 .stat-table td.name{display:flex;align-items:center;gap:0.5rem}
 .stat-color-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .stat-table .delta-pill{display:inline-block;padding:0.125rem 0.4375rem;border-radius:5px;font-size:0.6875rem;font-weight:700;margin-left:0.375rem}

@@ -195,6 +195,52 @@
     </section>
 
     <section class="sg-sec">
+        <h2>Rangliste</h2>
+        <p class="sg-note">Name, Anteil als Balken, Betrag — und darunter die Veränderung.
+        Sie ersetzt das Paar aus Ringdiagramm und Tabelle: beide sagten dasselbe, der Ring
+        war ab etwa sechs Posten nicht mehr lesbar. <strong>Ringdiagramm nur bis fünf, sechs
+        Posten; darüber eine Rangliste.</strong></p>
+        <div class="v-card">
+            <div class="rank-list">
+                <div class="rank-row" style="--tone:var(--m-ausgaben)">
+                    <span class="rank-mark">🥬</span>
+                    <span class="rank-name">Obst &amp; Gemüse</span>
+                    <span class="rank-val">128,40 €</span>
+                    <span class="rank-bar"><i style="width:100%"></i></span>
+                    <span class="rank-sub">31 % der Ausgaben<span class="delta-pill up">+14 %</span></span>
+                </div>
+                <div class="rank-row" style="--tone:var(--m-notizen)">
+                    <span class="rank-mark">🧀</span>
+                    <span class="rank-name">Milchprodukte</span>
+                    <span class="rank-val">61,90 €</span>
+                    <span class="rank-bar"><i style="width:48%"></i></span>
+                    <span class="rank-sub">15 % der Ausgaben</span>
+                </div>
+                <div class="rank-row" style="--tone:var(--m-blog)">
+                    <span class="rank-mark">🧽</span>
+                    <span class="rank-name">Haushalt</span>
+                    <span class="rank-val">22,10 €</span>
+                    <span class="rank-bar"><i style="width:17%"></i></span>
+                    <span class="rank-sub">5 % der Ausgaben<span class="delta-pill down">−21 %</span></span>
+                </div>
+            </div>
+            <div class="rank-rest">Top 3 · 199,60 € übrige</div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Auswahlfeld</h2>
+        <p class="sg-note">Ein <code>&lt;select&gt;</code> sieht ohne Zutun in jedem Browser
+        anders aus. <code>.v-select</code> ist die einzige Fassung — kein Chip mit
+        Inline-Formatierung.</p>
+        <div class="v-card sg-row">
+            <select class="v-select"><option>Alle Kategorien</option><option>Obst &amp; Gemüse</option></select>
+            <select class="v-select"><option>Alle Läden</option></select>
+            <select class="v-select" disabled><option>Deaktiviert</option></select>
+        </div>
+    </section>
+
+    <section class="sg-sec">
         <h2>Filter</h2>
         <p class="sg-note">Ein Knopf benennt den aktuellen Stand, das Feld darunter schwebt.
         Der Zeitraum-Filter (<code>VexRange.mount</code>, <code>js/range-filter.js</code>) ist

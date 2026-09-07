@@ -209,9 +209,66 @@ function storesCell(p) {
         </span>`).join('');
 }
 
+/* Sortierung der Tabelle. Zahlen absteigend, Text aufsteigend -- beim ersten
+ * Klick will man bei "Gesamt" das Teuerste oben und bei "Produkt" das A. */
+const NUMERIC_SORT = new Set(['count', 'total_spent', 'avg_price', 'last_date']);
+let prodSort = { key: 'count', dir: 'desc' };
+
+function sortValue(p, key) {
+    if (key === 'title') return (p.title || p.key || '').toLowerCase();
+    if (key === 'category_name') return (p.category_name || '').toLowerCase();
+    if (key === 'last_date') return p.last_date || '';
+    return Number(p[key]) || 0;
+}
+
+function sortProducts(list) {
+    const { key, dir } = prodSort;
+    const sign = dir === 'asc' ? 1 : -1;
+    return list.sort((a, b) => {
+        const va = sortValue(a, key), vb = sortValue(b, key);
+        if (va < vb) return -1 * sign;
+        if (va > vb) return 1 * sign;
+        // Gleichstand: der Name entscheidet, damit die Reihenfolge zwischen
+        // zwei Ladungen dieselbe bleibt.
+        return String(a.title || a.key).localeCompare(String(b.title || b.key), 'de');
+    });
+}
+
+function paintSortHeader() {
+    const head = document.getElementById('prodHead');
+    if (!head) return;
+    head.querySelectorAll('th.sort').forEach(th => {
+        const active = th.dataset.sort === prodSort.key;
+        th.classList.toggle('is-sorted', active);
+        const arrow = active ? (prodSort.dir === 'asc' ? '\u25b2' : '\u25bc') : '';
+        const label = th.dataset.label || (th.dataset.label = th.textContent.trim());
+        th.innerHTML = '<button type="button" class="sort-btn"' +
+            ' aria-label="Nach ' + escHtml(label) + ' sortieren">' +
+            escHtml(label) + '<span class="sort-arrow" aria-hidden="true">' + arrow + '</span></button>';
+    });
+}
+
+function bindSortHeader() {
+    const head = document.getElementById('prodHead');
+    if (!head) return;
+    head.addEventListener('click', (e) => {
+        const th = e.target.closest('th.sort');
+        if (!th) return;
+        const key = th.dataset.sort;
+        if (prodSort.key === key) {
+            prodSort.dir = prodSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            prodSort = { key, dir: NUMERIC_SORT.has(key) ? 'desc' : 'asc' };
+        }
+        renderProducts();
+    });
+    paintSortHeader();
+}
+
 function renderProducts() {
     const body = document.getElementById('prodBody');
     const filtered = allProducts.slice();
+    paintSortHeader();
 
     if (!filtered.length) {
         body.innerHTML = '<tr><td colspan="7" class="stat-empty">Keine Produkte gefunden.</td></tr>';
@@ -219,8 +276,7 @@ function renderProducts() {
         return;
     }
 
-    // Sortiert nach Kaufhäufigkeit (count)
-    filtered.sort((a, b) => (b.count || 0) - (a.count || 0));
+    sortProducts(filtered);
 
     body.innerHTML = filtered.map(p => {
         const lastBuy = p.last_date ? fmtDate(p.last_date) : '–';
@@ -231,10 +287,10 @@ function renderProducts() {
             </td>
             <td>${escHtml(p.category_name || '–')}</td>
             <td class="prod-stores">${storesCell(p)}</td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums">${p.count || 0}×</td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtEur(p.total_spent || 0)}</td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtEur(p.avg_price || 0)}</td>
-            <td style="text-align:right">${lastBuy}</td>
+            <td class="num">${p.count || 0}×</td>
+            <td class="num">${fmtEur(p.total_spent || 0)}</td>
+            <td class="num">${fmtEur(p.avg_price || 0)}</td>
+            <td class="num">${lastBuy}</td>
         </tr>`;
     }).join('');
 
@@ -371,6 +427,7 @@ function bindFilters() {
     ['prodCategory', 'prodStore'].forEach(id => {
         document.getElementById(id).addEventListener('change', loadProducts);
     });
+    bindSortHeader();
     const rp = document.getElementById('prodReparse');
     if (rp) rp.onclick = openReparseModal;
 }

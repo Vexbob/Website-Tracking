@@ -22,7 +22,6 @@ function escHtml(s){if(s==null)return'';return String(s).replace(/[&<>"']/g,c=>(
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const gridColor = () => cssVar('--chart-grid');
 const textColor = () => cssVar('--chart-axis');
-const chartSeriesColors = () => ['--chart-1','--chart-2','--chart-3','--chart-4','--chart-5','--chart-6'].map(cssVar);
 
 /* Gemeinsame Grundeinstellungen: Tooltip sieht aus wie ein schwebendes Element
  * der App, Achsen ohne Rahmen, Gitter nur waagerecht. */
@@ -105,10 +104,11 @@ function rangeParams(){
 // --------- Master-Loader ---------
 async function loadAll(){
     updateSeriesRangeLabel();
+    // Kategorien und Laeden kommen seit v1.62.0 aus den Insights mit --
+    // dieselben Zahlen wie vorher, aber zwei Anfragen weniger.
     await Promise.all([
         loadInsights(),
         loadSeries(),
-        loadDistribution(),
     ]);
 }
 
@@ -128,73 +128,65 @@ async function loadInsights(){
         renderInsights(data);
         renderWeekday(data);
         renderTopItems(data);
-        renderDistributionTables(data);
+        renderRanks(data);
     } catch(e) { console.error('insights failed:', e); }
 }
 
-function fmtDelta(pct){
-    if(pct == null) return '<span class="stat-kpi-delta neutral">neu</span>';
-    if(Math.abs(pct) < 0.5) return `<span class="stat-kpi-delta neutral">≈ 0 %</span>`;
-    const cls = pct > 0 ? 'up' : 'down';
-    const arr = pct > 0 ? '▲' : '▼';
-    return `<span class="stat-kpi-delta ${cls}">${arr} ${Math.abs(pct).toFixed(0)} %</span>`;
+/* Die Hauptzahl bekommt die Veraenderung als Pille daneben; sie ist die
+ * Antwort auf "ist das viel?" und gehoert deshalb neben die Zahl, nicht in
+ * eine eigene Kachel. */
+function deltaPill(pct){
+    if(pct == null) return '<span class="kpi-delta flat">neu</span>';
+    const cls = Math.abs(pct) < 5 ? 'flat' : (pct > 0 ? 'up' : 'down');
+    const sign = pct > 0 ? '+' : '';
+    return `<span class="kpi-delta ${cls}">${sign}${pct.toFixed(0)} %</span>`;
 }
 
 function renderKPI(data){
     const k = data.kpi, cp = data.compare_prev;
-    const grid = document.getElementById('statKpiGrid');
-    const tiles = [];
-    tiles.push({
-        label: 'Ausgaben (Zeitraum)',
-        value: fmtEur(k.total),
-        icon: '💶',
-        sub: `${fmtDelta(cp.diff_pct)} vs. Vorperiode (${fmtEur(cp.total)})`,
-    });
-    tiles.push({
-        label: `Ø / Tag (${data.range.days} T.)`,
-        value: fmtEur(k.avg_per_day),
-        icon: '📆',
-        sub: `${k.tx_count} Bons · Ø ${fmtEur(k.avg_tx)} / Bon`,
-    });
+    const box = document.getElementById('statKpiGrid');
+    const prev = Number(cp && cp.total) || 0;
+    const pill = deltaPill(prev > 0 ? (k.total / prev - 1) * 100 : null);
+    const sub = prev > 0
+        ? `gegen\u00fcber ${fmtEur(prev)} in der Vorperiode`
+        : 'keine Vorperiode zum Vergleich';
+
+    const minis = [
+        { lbl: `\u00d8 / Tag (${data.range.days} T.)`, val: fmtEur(k.avg_per_day) },
+        { lbl: 'Bons', val: `${k.tx_count}` , note: `\u00d8 ${fmtEur(k.avg_tx)}` },
+    ];
     if(k.biggest_tx){
         const b = k.biggest_tx;
-        const d = new Date(b.date).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
-        tiles.push({
-            label: 'Größter Bon',
-            value: fmtEur(b.amount),
-            icon: '🏆',
-            sub: `${escHtml(b.store_name||'—')} · ${d}`,
-            href: `/ausgaben/bon.html?id=${b.id}`,
-        });
-    } else {
-        tiles.push({label:'Größter Bon', value:'–', icon:'🏆', sub:'Keine Daten'});
+        minis.push({ lbl: 'Gr\u00f6\u00dfter Bon', val: fmtEur(b.amount),
+                     note: escHtml(b.store_name || '\u2014'),
+                     href: `/ausgaben/bon.html?id=${b.id}` });
     }
-    const wd = data.by_weekday;
-    if(wd && wd.length){
-        const days = ['Mo','Di','Mi','Do','Fr','Sa','So'];
-        const withData = wd.filter(x => x.total > 0);
-        if(withData.length){
-            const top = withData.reduce((a,b) => a.total > b.total ? a : b);
-            const share = k.total > 0 ? (top.total / k.total * 100) : 0;
-            tiles.push({
-                label: 'Teuerster Wochentag',
-                value: days[top.dow] || '?',
-                icon: '🗓',
-                sub: `${fmtEur(top.total)} · ${share.toFixed(0)} % der Ausgaben`,
-            });
-        } else {
-            tiles.push({label:'Teuerster Wochentag', value:'–', icon:'🗓', sub:'Keine Daten'});
-        }
+    const wd = (data.by_weekday || []).filter(x => x.total > 0);
+    if(wd.length){
+        const days = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+        const top = wd.reduce((a,b) => a.total > b.total ? a : b);
+        const share = k.total > 0 ? (top.total / k.total * 100) : 0;
+        minis.push({ lbl: 'Teuerster Tag', val: days[top.dow] || '?',
+                     note: `${share.toFixed(0)} % der Ausgaben` });
     }
-    grid.innerHTML = tiles.map(t => {
-        const inner = `
-            <div class="stat-kpi-icon">${t.icon}</div>
-            <div class="stat-kpi-label">${escHtml(t.label)}</div>
-            <div class="stat-kpi-value">${t.value}</div>
-            <div class="stat-kpi-sub">${t.sub}</div>`;
-        if(t.href) return `<a class="stat-kpi clickable" href="${t.href}" style="text-decoration:none;color:inherit;display:block">${inner}</a>`;
-        return `<div class="stat-kpi">${inner}</div>`;
-    }).join('');
+
+    box.innerHTML = `
+        <div class="kpi-hero">
+            <div class="kpi-hero-main">
+                <div class="lbl">Ausgaben im Zeitraum</div>
+                <div class="val">${fmtEur(k.total)}</div>
+                <div class="sub">${pill} ${sub}</div>
+            </div>
+        </div>
+        <div class="kpi-mini-row">
+            ${minis.map(m => {
+                const inner = `<div class="lbl">${m.lbl}</div><div class="val">${m.val}</div>`
+                    + (m.note ? `<div class="note">${m.note}</div>` : '');
+                return m.href
+                    ? `<a class="kpi-mini" href="${m.href}">${inner}</a>`
+                    : `<div class="kpi-mini">${inner}</div>`;
+            }).join('')}
+        </div>`;
 }
 
 function renderInsights(data){
@@ -286,98 +278,201 @@ function renderTopItems(data){
     box.innerHTML = html;
 }
 
-function renderDistributionTables(data){
-    const catBox = document.getElementById('tableCategory');
-    const total = data.kpi.total;
-    if(data.top_categories && data.top_categories.length){
-        let html = `<table class="stat-table"><thead><tr>
-            <th>Kategorie</th><th style="text-align:right">Anteil</th><th style="text-align:right">Total</th>
-        </tr></thead><tbody>`;
-        data.top_categories.forEach(c => {
-            const share = total > 0 ? (c.total/total*100).toFixed(0) : 0;
-            const delta = c.prev_total > 0 ? ((c.total/c.prev_total - 1)*100) : null;
-            const deltaPill = delta != null && Math.abs(delta) >= 10
-                ? `<span class="delta-pill ${delta > 0 ? 'up' : 'down'}">${delta > 0 ? '+' : ''}${delta.toFixed(0)}%</span>` : '';
-            html += `<tr><td><span class="name"><span class="stat-color-dot" style="background:${c.color}"></span>${escHtml(c.icon)} ${escHtml(c.name)}</span></td><td class="num">${share} %</td><td class="num">${fmtEur(c.total)}${deltaPill}</td></tr>`;
-        });
-        html += `</tbody></table>`;
-        catBox.innerHTML = html;
-    } else { catBox.innerHTML = '<div class="stat-empty">Keine Daten</div>'; }
-
-    const storeBox = document.getElementById('tableStore');
-    if(data.top_stores && data.top_stores.length){
-        let html = `<table class="stat-table"><thead><tr>
-            <th>Laden</th><th style="text-align:right">Besuche</th><th style="text-align:right">Ø / Besuch</th><th style="text-align:right">Total</th>
-        </tr></thead><tbody>`;
-        data.top_stores.forEach(s => {
-            const delta = s.prev_total > 0 ? ((s.total/s.prev_total - 1)*100) : null;
-            const deltaPill = delta != null && Math.abs(delta) >= 10
-                ? `<span class="delta-pill ${delta > 0 ? 'up' : 'down'}">${delta > 0 ? '+' : ''}${delta.toFixed(0)}%</span>` : '';
-            html += `<tr><td><span class="name"><span class="stat-color-dot" style="background:${s.color}"></span>${escHtml(s.icon)} ${escHtml(s.name)}</span></td><td class="num">${s.visits}</td><td class="num">${fmtEur(s.avg_per_visit)}</td><td class="num">${fmtEur(s.total)}${deltaPill}</td></tr>`;
-        });
-        html += `</tbody></table>`;
-        storeBox.innerHTML = html;
-    } else { storeBox.innerHTML = '<div class="stat-empty">Keine Daten</div>'; }
+/* Eine Zeile je Posten: Marke, Name, Betrag, darunter der Anteil als Balken
+ * und die Veraenderung. Die Entitaetsfarbe faerbt nur Marke und Balken --
+ * sie ist Nutzerdatum, ihren Kontrast gegen Text garantiert niemand. */
+function safeColor(v){
+    return /^#[0-9a-fA-F]{3,8}$/.test(String(v || '')) ? v : '';
 }
 
+function renderRankList(boxId, noteId, items, total, subOf){
+    const box = document.getElementById(boxId);
+    if(!box) return;
+    if(!items || !items.length){
+        box.innerHTML = `<div class="empty"><span class="empty-mark">\u{1f4ad}</span>
+            <p class="empty-text">In diesem Zeitraum wurde nichts erfasst.</p></div>`;
+        const n = document.getElementById(noteId); if(n) n.textContent = '';
+        return;
+    }
+    const max = Math.max(...items.map(x => Number(x.total) || 0), 0.01);
+    box.innerHTML = items.map(x => {
+        const val = Number(x.total) || 0;
+        const tone = safeColor(x.color);
+        const delta = Number(x.prev_total) > 0 ? (val / x.prev_total - 1) * 100 : null;
+        const pill = (delta != null && Math.abs(delta) >= 10)
+            ? `<span class="delta-pill ${delta > 0 ? 'up' : 'down'}">${delta > 0 ? '+' : ''}${delta.toFixed(0)} %</span>`
+            : '';
+        return `<div class="rank-row"${tone ? ` style="--tone:${tone}"` : ''}>
+            <span class="rank-mark">${escHtml(x.icon || '')}</span>
+            <span class="rank-name">${escHtml(x.name)}</span>
+            <span class="rank-val">${fmtEur(val)}</span>
+            <span class="rank-bar"><i style="width:${Math.max(2, val / max * 100).toFixed(1)}%"></i></span>
+            <span class="rank-sub">${subOf(x, val)}${pill}</span>
+        </div>`;
+    }).join('');
+
+    // Die Liste zeigt nur die vordersten Posten. Was fehlt, gehoert dazu --
+    // sonst liest man die Balken als Aufteilung des Ganzen.
+    const listed = items.reduce((sum, x) => sum + (Number(x.total) || 0), 0);
+    const rest = (Number(total) || 0) - listed;
+    const note = document.getElementById(noteId);
+    if(note) note.textContent = rest > 0.005
+        ? `Top ${items.length} \u00b7 ${fmtEur(rest)} \u00fcbrige`
+        : `${items.length} von ${items.length}`;
+}
+
+function renderRanks(data){
+    const total = data.kpi.total;
+    renderRankList('rankCategory', 'catNote', data.top_categories, total,
+        (x, val) => total > 0 ? `${(val / total * 100).toFixed(0)} % der Ausgaben` : '');
+    renderRankList('rankStore', 'storeNote', data.top_stores, total,
+        (x) => `${x.visits}\u00d7 \u00b7 \u00d8 ${fmtEur(x.avg_per_visit)}`);
+}
 
 // ========== ZEITREIHE ==========
+
+const isoDay = (d) => {
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+};
+
+/* ISO-Kalenderwoche (Montag ist Tag 1). JavaScript kennt keine, deshalb das
+ * Standardrezept ueber den Donnerstag derselben Woche. */
+function isoWeekOf(d){
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    const jan1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return { week: Math.ceil(((t - jan1) / 86400000 + 1) / 7), year: t.getUTCFullYear() };
+}
+function mondayOf(d){
+    const t = new Date(d.getTime());
+    t.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+    t.setHours(0, 0, 0, 0);
+    return t;
+}
+
+/* Die Endpunkte liefern nur Perioden MIT Ausgaben. Ungefuellt stuenden die
+ * Balken gleichmaessig verteilt nebeneinander, die Luecken waeren unsichtbar,
+ * und der gleitende Durchschnitt mittelte ueber sieben EINKAUFSTAGE statt
+ * ueber sieben Kalendertage. Deshalb wird die Reihe hier dicht gemacht. */
+function densify(rows, gran, from, to){
+    rows = rows || [];
+    const firstOf = () => {
+        if(!rows.length) return null;
+        if(gran === 'daily') return rows[0].date;
+        if(gran === 'weekly') return rows[0].week_start;
+        return rows[0].month + '-01';
+    };
+    const first = from || firstOf();
+    const last = to || isoDay(new Date());
+    if(!first) return [];
+    const out = [];
+    const end = new Date(last + 'T00:00:00');
+
+    if(gran === 'daily'){
+        const by = new Map(rows.map(r => [r.date, Number(r.total) || 0]));
+        for(let d = new Date(first + 'T00:00:00'); d <= end; d.setDate(d.getDate() + 1)){
+            const key = isoDay(d);
+            out.push({ key, value: by.get(key) || 0,
+                       label: d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }),
+                       full: VexCharts.fullDay(key) });
+        }
+    } else if(gran === 'weekly'){
+        const by = new Map(rows.map(r => [r.week_start, Number(r.total) || 0]));
+        for(let d = mondayOf(new Date(first + 'T00:00:00')); d <= end; d.setDate(d.getDate() + 7)){
+            const key = isoDay(d);
+            const w = isoWeekOf(d);
+            out.push({ key, value: by.get(key) || 0,
+                       label: 'KW ' + w.week,
+                       full: `KW ${w.week} \u00b7 ${w.year}` });
+        }
+    } else {
+        const by = new Map(rows.map(r => [r.month, Number(r.total) || 0]));
+        const s0 = new Date(first + 'T00:00:00');
+        let y = s0.getFullYear(), m = s0.getMonth();
+        while(y < end.getFullYear() || (y === end.getFullYear() && m <= end.getMonth())){
+            const key = y + '-' + String(m + 1).padStart(2, '0');
+            out.push({ key, value: by.get(key) || 0,
+                       label: new Date(y, m, 1).toLocaleDateString('de-DE', { month: 'short', year: '2-digit' }),
+                       full: VexCharts.fullMonth(key) });
+            if(++m > 11){ m = 0; y++; }
+        }
+    }
+    return out;
+}
+
+/* Die gleich lange Spanne unmittelbar davor. "Gesamt" hat keine Vorperiode --
+ * davor liegt nichts. */
+function prevRange(){
+    if(!STAT.from) return null;
+    const from = new Date(STAT.from + 'T00:00:00');
+    const to = new Date((STAT.to || isoDay(new Date())) + 'T00:00:00');
+    const days = Math.round((to - from) / 86400000) + 1;
+    const pTo = new Date(from.getTime() - 86400000);
+    const pFrom = new Date(pTo.getTime() - (days - 1) * 86400000);
+    return { from: isoDay(pFrom), to: isoDay(pTo) };
+}
+
 async function loadSeries(){
     try {
         const gran = STAT.granularity;
-        let data;
-        if(gran === 'daily') data = await AUSGABEN_API.statsDaily(rangeParams());
-        else if(gran === 'weekly') data = await AUSGABEN_API.statsWeekly(rangeParams());
-        else data = await AUSGABEN_API.statsMonthly(rangeParams());
-        renderSeriesChart(data, gran);
+        const fetchFor = (p) => gran === 'daily' ? AUSGABEN_API.statsDaily(p)
+                              : gran === 'weekly' ? AUSGABEN_API.statsWeekly(p)
+                              : AUSGABEN_API.statsMonthly(p);
+        const pr = prevRange();
+        const [rows, prevRows] = await Promise.all([
+            fetchFor(rangeParams()),
+            pr ? fetchFor({ from: pr.from, to: pr.to }).catch(() => []) : Promise.resolve(null),
+        ]);
+        renderSeriesChart(
+            densify(rows, gran, STAT.from, STAT.to),
+            pr ? densify(prevRows, gran, pr.from, pr.to) : null,
+            gran);
     } catch(e) { console.error('series failed:', e); }
 }
 
-function renderSeriesChart(data, gran){
+function renderSeriesChart(points, prevPoints, gran){
     const canvas = document.getElementById('chartSeries');
+    if(!canvas) return;
     if(STAT.charts.series) STAT.charts.series.destroy();
-    // Achse bleibt kurz, der Tooltip bekommt die ausgeschriebene Fassung mit
-    // Jahr -- in einer Jahresansicht ist ein blosses "05.09." wertlos.
-    let labels, fullLabels, values;
-    if(gran === 'daily'){
-        labels = data.map(d => new Date(d.date + 'T00:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}));
-        fullLabels = data.map(d => VexCharts.fullDay(d.date));
-        values = data.map(d => d.total);
-    } else if(gran === 'weekly'){
-        labels = data.map(d => 'KW ' + (d.week ? d.week.split('KW').pop() : '?'));
-        fullLabels = data.map(d => VexCharts.fullWeek(d.week));
-        values = data.map(d => d.total);
-    } else {
-        labels = data.map(d => {
-            const [y,m] = d.month.split('-');
-            const dt = new Date(parseInt(y),parseInt(m)-1,1);
-            return dt.toLocaleDateString('de-DE',{month:'short',year:'2-digit'});
-        });
-        fullLabels = data.map(d => VexCharts.fullMonth(d.month));
-        values = data.map(d => d.total);
-    }
+
+    const labels = points.map(p => p.label);
+    const fullLabels = points.map(p => p.full);
+    const values = points.map(p => p.value);
+
+    // Gleitender Durchschnitt. Seit die Reihe lueckenlos ist, sind das
+    // wirklich sieben Tage bzw. vier Wochen und nicht sieben Eintraege.
     const win = gran === 'daily' ? 7 : (gran === 'weekly' ? 4 : 3);
     const trend = values.map((_, i) => {
-        const s = Math.max(0, i - win + 1);
-        const slice = values.slice(s, i + 1);
-        return slice.reduce((a,b) => a+b, 0) / slice.length;
+        const slice = values.slice(Math.max(0, i - win + 1), i + 1);
+        return slice.reduce((a, b) => a + b, 0) / slice.length;
     });
+
+    // Die Vorperiode liegt Position fuer Position hinter der aktuellen. Sie
+    // beantwortet die Frage, die ein Balken allein nicht beantwortet: ist das
+    // viel? Ungleiche Laengen (Monate) werden hinten abgeschnitten.
+    const datasets = [
+        { type: 'bar', label: 'Ausgaben', data: values,
+          backgroundColor: cssVar('--chart-1'),
+          borderRadius: 4, borderSkipped: false, order: VexCharts.ORDER.VALUE },
+    ];
+    if(prevPoints && prevPoints.length){
+        datasets.push({
+            type: 'line', label: 'Vorperiode',
+            data: points.map((_, i) => prevPoints[i] ? prevPoints[i].value : null),
+            borderColor: cssVar('--text-3'), borderWidth: 1.5, borderDash: [2, 3],
+            pointRadius: 0, tension: 0.35, fill: false, spanGaps: true,
+            order: VexCharts.ORDER.CONTEXT,
+        });
+    }
+    datasets.push({
+        type: 'line', label: `\u00d8 (${win} Perioden)`, data: trend,
+        borderColor: cssVar('--text-2'), borderWidth: 2, borderDash: [6, 4],
+        pointRadius: 0, tension: 0.35, fill: false, order: VexCharts.ORDER.TREND,
+    });
+
     STAT.charts.series = new Chart(canvas, {
-        data: {
-            labels,
-            datasets: [
-                // Die Balken sind die Daten und tragen deshalb den Modulton;
-                // die Trendlinie ist eine Anmerkung und bleibt zurueckhaltend.
-                { type: 'bar', label: 'Ausgaben', data: values,
-                  backgroundColor: cssVar('--chart-1'),
-                  borderRadius: 4, borderSkipped: false, order: VexCharts.ORDER.VALUE },
-                // Die Ø-Linie liegt oben, damit sie auch bei sprunghaften
-                // Balken lesbar bleibt (kleinere `order` = weiter vorn).
-                { type: 'line', label: `Ø (${win} Perioden)`, data: trend,
-                  borderColor: cssVar('--text-2'), borderWidth: 2, borderDash: [4, 4],
-                  pointRadius: 0, tension: 0.35, fill: false, order: VexCharts.ORDER.TREND },
-            ],
-        },
+        data: { labels, datasets },
         options: (() => {
             const o = chartBase({ interaction: { mode: 'index', intersect: false } });
             o.plugins.legend = { display: true, position: 'top',
@@ -386,79 +481,6 @@ function renderSeriesChart(data, gran){
             VexCharts.applyFullDates(o, fullLabels);
             o.scales.x.ticks = Object.assign(o.scales.x.ticks, { maxRotation: 0, autoSkip: true, autoSkipPadding: 10 });
             o.scales.y.ticks.callback = v => fmtEur(v);
-            return o;
-        })(),
-    });
-}
-
-
-// ========== VERTEILUNGS-CHARTS ==========
-async function loadDistribution(){
-    try {
-        const params = rangeParams();
-        const [cats, stores] = await Promise.all([
-            AUSGABEN_API.statsCategory(params),
-            AUSGABEN_API.statsStore(params),
-        ]);
-        renderCategoryChart(cats);
-        renderStoreChart(stores);
-    } catch(e) { console.error('distribution failed:', e); }
-}
-
-function renderCategoryChart(data){
-    const canvas = document.getElementById('chartCategory');
-    if(!canvas) return;
-    if(STAT.charts.category) STAT.charts.category.destroy();
-    if(!data.length){
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        return;
-    }
-    STAT.charts.category = new Chart(canvas, {
-        type: 'doughnut',
-        data: {
-            labels: data.map(d => d.name),
-            datasets: [{ data: data.map(d => Number(d.total||0)),
-                backgroundColor: data.map(d => d.color),
-                borderWidth: 2, borderColor: cssVar('--surface-1') }],
-        },
-        options: (() => {
-            const o = chartBase();
-            delete o.scales;
-            o.cutout = '68%';
-            o.plugins.legend = { position: 'right',
-                labels: { color: textColor(), font: { size: 11 }, boxWidth: 8, boxHeight: 8, padding: 8, usePointStyle: true, pointStyle: 'circle' } };
-            o.plugins.tooltip.callbacks = { label: (c) => `${c.label}: ${fmtEur(c.parsed)}` };
-            return o;
-        })(),
-    });
-}
-
-function renderStoreChart(data){
-    const canvas = document.getElementById('chartStore');
-    if(!canvas) return;
-    if(STAT.charts.store) STAT.charts.store.destroy();
-    if(!data.length){
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        return;
-    }
-    // Nur top 8 im Chart, Rest ist in der Tabelle
-    const top = data.slice(0, 8);
-    STAT.charts.store = new Chart(canvas, {
-        type: 'bar',
-        data: {
-            labels: top.map(d => d.name),
-            datasets: [{ label: 'Ausgaben (€)', data: top.map(d => Number(d.total||0)),
-                backgroundColor: top.map(d => d.color), borderRadius: 6, borderSkipped: false }],
-        },
-        options: (() => {
-            const o = chartBase({ indexAxis: 'y' });
-            o.plugins.tooltip.callbacks = { label: (c) => fmtEur(c.parsed.x) };
-            o.scales.x = { ticks: { color: textColor(), font: { size: 11 }, callback: v => fmtEur(v) },
-                           grid: { color: gridColor() }, border: { display: false }, beginAtZero: true };
-            o.scales.y = { ticks: { color: textColor(), font: { size: 11 } },
-                           grid: { display: false }, border: { display: false } };
             return o;
         })(),
     });

@@ -85,10 +85,18 @@ let activeTag = null;
 async function renderList() {
     document.title = 'Vexbob Blog';
     const view = document.getElementById('blogView');
+    // Der Schreib-Knopf steht nur da, wenn jemand hier auch schreiben darf.
+    // is_admin kommt aus dem zwischengespeicherten Konto (js/api.js) -- auf
+    // dieser oeffentlichen Seite wird bewusst nichts nachgeladen, ein
+    // abgelaufenes Token wuerde sonst jeden Leser zum Login schicken.
+    const mayWrite = typeof isLoggedIn === 'function' && isLoggedIn()
+        && typeof isAdmin === 'function' && isAdmin();
     view.innerHTML = `
         <div class="blog-header">
             <h1>📰 Vexbob Blog</h1>
-            <p>Test</p>
+            <p>Notizen, die öffentlich stehen dürfen.</p>
+            ${mayWrite ? `<a class="v-btn v-btn--primary blog-new" href="/blog/admin/#neu">
+                <span aria-hidden="true">＋</span> Neuer Beitrag</a>` : ''}
         </div>
         <div class="blog-tags" id="blogTags"></div>
         <div class="blog-search-wrap">

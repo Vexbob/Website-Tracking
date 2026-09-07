@@ -41,10 +41,10 @@
                      Gesundheit — inklusive eigenem Von/Bis-Zeitraum, den das
                      Auswahlfeld hier nie konnte. -->
                 <div id="prodRange"></div>
-                <select id="prodCategory" class="stat-chip" style="border-radius:6px;padding:0.375rem 0.5rem">
+                <select id="prodCategory" class="v-select">
                     <option value="">Alle Kategorien</option>
                 </select>
-                <select id="prodStore" class="stat-chip" style="border-radius:6px;padding:0.375rem 0.5rem">
+                <select id="prodStore" class="v-select">
                     <option value="">Alle Läden</option>
                 </select>
                 <button id="prodReparse" class="prod-reparse-btn"
@@ -61,15 +61,18 @@
 
         <div style="overflow-x:auto">
             <table class="stat-table" id="prodTable">
+                <!-- v1.62.0: sortierbar. Auf einer Seite, deren Frage "was kostet
+                     mich am meisten" ist, war eine feste Reihenfolge nach
+                     Kaufhäufigkeit die falsche Antwort. -->
                 <thead>
-                    <tr>
-                        <th>Produkt</th>
-                        <th>Kategorie</th>
+                    <tr id="prodHead">
+                        <th class="sort" data-sort="title">Produkt</th>
+                        <th class="sort" data-sort="category_name">Kategorie</th>
                         <th>Läden</th>
-                        <th style="text-align:right">Käufe</th>
-                        <th style="text-align:right">Gesamt</th>
-                        <th style="text-align:right">Ø Preis</th>
-                        <th style="text-align:right">Letzter Kauf</th>
+                        <th class="sort num" data-sort="count">Käufe</th>
+                        <th class="sort num" data-sort="total_spent">Gesamt</th>
+                        <th class="sort num" data-sort="avg_price">Ø Preis</th>
+                        <th class="sort num" data-sort="last_date">Letzter Kauf</th>
                     </tr>
                 </thead>
                 <tbody id="prodBody">
