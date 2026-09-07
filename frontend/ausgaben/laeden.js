@@ -126,11 +126,6 @@ function renderCleanup(unused) {
     };
 }
 
-async function askConfirm(opts) {
-    if (window.Confirm) return await Confirm.ask(opts);
-    return confirm(`${opts.title}\n\n${opts.text || ''}`);
-}
-
 function storeFormHtml(s) {
     return `<div class="form-grid">
         <div>

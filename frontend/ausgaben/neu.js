@@ -91,14 +91,16 @@ function fillStoreSelects() {
 }
 
 /** v1.16.0: Wenn "+ Neuen Laden anlegen" in einem Store-Select gewaehlt wurde,
- * per prompt() sofort anlegen und alle Store-Selects refreshen. */
+ * per Dialog sofort anlegen und alle Store-Selects refreshen. */
 async function handleStoreSelectChange(sel) {
     if (sel.value !== '__new__') return;
-    const name = prompt('Name des neuen Ladens (z.B. Aldi, dm, Amazon):');
-    if (!name || !name.trim()) { sel.value = ''; return; }
+    const name = await askPrompt({ title: 'Neuer Laden',
+        text: 'Wie heißt der Laden? Er steht danach überall zur Auswahl.',
+        placeholder: 'z.B. Aldi, dm, Amazon', ok: 'Anlegen' });
+    if (!name) { sel.value = ''; return; }
     try {
         const created = await AUSGABEN_API.createStore({
-            name: name.trim(),
+            name,
             color: '#6b7280',
             icon: null,
         });
@@ -498,11 +500,13 @@ function addItemRow(containerId, item) {
     // v1.16.0: Inline-Kategorie-Anlage bei "__new__"-Wahl
     catSelect.addEventListener('change', async () => {
         if (catSelect.value !== '__new__') return;
-        const name = prompt('Name der neuen Kategorie (z.B. Snacks, Tiernahrung):');
-        if (!name || !name.trim()) { catSelect.value = ''; return; }
+        const name = await askPrompt({ title: 'Neue Kategorie',
+            text: 'Kurzer Name im Singular — er taucht danach in jeder Positionszeile auf.',
+            placeholder: 'z.B. Snacks, Tiernahrung', ok: 'Anlegen' });
+        if (!name) { catSelect.value = ''; return; }
         try {
             const created = await AUSGABEN_API.createCategory({
-                name: name.trim(),
+                name,
                 color: '#3b82f6',
                 icon: null,
             });
@@ -596,7 +600,9 @@ async function saveOcrExpense() {
 
 async function discardReceipt() {
     if (!uploadedReceipt) return;
-    if (!confirm('Bild und OCR-Daten verwerfen?')) return;
+    if (!await askConfirm({ title: 'Aufnahme verwerfen?',
+        text: 'Foto und erkannter Text werden gelöscht. Der Bon wird nicht gespeichert.',
+        ok: 'Verwerfen', danger: true })) return;
     try { await AUSGABEN_API.deleteReceipt(uploadedReceipt.id); } catch(e) {}
     uploadedReceipt = null;
     document.getElementById('ocrEditCard').style.display = 'none';

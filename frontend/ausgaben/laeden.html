@@ -19,16 +19,17 @@ body{visibility:hidden}body.ready{visibility:visible}
 /* Karte mit farbigem Streifen — identisch zur Kategorie-Seite, damit beide
    Seiten sich wie dasselbe Modul anfühlen. */
 .cat-card{position:relative;overflow:hidden}
-.cat-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cat-color,var(--teal))}
-.cat-card .entity-avatar{background:color-mix(in srgb, var(--cat-color, var(--teal)) 16%, transparent);color:var(--cat-color,var(--teal));box-shadow:none;font-size:1.1rem}
+.cat-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cat-color,var(--m-ausgaben))}
+.cat-card .entity-avatar{background:color-mix(in srgb, var(--cat-color, var(--m-ausgaben)) 16%, transparent);color:var(--cat-color,var(--m-ausgaben));box-shadow:none;font-size:1.1rem}
 @supports not (color: color-mix(in srgb, red 50%, blue)) {
     .cat-card .entity-avatar{background:var(--surface-2)}
 }
 .cat-card.is-unused .entity-title{color:var(--text-muted);font-weight:500}
 .cat-bar{height:3px;border-radius:2px;background:var(--border);margin-top:6px;overflow:hidden}
-.cat-bar span{display:block;height:100%;background:var(--cat-color,var(--teal));opacity:0.75}
-.empty-note{padding:1.5rem 1rem;text-align:center;color:var(--text-muted);font-size:0.875rem;
-    background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--radius)}
+.cat-bar span{display:block;height:100%;background:var(--cat-color,var(--m-ausgaben));opacity:0.75}
+/* .empty-note ist der alte Name; die Optik kommt aus .empty in style.css. */
+.empty-note{padding:1.5rem 1rem;text-align:center;color:var(--text-3);font-size:0.875rem;
+    background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:var(--radius-lg)}
 .ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
 .ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .ausg-toast-success{background:var(--green-dark)}

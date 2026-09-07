@@ -87,7 +87,10 @@ function render() {
         const delBtn = row.querySelector('button.del');
         if (delBtn) {
             delBtn.onclick = async () => {
-                if (!confirm(`Marke "${brand.name}" löschen? Bestehende Artikel verlieren die Verknüpfung, bleiben aber erhalten.`)) return;
+                const ok = await askConfirm({ title: `Marke „${brand.name}" löschen?`,
+                    text: 'Bestehende Artikel verlieren die Verknüpfung, bleiben aber erhalten.',
+                    ok: 'Löschen', danger: true });
+                if (!ok) return;
                 try {
                     await AUSGABEN_API.deleteBrand(id);
                     allBrands = allBrands.filter(b => b.id !== id);

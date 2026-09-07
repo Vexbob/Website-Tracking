@@ -173,6 +173,20 @@ async function ensureLoggedIn() {
     } catch (e) { return null; }
 }
 
+/* ---------- Dialoge ----------
+ * ui.js wird von nav-switcher.js asynchron nachgeladen. Bis es da ist, faellt
+ * askConfirm/askPrompt auf die nativen Fenster zurueck -- besser ein haesslicher
+ * Dialog als ein Klick, der ins Leere laeuft. */
+async function askConfirm(opts) {
+    if (window.Confirm) return await Confirm.ask(opts);
+    return confirm([opts.title, opts.text].filter(Boolean).join('\n\n'));
+}
+async function askPrompt(opts) {
+    if (window.Prompt) return await Prompt.ask(opts);
+    const v = prompt([opts.title, opts.text].filter(Boolean).join('\n\n'), opts.value || '');
+    return v && v.trim() ? v.trim() : null;
+}
+
 /* ---------- Toast ---------- */
 function showToast(msg, type='info', ms=2500) {
     const t = document.createElement('div');

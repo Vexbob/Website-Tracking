@@ -161,7 +161,9 @@ function renderItemRow(item) {
     };
     row.querySelector('.del').onclick = async () => {
         if (!item.id) { row.remove(); return; }
-        if (!confirm('Position löschen?')) return;
+        if (!await askConfirm({ title: 'Position löschen?',
+            text: 'Die Position verschwindet aus diesem Bon und aus der Produktliste.',
+            ok: 'Löschen', danger: true })) return;
         try { await AUSGABEN_API.deleteItem(item.id); row.remove(); showToast('Gelöscht', 'success', 1200); }
         catch(err) { showToast('Fehler: ' + err.message, 'error'); }
     };
@@ -192,7 +194,9 @@ async function saveExpense() {
 }
 
 async function deleteExpense() {
-    if (!confirm('Diesen Bon wirklich löschen?')) return;
+    if (!await askConfirm({ title: 'Diesen Bon löschen?',
+        text: 'Bon, Positionen und das hinterlegte Foto werden entfernt. Das lässt sich nicht rückgängig machen.',
+        ok: 'Löschen', danger: true })) return;
     try {
         await AUSGABEN_API.deleteExpense(currentExpense.id);
         showToast('Gelöscht', 'success');

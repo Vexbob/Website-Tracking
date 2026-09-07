@@ -18,7 +18,9 @@ async function loadDuplicates() {
         const data = await AUSGABEN_API.duplicateGroups();
         const groups = data.groups || [];
         if (!groups.length) {
-            list.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>Keine Duplikate gefunden.</div>';
+            list.innerHTML = '<div class="empty"><span class="empty-mark">✅</span>'
+                + '<p class="empty-text">Keine doppelt erfassten Bons. Vexbob vergleicht Datum, Betrag und Laden — '
+                + 'wenn hier nichts steht, ist auch nichts doppelt.</p></div>';
             return;
         }
         list.innerHTML = groups.map((g, gi) => {

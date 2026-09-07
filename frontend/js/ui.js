@@ -142,4 +142,78 @@
         ask:   (opts) => openConfirm(opts || {}),
         alert: (opts) => openConfirm({ ...(opts || {}), cancel: null }),
     };
+
+    // ------------------------------------------------------------- Prompt
+    /* Wie Confirm, nur mit Eingabefeld. Existiert, damit die letzten nativen
+     * window.prompt()-Aufrufe verschwinden koennen: die brechen optisch aus
+     * der App aus und sehen auf jedem Geraet anders aus.
+     * Loest auf mit dem eingegebenen Text oder null bei Abbruch. */
+    function openPrompt(opts) {
+        opts = opts || {};
+        const title = opts.title || 'Eingabe';
+        const text = opts.text || '';
+        const okLabel = opts.ok || 'Speichern';
+        const cancelLabel = opts.cancel || 'Abbrechen';
+
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay ui-confirm-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+
+            const box = document.createElement('div');
+            box.className = 'modal-box ui-confirm-box';
+            box.innerHTML =
+                '<div class="ui-confirm-head">' +
+                    '<h3 class="ui-confirm-title"></h3>' +
+                    (text ? '<p class="ui-confirm-text"></p>' : '') +
+                    '<input type="text" class="ui-prompt-input">' +
+                '</div>' +
+                '<div class="ui-confirm-actions">' +
+                    '<button type="button" class="ui-confirm-btn ui-confirm-cancel"></button>' +
+                    '<button type="button" class="ui-confirm-btn ui-confirm-ok"></button>' +
+                '</div>';
+            box.querySelector('.ui-confirm-title').textContent = title;
+            if (text) box.querySelector('.ui-confirm-text').textContent = text;
+            box.querySelector('.ui-confirm-ok').textContent = okLabel;
+            box.querySelector('.ui-confirm-cancel').textContent = cancelLabel;
+            const input = box.querySelector('.ui-prompt-input');
+            input.placeholder = opts.placeholder || '';
+            input.value = opts.value || '';
+
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+            const prevOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+
+            const close = (result) => {
+                overlay.classList.remove('show');
+                document.removeEventListener('keydown', onKey);
+                setTimeout(() => {
+                    overlay.remove();
+                    document.body.style.overflow = prevOverflow;
+                    resolve(result);
+                }, 180);
+            };
+            const submit = () => {
+                const v = input.value.trim();
+                close(v ? v : null);
+            };
+            const onKey = (e) => {
+                if (e.key === 'Escape') close(null);
+                else if (e.key === 'Enter') submit();
+            };
+            document.addEventListener('keydown', onKey);
+            box.querySelector('.ui-confirm-ok').addEventListener('click', submit);
+            box.querySelector('.ui-confirm-cancel').addEventListener('click', () => close(null));
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+            requestAnimationFrame(() => {
+                overlay.classList.add('show');
+                input.focus();
+                input.select();
+            });
+        });
+    }
+
+    window.Prompt = { ask: (opts) => openPrompt(opts || {}) };
 })();

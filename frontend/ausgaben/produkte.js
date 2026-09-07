@@ -333,7 +333,10 @@ async function openMergeEditor(product) {
 }
 
 async function splitProduct(product) {
-    if (!confirm(`„${product.title}" wieder auftrennen? Die Artikel fallen auf ihre einzelnen Namen zurück.`)) return;
+    const ok = await askConfirm({ title: `„${product.title}" auftrennen?`,
+        text: 'Die Artikel fallen auf ihre einzelnen Namen zurück und stehen danach wieder als getrennte Produkte in der Liste.',
+        ok: 'Auftrennen' });
+    if (!ok) return;
     try {
         await AUSGABEN_API.splitProduct(product.key);
         showToast('Aufgetrennt', 'success');
@@ -381,8 +384,8 @@ function openReparseModal() {
             <div class="reparse-log" id="reparseLog"></div>
         </div>
         <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
-            <button class="cancel" style="width:auto;margin:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border)">Abbrechen</button>
-            <button class="start primary" style="width:auto;margin:0;background:var(--teal);color:#fff">Los geht's</button>
+            <button class="cancel" style="width:auto;margin:0;background:var(--surface-2);color:var(--text-1);border:1px solid var(--line-strong)">Abbrechen</button>
+            <button class="start primary" style="width:auto;margin:0;background:var(--grad-accent);color:#fff">Los geht's</button>
         </div>
     `, { wide: true });
     modal.root.querySelector('.cancel').onclick = () => modal.close();
@@ -447,7 +450,7 @@ async function runReparse() {
             } else if (msg.type === 'done') {
                 st.textContent = `Fertig — ${msg.updated_items} Positionen aktualisiert, ${msg.errors} Fehler`;
                 bar.style.width = '100%';
-                bar.style.background = msg.errors ? 'var(--orange)' : 'var(--teal)';
+                bar.style.background = msg.errors ? 'var(--warn)' : 'var(--grad-accent)';
             }
         }
     }
