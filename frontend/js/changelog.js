@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.53.0', date: '2026-09-07', title: 'Kategorien und Läden neu, Zusammenführen überall erreichbar', notes: [
+        'Kategorien und Läden sind keine Wand aus Formularfeldern mehr, sondern Karten mit Nutzung — wie viele Positionen und wie viel Geld daran hängen —, dazu Suche, Sortierung und ein Sammel-Löschen für nie benutzte Einträge.',
+        'Beide Seiten haben jetzt eine echte Überschrift mit einem Satz Erklärung, bearbeitet wird im Dialog statt in dauerhaft offenen Zeilen.',
+        'Produkte zusammenführen geht jetzt von jedem Produkt aus: Zeile anklicken, „Mit anderem Produkt zusammenführen“ — mit Suche über alle Produkte, unabhängig von den Vorschlägen.',
+        'Eine bestehende Gruppe öffnet denselben Dialog: Name ändern, einzelne Schreibweisen abwählen oder ganz auftrennen.',
+        'Helle Ansicht: blasse graue Meta-Texte und weiße Schrift auf grünen und türkisen Flächen erfüllen jetzt WCAG-AA.',
+    ]},
     { v: 'v1.52.2', date: '2026-09-07', title: 'Bon-Scan: Typ automatisch, Zahlungsart und Einheiten raus', notes: [
         'Die Zahlungsart ist weg — beim Scannen, beim manuellen Eintrag und in der Bon-Ansicht.',
         'Der KI-Parser entscheidet den Beleg-Typ jetzt selbst und darf einen eigenen vergeben (z.B. „Arztrechnung“), der danach überall zur Auswahl steht.',

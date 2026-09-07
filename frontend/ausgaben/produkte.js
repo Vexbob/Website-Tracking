@@ -224,7 +224,7 @@ function renderProducts() {
         const lastBuy = p.last_date ? fmtDate(p.last_date) : '–';
         return `<tr class="prod-row" data-key="${escHtml(p.key)}">
             <td>
-                <div class="prod-name">${escHtml(p.title || p.key)}${p.is_merged ? ' <span class="prod-merged" title="Zusammengeführt — klicken zum Bearbeiten">🔗</span>' : ''}</div>
+                <div class="prod-name">${escHtml(p.title || p.key)}${p.is_merged ? ' <button type="button" class="prod-merged" title="Zusammengeführt — klicken zum Bearbeiten">🔗</button>' : ''}</div>
                 ${p.brand_name ? `<div class="prod-brand">${escHtml(p.brand_name)}</div>` : ''}
             </td>
             <td>${escHtml(p.category_name || '–')}</td>
@@ -244,7 +244,7 @@ function renderProducts() {
             const key = row.dataset.key;
             const product = allProducts.find(p => p.key === key);
             if (!product) return;
-            if (ev.target.classList.contains('prod-merged')) {
+            if (ev.target.closest('.prod-merged')) {
                 ev.stopPropagation();
                 openMergeEditor(product);
                 return;
@@ -268,6 +268,7 @@ async function openMergeEditor(product) {
         </label>
         <div class="me-actions">
             <button class="me-split">Ganz auftrennen</button>
+            <button class="me-cancel">Abbrechen</button>
             <button class="me-save merge-do">Speichern</button>
         </div>
     `, { wide: true });
@@ -300,6 +301,7 @@ async function openMergeEditor(product) {
             </label></li>`).join('')}</ul>`
         : '<div class="pv-empty">Diese Gruppe hat nur eine Schreibweise — du kannst sie umbenennen oder auftrennen.</div>';
 
+    modal.root.querySelector('.me-cancel').onclick = () => modal.close();
     modal.root.querySelector('.me-split').onclick = async () => {
         modal.close();
         await splitProduct(product);
@@ -456,12 +458,24 @@ let currentChartInstance = null;
 
 async function openProductDetail(key, product) {
     const modal = openModal(`🛒 ${escHtml(product.title || key)}`, `
+        <div class="pv-toolbar">
+            <button type="button" class="pv-action" id="pvMerge">
+                ${product.is_merged ? '🔗 Zusammenführung bearbeiten' : '🔗 Mit anderem Produkt zusammenführen'}
+            </button>
+        </div>
         <div id="pvStores" class="pv-stores"></div>
         <div class="pv-chart-wrap"><canvas id="pvChart"></canvas></div>
         <div id="pvHistList" class="pv-hist-list"></div>
     `, { wide: true, onClose: () => {
         if (currentChartInstance) { try { currentChartInstance.destroy(); } catch(_) {} currentChartInstance = null; }
     }});
+
+    const mergeBtn = modal.root.querySelector('#pvMerge');
+    if (mergeBtn) mergeBtn.onclick = () => {
+        modal.close();
+        if (product.is_merged) openMergeEditor(product);
+        else openMergePicker(product);
+    };
 
     try {
         const data = await AUSGABEN_API.productHistory(key);
@@ -472,6 +486,75 @@ async function openProductDetail(key, product) {
     } catch (e) {
         modal.root.innerHTML = `<div class="pv-empty">Fehler: ${escHtml(e.message)}</div>`;
     }
+}
+
+/* Zwei Produkte von Hand zusammenführen — unabhängig davon, ob der Server sie
+ * als Schreibvarianten erkannt hat. Die Vorschläge oben auf der Seite finden
+ * nur ähnliche Namen; „Klopapier" und „Toilettenpapier" muss man selbst
+ * zusammenlegen können. */
+function openMergePicker(product) {
+    const others = allProducts.filter(p => p.key !== product.key);
+    const modal = openModal(`🔗 „${escHtml(product.title || product.key)}" zusammenführen`, `
+        <p class="me-hint">Wähle die Produkte, die dasselbe meinen. Sie werden zu einer Zeile —
+        auch für künftige Käufe.</p>
+        <input type="search" class="me-search" id="mpSearch" placeholder="🔍 Produkt suchen …">
+        <div class="me-list me-scroll" id="mpList"></div>
+        <label class="me-name-lbl">Name der Gruppe
+            <input id="mpName" class="merge-name" value="${escHtml(product.title || product.key)}">
+        </label>
+        <div class="me-actions">
+            <button class="me-cancel">Abbrechen</button>
+            <button class="me-save merge-do" disabled>Mindestens eines wählen</button>
+        </div>
+    `, { wide: true });
+
+    const listEl = modal.root.querySelector('#mpList');
+    const searchEl = modal.root.querySelector('#mpSearch');
+    const saveBtn = modal.root.querySelector('.me-save');
+    const picked = new Set();
+
+    const render = () => {
+        const q = searchEl.value.trim().toLowerCase();
+        const rows = others
+            .filter(p => !q || (p.title || p.key).toLowerCase().includes(q))
+            .slice(0, 200);
+        listEl.innerHTML = rows.length
+            ? `<ul class="merge-variants">${rows.map(p => `
+                <li><label class="merge-variant">
+                    <input type="checkbox" class="mp-pick" data-key="${escHtml(p.key)}"${picked.has(p.key) ? ' checked' : ''}>
+                    <span class="merge-variant-name">${escHtml(p.title || p.key)}</span>
+                    <span class="merge-meta">${p.count}× · ${fmtEur(p.total_spent || 0)}</span>
+                </label></li>`).join('')}</ul>`
+            : '<div class="pv-empty">Kein Produkt gefunden.</div>';
+        listEl.querySelectorAll('.mp-pick').forEach(cb => {
+            cb.onchange = () => {
+                if (cb.checked) picked.add(cb.dataset.key); else picked.delete(cb.dataset.key);
+                sync();
+            };
+        });
+    };
+    const sync = () => {
+        saveBtn.disabled = picked.size < 1;
+        saveBtn.textContent = picked.size < 1
+            ? 'Mindestens eines wählen'
+            : `${picked.size + 1} zusammenführen`;
+    };
+
+    searchEl.oninput = render;
+    render();
+    sync();
+
+    modal.root.querySelector('.me-cancel').onclick = () => modal.close();
+    saveBtn.onclick = async () => {
+        if (!picked.size) return;
+        const title = modal.root.querySelector('#mpName').value.trim() || product.title;
+        try {
+            const r = await AUSGABEN_API.mergeProducts([product.key, ...picked], title);
+            modal.close();
+            showToast(`Zusammengeführt (${r.items} Positionen)`, 'success');
+            await Promise.all([loadProducts(), loadMergeSuggestions()]);
+        } catch (e) { showToast('Fehler: ' + e.message, 'error'); }
+    };
 }
 
 function renderStoreChips(stores) {

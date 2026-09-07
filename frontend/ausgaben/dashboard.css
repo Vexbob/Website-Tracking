@@ -8,7 +8,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .date-header .date-total{font-size:0.75rem;color:var(--text-faint);font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500}
 .presets{display:flex;flex-wrap:wrap;gap:0.375rem;margin-bottom:0.5rem}
 .presets button{padding:0.3125rem 0.625rem;font-size:0.75rem;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:6px;cursor:pointer;width:auto;margin:0;font-weight:500}
-.presets button.active{background:var(--teal);color:#fff;border-color:var(--teal)}
+.presets button.active{background:var(--teal-dark);color:#fff;border-color:var(--teal-dark)}
 .exp-photo-badge{font-size:0.9rem;opacity:0.85;margin-left:0.25rem;flex-shrink:0}
 /* Total-Row bei aktivem Filter */
 .filter-total{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.75rem;margin:0.5rem 0;font-size:0.8125rem;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center}
@@ -53,7 +53,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .filter-bar{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:1rem}
 .filter-bar select,.filter-bar input{padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;width:auto;min-width:130px}
 .filter-bar button{padding:0.4375rem 0.75rem;font-size:0.8125rem;width:auto;margin:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
-.filter-bar button.primary{background:var(--teal);color:#fff;border-color:var(--teal)}
+.filter-bar button.primary{background:var(--teal-dark);color:#fff;border-color:var(--teal-dark)}
 
 /* v1.38.0 — kompakte Filter-Zeile mit Popover */
 .filter-bar-v2{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap}

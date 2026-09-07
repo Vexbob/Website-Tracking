@@ -18,25 +18,36 @@
 <style>
 body{visibility:hidden}body.ready{visibility:visible}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
-.entity-list{display:flex;flex-direction:column;gap:0.5rem;margin-top:0.75rem}
-.entity-row{display:flex;align-items:center;gap:0.5rem;padding:0.5rem;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap}
-.entity-badge{width:34px;height:34px;border-radius:9px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.entity-row input.name{flex:1;min-width:120px;margin:0;padding:0.375rem 0.5rem;font-size:0.875rem}
-.entity-row input.color{width:36px;height:32px;padding:0;margin:0;cursor:pointer;border:1px solid var(--border);border-radius:6px}
-.entity-row input.icon{width:56px;text-align:center;margin:0;padding:0.375rem 0.5rem;font-size:0.95rem}
-.entity-row button.save{width:auto;padding:0.375rem 0.75rem;font-size:0.75rem;margin:0;background:var(--teal);color:#fff}
-.entity-row button.del{width:auto;padding:0.375rem 0.5rem;font-size:0.875rem;margin:0;background:transparent;color:var(--red);border:none;cursor:pointer}
-.add-form{display:grid;grid-template-columns:1fr 60px 60px auto;gap:0.5rem;align-items:center}
-@media(max-width:500px){.add-form{grid-template-columns:1fr 60px 60px;gap:0.375rem}.add-form button{grid-column:1/-1;margin-top:0.25rem}}
-.add-form input,.add-form button{margin:0;padding:0.5rem 0.625rem;font-size:0.875rem}
-.add-form input.color{padding:0;height:36px}
-.add-form button.primary{background:var(--teal);color:#fff;width:auto;padding:0.5rem 1rem}
+
+/* Die Kategorie-Karte traegt einen farbigen Streifen statt eines bunten
+   Kaestchens: bei 80 Kategorien wirkt eine Wand aus Farbflaechen unruhig. */
+.cat-card{position:relative;overflow:hidden}
+.cat-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cat-color,var(--blue))}
+.cat-card .entity-avatar{background:color-mix(in srgb, var(--cat-color, var(--blue)) 16%, transparent);color:var(--cat-color,var(--blue));box-shadow:none;font-size:1.1rem}
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+    .cat-card .entity-avatar{background:var(--surface-2)}
+}
+.cat-card.is-unused .entity-title{color:var(--text-muted);font-weight:500}
+
+.cat-bar{height:3px;border-radius:2px;background:var(--border);margin-top:6px;overflow:hidden}
+.cat-bar span{display:block;height:100%;background:var(--cat-color,var(--blue));opacity:0.75}
+
+/* Auto-Regeln */
+.rules-head{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;cursor:pointer;list-style:none}
+.rules-head::-webkit-details-marker{display:none}
+.rules-head h2{font-size:1rem;font-weight:600;margin:0}
+.rules-chevron{color:var(--text-muted);font-size:0.75rem;transition:transform .15s}
+details[open] .rules-chevron{transform:rotate(90deg)}
 .rule-row{display:flex;align-items:center;gap:0.5rem;padding:0.4375rem 0.625rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:0.8125rem;margin-bottom:0.375rem}
-.rule-kw{background:var(--surface);padding:2px 8px;border-radius:5px;font-weight:600;font-family:monospace;font-size:0.75rem}
+.rule-kw{background:var(--surface);padding:2px 8px;border-radius:5px;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.75rem}
 .rule-arrow{color:var(--text-faint)}
-.rule-cat{flex:1;font-weight:600}
-.rule-hits{font-size:0.6875rem;color:var(--text-faint)}
+.rule-cat{flex:1;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rule-hits{font-size:0.6875rem;color:var(--text-faint);white-space:nowrap}
 .rule-row button{width:auto;padding:2px 6px;font-size:0.75rem;background:transparent;color:var(--red);border:none;margin:0;cursor:pointer}
+
+.empty-note{padding:1.5rem 1rem;text-align:center;color:var(--text-muted);font-size:0.875rem;
+    background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--radius)}
+
 .ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
 .ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .ausg-toast-success{background:var(--green-dark)}
@@ -54,24 +65,36 @@ body{visibility:hidden}body.ready{visibility:visible}
 </nav>
 <main>
 <div id="subnav" data-active="kategorien"></div>
-    <div class="card">
-        <h3 style="margin-bottom:0.75rem">Neue Kategorie</h3>
-        <div class="add-form">
-            <input type="text" id="newName" placeholder="Elektronik, Bücher …">
-            <input type="text" id="newIcon" placeholder="📚" maxlength="3">
-            <input type="color" id="newColor" value="#3b82f6" class="color">
-            <button id="newBtn" class="primary">Hinzufügen</button>
-        </div>
+
+    <header class="page-head">
+        <h1>Kategorien</h1>
+        <p class="page-sub">Wofür dein Geld gebucht wird. Der KI-Parser legt beim Scannen selbst neue
+        Kategorien an — hier räumst du auf: umbenennen, zusammenführen, löschen.</p>
+    </header>
+
+    <div class="toolbar">
+        <input type="search" id="q" class="toolbar-search" placeholder="🔍 Kategorie suchen …" aria-label="Kategorie suchen">
+        <select id="sort" aria-label="Sortierung">
+            <option value="spent">Nach Ausgaben</option>
+            <option value="count">Nach Häufigkeit</option>
+            <option value="name">Nach Name</option>
+        </select>
+        <button id="addBtn" class="btn btn-accent">+ Neue Kategorie</button>
     </div>
-    <div class="card">
-        <h3>Meine Kategorien</h3>
-        <div id="list" class="entity-list"></div>
-    </div>
-    <div class="card">
-        <h3>🧠 Auto-Zuordnungs-Regeln</h3>
-        <p class="muted" style="font-size:0.8125rem;margin-bottom:0.75rem">Regeln werden automatisch gelernt, wenn du Positionen Kategorien zuweist. Je öfter, desto zuverlässiger die Vorhersage.</p>
+
+    <div id="cleanup"></div>
+    <p class="toolbar-count" id="count"></p>
+    <div id="list" class="entity-grid"></div>
+
+    <details class="card" id="rulesCard" style="margin-top:1.5rem">
+        <summary class="rules-head">
+            <h2>🧠 Auto-Zuordnungs-Regeln <span class="toolbar-count" id="rulesCount" style="margin:0"></span></h2>
+            <span class="rules-chevron">▶</span>
+        </summary>
+        <p class="page-sub" style="margin:0.75rem 0">Vexbob merkt sich, welche Kategorie du einem Artikel
+        gibst, und schlägt sie beim nächsten Mal von selbst vor. Je öfter bestätigt, desto zuverlässiger.</p>
         <div id="rules"></div>
-    </div>
+    </details>
 </main>
 <div class="version-tag"></div>
 <script src="/ausgaben/kategorien.js"></script>
