@@ -20,7 +20,10 @@ async function boot() {
     if (!isLoggedIn()) { window.location.href = '/private/login.html'; return; }
     try {
         const me = await fetchMe(true);
-        if (!me.is_admin) { alert('Admin-Zugriff erforderlich'); window.location.href = '/'; return; }
+        if (!me.is_admin) {
+            await askAlert({ title: 'Kein Zugriff', text: 'Diese Seite ist Administratoren vorbehalten.' });
+            window.location.href = '/'; return;
+        }
         document.getElementById('userLabel').textContent = '👤 ' + me.username;
     } catch (e) { window.location.href = '/private/login.html'; return; }
     document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
@@ -76,7 +79,9 @@ function bindUI() {
         renderList(); renderState();
     };
     document.getElementById('baDelete').onclick = async () => {
-        if (!confirm('Post wirklich löschen?')) return;
+        if (!await askConfirm({ title: 'Beitrag löschen?',
+            text: 'Der Beitrag verschwindet samt Bildern aus dem Blog.',
+            ok: 'Löschen', danger: true })) return;
         await BLOG_ADMIN_API.remove(S.selectedId);
         S.posts = S.posts.filter(x => x.id !== S.selectedId);
         S.selectedId = null;
@@ -86,7 +91,10 @@ function bindUI() {
 
 async function loadPosts() {
     try { S.posts = await BLOG_ADMIN_API.list() || []; }
-    catch (e) { alert('Laden fehlgeschlagen: ' + e.message); S.posts = []; }
+    catch (e) {
+        if (window.Toast) Toast.error('Laden fehlgeschlagen: ' + e.message); else alert(e.message);
+        S.posts = [];
+    }
     renderList();
     if (S.posts.length && !S.selectedId) selectPost(S.posts[0].id);
     else renderDetail();
@@ -159,7 +167,9 @@ async function newPost() {
         renderList();
         renderDetail();
         document.getElementById('baTitle').select();
-    } catch (e) { alert('Anlegen fehlgeschlagen: ' + e.message); }
+    } catch (e) {
+        if (window.Toast) Toast.error('Anlegen fehlgeschlagen: ' + e.message); else alert(e.message);
+    }
 }
 
 // ==========================================================
@@ -284,6 +294,7 @@ function onEditorClick(e) {
     // Bild angeklickt → Alt-Text bearbeiten (v1.18.1)
     const img = e.target.closest('img');
     if (img) {
+        // Nativ, weil danach im contenteditable weitergearbeitet wird.
         const newAlt = prompt('Beschreibung/Alt-Text für das Bild:', img.alt || '');
         if (newAlt != null) {
             img.alt = newAlt;
@@ -404,6 +415,7 @@ function applyToolbarCmd(cmd) {
         case 'hr': document.execCommand('insertHorizontalRule'); break;
         case 'task': insertTaskAtCursor(); break;
         case 'link': {
+            // Siehe notizen.js: ein Modal wuerde die Auswahl im Editor kosten.
             const url = prompt('Link-URL:', 'https://');
             if (url) document.execCommand('createLink', false, url);
             break;

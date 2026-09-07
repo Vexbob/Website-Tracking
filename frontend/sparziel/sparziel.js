@@ -516,7 +516,9 @@ async function createAchievement(){
     }catch(e){haptic('error');showToast('Erstellung fehlgeschlagen',true);}
 }
 async function resetAchievement(id){
-    if(!confirm('Zurücksetzen? Löscht alle Meilensteine und Sparbeiträge für dieses Achievement.'))return;
+    if(!await askConfirm({title:'Achievement zurücksetzen?',
+        text:'Alle Meilensteine und die daraus gesparten Beiträge werden entfernt.',
+        ok:'Zurücksetzen',danger:true}))return;
     try{const r=await apiCall('/api/achievements/'+id+'/reset',{method:'POST'});const s=r&&r.removed_count?` (${r.removed_count} Einträge, ${fmtEur(r.removed_sum||0)} entfernt)`:'';haptic('success');showToast('Zurückgesetzt'+s);await Promise.all([loadAchievements(),loadSparziel()]);}
     catch(e){haptic('error');showToast('Reset fehlgeschlagen',true);}
 }
@@ -883,7 +885,9 @@ async function deleteSavingsGoal(id){
     const name=g?g.name:'Sparziel';
     const saved=Number((g&&g.saved_amount)||0);
     const extra=saved>0.005?`\n\nDie ${fmtEur(saved)} auf diesem Ziel werden dabei entfernt.`:'';
-    if(!confirm(`Sparziel "${name}" wirklich löschen?${extra}`))return;
+    if(!await askConfirm({title:`Sparziel „${name}" löschen?`,
+        text:saved>0.005?`Die ${fmtEur(saved)} auf diesem Ziel werden dabei entfernt.`:'Auf dem Ziel liegt nichts.',
+        ok:'Löschen',danger:true}))return;
     try{
         const r=await apiCall('/api/savings-goals/'+id,{method:'DELETE'});
         haptic('success');
@@ -1338,7 +1342,8 @@ function renderTrophies(){
     }).join('');
 }
 async function deleteTrophy(id){
-    if(!confirm('Trophäe wirklich löschen?'))return;
+    if(!await askConfirm({title:'Trophäe löschen?',
+        text:'Sie verschwindet aus der Sammlung.',ok:'Löschen',danger:true}))return;
     try{
         await apiCall('/api/trophies/'+id,{method:'DELETE'});
         haptic('success');

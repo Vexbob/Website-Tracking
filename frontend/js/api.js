@@ -82,6 +82,29 @@ function isAdmin() {
     } catch (e) { return false; }
 }
 
+/* ---------- Dialoge ----------
+ * Native confirm()/prompt()/alert() sind aus der App verbannt: sie brechen
+ * optisch aus und sehen auf jedem Geraet anders aus. Die gestalteten
+ * Gegenstuecke stehen in ui.js, das nav-switcher.js asynchron nachlaedt --
+ * bis dahin faellt es hier auf das native Fenster zurueck, damit ein Klick
+ * nie ins Leere laeuft. */
+async function askConfirm(opts) {
+    opts = opts || {};
+    if (window.Confirm) return await Confirm.ask(opts);
+    return confirm([opts.title, opts.text].filter(Boolean).join('\n\n'));
+}
+async function askPrompt(opts) {
+    opts = opts || {};
+    if (window.Prompt) return await Prompt.ask(opts);
+    const v = prompt([opts.title, opts.text].filter(Boolean).join('\n\n'), opts.value || '');
+    return v && v.trim() ? v.trim() : null;
+}
+async function askAlert(opts) {
+    opts = opts || {};
+    if (window.Confirm) return await Confirm.alert(opts);
+    alert([opts.title, opts.text].filter(Boolean).join('\n\n'));
+}
+
 // Theme — seit v1.55.0 gibt es nur noch das dunkle. Das Attribut bleibt
 // trotzdem gesetzt: rund 50 CSS-Selektoren und die Diagramm-Farbwahl in den
 // Modulen fragen es ab. Es zu entfernen waere ein Umbau ohne Gewinn.

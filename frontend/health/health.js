@@ -1375,12 +1375,14 @@ async function toggleWorkoutExtras(id) {
 
 function closeWorkoutModal() { /* legacy no-op, Modal entfernt in v1.25.1 */ }
 
-// v1.28.0: einzelnes Workout löschen (nutzt confirm() — leichtgewichtig,
+// v1.28.0: einzelnes Workout löschen (leichtgewichtig,
 // analog zu deleteSavingsGoal im Sparziel-Tracker)
 async function deleteWorkout(id) {
     const w = state.workoutsAll.find(x => x.id === id);
     const label = w ? wMeta(w.workout_type).de + ' vom ' + fmtDateTime(w.start_at) : 'Workout';
-    if (!confirm(`${label} wirklich löschen? Zusatzdaten (Kadenz, SWOLF, ...) werden mit entfernt.`))
+    if (!await askConfirm({ title: `${label} löschen?`,
+        text: 'Zusatzdaten wie Kadenz und SWOLF werden mit entfernt.',
+        ok: 'Löschen', danger: true }))
         return;
     try {
         await HEALTH_API.deleteWorkout(id);
@@ -1480,7 +1482,9 @@ function copyNewKey() {
     if (navigator.clipboard) navigator.clipboard.writeText(input.value).then(() => showToast('Key kopiert ✓'));
 }
 async function revokeApiKey(id) {
-    if (!confirm('Diesen Key wirklich widerrufen?')) return;
+    if (!await askConfirm({ title: 'Key widerrufen?',
+        text: 'Geräte, die diesen Key benutzen, können danach nichts mehr senden.',
+        ok: 'Widerrufen', danger: true })) return;
     try {
         await HEALTH_API.revokeKey(id);
         showToast('Key widerrufen');
@@ -1602,7 +1606,9 @@ async function deleteImportEntry(id) {
 }
 
 async function clearImportLog() {
-    if (!confirm('Das komplette Import-Protokoll löschen? Die importierten Gesundheitsdaten bleiben erhalten.')) return;
+    if (!await askConfirm({ title: 'Import-Protokoll löschen?',
+        text: 'Nur das Protokoll verschwindet — die importierten Gesundheitsdaten bleiben erhalten.',
+        ok: 'Löschen', danger: true })) return;
     try {
         const res = await HEALTH_API.clearImports();
         showToast(`${res.deleted} Einträge gelöscht ✓`);
@@ -1626,7 +1632,9 @@ async function bulkDeleteHealth() {
     const resultEl = document.getElementById('hDelResult');
     const range = (from || to) ? ` (${from||'Anfang'} – ${to||'heute'})` : ' für ALLE Zeit';
     const label = DELETE_SCOPE_LABELS[scope] || scope;
-    if (!confirm(`${label}${range} unwiderruflich löschen?\n\nDas kann nicht rückgängig gemacht werden. Falls noch nicht geschehen: vorher den CSV-Export nutzen!`))
+    if (!await askConfirm({ title: `${label}${range} löschen?`,
+        text: 'Das lässt sich nicht rückgängig machen. Falls noch nicht geschehen: vorher den CSV-Export nutzen.',
+        ok: 'Endgültig löschen', danger: true }))
         return;
     resultEl.innerHTML = '<div class="stat-loading">Lösche …</div>';
     try {

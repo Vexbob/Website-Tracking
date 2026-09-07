@@ -321,7 +321,9 @@ async function deleteNote(id) {
     const n = state.notes.find(x => x.id === id);
     if (!n) return;
     const snapshot = { ...n };
-    if (!confirm('Notiz "' + (n.title || '(ohne Titel)') + '" wirklich löschen?')) return;
+    if (!await askConfirm({ title: `Notiz „${n.title || '(ohne Titel)'}" löschen?`,
+        text: 'Sie landet im Papierkorb der Liste und lässt sich von dort noch zurückholen.',
+        ok: 'Löschen', danger: true })) return;
     try {
         await NOTES_API.remove(id);
         state.notes = state.notes.filter(x => x.id !== id);
@@ -539,6 +541,9 @@ function applyToolbarCmd(cmd) {
         case 'hr':        document.execCommand('insertHorizontalRule'); break;
         case 'task':      insertTaskAtCursor(); break;
         case 'link': {
+            // Bleibt bewusst nativ: ein eigenes Modal nimmt dem contenteditable
+            // den Fokus, damit ist die Auswahl weg und createLink greift ins
+            // Leere. Das saubere Gegenstueck braucht Selection-Sicherung.
             const url = prompt('Link-URL:', 'https://');
             if (url) document.execCommand('createLink', false, url);
             break;
