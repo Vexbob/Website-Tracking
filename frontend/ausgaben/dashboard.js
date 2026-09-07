@@ -214,8 +214,8 @@ function renderExpDetail(e, imgUrl) {
             const catIcon = it.category_icon || (it.category_id ? '🏷️' : '');
             const catName = it.category_name ? `${catIcon ? catIcon + ' ' : ''}${escapeHtml(it.category_name)}` : '';
             // Stückzahl nur zeigen, wenn der Artikel mehrfach gekauft wurde.
-            const q = Math.round(Number(it.quantity));
-            const qtyPrefix = (Number.isFinite(q) && q > 1) ? `<span class="it-qty">${q}× </span>` : '';
+            const q = itemPieceCount(it);
+            const qtyPrefix = q ? `<span class="it-qty">${q}× </span>` : '';
             return `<div class="it">
                 <span class="it-desc">${qtyPrefix}${escapeHtml(it.description || '')}${catName ? '<span class="it-cat">· ' + catName + '</span>' : ''}</span>
                 <span class="it-price">${fmtEur(it.total_price)}</span>

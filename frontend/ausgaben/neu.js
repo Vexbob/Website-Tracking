@@ -462,8 +462,8 @@ function splitProductDescription(desc, item) {
         const qtyMatch = s.match(/^(.*?)[\s]+(\d+(?:[.,]\d+)?)\s*(kg|g|L|ml|Stk|Pack|Btl|Blatt)\b\s*$/i);
         out.name = qtyMatch ? qtyMatch[1].trim() : s;
     }
-    const q = item ? Math.round(Number(item.quantity)) : NaN;
-    if (Number.isFinite(q) && q > 1 && q <= 99) out.qty = String(q);
+    const q = itemPieceCount(item);
+    if (q) out.qty = String(q);
     return out;
 }
 

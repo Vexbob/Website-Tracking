@@ -460,8 +460,8 @@ function renderChart(items) {
 // Menge heißt seit v1.52.0 Stückzahl: sie steht nur da, wenn derselbe Artikel
 // mehrfach gekauft wurde. Gewicht und Packungsgröße stehen im Bon-Text darüber.
 function mengeLabel(h) {
-    const q = Math.round(Number(h.quantity));
-    return (Number.isFinite(q) && q > 1) ? `${q}× gekauft` : '';
+    const q = itemPieceCount(h);
+    return q ? `${q}× gekauft` : '';
 }
 
 function renderHistList(items) {

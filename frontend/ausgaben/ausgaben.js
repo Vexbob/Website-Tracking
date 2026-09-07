@@ -97,6 +97,20 @@ const AUSGABEN_API = {
 };
 
 
+/* ---------- Stückzahl einer Position ---------- */
+/* Gibt die anzuzeigende Stückzahl zurück oder 0, wenn keine hingehört.
+ * Bis v1.51 stand in ``quantity`` auch Gewicht oder Volumen ("500" mit der
+ * Einheit "g"). Solche Altbestands-Zeilen sind keine Stückzahl und dürfen
+ * nicht als "500×" auftauchen — erkennbar an der alten Einheit, die es für
+ * neue Positionen nicht mehr gibt. */
+function itemPieceCount(it) {
+    if (!it) return 0;
+    const unit = String(it.quantity_unit || '').toLowerCase();
+    if (unit && unit !== 'stk' && unit !== 'stück' && unit !== 'x') return 0;
+    const q = Math.round(Number(it.quantity));
+    return (Number.isFinite(q) && q > 1 && q <= 99) ? q : 0;
+}
+
 /* ---------- Beleg-Typen ---------- */
 /* Der Typ eines Bons (Kassenbon, Abo, ...) ist seit v1.52.0 nicht mehr fest
  * verdrahtet: der KI-Parser entscheidet ihn beim Scannen und darf einen eigenen

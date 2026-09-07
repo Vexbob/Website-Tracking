@@ -100,10 +100,10 @@ function renderItemRow(item) {
         ? 'Aus der Produktliste ausblenden (z.B. Einmalkauf)'
         : 'Wieder in die Produktliste aufnehmen';
     const cmpIcon = comparable ? '📊' : '🚫';
-    const qty = Math.round(Number(item.quantity));
+    const qty = itemPieceCount(item);
     row.innerHTML = `
         <input type="text" class="d-desc" value="${escapeAttr(item.description||'')}" placeholder="Beschreibung">
-        <input type="number" min="1" step="1" class="d-qty" value="${Number.isFinite(qty) && qty > 1 ? qty : ''}" placeholder="1×" title="Stückzahl — nur ausfüllen, wenn du den Artikel mehrfach gekauft hast">
+        <input type="number" min="1" step="1" class="d-qty" value="${qty || ''}" placeholder="1×" title="Stückzahl — nur ausfüllen, wenn du den Artikel mehrfach gekauft hast">
         <input type="number" step="0.01" class="d-price" value="${item.total_price || ''}" placeholder="Preis">
         <select class="d-cat">${catOpts}</select>
         <button class="cmp" title="${cmpTitle}">${cmpIcon}</button>
