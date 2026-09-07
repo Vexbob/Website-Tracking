@@ -42,6 +42,7 @@ from services.full_export import (
     EXPORT_SECTIONS,
     build_export_preview,
     build_full_export_csv,
+    clean_aggregate_map,
 )
 
 router = APIRouter(tags=["export"])
@@ -143,7 +144,7 @@ async def export_all(
     # Der Dateiname nennt die Aggregation nur, wenn sie ueberall dieselbe ist;
     # sonst waere "…-month" eine Behauptung ueber Sektionen, die einzeln
     # exportiert wurden.
-    used_aggs = set(agg_map.values()) or {aggregate}
+    used_aggs = set(clean_aggregate_map(agg_map, aggregate).values())
     if len(used_aggs) == 1 and used_aggs != {"none"}:
         parts.append(used_aggs.pop())
     elif len(used_aggs) > 1:

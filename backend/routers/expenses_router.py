@@ -1258,34 +1258,6 @@ async def stats_insights(db=Depends(get_db), user=Depends(get_current_user),
     }
 
 
-@router.get("/api/expenses/heatmap")
-async def expenses_heatmap(db=Depends(get_db), user=Depends(get_current_user)):
-    since = date.today() - timedelta(days=365)
-    rows = await db.fetch(
-        """SELECT purchase_date AS d, SUM(total_amount) AS s, COUNT(*) AS c
-           FROM expenses WHERE user_id=$1 AND purchase_date >= $2
-           GROUP BY purchase_date""",
-        user["id"], since)
-    by_day = {r["d"].isoformat(): (float(r["s"] or 0), int(r["c"])) for r in rows}
-    max_amount = max((v[0] for v in by_day.values()), default=0.0)
-    out = []
-    cur = since
-    end = date.today()
-    while cur <= end:
-        key = cur.isoformat()
-        amount, count = by_day.get(key, (0.0, 0))
-        if amount <= 0 or max_amount <= 0:
-            level = 0
-        else:
-            ratio = amount / max_amount
-            if ratio < 0.25: level = 1
-            elif ratio < 0.5: level = 2
-            elif ratio < 0.75: level = 3
-            else: level = 4
-        out.append({"date": key, "amount": round(amount, 2), "count": count, "level": level})
-        cur += timedelta(days=1)
-    return out
-
 @router.get("/api/expenses/recurring/suggestions")
 async def recurring_suggestions(db=Depends(get_db), user=Depends(get_current_user)):
     rows = await db.fetch(

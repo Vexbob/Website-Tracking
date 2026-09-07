@@ -1635,10 +1635,16 @@ async def st_sp(db=Depends(get_db), user=Depends(get_current_user)):
         out.append({"date": r["created_at"].isoformat() if r["created_at"] else None, "cumulative": c})
     return out
 
-# ---------- Activity Heatmap ----------
+# ---------- Taegliche Aktivitaet ----------
 @app.get("/api/stats/heatmap")
 async def stats_heatmap(days: int = 365, db=Depends(get_db), user=Depends(get_current_user)):
-    """Liefert pro Tag: Anzahl Check-ins, Anzahl Meilensteine, ausgezahlter Betrag."""
+    """Liefert pro Tag: Anzahl Check-ins, Anzahl Meilensteine, ausgezahlter Betrag.
+
+    v1.60.2: Der Name ist historisch. Die Heatmap, fuer die dieser Endpunkt
+    gebaut wurde, gibt es seit v1.59.0 nicht mehr -- die Zahlen speisen jetzt
+    die Aktivitaets-Zeile auf dem Sparziel-Dashboard (``loadActivityStats``).
+    Der Endpunkt ist also NICHT verwaist; ``level`` ist der einzige Rest der
+    alten Darstellung und wird nicht mehr gelesen."""
     if days < 1 or days > 730:
         raise HTTPException(400, "days muss 1..730 sein")
     since = date.today() - timedelta(days=days-1)

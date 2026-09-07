@@ -65,14 +65,16 @@ async function loadStores() {
     } catch (e) { console.error(e); }
 }
 
+// Gewaehlter Zeitraum (VexRange). Wird in bindFilters() gesetzt.
+let prodRange = null;
+
 function currentFilters() {
-    const days = parseInt(document.getElementById('prodPeriod').value, 10);
     const filters = {};
-    if (days > 0) {
-        const from = new Date();
-        from.setDate(from.getDate() - days);
-        filters.date_from = from.toISOString().slice(0, 10);
-    }
+    // Neu seit v1.60.2: auch ein Ende. Vorher ging der Zeitraum immer bis
+    // heute, ein zurueckliegendes Fenster war gar nicht ausdrueckbar.
+    const r = prodRange || VexRange.resolve('90');
+    if (r.from) filters.date_from = r.from;
+    if (r.to) filters.date_to = r.to;
     const catId = document.getElementById('prodCategory').value;
     if (catId) filters.category_id = catId;
     const storeId = document.getElementById('prodStore').value;
@@ -359,7 +361,14 @@ function updateKpis(products) {
 }
 
 function bindFilters() {
-    ['prodPeriod', 'prodCategory', 'prodStore'].forEach(id => {
+    // fire:false -- init() laedt gleich selbst; sonst gaebe es zwei Ladungen
+    // direkt hintereinander.
+    const rf = VexRange.mount(document.getElementById('prodRange'), {
+        fire: false,
+        onChange: (r) => { prodRange = r; loadProducts(); },
+    });
+    prodRange = rf.get();
+    ['prodCategory', 'prodStore'].forEach(id => {
         document.getElementById(id).addEventListener('change', loadProducts);
     });
     const rp = document.getElementById('prodReparse');

@@ -120,8 +120,15 @@
         wrapper.appendChild(menu);
         navbar.appendChild(wrapper);
 
-        await buildModuleRow(navbar, visible);
-        buildSettingsLink(navbar);
+        // Beides ist Ausstattung fuer ein Konto: die Leiste zeigt Module,
+        // die nur eingeloggt erreichbar sind, und das Zahnrad fuehrt auf eine
+        // geschuetzte Seite. Auf der oeffentlichen Blog-Seite haette der
+        // Abruf der Einstellungen ausserdem eine 401 ausgeloest -- und die
+        // schickt in api.js jeden Besucher zum Login.
+        if (loggedIn) {
+            await buildModuleRow(navbar, visible);
+            buildSettingsLink(navbar);
+        }
 
         const cfgBtn = menu.querySelector('.nav-switcher-cfg');
         if (cfgBtn) cfgBtn.addEventListener('click', (e) => {

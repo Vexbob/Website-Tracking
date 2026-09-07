@@ -52,16 +52,30 @@
         }
     }
 
+    // Liegt der Finger gerade AUF einem Diagramm, zieht er Werte durch. Ein
+    // dabei ausgeloestes Scrollen der Seite darf den Wert dann nicht wegnehmen
+    // -- sonst waere das Durchziehen auf dem Handy kaputt.
+    var scrubbing = false;
+
     function onPointerDown(e) {
         var t = e.target;
         var canvas = (t && t.closest) ? t.closest('canvas') : null;
+        scrubbing = !!canvas;
         hideAllExcept(canvas);
     }
+    function onPointerUp() { scrubbing = false; }
+
     document.addEventListener('pointerdown', onPointerDown, true);
     // Aeltere WebViews ohne Pointer Events. Doppelt aufzuraeumen schadet nicht.
     document.addEventListener('touchstart', onPointerDown, { capture: true, passive: true });
-    // Wegscrollen ist auch ein "ich meine das nicht mehr".
-    window.addEventListener('scroll', function () { hideAllExcept(null); }, { passive: true });
+    ['pointerup', 'pointercancel', 'touchend', 'touchcancel'].forEach(function (ev) {
+        document.addEventListener(ev, onPointerUp, true);
+    });
+    // Wegscrollen ist auch ein "ich meine das nicht mehr" -- aber nur, wenn
+    // gerade niemand am Diagramm zieht.
+    window.addEventListener('scroll', function () {
+        if (!scrubbing) hideAllExcept(null);
+    }, { passive: true });
 
     /* ---------------------------------------------------------------- Datum */
 
