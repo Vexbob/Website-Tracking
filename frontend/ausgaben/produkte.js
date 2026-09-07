@@ -224,7 +224,7 @@ function renderProducts() {
         const lastBuy = p.last_date ? fmtDate(p.last_date) : '–';
         return `<tr class="prod-row" data-key="${escHtml(p.key)}">
             <td>
-                <div class="prod-name">${escHtml(p.title || p.key)}${p.is_merged ? ' <span class="prod-merged" title="Manuell zusammengeführt — klicken zum Auftrennen">🔗</span>' : ''}</div>
+                <div class="prod-name">${escHtml(p.title || p.key)}${p.is_merged ? ' <span class="prod-merged" title="Zusammengeführt — klicken zum Bearbeiten">🔗</span>' : ''}</div>
                 ${p.brand_name ? `<div class="prod-brand">${escHtml(p.brand_name)}</div>` : ''}
             </td>
             <td>${escHtml(p.category_name || '–')}</td>
@@ -246,12 +246,88 @@ function renderProducts() {
             if (!product) return;
             if (ev.target.classList.contains('prod-merged')) {
                 ev.stopPropagation();
-                splitProduct(product);
+                openMergeEditor(product);
                 return;
             }
             openProductDetail(key, product);
         };
     });
+}
+
+/* Bestehende Zusammenführung bearbeiten: Gruppenname ändern und einzelne
+ * Schreibweisen wieder herauslösen. Die Mitglieder stehen in keiner eigenen
+ * Tabelle — sie ergeben sich aus den Positionen der Gruppe, deshalb kommt die
+ * Liste aus der Kaufhistorie und wird hier nach Basisnamen verdichtet. */
+async function openMergeEditor(product) {
+    const title = product.title || product.key;
+    const modal = openModal(`🔗 „${escHtml(title)}" bearbeiten`, `
+        <p class="me-hint">Angehakt bleibt in der Gruppe. Was du abwählst, steht danach wieder als eigenes Produkt in der Liste.</p>
+        <div id="mePicks" class="me-list"><div class="pv-empty">Lade …</div></div>
+        <label class="me-name-lbl">Name der Gruppe
+            <input id="meName" class="merge-name" value="${escHtml(title)}">
+        </label>
+        <div class="me-actions">
+            <button class="me-split">Ganz auftrennen</button>
+            <button class="me-save merge-do">Speichern</button>
+        </div>
+    `, { wide: true });
+
+    const picksWrap = modal.root.querySelector('#mePicks');
+    let variants = [];
+    try {
+        const data = await AUSGABEN_API.productHistory(product.key);
+        const byName = new Map();
+        (data.items || []).forEach(h => {
+            const name = String(h.base_name || h.description || '').trim();
+            const k = name.toLowerCase();
+            if (!k) return;
+            const entry = byName.get(k) || { name, count: 0 };
+            entry.count += 1;
+            byName.set(k, entry);
+        });
+        variants = [...byName.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    } catch (e) {
+        picksWrap.innerHTML = `<div class="pv-empty">Fehler: ${escHtml(e.message)}</div>`;
+        return;
+    }
+
+    picksWrap.innerHTML = variants.length
+        ? `<ul class="merge-variants">${variants.map(v => `
+            <li><label class="merge-variant">
+                <input type="checkbox" class="me-pick" data-name="${escHtml(v.name)}" checked>
+                <span class="merge-variant-name">${escHtml(v.name)}</span>
+                <span class="merge-meta">${v.count}×</span>
+            </label></li>`).join('')}</ul>`
+        : '<div class="pv-empty">Diese Gruppe hat nur eine Schreibweise — du kannst sie umbenennen oder auftrennen.</div>';
+
+    modal.root.querySelector('.me-split').onclick = async () => {
+        modal.close();
+        await splitProduct(product);
+    };
+    modal.root.querySelector('.me-save').onclick = async () => {
+        const dropped = [...modal.root.querySelectorAll('.me-pick:not(:checked)')].map(cb => cb.dataset.name);
+        const newTitle = modal.root.querySelector('#meName').value.trim() || title;
+        if (dropped.length === variants.length && variants.length) {
+            modal.close();
+            await splitProduct(product);
+            return;
+        }
+        try {
+            const r = await AUSGABEN_API.regroupProduct(product.key, newTitle, dropped);
+            // Herausgelöstes ist eine Entscheidung: sonst schlägt die Seite
+            // beim nächsten Laden dieselbe Zusammenführung wieder vor.
+            if (dropped.length && r.product_group) {
+                try {
+                    await AUSGABEN_API.dismissMerge([r.product_group, ...dropped.map(n => n.toLowerCase())]);
+                } catch (_) {}
+            }
+            modal.close();
+            showToast(dropped.length
+                ? `Gespeichert — ${r.dropped} Position${r.dropped === 1 ? '' : 'en'} herausgelöst`
+                : 'Gespeichert', 'success');
+            await Promise.all([loadProducts(), loadMergeSuggestions()]);
+        } catch (e) { showToast('Fehler: ' + e.message, 'error'); }
+    };
 }
 
 async function splitProduct(product) {

@@ -74,6 +74,7 @@ const AUSGABEN_API = {
     mergeSuggestions:(  ) => apiCall('/api/expenses/products/merge-suggestions'),
     mergeProducts:   (keys, title) => apiCall('/api/expenses/products/merge', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ keys, title }) }),
     dismissMerge:    (keys) => apiCall('/api/expenses/products/merge-dismiss', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ keys }) }),
+    regroupProduct:  (key, title, drop) => apiCall('/api/expenses/products/regroup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key, title, drop }) }),
     splitProduct:    (key) => apiCall('/api/expenses/products/split', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ keys: [key] }) }),
     mergeCategory:   (srcId, targetId) => apiCall(`/api/expense-categories/${srcId}/merge-into/${targetId}`, { method: 'POST' }),
     setItemGroup:    (iid, group) => apiCall(`/api/expense-items/${iid}/product-group`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ product_group: group }) }),

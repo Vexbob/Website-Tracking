@@ -44,6 +44,17 @@
 .merge-do{background:var(--blue) !important;border-color:var(--blue) !important;color:#fff !important}
 .merge-skip:hover{border-color:var(--red);color:var(--red)}
 
+/* Editor fuer eine bestehende Zusammenfuehrung */
+.me-hint{margin:0 0 0.75rem;font-size:0.8125rem;color:var(--text-muted)}
+.me-list{margin-bottom:0.875rem}
+.me-list .merge-variants{margin:0}
+.me-name-lbl{display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.875rem}
+.me-name-lbl .merge-name{display:block;width:100%;flex:none;margin-top:0.25rem}
+.me-actions{display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap}
+.me-actions button{width:auto;margin:0;padding:0.375rem 0.75rem;font-size:0.8125rem;border-radius:7px;
+    border:1px solid var(--border-strong);background:var(--surface);color:var(--text);cursor:pointer;font-weight:600}
+.me-split:hover{border-color:var(--red);color:var(--red)}
+
 /* Detail-Modal */
 .pv-stores{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:0.75rem}
 .pv-store-chip{display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);

@@ -1622,7 +1622,11 @@ async def list_products(
         last = purchases[0]
         prices = [float(p["total_price"]) for p in purchases]
         total_spent = sum(prices)
-        title = ((last["base_name"] or "").strip()
+        # Bei einer zusammengefuehrten Gruppe gilt der Gruppenname. Vorher stand
+        # hier der Basisname der neuesten Position -- der beim Zusammenfuehren
+        # eingetippte Name war damit unsichtbar.
+        title = ((last["product_group"] or "").strip()
+                 or (last["base_name"] or "").strip()
                  or _norm_product_key(last["description"]).title()
                  or (last["description"] or key))
         products.append({
@@ -1775,7 +1779,9 @@ async def merge_products(request: Request, b: ProductMerge,
     keys = {(k or "").strip().lower() for k in (b.keys or []) if (k or "").strip()}
     if len(keys) < 2:
         raise HTTPException(400, "Mindestens zwei Produkt-Schlüssel nötig")
-    target = (b.title or "").strip().lower() or min(keys, key=lambda m: (len(m), m))
+    # Schreibweise des Users behalten -- _product_key vergleicht ohnehin
+    # kleingeschrieben, angezeigt wird aber genau das, was hier eingetippt wurde.
+    target = (b.title or "").strip() or min(keys, key=lambda m: (len(m), m))
 
     rows = await _fetch_product_rows(db, user["id"])
     item_ids = [r["item_id"] for r in rows if _product_key(r) in keys]
@@ -1824,6 +1830,58 @@ async def split_product(request: Request, b: ProductMerge,
         "UPDATE expense_items SET product_group=NULL WHERE id = ANY($1) AND user_id=$2",
         item_ids, user["id"])
     return {"status": "split", "items": len(item_ids)}
+
+
+class ProductRegroup(BaseModel):
+    key: str
+    title: Optional[str] = None
+    drop: Optional[list] = None  # Basisnamen, die aus der Gruppe fallen sollen
+
+
+@router.post("/api/expenses/products/regroup")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def regroup_product(request: Request, b: ProductRegroup,
+                          db=Depends(get_db), user=Depends(get_current_user)):
+    """Bearbeitet eine BESTEHENDE Zusammenfuehrung.
+
+    Zwei Dinge in einem Schritt, weil sie am selben Kasten haengen: die Gruppe
+    umbenennen (``title``) und einzelne Schreibweisen wieder herausloesen
+    (``drop`` = Basisnamen). Herausgeloeste Positionen verlieren ihre
+    ``product_group`` und stehen danach wieder als eigenes Produkt in der Liste.
+    Anders als ``/split`` bleibt der Rest der Gruppe bestehen.
+    """
+    key = (b.key or "").strip().lower()
+    if not key:
+        raise HTTPException(400, "Produkt-Schlüssel nötig")
+    rows = await db.fetch(
+        "SELECT id, base_name, description FROM expense_items "
+        "WHERE user_id=$1 AND LOWER(TRIM(COALESCE(product_group,'')))=$2",
+        user["id"], key)
+    if not rows:
+        raise HTTPException(404, "Keine zusammengeführte Gruppe zu diesem Schlüssel")
+
+    drop = {(d or "").strip().lower() for d in (b.drop or []) if (d or "").strip()}
+    title = (b.title or "").strip() or key
+
+    keep_ids, drop_ids = [], []
+    for r in rows:
+        name = ((r["base_name"] or "").strip() or (r["description"] or "").strip()).lower()
+        (drop_ids if name in drop else keep_ids).append(r["id"])
+
+    async with db.transaction():
+        if drop_ids:
+            await db.execute(
+                "UPDATE expense_items SET product_group=NULL WHERE id = ANY($1) AND user_id=$2",
+                drop_ids, user["id"])
+        if keep_ids and title.lower() != key:
+            await db.execute(
+                "UPDATE expense_items SET product_group=$1 WHERE id = ANY($2) AND user_id=$3",
+                title, keep_ids, user["id"])
+    logger.info(f"User {user['id']} regrouped '{key}' -> '{title}' "
+                f"({len(keep_ids)} behalten, {len(drop_ids)} herausgeloest)")
+    return {"status": "ok",
+            "product_group": title if keep_ids else None,
+            "kept": len(keep_ids), "dropped": len(drop_ids)}
 
 
 class ItemGroupOverride(BaseModel):
