@@ -231,9 +231,14 @@
         moduleRow = document.createElement('nav');
         moduleRow.className = 'nav-modules';
         moduleRow.setAttribute('aria-label', 'Module');
+        // Die Leiste steht zwischen Titel und Konto. Sie am Titel
+        // auszurichten reicht nicht -- nicht jede Seite hat einen; der Block
+        // rechts ist der verlaessliche Anker.
+        const right = navbar.querySelector('.nav-right');
         const title = navbar.querySelector('.nav-title');
-        if (title && title.parentNode === navbar) title.after(moduleRow);
-        else navbar.insertBefore(moduleRow, navbar.firstChild);
+        if (right && right.parentNode === navbar) navbar.insertBefore(moduleRow, right);
+        else if (title && title.parentNode === navbar) title.after(moduleRow);
+        else navbar.appendChild(moduleRow);
         renderModuleRow(visible);
 
         let t = null;
