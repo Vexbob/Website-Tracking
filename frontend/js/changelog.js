@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.60.0', date: '2026-09-07', title: 'Zeitfilter hinter einem Knopf, Export zum Zusammenstellen', notes: [
+        'Der Zeitraum liegt überall hinter einem Knopf, der den aktuellen Stand benennt — 7/30/90/365 Tage, Gesamt und ein eigener Von/Bis-Zeitraum.',
+        'Im Export wählst du jetzt aus, welche Module und Sektionen hinein sollen, und fasst jedes Modul einzeln wochen- oder monatsweise zusammen.',
+        'Eine Vorschau zeigt vorher, wie viele Zeilen je Sektion herauskommen, wie groß die Datei wird und wie ihre ersten Zeilen aussehen.',
+        'In den Einstellungen lässt sich festlegen, mit welchem Zeitraum Statistik- und Gesundheitsseiten aufmachen.',
+    ]},
     { v: 'v1.59.0', date: '2026-09-07', title: 'Module offen in der Leiste, hellere Akzente', notes: [
         'Am Rechner stehen die Module jetzt offen in der Navigationszeile statt hinter dem Punkte-Symbol — was nicht mehr hineinpasst, rutscht von selbst ins Menü.',
         'Neue Seite „Einstellungen“: Reihenfolge der Leiste am Rechner, Belegung der Tab-Leiste am Handy und der Gesamt-Export an einem Ort.',

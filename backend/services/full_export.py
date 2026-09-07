@@ -13,6 +13,16 @@ v1.28.0 - kompaktes Format (~40 % kleiner als v1.27):
     in Kommentarzeilen ausgelagert statt in jeder Zeile wiederholt.
   * Der dedizierte Health-Export (``build_health_export_csv``) nutzt
     exakt dieselben Sektions-Helfer, damit beide konsistent bleiben.
+
+v1.60.0 - der Export ist zusammenstellbar:
+  * ``EXPORT_SECTIONS`` ist die eine Liste, aus der Auswahl, Vorschau und
+    Oberflaeche leben. ``sections`` waehlt daraus aus; ohne Angabe ist alles
+    dabei.
+  * Die Aggregation ist je Modul waehlbar (``aggregate_map``) statt einmal
+    fuer die ganze Datei -- Ausgaben monatsweise, Gesundheit einzeln.
+  * ``build_export_preview`` liefert dieselbe Zusammenstellung als
+    Kennzahlen (Sektionen, Zeilen, Groesse) samt der ersten Zeilen. Es baut
+    den Export dafuer wirklich: eine Schaetzung waere schneller und falsch.
 """
 from __future__ import annotations
 
@@ -124,6 +134,76 @@ def _euro_de(v) -> str:
 
 
 
+# ---------- Sektionen (v1.60.0) ----------
+# Die eine Liste, aus der Auswahl, Vorschau und Frontend leben. Wer eine
+# Sektion hinzufuegt, traegt sie hier ein und baut sie in ``_build_sections``
+# -- die Oberflaeche zieht ueber /api/export/sections automatisch nach.
+#
+# ``group`` bestimmt, welche Aggregations-Einstellung greift; ``aggregatable``
+# sagt, ob die Sektion ueberhaupt zusammenfassbar ist. Metadaten (Ziele,
+# Achievements, Zusammenfassung) sind es nicht: sie sind Stammdaten, keine
+# Zeitreihe, und werden deshalb auch vom Zeitraum-Filter nicht angefasst.
+
+EXPORT_SECTIONS: list[dict] = [
+    {"key": "sparziel_meta", "group": "sparziel", "aggregatable": False, "dated": False,
+     "label": "Ziele, Achievements, Wochenziele, Trophaeen"},
+    {"key": "sparziel_log", "group": "sparziel", "aggregatable": True, "dated": True,
+     "label": "Protokoll (Check-ins, Meilensteine, Auszahlungen)"},
+    {"key": "ausgaben", "group": "ausgaben", "aggregatable": True, "dated": True,
+     "label": "Bons und ihre Positionen"},
+    {"key": "health_summary", "group": "health", "aggregatable": False, "dated": False,
+     "label": "Zusammenfassung"},
+    {"key": "health_vitals", "group": "health", "aggregatable": True, "dated": True,
+     "label": "Vitalwerte (ein Tag je Zeile)"},
+    {"key": "health_bp", "group": "health", "aggregatable": True, "dated": True,
+     "label": "Blutdruck"},
+    {"key": "health_glucose", "group": "health", "aggregatable": True, "dated": True,
+     "label": "Blutzucker"},
+    {"key": "health_sleep", "group": "health", "aggregatable": True, "dated": True,
+     "label": "Schlaf inkl. Phasen"},
+    {"key": "health_workouts", "group": "health", "aggregatable": True, "dated": True,
+     "label": "Workouts inkl. Zusatzmetriken"},
+]
+
+EXPORT_GROUPS: list[dict] = [
+    {"key": "sparziel", "label": "Sparziel"},
+    {"key": "ausgaben", "label": "Ausgaben"},
+    {"key": "health", "label": "Gesundheit"},
+]
+
+ALL_SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS]
+
+
+def clean_sections(raw) -> list[str]:
+    """Bekannte Schluessel in der Reihenfolge der Registry. Leer heisst alle --
+    ein Export ohne Sektionen waere eine leere Datei, und die will niemand."""
+    if not raw:
+        return list(ALL_SECTION_KEYS)
+    wanted = {str(x).strip() for x in raw if str(x).strip()}
+    picked = [k for k in ALL_SECTION_KEYS if k in wanted]
+    return picked or list(ALL_SECTION_KEYS)
+
+
+def clean_aggregate_map(raw, fallback: str = "none") -> dict:
+    """Aggregation je Modul. Was fehlt oder unbekannt ist, bekommt den
+    Gesamtwert -- so bleibt der alte Aufruf mit nur ``aggregate`` gueltig."""
+    fallback = fallback if fallback in ("none", "week", "month") else "none"
+    out = {g["key"]: fallback for g in EXPORT_GROUPS}
+    for key, value in (raw or {}).items():
+        if key in out and value in ("none", "week", "month"):
+            out[key] = value
+    return out
+
+
+def _count_rows(lines: list[str]) -> int:
+    """Datenzeilen einer Sektion: alles ohne Kommentar und ohne Leerzeile,
+    abzueglich der Spalten-Header. Jede '# SEKTION:'-Marke steht genau vor
+    einem Header -- daher deren Anzahl."""
+    data = sum(1 for ln in lines if ln and not ln.startswith("#"))
+    headers = sum(1 for ln in lines if ln.startswith("# SEKTION:"))
+    return max(0, data - headers)
+
+
 # ---------- Public API ----------
 
 async def build_full_export_csv(
@@ -132,6 +212,8 @@ async def build_full_export_csv(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     aggregate: str = "none",
+    sections: Optional[list] = None,
+    aggregate_map: Optional[dict] = None,
 ) -> str:
     """Baut die komplette CSV als String. Gibt Zeilen (``\\n``-getrennt) zurueck.
 
@@ -148,65 +230,136 @@ async def build_full_export_csv(
         (Datum, Laden, Typ, Anzahl Positionen, Summe, Kategorien-Split) --
         weg fallen nur die Einzelpositionen.
     """
-    if aggregate not in ("none", "week", "month"):
-        aggregate = "none"
+    picked = clean_sections(sections)
+    agg_map = clean_aggregate_map(aggregate_map, aggregate)
+    built = await _build_sections(db, user, picked, date_from, date_to, agg_map)
 
-    lines: list[str] = []
+    lines = _export_header(user, picked, date_from, date_to, agg_map)
+    for _key, section_lines in built:
+        lines.extend(section_lines)
+    return _compact_timestamps("\n".join(lines) + "\n")
+
+
+def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict) -> list[str]:
+    """Der Vorspann dokumentiert die Zusammenstellung in der Datei selbst --
+    ein halber Export ohne diese Zeilen sieht ein Jahr spaeter aus wie
+    fehlende Daten."""
+    labels = {s["key"]: s["label"] for s in EXPORT_SECTIONS}
     export_dt = datetime.now(timezone.utc).isoformat()
-    lines.append(
-        f"# Vexbob Gesamt-Export;user={_f(user['username'])};generated_at={export_dt}")
-    # Optionen-Zeile: dokumentiert Filter/Aggregation direkt in der CSV,
-    # damit der Empfaenger (Mensch/KI) den Kontext der Zahlen versteht.
     opt_from = date_from.isoformat() if date_from else "(offen)"
     opt_to = date_to.isoformat() if date_to else "(offen)"
+    agg_txt = "; ".join(
+        f'{g["label"]}={agg_map.get(g["key"], "none")}' for g in EXPORT_GROUPS)
+    lines = [
+        f"# Vexbob Gesamt-Export;user={_f(user['username'])};generated_at={export_dt}",
+        f"# Optionen: zeitraum={opt_from} bis {opt_to}; aggregation: {agg_txt}",
+        "# Enthaltene Sektionen: " + "; ".join(labels.get(k, k) for k in picked),
+    ]
+    if len(picked) < len(ALL_SECTION_KEYS):
+        fehlt = [labels.get(k, k) for k in ALL_SECTION_KEYS if k not in picked]
+        lines.append("# BEWUSST NICHT enthalten: " + "; ".join(fehlt))
     lines.append(
-        f"# Optionen: zeitraum={opt_from} bis {opt_to}; aggregation={aggregate}")
-    lines.append(
-        "# Diese Datei enthaelt ALLE Vexbob-Module in einer CSV: Sparziel "
-        "(Ziele, Achievements, Wochen-/Monatsziele, Protokoll), Ausgaben "
-        "(Bons + Positionen als getrennte Sektionen, verknuepft ueber "
-        "expense_id) und Gesundheit (Vitalwerte im Wide-Format, Blutdruck, "
-        "Blutzucker, Schlaf, Workouts). Jede Sektion beginnt mit einer "
-        "Kommentarzeile '# SEKTION: ...' gefolgt von ihrem eigenen "
-        "Spalten-Header - die Spaltenanzahl unterscheidet sich bewusst "
-        "zwischen den Sektionen.")
+        "# Jede Sektion beginnt mit einer Kommentarzeile '# SEKTION: ...' "
+        "gefolgt von ihrem eigenen Spalten-Header - die Spaltenanzahl "
+        "unterscheidet sich bewusst zwischen den Sektionen. Bons und "
+        "Positionen sind ueber expense_id verknuepft.")
     lines.append(
         "# Konventionen: Zeitstempel sind UTC im Format YYYY-MM-DDTHH:MM:SSZ "
         "(keine Mikrosekunden). Gesundheitswerte nutzen Punkt-Dezimal, "
         "Euro-Betraege in der Ausgaben-Sektion nutzen Komma-Dezimal.")
     lines.append("")
+    return lines
 
-    # ---------- 1) Sparziel-Metadaten (immer unveraendert) ----------
-    lines.extend(await _build_export_metadata(db, user["id"]))
 
-    # ---------- 2) Sparziel-Protokoll (zeitraum-gefiltert, optional aggregiert) ----------
-    proto_all = await _sparziel_protocol_lines(db, user["id"])
-    if date_from or date_to:
-        proto_filtered = [
-            ln for ln in proto_all
-            if _in_range(_date_from_iso_prefix(ln.split(";", 1)[0]), date_from, date_to)
-        ]
-    else:
-        proto_filtered = proto_all
-    if aggregate in ("week", "month"):
-        # v1.37.2: Bei Aggregation kompakte Perioden-Zusammenfassung statt
-        # Einzel-Eintraege. Bei ~130 Checkins/Woche wird das sonst unlesbar.
-        lines.extend(_sparziel_protocol_aggregated(proto_filtered, aggregate))
-    else:
-        lines.append("# SEKTION: Sparziel-Protokoll")
-        lines.append("Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz")
-        lines.extend(proto_filtered)
-        lines.append("")
+async def _build_sections(db, user, picked: list[str], date_from, date_to,
+                          agg_map: dict) -> list[tuple]:
+    """Baut die gewaehlten Sektionen einzeln. Getrennt gehalten, damit die
+    Vorschau dieselben Zeilen zaehlen kann, die spaeter in der Datei stehen --
+    eine zweite Schaetzformel waere garantiert irgendwann falsch."""
+    want = set(picked)
+    out: list[tuple] = []
+    uid = user["id"]
 
-    # ---------- 3) Ausgaben (Filter + optionale Wochen-/Monats-Aggregation) ----------
-    lines.extend(await _expenses_sections(
-        db, user["id"], date_from=date_from, date_to=date_to, aggregate=aggregate))
+    if "sparziel_meta" in want:
+        out.append(("sparziel_meta", await _build_export_metadata(db, uid)))
 
-    # ---------- 4) Gesundheit (Filter + optionale Aggregation) ----------
-    lines.extend(await _health_section(
-        db, user["id"], date_from=date_from, date_to=date_to, aggregate=aggregate))
+    if "sparziel_log" in want:
+        proto_all = await _sparziel_protocol_lines(db, uid)
+        if date_from or date_to:
+            proto = [ln for ln in proto_all
+                     if _in_range(_date_from_iso_prefix(ln.split(";", 1)[0]),
+                                  date_from, date_to)]
+        else:
+            proto = proto_all
+        agg = agg_map.get("sparziel", "none")
+        if agg in ("week", "month"):
+            # v1.37.2: Bei Aggregation kompakte Perioden-Zusammenfassung statt
+            # Einzel-Eintraege. Bei ~130 Checkins/Woche wird das sonst unlesbar.
+            out.append(("sparziel_log", _sparziel_protocol_aggregated(proto, agg)))
+        else:
+            block = ["# SEKTION: Sparziel-Protokoll",
+                     "Datum;Typ;Titel;Beschreibung;Periode;Betrag;Notiz"]
+            block.extend(proto)
+            block.append("")
+            out.append(("sparziel_log", block))
 
-    return _compact_timestamps("\n".join(lines) + "\n")
+    if "ausgaben" in want:
+        out.append(("ausgaben", await _expenses_sections(
+            db, uid, date_from=date_from, date_to=date_to,
+            aggregate=agg_map.get("ausgaben", "none"))))
+
+    health_keys = [k for k in ("health_summary", "health_vitals", "health_bp",
+                               "health_glucose", "health_sleep", "health_workouts")
+                   if k in want]
+    if health_keys:
+        out.extend(await _health_section(
+            db, uid, date_from=date_from, date_to=date_to,
+            aggregate=agg_map.get("health", "none"), sections=health_keys))
+    return out
+
+
+async def build_export_preview(
+    db,
+    user,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    aggregate: str = "none",
+    sections: Optional[list] = None,
+    aggregate_map: Optional[dict] = None,
+    sample_lines: int = 40,
+) -> dict:
+    """Was der Export enthalten wuerde: je Sektion die Zeilenzahl und ihr
+    Anteil, die Gesamtgroesse und die ersten Zeilen der echten Datei. Baut den
+    Export dafuer wirklich -- eine Schaetzung waere schneller und falsch."""
+    picked = clean_sections(sections)
+    agg_map = clean_aggregate_map(aggregate_map, aggregate)
+    built = await _build_sections(db, user, picked, date_from, date_to, agg_map)
+
+    header = _export_header(user, picked, date_from, date_to, agg_map)
+    all_lines = list(header)
+    labels = {s["key"]: s["label"] for s in EXPORT_SECTIONS}
+    detail = []
+    for key, section_lines in built:
+        text = _compact_timestamps("\n".join(section_lines))
+        detail.append({
+            "key": key,
+            "label": labels.get(key, key),
+            "rows": _count_rows(section_lines),
+            "bytes": len(text.encode("utf-8")),
+        })
+        all_lines.extend(section_lines)
+
+    csv = _compact_timestamps("\n".join(all_lines) + "\n")
+    body = ("\ufeff" + csv).encode("utf-8")
+    sample = csv.split("\n")[:max(1, sample_lines)]
+    return {
+        "sections": detail,
+        "total_rows": sum(d["rows"] for d in detail),
+        "bytes": len(body),
+        "lines": csv.count("\n"),
+        "sample": "\n".join(sample),
+        "truncated": csv.count("\n") > len(sample),
+    }
 
 
 async def build_health_export_csv(db, user) -> str:
@@ -225,7 +378,8 @@ async def build_health_export_csv(db, user) -> str:
         "# Konvention: Zeitstempel sind UTC im Format YYYY-MM-DDTHH:MM:SSZ. "
         "Zahlen nutzen Punkt-Dezimal.")
     lines.append("")
-    lines.extend(await _health_section(db, user["id"]))
+    for _key, section_lines in await _health_section(db, user["id"]):
+        lines.extend(section_lines)
     return _compact_timestamps("\n".join(lines) + "\n")
 
 
@@ -874,127 +1028,142 @@ async def _health_section(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     aggregate: str = "none",
-) -> list[str]:
-    out: list[str] = []
-    # Zusammenfassung bleibt unveraendert (keys/counts ueber gesamten Bestand),
-    # damit man beim Oeffnen der CSV immer den Gesamtueberblick sieht.
-    out.extend(await _health_summary_section(db, user_id))
-    out.extend(await _health_vitals_wide_section(
-        db, user_id, date_from=date_from, date_to=date_to, aggregate=aggregate))
+    sections: Optional[list] = None,
+) -> list:
+    """Liefert Paare ``(sektions-schluessel, zeilen)``.
 
+    Ohne ``sections`` sind alle Gesundheits-Sektionen dabei -- so bleibt der
+    Health-Einzelexport, der dieselbe Funktion benutzt, unveraendert.
+    """
+    want = set(sections) if sections else {
+        "health_summary", "health_vitals", "health_bp",
+        "health_glucose", "health_sleep", "health_workouts"}
+    result: list = []
     agg_on = aggregate in ("week", "month")
 
-    # Blutdruck
-    bp_where, bp_params = _build_range_where("recorded_at", 1, date_from, date_to)
-    bp_rows = await db.fetch(
-        f"SELECT recorded_at, systolic, diastolic, unit FROM health_blood_pressure "
-        f"WHERE user_id=$1{bp_where} ORDER BY recorded_at", user_id, *bp_params)
-    if agg_on:
-        out.extend(_bp_aggregated(bp_rows, aggregate))
-    else:
-        out.append("# SEKTION: Gesundheit - Blutdruck")
-        out.append("Zeitpunkt;Systolisch;Diastolisch;Einheit")
-        for r in bp_rows:
-            unit = (r["unit"] or "").strip()
-            out.append(
-                f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
-                f'{_num(r["systolic"])};{_num(r["diastolic"])};{unit}'
-            )
-        out.append("")
+    if "health_summary" in want:
+        # Zusammenfassung bleibt unveraendert (keys/counts ueber den gesamten
+        # Bestand), damit man beim Oeffnen der CSV den Ueberblick sieht.
+        result.append(("health_summary", await _health_summary_section(db, user_id)))
 
-    # Blutzucker
-    gl_where, gl_params = _build_range_where("recorded_at", 1, date_from, date_to)
-    gl_rows = await db.fetch(
-        f"SELECT recorded_at, value, unit FROM health_blood_glucose "
-        f"WHERE user_id=$1{gl_where} ORDER BY recorded_at", user_id, *gl_params)
-    if agg_on:
-        out.extend(_gl_aggregated(gl_rows, aggregate))
-    else:
-        out.append("# SEKTION: Gesundheit - Blutzucker")
-        out.append("Zeitpunkt;Wert;Einheit")
-        for r in gl_rows:
-            unit = (r["unit"] or "").strip()
-            out.append(
-                f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
-                f'{_num(r["value"])};{unit}'
-            )
-        out.append("")
+    if "health_vitals" in want:
+        result.append(("health_vitals", await _health_vitals_wide_section(
+            db, user_id, date_from=date_from, date_to=date_to, aggregate=aggregate)))
 
-    # Schlaf
-    sl_where, sl_params = _build_range_where("sleep_date", 1, date_from, date_to)
-    sl_rows = await db.fetch(
-        f"SELECT sleep_date, sleep_start, sleep_end, in_bed_minutes, asleep_minutes, "
-        f"core_minutes, deep_minutes, rem_minutes, awake_minutes FROM health_sleep "
-        f"WHERE user_id=$1{sl_where} ORDER BY sleep_date", user_id, *sl_params)
-    if agg_on:
-        out.extend(_sleep_aggregated(sl_rows, aggregate))
-    else:
-        out.append("# SEKTION: Gesundheit - Schlaf (Phasen in Minuten)")
-        out.append("Datum;Schlafbeginn;Schlafende;Im Bett (min);Geschlafen (min);"
-                    "Core (min);Deep (min);REM (min);Wach (min)")
-        for r in sl_rows:
-            out.append(
-                f'{r["sleep_date"].isoformat() if r["sleep_date"] else ""};'
-                f'{r["sleep_start"].isoformat() if r["sleep_start"] else ""};'
-                f'{r["sleep_end"].isoformat() if r["sleep_end"] else ""};'
-                f'{_num(r["in_bed_minutes"])};{_num(r["asleep_minutes"])};'
-                f'{_num(r["core_minutes"])};{_num(r["deep_minutes"])};'
-                f'{_num(r["rem_minutes"])};{_num(r["awake_minutes"])}'
-            )
-        out.append("")
+    if "health_bp" in want:
+        out: list[str] = []
+        bp_where, bp_params = _build_range_where("recorded_at", 1, date_from, date_to)
+        bp_rows = await db.fetch(
+            f"SELECT recorded_at, systolic, diastolic, unit FROM health_blood_pressure "
+            f"WHERE user_id=$1{bp_where} ORDER BY recorded_at", user_id, *bp_params)
+        if agg_on:
+            out.extend(_bp_aggregated(bp_rows, aggregate))
+        else:
+            out.append("# SEKTION: Gesundheit - Blutdruck")
+            out.append("Zeitpunkt;Systolisch;Diastolisch;Einheit")
+            for r in bp_rows:
+                unit = (r["unit"] or "").strip()
+                out.append(
+                    f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
+                    f'{_num(r["systolic"])};{_num(r["diastolic"])};{unit}'
+                )
+            out.append("")
+        result.append(("health_bp", out))
 
-    # Workouts
-    wk_where, wk_params = _build_range_where("start_at", 1, date_from, date_to)
-    wk_rows = await db.fetch(
-        f"SELECT id, start_at, end_at, workout_type, duration_min, active_energy_kcal, "
-        f"total_energy_kcal, distance_m, elevation_m, avg_heart_rate, max_heart_rate, "
-        f"min_heart_rate "
-        f"FROM health_workouts WHERE user_id=$1{wk_where} ORDER BY start_at",
-        user_id, *wk_params)
-    workout_ids: list[int] = [r["id"] for r in wk_rows]
-    if agg_on:
-        out.extend(_workouts_aggregated(wk_rows, aggregate))
-    else:
-        out.append("# SEKTION: Gesundheit - Workouts (ohne Routendaten)")
-        out.append("ID;Start;Ende;Typ;Dauer (min);Aktive Energie (kcal);Gesamt-Energie (kcal);"
-                    "Distanz (m);Hoehenmeter (m);O-Herzfrequenz;Max-Herzfrequenz;"
-                    "Min-Herzfrequenz")
-        for r in wk_rows:
-            out.append(
-                f'{r["id"]};'
-                f'{r["start_at"].isoformat() if r["start_at"] else ""};'
-                f'{r["end_at"].isoformat() if r["end_at"] else ""};'
-                f'{_f(r["workout_type"] or "")};'
-                f'{_num(r["duration_min"])};{_num(r["active_energy_kcal"])};'
-                f'{_num(r["total_energy_kcal"])};{_num(r["distance_m"])};'
-                f'{_num(r["elevation_m"])};{_num(r["avg_heart_rate"])};'
-                f'{_num(r["max_heart_rate"])};{_num(r["min_heart_rate"])}'
-            )
-        out.append("")
+    if "health_glucose" in want:
+        out = []
+        gl_where, gl_params = _build_range_where("recorded_at", 1, date_from, date_to)
+        gl_rows = await db.fetch(
+            f"SELECT recorded_at, value, unit FROM health_blood_glucose "
+            f"WHERE user_id=$1{gl_where} ORDER BY recorded_at", user_id, *gl_params)
+        if agg_on:
+            out.extend(_gl_aggregated(gl_rows, aggregate))
+        else:
+            out.append("# SEKTION: Gesundheit - Blutzucker")
+            out.append("Zeitpunkt;Wert;Einheit")
+            for r in gl_rows:
+                unit = (r["unit"] or "").strip()
+                out.append(
+                    f'{r["recorded_at"].isoformat() if r["recorded_at"] else ""};'
+                    f'{_num(r["value"])};{unit}'
+                )
+            out.append("")
+        result.append(("health_glucose", out))
 
-    # Workout-Zusatzmetriken referenzieren einzelne Workout-IDs; im
-    # Aggregations-Modus sind diese IDs nicht mehr in der CSV -> Sektion
-    # bewusst weglassen statt "haengende" Referenzen zu produzieren.
-    if agg_on:
-        return out
+    if "health_sleep" in want:
+        out = []
+        sl_where, sl_params = _build_range_where("sleep_date", 1, date_from, date_to)
+        sl_rows = await db.fetch(
+            f"SELECT sleep_date, sleep_start, sleep_end, in_bed_minutes, asleep_minutes, "
+            f"core_minutes, deep_minutes, rem_minutes, awake_minutes FROM health_sleep "
+            f"WHERE user_id=$1{sl_where} ORDER BY sleep_date", user_id, *sl_params)
+        if agg_on:
+            out.extend(_sleep_aggregated(sl_rows, aggregate))
+        else:
+            out.append("# SEKTION: Gesundheit - Schlaf (Phasen in Minuten)")
+            out.append("Datum;Schlafbeginn;Schlafende;Im Bett (min);Geschlafen (min);"
+                       "Core (min);Deep (min);REM (min);Wach (min)")
+            for r in sl_rows:
+                out.append(
+                    f'{r["sleep_date"].isoformat() if r["sleep_date"] else ""};'
+                    f'{r["sleep_start"].isoformat() if r["sleep_start"] else ""};'
+                    f'{r["sleep_end"].isoformat() if r["sleep_end"] else ""};'
+                    f'{_num(r["in_bed_minutes"])};{_num(r["asleep_minutes"])};'
+                    f'{_num(r["core_minutes"])};{_num(r["deep_minutes"])};'
+                    f'{_num(r["rem_minutes"])};{_num(r["awake_minutes"])}'
+                )
+            out.append("")
+        result.append(("health_sleep", out))
 
-    out.append("# SEKTION: Gesundheit - Workout-Zusatzmetriken (Kadenz, "
-                "Schwimmzuege, Temperatur, ...); Workout-ID verweist auf die "
-                "vorige Sektion")
-    out.append("Workout-ID;Metrik;Wert;Einheit")
-    if workout_ids:
-        for r in await db.fetch(
-            "SELECT workout_id, metric_key, value, unit FROM health_workout_metrics "
-            "WHERE workout_id = ANY($1::int[]) ORDER BY workout_id, metric_key",
-            workout_ids):
-            unit = (r["unit"] or "").strip()
-            out.append(
-                f'{r["workout_id"]};{_f(r["metric_key"])};'
-                f'{_num(r["value"])};{unit}'
-            )
-    out.append("")
+    if "health_workouts" in want:
+        out = []
+        wk_where, wk_params = _build_range_where("start_at", 1, date_from, date_to)
+        wk_rows = await db.fetch(
+            f"SELECT id, start_at, end_at, workout_type, duration_min, active_energy_kcal, "
+            f"total_energy_kcal, distance_m, elevation_m, avg_heart_rate, max_heart_rate, "
+            f"min_heart_rate "
+            f"FROM health_workouts WHERE user_id=$1{wk_where} ORDER BY start_at",
+            user_id, *wk_params)
+        workout_ids: list[int] = [r["id"] for r in wk_rows]
+        if agg_on:
+            out.extend(_workouts_aggregated(wk_rows, aggregate))
+        else:
+            out.append("# SEKTION: Gesundheit - Workouts (ohne Routendaten)")
+            out.append("ID;Start;Ende;Typ;Dauer (min);Aktive Energie (kcal);Gesamt-Energie (kcal);"
+                       "Distanz (m);Hoehenmeter (m);O-Herzfrequenz;Max-Herzfrequenz;"
+                       "Min-Herzfrequenz")
+            for r in wk_rows:
+                out.append(
+                    f'{r["id"]};'
+                    f'{r["start_at"].isoformat() if r["start_at"] else ""};'
+                    f'{r["end_at"].isoformat() if r["end_at"] else ""};'
+                    f'{_f(r["workout_type"] or "")};'
+                    f'{_num(r["duration_min"])};{_num(r["active_energy_kcal"])};'
+                    f'{_num(r["total_energy_kcal"])};{_num(r["distance_m"])};'
+                    f'{_num(r["elevation_m"])};{_num(r["avg_heart_rate"])};'
+                    f'{_num(r["max_heart_rate"])};{_num(r["min_heart_rate"])}'
+                )
+            out.append("")
 
-    return out
+            # Workout-Zusatzmetriken referenzieren einzelne Workout-IDs; im
+            # Aggregations-Modus sind diese IDs nicht mehr in der CSV -> die
+            # Sektion bleibt dort bewusst weg statt "haengende" Referenzen zu
+            # produzieren.
+            out.append("# SEKTION: Gesundheit - Workout-Zusatzmetriken (Kadenz, "
+                       "Schwimmzuege, Temperatur, ...); Workout-ID verweist auf die "
+                       "vorige Sektion")
+            out.append("Workout-ID;Metrik;Wert;Einheit")
+            if workout_ids:
+                for r in await db.fetch(
+                    "SELECT workout_id, metric_key, value, unit FROM health_workout_metrics "
+                    "WHERE workout_id = ANY($1::int[]) ORDER BY workout_id, metric_key",
+                    workout_ids):
+                    unit = (r["unit"] or "").strip()
+                    out.append(
+                        f'{r["workout_id"]};{_f(r["metric_key"])};'
+                        f'{_num(r["value"])};{unit}'
+                    )
+            out.append("")
+        result.append(("health_workouts", out))
 
-    out.append("")
-    return out
+    return result

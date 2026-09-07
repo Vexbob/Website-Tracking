@@ -52,9 +52,8 @@ function move(href, dir) {
 async function saveDesktop(btn) {
     btn.disabled = true;
     try {
-        await apiCall('/api/ui/prefs', { method: 'PUT',
-            body: { prefs: { [VexNav.DESKTOP_PREF]: SET.order } } });
-        VexNav.applyDesktopOrder(SET.order);
+        await VexPrefs.set(VexNav.DESKTOP_PREF, SET.order);
+        VexNav.redrawDesktop();
         if (window.Toast) Toast.success('Reihenfolge gespeichert');
     } catch (e) {
         if (window.Toast) Toast.error(e.message || String(e));
@@ -64,14 +63,38 @@ async function saveDesktop(btn) {
 async function resetDesktop(btn) {
     btn.disabled = true;
     try {
-        await apiCall('/api/ui/prefs/' + VexNav.DESKTOP_PREF, { method: 'DELETE' });
+        await VexPrefs.reset(VexNav.DESKTOP_PREF);
         SET.order = SET.modules.map(m => m.href);
-        VexNav.applyDesktopOrder(SET.order);
+        VexNav.redrawDesktop();
         renderDesktopList();
         if (window.Toast) Toast.success('Standardreihenfolge wiederhergestellt');
     } catch (e) {
         if (window.Toast) Toast.error(e.message || String(e));
     } finally { btn.disabled = false; }
+}
+
+/* Standard-Zeitraum: dieselben Presets wie der Filter-Knopf, damit hier
+ * nichts steht, was es dort nicht gibt. */
+const RANGE_PREF = 'ui_default_range';
+
+function renderRangeList() {
+    const box = document.getElementById('rangeList');
+    if (!box) return;
+    const cur = VexPrefs.get(RANGE_PREF, VexRange.DEFAULT_PRESET);
+    box.innerHTML = VexRange.PRESETS.map(p =>
+        '<button type="button" class="rf-opt' + (p.key === cur ? ' is-active' : '') +
+        '" data-preset="' + p.key + '">' + p.label +
+        '<span class="rf-check" aria-hidden="true">✓</span></button>').join('');
+}
+
+async function saveRange(preset) {
+    try {
+        await VexPrefs.set(RANGE_PREF, preset);
+        renderRangeList();
+        if (window.Toast) Toast.success('Standard-Zeitraum gespeichert');
+    } catch (e) {
+        if (window.Toast) Toast.error(e.message || String(e));
+    }
 }
 
 (async function init() {
@@ -99,6 +122,11 @@ async function resetDesktop(btn) {
     });
     document.getElementById('deskSave').onclick = (e) => saveDesktop(e.currentTarget);
     document.getElementById('deskReset').onclick = (e) => resetDesktop(e.currentTarget);
+    renderRangeList();
+    document.getElementById('rangeList').addEventListener('click', (e) => {
+        const b = e.target.closest('.rf-opt');
+        if (b) saveRange(b.dataset.preset);
+    });
     document.getElementById('tabCfg').onclick = () => VexNav.openTabBarSettings();
     document.getElementById('expBtn').onclick = () => exportAll();
 })();

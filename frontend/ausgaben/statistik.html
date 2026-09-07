@@ -17,6 +17,7 @@
     <script src="/ausgaben/ausgaben.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 <script src="/js/charts.js"></script>
+<script src="/js/range-filter.js"></script>
 </head>
 <body>
 <nav class="navbar">
@@ -29,18 +30,12 @@
 <main class="wide">
     <div id="subnav" data-active="statistik"></div>
 
+    <!-- v1.60.0: Der Zeitraum liegt hinter einem Knopf (js/range-filter.js);
+         vorher standen fünf Chips und zwei Datumsfelder dauerhaft im Weg. -->
     <div class="stat-filterbar">
-        <div class="stat-preset-chips" id="statPresets">
-            <button class="stat-chip" data-preset="7">7 Tage</button>
-            <button class="stat-chip active" data-preset="30">30 Tage</button>
-            <button class="stat-chip" data-preset="90">90 Tage</button>
-            <button class="stat-chip" data-preset="365">1 Jahr</button>
-            <button class="stat-chip" data-preset="all">Gesamt</button>
-        </div>
-        <div class="stat-custom">
-            <label>von <input type="date" id="statFrom"></label>
-            <label>bis <input type="date" id="statTo"></label>
-        </div>
+        <span class="stat-filter-title">Zeitraum</span>
+        <span class="stat-range-lbl" id="statRangeInfo"></span>
+        <div class="stat-filter-slot" id="statRange"></div>
     </div>
 
     <div class="stat-kpi-grid" id="statKpiGrid">

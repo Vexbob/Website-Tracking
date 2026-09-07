@@ -53,30 +53,14 @@ async function init(){
     const me = await ensureLoggedIn(); if(!me) return;
     renderSubnav();
     bindFilterUI();
-    applyPreset('30');
     document.body.classList.add('ready');
     document.body.style.visibility = 'visible';
 }
 
 function bindFilterUI(){
-    document.querySelectorAll('.stat-chip').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const p = btn.dataset.preset;
-            applyPreset(p);
-        });
-    });
-    const fromEl = document.getElementById('statFrom');
-    const toEl = document.getElementById('statTo');
-    const onCustomChange = () => {
-        if(!fromEl.value && !toEl.value) return;
-        STAT.preset = 'custom';
-        STAT.from = fromEl.value || null;
-        STAT.to = toEl.value || null;
-        document.querySelectorAll('.stat-chip').forEach(b => b.classList.remove('active'));
-        loadAll();
-    };
-    fromEl.addEventListener('change', onCustomChange);
-    toEl.addEventListener('change', onCustomChange);
+    // Der Zeitraum-Knopf zeichnet sich selbst und meldet den fertigen
+    // Zeitraum zurück — diese Seite rechnet nichts mehr aus.
+    VexRange.mount(document.getElementById('statRange'), { onChange: applyRange });
     document.querySelectorAll('#statGranularity button').forEach(b => {
         b.addEventListener('click', () => {
             document.querySelectorAll('#statGranularity button').forEach(x => x.classList.remove('active'));
@@ -87,29 +71,24 @@ function bindFilterUI(){
     });
 }
 
-function applyPreset(preset){
-    STAT.preset = preset;
-    document.querySelectorAll('.stat-chip').forEach(b => {
-        b.classList.toggle('active', b.dataset.preset === preset);
-    });
-    const today = new Date();
-    const iso = (d) => d.toISOString().slice(0,10);
-    if(preset === 'all'){
-        STAT.from = null; STAT.to = iso(today);
-    } else {
-        const days = parseInt(preset, 10);
-        const from = new Date(today.getTime() - (days-1)*86400000);
-        STAT.from = iso(from); STAT.to = iso(today);
-    }
-    // Custom-Inputs mit aktuellen Werten synchronisieren
-    document.getElementById('statFrom').value = STAT.from || '';
-    document.getElementById('statTo').value = STAT.to || '';
-    // Granularity smart wählen
-    if(preset === '7') { STAT.granularity = 'daily'; }
-    else if(preset === '30') { STAT.granularity = 'daily'; }
-    else if(preset === '90') { STAT.granularity = 'weekly'; }
-    else if(preset === '365') { STAT.granularity = 'monthly'; }
-    else if(preset === 'all') { STAT.granularity = 'monthly'; }
+/* Wie fein die Zeitreihe aufgelöst wird, hängt an der Länge des Zeitraums,
+ * nicht am gewählten Preset — sonst hätte ein eigener Zeitraum keine Regel. */
+function granularityFor(days){
+    if(!days || days > 400) return 'monthly';
+    if(days > 92) return 'monthly';
+    if(days > 31) return 'weekly';
+    return 'daily';
+}
+
+function applyRange(range){
+    STAT.preset = range.preset;
+    STAT.from = range.from;
+    STAT.to = range.to;
+    const info = document.getElementById('statRangeInfo');
+    if(info) info.textContent = range.preset === 'all'
+        ? 'seit dem ersten Bon'
+        : `${range.days} Tage`;
+    STAT.granularity = granularityFor(range.days);
     document.querySelectorAll('#statGranularity button').forEach(b => {
         b.classList.toggle('active', b.dataset.gran === STAT.granularity);
     });

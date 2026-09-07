@@ -150,8 +150,27 @@ def _check_nav_desktop(value: Any) -> List[str]:
     return out
 
 
+DEFAULT_RANGE_PREF = "ui_default_range"
+
+# Die Zeitraeume, die der Filter-Knopf anbietet. "all" heisst "kein Anfang",
+# nicht "0 Tage" -- deshalb Strings und keine Zahlen.
+ALLOWED_RANGES = ["7", "30", "90", "365", "all"]
+
+
+def _check_default_range(value: Any) -> str:
+    """Mit welchem Zeitraum Statistik- und Gesundheitsseiten aufmachen. Ein
+    eigener Von/Bis-Zeitraum ist bewusst NICHT speicherbar: er veraltet mit
+    jedem Tag, und eine Seite, die mit einem drei Monate alten Fenster
+    aufmacht, sieht nach kaputten Daten aus."""
+    v = str(value)
+    if v not in ALLOWED_RANGES:
+        raise ValueError(f"erlaubt sind {', '.join(ALLOWED_RANGES)}")
+    return v
+
+
 UI_PREFS = {
     DESKTOP_NAV_PREF: _check_nav_desktop,
+    DEFAULT_RANGE_PREF: _check_default_range,
 }
 
 

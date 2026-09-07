@@ -10,6 +10,7 @@
 <script src="/js/version.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 <script src="/js/charts.js"></script>
+<script src="/js/range-filter.js"></script>
 <style>
 /* Nur Aufbau dieser Musterseite — alles Gestaltete kommt aus style.css. */
 .sg-sec { margin: 0 0 var(--space-6); }
@@ -194,6 +195,17 @@
     </section>
 
     <section class="sg-sec">
+        <h2>Filter</h2>
+        <p class="sg-note">Ein Knopf benennt den aktuellen Stand, das Feld darunter schwebt.
+        Der Zeitraum-Filter (<code>VexRange.mount</code>, <code>js/range-filter.js</code>) ist
+        die einzige Fassung davon — Presets als Liste mit Haken, darunter der eigene
+        Zeitraum. Dieselben Bausteine (<code>.filter-toggle-btn</code>,
+        <code>.filter-popover</code>, <code>.fp-*</code>) tragen auch den Filter im
+        Ausgaben-Dashboard.</p>
+        <div class="v-card sg-row" id="sgRangeDemo"></div>
+    </section>
+
+    <section class="sg-sec">
         <h2>Diagramme</h2>
         <p class="sg-note">Kein Gitter außer waagerechten Linien, keine Rahmen, keine Achsentitel. Die
         erste Reihe trägt den Modulton, nicht den Akzent — der Akzent markiert Auswahl, nicht Daten.</p>
@@ -218,6 +230,7 @@
 <script>
 document.querySelector('.version-tag').textContent = typeof APP_VERSION !== 'undefined' ? APP_VERSION : '';
 window.addEventListener('load', () => {
+    if (window.VexRange) VexRange.mount(document.getElementById('sgRangeDemo'), {});
     if (typeof Chart === 'undefined') return;
     const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const axis = css('--chart-axis'), grid = css('--chart-grid');

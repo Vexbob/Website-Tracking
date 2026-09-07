@@ -100,46 +100,9 @@ body{visibility:hidden}body.ready{visibility:visible}
 .filter-tools{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap}
 .filter-tools input[type="search"]{padding:0.4375rem 0.75rem;font-size:0.8125rem;margin:0;width:auto;min-width:200px;max-width:280px}
 @media(max-width:640px){.filter-tools input[type="search"]{min-width:0;flex:1 1 100%;max-width:none;order:-1}}
-.filter-popover-wrap{position:relative}
-.filter-toggle-btn{
-    display:inline-flex;align-items:center;gap:0.375rem;
-    padding:0.4375rem 0.75rem;font-size:0.8125rem;font-weight:500;
-    background:var(--surface-2);color:var(--text);
-    border:1px solid var(--border);border-radius:8px;
-    cursor:pointer;width:auto;margin:0;
-    transition:background .15s,border-color .15s,color .15s;
-}
-.filter-toggle-btn:hover{border-color:var(--border-strong)}
-.filter-toggle-btn[aria-expanded="true"]{background:var(--surface);border-color:var(--border-strong)}
-.filter-toggle-btn.has-active{border-color:var(--accent);color:var(--accent)}
-.filter-badge{
-    display:inline-flex;align-items:center;justify-content:center;
-    min-width:18px;height:18px;padding:0 5px;border-radius:9px;
-    background:var(--accent-strong);color:var(--accent-ink);font-size:0.6875rem;font-weight:700;
-    line-height:1;font-variant-numeric:tabular-nums;
-}
-.filter-popover{
-    position:absolute;top:calc(100% + 6px);right:0;
-    min-width:280px;max-width:min(340px,calc(100vw - 1.5rem));
-    background:var(--surface-3);border:1px solid var(--line-strong);
-    border-radius:var(--radius-lg);box-shadow:var(--shadow-float);
-    padding:0.875rem;z-index:80;
-    display:flex;flex-direction:column;gap:0.625rem;
-    animation:fpIn .14s cubic-bezier(.2,.7,.2,1);
-}
-@keyframes fpIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
-.filter-popover[hidden]{display:none}
-.fp-row{display:flex;flex-direction:column;gap:0.25rem}
-.fp-row.fp-two{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
-.fp-row.fp-two>div{display:flex;flex-direction:column;gap:0.25rem}
-.fp-label{font-size:0.6875rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-faint);margin:0}
-.fp-row select,.fp-row input{padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px}
-.fp-actions{display:flex;gap:0.5rem;margin-top:0.25rem;padding-top:0.625rem;border-top:1px solid var(--border)}
-.fp-btn{flex:1;padding:0.5rem 0.75rem;font-size:0.8125rem;font-weight:600;border-radius:8px;cursor:pointer;width:auto;margin:0;border:1px solid transparent}
-.fp-btn-ghost{background:var(--surface-2);color:var(--text-muted);border-color:var(--border)}
-.fp-btn-ghost:hover{color:var(--text);border-color:var(--border-strong)}
-.fp-btn-primary{background:var(--text);color:var(--surface);border-color:var(--text)}
-.fp-btn-primary:hover{opacity:.92}
+/* Knopf, Popover und seine Zeilen liegen seit v1.60.0 in style.css:
+   der Zeitraum-Filter (js/range-filter.js) benutzt dieselben Bausteine,
+   und zwei Varianten derselben Komponente will die Designsprache nicht. */
 
 .active-filter-chips{display:flex;flex-wrap:wrap;gap:0.375rem;margin-bottom:0.5rem}
 .active-filter-chips:empty{display:none}

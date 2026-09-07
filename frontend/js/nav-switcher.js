@@ -161,17 +161,12 @@
     // ohne gespeicherte Einstellung stehen alle sichtbaren Module in der
     // Reihenfolge von MODULES. Der localStorage-Eintrag ist nur ein Cache,
     // damit die Leiste beim Seitenwechsel nicht erst umspringt.
-    const NAV_DESKTOP_CACHE = 'vexbob_nav_desktop';
+    const DESKTOP_PREF = 'ui_nav_desktop';
     let moduleRow = null;
 
     function readDesktopCache() {
-        try {
-            const arr = JSON.parse(localStorage.getItem(NAV_DESKTOP_CACHE) || 'null');
-            return (Array.isArray(arr) && arr.length) ? arr : null;
-        } catch (e) { return null; }
-    }
-    function writeDesktopCache(list) {
-        try { localStorage.setItem(NAV_DESKTOP_CACHE, JSON.stringify(list)); } catch (e) {}
+        const arr = VexPrefs.get(DESKTOP_PREF, null);
+        return (Array.isArray(arr) && arr.length) ? arr : null;
     }
 
     /* Die Wunschreihenfolge auf das, was dieses Konto sehen darf. Module, die
@@ -247,17 +242,14 @@
             t = setTimeout(fitModuleRow, 120);
         });
 
-        // Serverstand nachziehen: die Leiste steht schon aus dem Cache, hier
-        // wird nur korrigiert, wenn er veraltet ist. Bewusst abgewartet --
-        // die Einstellungsseite liest den Cache, sobald wir bereit melden.
+        // Einmal pro Seite den Serverstand aller Einstellungen holen. Die
+        // Leiste steht schon aus dem Cache; hier wird nur korrigiert, wenn er
+        // veraltet ist. Bewusst abgewartet -- wer auf Einstellungen angewiesen
+        // ist, wartet auf 'vexnav:ready' und findet den Cache dann gefuellt.
         try {
             if (typeof apiCall !== 'function') return;
-            const res = await apiCall('/api/ui/prefs');
-            const wish = res && res.prefs && res.prefs.ui_nav_desktop;
-            if (Array.isArray(wish) && wish.length) {
-                writeDesktopCache(wish);
-                renderModuleRow(visible);
-            }
+            await VexPrefs.load();
+            renderModuleRow(visible);
         } catch (e) { /* offline: der Cache steht */ }
     }
 
@@ -546,11 +538,9 @@
         iconSvg: moduleIconSvg,
         openTabBarSettings: openNavSettings,
         readDesktopOrder: readDesktopCache,
-        applyDesktopOrder: (list) => {
-            writeDesktopCache(list);
-            if (visibleModules) renderModuleRow(visibleModules);
-        },
-        DESKTOP_PREF: 'ui_nav_desktop',
+        // Der Cache haengt an VexPrefs.set() -- hier wird nur neu gezeichnet.
+        redrawDesktop: () => { if (visibleModules) renderModuleRow(visibleModules); },
+        DESKTOP_PREF: DESKTOP_PREF,
     };
 
     async function boot() {

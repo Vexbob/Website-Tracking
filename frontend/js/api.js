@@ -120,6 +120,54 @@ function fmtNum(n, digits) {
     return _numFmt.format(Number(n) || 0);
 }
 
+/* Oberflaechen-Einstellungen — v1.60.0
+ *
+ * Sie liegen am Konto (``/api/ui/prefs``, Tabelle ``user_prefs``), damit sie
+ * auf jedem Geraet dieselben sind. Der localStorage ist NUR ein Cache: er
+ * sorgt dafuer, dass eine Seite sofort in der richtigen Einstellung aufbaut,
+ * statt nach der Serverantwort umzuspringen. Wer eine Einstellung liest,
+ * nimmt ``get`` mit einem sinnvollen Standardwert — ein leerer Cache ist
+ * der Normalfall, kein Fehler.
+ *
+ * nav-switcher.js ruft ``load()`` einmal pro Seite. Wer den Cache selbst
+ * fuellen muss (frueh im Seitenaufbau), ruft ihn ebenfalls — er ist
+ * idempotent.
+ */
+const PREFS_CACHE = 'vexbob_prefs';
+const VexPrefs = {
+    all() {
+        try { return JSON.parse(localStorage.getItem(PREFS_CACHE) || '{}') || {}; }
+        catch (e) { return {}; }
+    },
+    get(key, fallback) {
+        const v = VexPrefs.all()[key];
+        return v === undefined ? fallback : v;
+    },
+    _write(obj) {
+        try { localStorage.setItem(PREFS_CACHE, JSON.stringify(obj)); } catch (e) {}
+    },
+    // Ersetzt den Cache vollstaendig: eine serverseitig zurueckgesetzte
+    // Einstellung soll auch hier verschwinden.
+    async load() {
+        const res = await apiCall('/api/ui/prefs');
+        const prefs = (res && res.prefs) || {};
+        VexPrefs._write(prefs);
+        return prefs;
+    },
+    async set(key, value) {
+        await apiCall('/api/ui/prefs', { method: 'PUT', body: { prefs: { [key]: value } } });
+        const o = VexPrefs.all();
+        o[key] = value;
+        VexPrefs._write(o);
+    },
+    async reset(key) {
+        await apiCall('/api/ui/prefs/' + encodeURIComponent(key), { method: 'DELETE' });
+        const o = VexPrefs.all();
+        delete o[key];
+        VexPrefs._write(o);
+    },
+};
+
 // Haptic Feedback (nur wenn vom Gerät unterstützt)
 function haptic(pattern) {
     try {

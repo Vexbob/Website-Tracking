@@ -137,6 +137,23 @@ Handlung.
 - Ein **Fehler** ist kein leerer Zustand: `.empty.is-error` zeigt die Meldung
   und einen „Erneut versuchen"-Knopf.
 
+## 6b. Filter
+
+Ein Filter zeigt im Ruhezustand seinen **Stand**, nicht seine Möglichkeiten: der
+Knopf heißt „30 Tage“, nicht „Zeitraum ▾“. Die Auswahl liegt in einem
+schwebenden Feld darunter (`.filter-toggle-btn` + `.filter-popover`), nicht
+dauerhaft auf der Seite — sie wird selten benutzt und kostet sonst auf dem
+Handy zwei Zeilen.
+
+- Der **Zeitraum** hat genau eine Fassung: `VexRange.mount` aus
+  `js/range-filter.js`. Presets als Liste mit Haken (die Auswahl ist
+  einwertig), darunter der eigene Von/Bis-Zeitraum.
+- Ein Preset gilt **sofort** und schließt das Feld. Ein eigener Zeitraum wird
+  bestätigt — zwei Datumsfelder sind zwei Eingaben, und nach der ersten wäre
+  jede Ladung falsch.
+- Ist etwas anderes als der Standard gewählt, trägt der Knopf den Akzent
+  (`.has-active`). Ein Filter, den man nicht sieht, ist eine Falle.
+
 ## 7. Diagramme
 
 Reduziert, ruhig, dieselbe Farbwelt.

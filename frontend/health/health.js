@@ -270,15 +270,15 @@ const state = {
     metricsCache: {},
     activityMode: 'steps',
     activityChart: null,
-    vitalDays: 30, vitalInit: false,
+    vitalRange: null, vitalInit: false,
     metricCards: null, metricChartMap: {},   // v1.46.0: Karten bleiben stehen,
                                              // nur die Daten werden getauscht
     metricOrder: null, sortableMetrics: null,
 
     chartBp: null, chartGlucose: null,
-    sleepDays: 30, sleepInit: false, chartSleepTimes: null,
+    sleepRange: null, sleepInit: false, chartSleepTimes: null,
     sleepUsable: [], sleepWindows: [],   // Naechte hinter den Balken (Tooltip)
-    workoutsLoaded: false, workoutsAll: [], workoutFilter: '', workoutRange: 0,
+    workoutsLoaded: false, workoutsAll: [], workoutFilter: '', workoutRange: null,
     workoutHrCharts: {},
     keysLoaded: false,
     sparkCharts: [],
@@ -504,14 +504,6 @@ function renderActivityChart() {
 // ---------- Vitalwerte ----------
 function initVitalwerte() {
     state.vitalInit = true;
-    document.querySelectorAll('#hMetricPresets .stat-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            document.querySelectorAll('#hMetricPresets .stat-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            state.vitalDays = parseInt(chip.dataset.preset, 10);
-            loadMetricCharts(); loadBpGlucoseCharts();
-        });
-    });
     state.chartBp = new Chart(document.getElementById('hChartBp').getContext('2d'), {
         type: 'line',
         data: { labels: [], datasets: [
@@ -530,7 +522,11 @@ function initVitalwerte() {
             plugins: { legend: { display: false }, tooltip: themedTooltip() },
         }),
     });
-    loadMetricCharts(); loadBpGlucoseCharts();
+    // Der Zeitraum-Knopf meldet beim Einhaengen einmal -- das ist die erste
+    // Ladung. Er steht deshalb hier unten, wenn die Diagramme schon stehen.
+    VexRange.mount(document.getElementById('hVitalRange'), {
+        onChange: (r) => { state.vitalRange = r; loadMetricCharts(); loadBpGlucoseCharts(); },
+    });
 }
 
 // v1.45.0: Jede Metrik bekommt ihr eigenes Diagramm. Vorher gab es eine
@@ -573,15 +569,18 @@ async function loadMetricCharts() {
     }
     const keys = orderedMetricKeys();
 
-    const days = state.vitalDays;
+    const range = state.vitalRange || VexRange.resolve('30');
     box.classList.add('is-loading');
     const rowsList = await Promise.all(
-        keys.map(k => HEALTH_API.metricSeries(k, days).catch(() => [])));
+        keys.map(k => HEALTH_API.metricSeries(k, range.fetchDays).catch(() => [])));
     // Zwischenzeitlicher Zeitraum-Wechsel: das spaetere Ergebnis gewinnt,
     // ein veraltetes ueberschreibt die frischeren Daten nicht mehr.
-    if (state.vitalDays !== days) return;
+    if (state.vitalRange !== range) return;
     box.classList.remove('is-loading');
-    keys.forEach((k, i) => updateMetricCard(k, rowsList[i], days));
+    // Der Endpunkt kennt nur "die letzten N Tage" -- ein zurueckliegendes
+    // Fenster wird deshalb hier zugeschnitten.
+    keys.forEach((k, i) => updateMetricCard(
+        k, VexRange.clip(rowsList[i], ['sample_date', 'recorded_at'], range), range.days));
 }
 
 // Gleiche Wert-Ermittlung wie fuer die Chart-Linie (qty, sonst avg_value),
@@ -741,7 +740,9 @@ function mountMetricChart(key, labels, data, trend, win) {
 
 async function loadBpGlucoseCharts() {
     try {
-        const bp = await HEALTH_API.bloodPressure(state.vitalDays);
+        const range = state.vitalRange || VexRange.resolve('30');
+        const bp = VexRange.clip(await HEALTH_API.bloodPressure(range.fetchDays),
+                                 'recorded_at', range);
         state.chartBp.data.labels = bp.map(r => fmtDate(r.recorded_at));
         setChartDates(state.chartBp, bp.map(r => r.recorded_at));
         state.chartBp.data.datasets[0].data = bp.map(r => r.systolic);
@@ -749,7 +750,9 @@ async function loadBpGlucoseCharts() {
         state.chartBp.update();
     } catch (e) {}
     try {
-        const gl = await HEALTH_API.bloodGlucose(state.vitalDays);
+        const range = state.vitalRange || VexRange.resolve('30');
+        const gl = VexRange.clip(await HEALTH_API.bloodGlucose(range.fetchDays),
+                                 'recorded_at', range);
         state.chartGlucose.data.labels = gl.map(r => fmtDate(r.recorded_at));
         setChartDates(state.chartGlucose, gl.map(r => r.recorded_at));
         state.chartGlucose.data.datasets[0].data = gl.map(r => r.value);
@@ -790,14 +793,6 @@ const SLEEP_SEGMENTS = [
 
 function initSchlaf() {
     state.sleepInit = true;
-    document.querySelectorAll('#hSleepPresets .stat-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            document.querySelectorAll('#hSleepPresets .stat-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            state.sleepDays = parseInt(chip.dataset.preset, 10);
-            loadSleepChart();
-        });
-    });
     const th = chartTheme();
     state.chartSleepTimes = new Chart(document.getElementById('hChartSleepTimes').getContext('2d'), {
         type: 'bar',
@@ -884,12 +879,16 @@ function initSchlaf() {
             },
         }),
     });
-    loadSleepChart();
+    VexRange.mount(document.getElementById('hSleepRange'), {
+        onChange: (r) => { state.sleepRange = r; loadSleepChart(); },
+    });
 }
 
 async function loadSleepChart() {
     try {
-        const rows = await HEALTH_API.sleep(state.sleepDays);
+        const range = state.sleepRange || VexRange.resolve('30');
+        const rows = VexRange.clip(await HEALTH_API.sleep(range.fetchDays),
+                                   'sleep_date', range);
         const kpiBox = document.getElementById('hSleepKpis');
         if (!rows.length) {
             kpiBox.innerHTML = `<div class="stat-empty" style="grid-column:1/-1">
@@ -1167,39 +1166,28 @@ async function initWorkouts() {
             renderWorkouts();
         });
     });
-    // v1.43.1: Zeitraum-Chips — die Kennzahlen darueber beziehen sich auf den
+    // v1.43.1: Zeitraum — die Kennzahlen darueber beziehen sich auf den
     // gewaehlten Zeitraum, nicht mehr zwangslaeufig auf die gesamte Historie.
-    const rangeBox = document.getElementById('hWorkoutRangeChips');
-    if (rangeBox) {
-        rangeBox.querySelectorAll('.stat-chip').forEach(btn => {
-            btn.addEventListener('click', () => {
-                rangeBox.querySelectorAll('.stat-chip').forEach(c => c.classList.remove('active'));
-                btn.classList.add('active');
-                state.workoutRange = Number(btn.dataset.range) || 0;
-                renderWorkouts();
-            });
-        });
-    }
-    renderWorkouts();
+    // Seit v1.60.0 liegt er hinter demselben Knopf wie ueberall; er meldet
+    // beim Einhaengen einmal und zeichnet damit die Liste zum ersten Mal.
+    VexRange.mount(document.getElementById('hWorkoutRange'), {
+        preset: 'all',
+        onChange: (r) => { state.workoutRange = r; renderWorkouts(); },
+    });
 }
 
-const WORKOUT_RANGE_LBL = { 0: 'Gesamter Zeitraum', 7: 'Letzte 7 Tage',
-                            30: 'Letzte 30 Tage', 90: 'Letzte 90 Tage',
-                            365: 'Letztes Jahr' };
-
 function renderWorkouts() {
-    const days = Number(state.workoutRange) || 0;
-    const since = days ? Date.now() - days * 86400000 : null;
-    const rows = state.workoutsAll.filter(w => {
-        if (state.workoutFilter && w.workout_type !== state.workoutFilter) return false;
-        if (since == null) return true;
-        const t = Date.parse(w.start_at);
-        return Number.isFinite(t) && t >= since;
-    });
+    const range = state.workoutRange || VexRange.resolve('all');
+    const byType = state.workoutsAll.filter(
+        w => !state.workoutFilter || w.workout_type === state.workoutFilter);
+    // Workouts liegen ohnehin vollstaendig im Browser -- das Fenster wird
+    // deshalb hier geschnitten und nicht nachgeladen.
+    const rows = VexRange.clip(byType, 'start_at', range);
     const kpiBox = document.getElementById('hWorkoutKpis');
     const rangeEl = document.getElementById('hWorkoutRangeLbl');
     const list = document.getElementById('hWorkoutList');
-    if (rangeEl) rangeEl.textContent = WORKOUT_RANGE_LBL[days] || 'Gesamter Zeitraum';
+    if (rangeEl) rangeEl.textContent = range.preset === 'all'
+        ? 'Gesamter Zeitraum' : range.label;
     if (!rows.length) {
         kpiBox.innerHTML = '';
         list.className = 'h-empty';

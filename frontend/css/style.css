@@ -915,6 +915,76 @@ input[type="checkbox"] { display: inline; width: auto; }
     line-height: 1.5;
 }
 
+/* v1.60.0 — zusammenstellbarer Export: links die Auswahl, rechts die
+   Vorschau. Auf schmalen Bildschirmen untereinander, die Vorschau zuletzt —
+   sie ist die Kontrolle, nicht der Einstieg. */
+.exp-dialog { max-width: 900px; width: min(900px, calc(100vw - 2rem)); }
+.exp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+@media (max-width: 760px) { .exp-cols { grid-template-columns: 1fr; } }
+.exp-col { min-width: 0; }
+.exp-col-preview { border-left: 1px solid var(--line); padding-left: var(--space-5); }
+@media (max-width: 760px) {
+    .exp-col-preview { border-left: none; border-top: 1px solid var(--line);
+        padding-left: 0; padding-top: var(--space-4); }
+}
+
+.exp-sections { display: flex; flex-direction: column; gap: var(--space-2); }
+.exp-group {
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: var(--space-3);
+    transition: opacity var(--dur-1) var(--ease);
+}
+/* Ein ganz abgewaehltes Modul bleibt sichtbar, tritt aber zurueck — es
+   auszublenden wuerde die Liste bei jedem Haken springen lassen. */
+.exp-group.is-off { opacity: 0.55; }
+.exp-group-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: var(--space-2); margin-bottom: var(--space-2);
+}
+.exp-check {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.8125rem; color: var(--text-2); cursor: pointer;
+    padding: 0.25rem 0; min-height: 30px;
+}
+.exp-check input { width: auto; margin: 0; accent-color: var(--accent); flex: none; }
+.exp-check-all { font-size: 0.9375rem; font-weight: 650; color: var(--text-1); }
+.exp-group-body { display: flex; flex-direction: column; padding-left: 1.5rem; }
+.exp-tag {
+    font-style: normal; font-size: 0.625rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-4); border: 1px solid var(--line);
+    border-radius: 5px; padding: 0.0625rem 0.3125rem;
+}
+.exp-agg {
+    width: auto; margin: 0; padding: 0.3125rem 0.5rem;
+    font-size: 0.75rem; font-weight: 600;
+    background: var(--surface-1); color: var(--text-2);
+    border: 1px solid var(--line); border-radius: 8px;
+}
+.exp-agg:disabled { opacity: 0.4; }
+
+.exp-summary { font-size: 0.875rem; color: var(--text-2); margin-bottom: var(--space-3); }
+.exp-summary strong { color: var(--text-1); font-variant-numeric: tabular-nums; }
+.exp-warn { color: var(--warn); }
+.exp-preview-table { display: flex; flex-direction: column; gap: 0.3125rem; }
+.exp-prow {
+    display: grid; grid-template-columns: 1fr 72px auto;
+    align-items: center; gap: 0.5rem; font-size: 0.75rem;
+}
+.exp-prow.is-empty { opacity: 0.45; }
+.exp-pname { color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exp-pbar { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.exp-pbar i { display: block; height: 100%; background: var(--grad-accent); }
+.exp-pnum { color: var(--text-2); font-weight: 650; font-variant-numeric: tabular-nums; }
+.exp-sample {
+    margin: 0; max-height: 210px; overflow: auto;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: var(--space-3);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.6875rem; line-height: 1.5; color: var(--text-3);
+    white-space: pre; tab-size: 4;
+}
+
 
 /* ==========================================================================
    v1.51.0 — Einstell-Dialog fuer die mobile Tab-Leiste
@@ -1069,6 +1139,71 @@ button.nav-switcher-item:hover { background: var(--surface-2); opacity: 1; }
     color: var(--accent-ink); background: var(--accent-strong); border-color: var(--accent-strong);
 }
 .v-chip[disabled] { opacity: 0.45; cursor: default; pointer-events: none; }
+
+/* ---------- Filter-Popover ----------
+   Ein Knopf, der den aktuellen Stand benennt, und ein schwebendes Feld
+   darunter. Benutzt vom Filter im Ausgaben-Dashboard und vom Zeitraum-
+   Filter (js/range-filter.js). Lag bis v1.59.x in ausgaben/dashboard.css
+   und war damit fuer die anderen Module unerreichbar. */
+.filter-popover-wrap{position:relative}
+.filter-toggle-btn{
+    display:inline-flex;align-items:center;gap:0.375rem;
+    padding:0.4375rem 0.75rem;font-size:0.8125rem;font-weight:500;
+    background:var(--surface-2);color:var(--text);
+    border:1px solid var(--border);border-radius:8px;
+    cursor:pointer;width:auto;margin:0;
+    transition:background .15s,border-color .15s,color .15s;
+}
+.filter-toggle-btn:hover{border-color:var(--border-strong)}
+.filter-toggle-btn[aria-expanded="true"]{background:var(--surface);border-color:var(--border-strong)}
+.filter-toggle-btn.has-active{border-color:var(--accent);color:var(--accent)}
+.filter-badge{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+    background:var(--accent-strong);color:var(--accent-ink);font-size:0.6875rem;font-weight:700;
+    line-height:1;font-variant-numeric:tabular-nums;
+}
+.filter-popover{
+    position:absolute;top:calc(100% + 6px);right:0;
+    min-width:280px;max-width:min(340px,calc(100vw - 1.5rem));
+    background:var(--surface-3);border:1px solid var(--line-strong);
+    border-radius:var(--radius-lg);box-shadow:var(--shadow-float);
+    padding:0.875rem;z-index:80;
+    display:flex;flex-direction:column;gap:0.625rem;
+    animation:fpIn .14s cubic-bezier(.2,.7,.2,1);
+}
+@keyframes fpIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
+.filter-popover[hidden]{display:none}
+.fp-row{display:flex;flex-direction:column;gap:0.25rem}
+.fp-row.fp-two{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
+.fp-row.fp-two>div{display:flex;flex-direction:column;gap:0.25rem}
+.fp-label{font-size:0.6875rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-faint);margin:0}
+.fp-row select,.fp-row input{padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px}
+.fp-actions{display:flex;gap:0.5rem;margin-top:0.25rem;padding-top:0.625rem;border-top:1px solid var(--border)}
+.fp-btn{flex:1;padding:0.5rem 0.75rem;font-size:0.8125rem;font-weight:600;border-radius:8px;cursor:pointer;width:auto;margin:0;border:1px solid transparent}
+.fp-btn-ghost{background:var(--surface-2);color:var(--text-muted);border-color:var(--border)}
+.fp-btn-ghost:hover{color:var(--text);border-color:var(--border-strong)}
+.fp-btn-primary{background:var(--text);color:var(--surface);border-color:var(--text)}
+.fp-btn-primary:hover{opacity:.92}
+
+/* Zeitraum-Filter: das Menue ist eine Liste mit Haken, keine Chip-Wolke --
+   die Auswahl ist einwertig, und untereinander liest man sie schneller. */
+.rf .rf-btn { font-variant-numeric: tabular-nums; }
+.rf .rf-caret { opacity: 0.55; margin-left: 0.125rem; }
+.rf-presets { display: flex; flex-direction: column; gap: 2px; }
+.rf-opt {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; margin: 0; padding: 0.5rem 0.625rem;
+    font: inherit; font-size: 0.875rem; font-weight: 600; text-align: left;
+    color: var(--text-2); background: transparent;
+    border: 1px solid transparent; border-radius: 10px; cursor: pointer;
+    transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+.rf-opt:hover { color: var(--text-1); background: var(--surface-2); }
+.rf-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.rf-opt.is-active { color: var(--accent); background: var(--accent-soft); }
+.rf-check { opacity: 0; font-weight: 700; }
+.rf-opt.is-active .rf-check { opacity: 1; }
 
 /* ---------- Leerer Zustand: ein Muster fuer die ganze App ---------- */
 .empty {

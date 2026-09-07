@@ -18,6 +18,7 @@
 <script src="/js/sw-update.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="/js/charts.js"></script>
+<script src="/js/range-filter.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
 </head>
 <body>
@@ -74,13 +75,8 @@
     <!-- ---------- Vitalwerte ---------- -->
     <div id="tab-vitalwerte" style="display:none">
         <div class="stat-filterbar">
-            <div class="stat-preset-chips" id="hMetricPresets">
-                <button class="stat-chip" data-preset="7">7 Tage</button>
-                <button class="stat-chip active" data-preset="30">30 Tage</button>
-                <button class="stat-chip" data-preset="90">90 Tage</button>
-                <button class="stat-chip" data-preset="365">1 Jahr</button>
-                <button class="stat-chip" data-preset="0">Gesamt</button>
-            </div>
+            <span class="stat-filter-title">Zeitraum</span>
+            <div class="stat-filter-slot" id="hVitalRange"></div>
         </div>
 
         <div class="h-metric-grid" id="hMetricCharts"></div>
@@ -101,13 +97,8 @@
     <!-- ---------- Schlaf ---------- -->
     <div id="tab-schlaf" style="display:none">
         <div class="stat-filterbar">
-            <div class="stat-preset-chips" id="hSleepPresets">
-                <button class="stat-chip" data-preset="7">7 Tage</button>
-                <button class="stat-chip active" data-preset="30">30 Tage</button>
-                <button class="stat-chip" data-preset="90">90 Tage</button>
-                <button class="stat-chip" data-preset="365">1 Jahr</button>
-                <button class="stat-chip" data-preset="0">Gesamt</button>
-            </div>
+            <span class="stat-filter-title">Zeitraum</span>
+            <div class="stat-filter-slot" id="hSleepRange"></div>
         </div>
         <div class="stat-kpi-grid" id="hSleepKpis"></div>
         <div class="stat-range-lbl" id="hSleepNote" style="margin:-0.25rem 0 0.75rem"></div>
@@ -124,14 +115,7 @@
             <div class="stat-preset-chips" id="hWorkoutTypeChips">
                 <button class="stat-chip active" data-type="">Alle</button>
             </div>
-            <span class="stat-filter-sep"></span>
-            <div class="stat-preset-chips" id="hWorkoutRangeChips">
-                <button class="stat-chip" data-range="7">7 Tage</button>
-                <button class="stat-chip" data-range="30">30 Tage</button>
-                <button class="stat-chip" data-range="90">90 Tage</button>
-                <button class="stat-chip" data-range="365">1 Jahr</button>
-                <button class="stat-chip active" data-range="0">Gesamt</button>
-            </div>
+            <div class="stat-filter-slot" id="hWorkoutRange"></div>
         </div>
         <div class="stat-kpi-grid" id="hWorkoutKpis"></div>
         <div class="stat-card">
