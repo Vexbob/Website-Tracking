@@ -1635,68 +1635,6 @@ async def st_sp(db=Depends(get_db), user=Depends(get_current_user)):
         out.append({"date": r["created_at"].isoformat() if r["created_at"] else None, "cumulative": c})
     return out
 
-# ---------- Taegliche Aktivitaet ----------
-@app.get("/api/stats/heatmap")
-async def stats_heatmap(days: int = 365, db=Depends(get_db), user=Depends(get_current_user)):
-    """Liefert pro Tag: Anzahl Check-ins, Anzahl Meilensteine, ausgezahlter Betrag.
-
-    v1.60.2: Der Name ist historisch. Die Heatmap, fuer die dieser Endpunkt
-    gebaut wurde, gibt es seit v1.59.0 nicht mehr -- die Zahlen speisen jetzt
-    die Aktivitaets-Zeile auf dem Sparziel-Dashboard (``loadActivityStats``).
-    Der Endpunkt ist also NICHT verwaist; ``level`` ist der einzige Rest der
-    alten Darstellung und wird nicht mehr gelesen."""
-    if days < 1 or days > 730:
-        raise HTTPException(400, "days muss 1..730 sein")
-    since = date.today() - timedelta(days=days-1)
-
-    ci = await db.fetch(
-        """SELECT log_date::date AS d, COUNT(*) AS c
-           FROM progress_logs WHERE user_id=$1 AND log_date >= $2
-           GROUP BY log_date::date""",
-        user["id"], since)
-
-    ml = await db.fetch(
-        """SELECT date_achieved::date AS d, COUNT(*) AS c
-           FROM achievement_logs WHERE user_id=$1 AND date_achieved >= $2
-           GROUP BY date_achieved::date""",
-        user["id"], since)
-
-    tx = await db.fetch(
-        """SELECT created_at::date AS d, COALESCE(SUM(amount),0) AS s
-           FROM savings_transactions
-           WHERE user_id=$1 AND created_at >= $2 AND source_type <> 'initial'
-           GROUP BY created_at::date""",
-        user["id"], since)
-
-    by_day = {}
-    for r in ci: by_day.setdefault(r["d"].isoformat(), {"checkins":0,"milestones":0,"amount":0.0})["checkins"] = int(r["c"])
-    for r in ml: by_day.setdefault(r["d"].isoformat(), {"checkins":0,"milestones":0,"amount":0.0})["milestones"] = int(r["c"])
-    for r in tx: by_day.setdefault(r["d"].isoformat(), {"checkins":0,"milestones":0,"amount":0.0})["amount"] = float(r["s"])
-
-    out = []
-    cur = since
-    end = date.today()
-    while cur <= end:
-        key = cur.isoformat()
-        data = by_day.get(key, {"checkins":0,"milestones":0,"amount":0.0})
-        total = data["checkins"] + data["milestones"]
-        if total == 0: level = 0
-        elif total <= 1: level = 1
-        elif total <= 3: level = 2
-        elif total <= 6: level = 3
-        else: level = 4
-        out.append({
-            "date": key,
-            "checkins": data["checkins"],
-            "milestones": data["milestones"],
-            "amount": round(data["amount"], 2),
-            "total": total,
-            "level": level,
-        })
-        cur += timedelta(days=1)
-    return out
-
-# ---------- Trophies / Completed Goals ----------
 @app.get("/api/trophies")
 async def list_trophies(db=Depends(get_db), user=Depends(get_current_user)):
     rows = await db.fetch(

@@ -148,7 +148,7 @@
                             (allOn ? ' checked' : '') + (someOn && !allOn ? ' data-partial="1"' : '') + '>' +
                         '<span>' + esc(g.label) + '</span>' +
                     '</label>' +
-                    '<select class="exp-agg" data-group="' + g.key + '"' + (canAgg ? '' : ' disabled') + '>' +
+                    '<select class="exp-agg" data-agg-group="' + g.key + '"' + (canAgg ? '' : ' disabled') + '>' +
                         AGGS.map(a => '<option value="' + a.key + '"' +
                             (state.agg[g.key] === a.key ? ' selected' : '') + '>' + a.label + '</option>').join('') +
                     '</select>' +
@@ -281,14 +281,26 @@
 
         sectionBox.addEventListener('change', (e) => {
             const el = e.target;
+            // Das Auswahlfeld zuerst: es trug frueher dasselbe data-group wie
+            // die Gruppen-Checkbox, landete in deren Zweig und hakte mit
+            // el.checked === undefined die ganze Gruppe ab.
+            if (el.dataset.aggGroup) {
+                state.agg[el.dataset.aggGroup] = el.value;
+                // Nur der Hinweistext darunter aendert sich. Die ganze Liste
+                // neu zu zeichnen naehme dem Auswahlfeld mitten im Bedienen
+                // den Fokus.
+                const group = el.closest('.exp-group');
+                const hint = group ? group.querySelector('.exp-hint') : null;
+                if (hint) hint.textContent = AGG_HINT[el.value] || '';
+                refreshPreview();
+                return;
+            }
             if (el.dataset.section) {
                 el.checked ? state.picked.add(el.dataset.section)
                            : state.picked.delete(el.dataset.section);
             } else if (el.dataset.group) {
                 const keys = state.sections.filter(s => s.group === el.dataset.group).map(s => s.key);
                 keys.forEach(k => el.checked ? state.picked.add(k) : state.picked.delete(k));
-            } else if (el.classList.contains('exp-agg')) {
-                state.agg[el.dataset.group] = el.value;
             } else return;
             renderSections(sectionBox, state);
             refreshPreview();

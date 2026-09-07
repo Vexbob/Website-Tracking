@@ -129,14 +129,11 @@ async def reset_nav_tabs(request: Request, db=Depends(get_db),
 # Dokumentation dessen, was der Schluessel bedeuten darf.
 
 DESKTOP_NAV_PREF = "ui_nav_desktop"
+NAV_HIDDEN_PREF = "ui_nav_hidden"
 
 
-def _check_nav_desktop(value: Any) -> List[str]:
-    """Welche Module in der Navigationsleiste am Rechner offen stehen, und in
-    welcher Reihenfolge. Leere Liste heisst "noch nie eingestellt" -- das
-    Frontend nimmt dann alle Module in ihrer eigenen Reihenfolge. Was nicht
-    mehr in die Zeile passt, wandert dort automatisch ins Punkte-Menue; hier
-    steht also die Wunschreihenfolge, nicht das Ergebnis."""
+def _href_list(value: Any) -> List[str]:
+    """Bekannte Navigationsziele, ohne Dubletten, in gegebener Reihenfolge."""
     if not isinstance(value, list):
         raise ValueError("erwartet eine Liste von Modul-Pfaden")
     seen, out = set(), []
@@ -148,6 +145,27 @@ def _check_nav_desktop(value: Any) -> List[str]:
             seen.add(href)
             out.append(href)
     return out
+
+
+def _check_nav_desktop(value: Any) -> List[str]:
+    """Welche Module in der Navigationsleiste am Rechner offen stehen, und in
+    welcher Reihenfolge. Leere Liste heisst "noch nie eingestellt" -- das
+    Frontend nimmt dann alle Module in ihrer eigenen Reihenfolge. Was nicht
+    mehr in die Zeile passt, wandert dort automatisch ins Punkte-Menue; hier
+    steht also die Wunschreihenfolge, nicht das Ergebnis."""
+    return _href_list(value)
+
+
+def _check_nav_hidden(value: Any) -> List[str]:
+    """Module, die NICHT in der Leiste am Rechner stehen sollen.
+
+    Bewusst eine eigene Liste statt einer verkuerzten Reihenfolge: waere die
+    Reihenfolge zugleich die Auswahl, tauchte ein spaeter dazukommendes Modul
+    nie von selbst auf. So bleibt "unbekannt" gleichbedeutend mit "sichtbar".
+
+    Ausblenden heisst nicht sperren -- die Module bleiben ueber das
+    Punkte-Menue und ihre Adresse erreichbar."""
+    return _href_list(value)
 
 
 DEFAULT_RANGE_PREF = "ui_default_range"
@@ -170,6 +188,7 @@ def _check_default_range(value: Any) -> str:
 
 UI_PREFS = {
     DESKTOP_NAV_PREF: _check_nav_desktop,
+    NAV_HIDDEN_PREF: _check_nav_hidden,
     DEFAULT_RANGE_PREF: _check_default_range,
 }
 

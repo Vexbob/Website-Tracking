@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.61.0', date: '2026-09-07', title: 'Leiste ausblendbar, Export-Fehler behoben', notes: [
+        'In der Navigationsleiste am Rechner lassen sich einzelne Module jetzt ausblenden — über das Punkte-Menü bleiben sie erreichbar.',
+        'Im Export hat die Wahl einer Zusammenfassung das ganze Modul abgehakt; jetzt bleibt die Auswahl stehen.',
+        'Die Aktivitäts-Zahlen unter dem aktuellen Sparziel sind raus.',
+        'Workouts nennen als Kopfzahl die Anzahl statt der Gesamtzeit — die steht klein darunter.',
+        'Der farbige Strich über den Kennzahlen im Ausgaben-Dashboard ist weg.',
+    ]},
     { v: 'v1.60.2', date: '2026-09-07', title: 'Zeitfilter hinter einem Knopf, Export zum Zusammenstellen', notes: [
         'Der Zeitraum liegt überall hinter einem Knopf, der den aktuellen Stand benennt — 7/30/90/365 Tage, Gesamt und ein eigener Von/Bis-Zeitraum.',
         'Im Export wählst du jetzt aus, welche Module und Sektionen hinein sollen, und fasst jedes Modul einzeln wochen- oder monatsweise zusammen.',

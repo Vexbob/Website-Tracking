@@ -1213,7 +1213,11 @@ function renderWorkouts() {
                       .filter(v => Number.isFinite(v) && v >= 30 && v <= 240);
     const avgHr = avgOf(hrArr);
     const kpis = [
-        { icon:'⏱️', lbl:'Gesamtzeit', val: fmtDuration(totalMin) },
+        // Die Anzahl ist die Zahl, wegen der man auf diesen Reiter geht --
+        // "wie oft war ich draussen". Die Gesamtzeit steht als Einordnung
+        // darunter, statt die Kopfzeile zu belegen.
+        { icon:'🏋️', lbl:'Workouts', val: fmt0(rows.length),
+          sub: fmtDuration(totalMin) + ' insgesamt' },
         { icon:'⌛', lbl:'Ø Dauer', val: avgDur != null ? fmtDuration(avgDur) : '–' },
         { icon:'🔥', lbl:'Ø Kalorien (aktiv)', val: avgKcal != null ? fmt0(avgKcal) + ' kcal' : '–' },
         { icon:'❤️', lbl:'Ø Puls', val: avgHr != null ? fmt0(avgHr) + ' bpm' : '–',

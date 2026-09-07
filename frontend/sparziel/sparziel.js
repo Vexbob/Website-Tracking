@@ -200,7 +200,7 @@ function toggleHeroEdit(){
         document.getElementById('sgTarget').value=glTarget;
     }
 }
-async function loadAll(){await Promise.all([loadSparziel(),loadAchievements(),loadProgressGoals(),loadSavingsGoals(),loadActivityStats()]);updatePeriodLabel();}
+async function loadAll(){await Promise.all([loadSparziel(),loadAchievements(),loadProgressGoals(),loadSavingsGoals()]);updatePeriodLabel();}
 
 async function loadSparziel(){
     try{
@@ -1213,38 +1213,6 @@ async function downloadBackup(){
         haptic('success');
         showToast('Backup heruntergeladen');
     }catch(e){haptic('error');showToast('Backup fehlgeschlagen',true);}
-}
-
-// --- Aktivitaets-Kennzahlen (v1.59.0) ---
-// Frueher stand hier eine 365-Tage-Heatmap. Sie hat viel Platz fuer wenig
-// Erkenntnis gebraucht: abgelesen wurden ohnehin nur die Zahlen darunter.
-// Die bleiben -- als Zeile auf dem Dashboard, aus derselben Quelle.
-async function loadActivityStats(){
-    const box=document.getElementById('actStats');
-    if(!box) return;
-    let data=[];
-    try{ data=await apiCall('/api/stats/heatmap?days=365')||[]; }
-    catch(e){ box.hidden=true; return; }
-    if(!data.length){ box.hidden=true; return; }
-
-    const activeDays=data.filter(d=>d.total>0).length;
-    let maxStreak=0,tmp=0,curStreak=0;
-    data.forEach(d=>{if(d.total>0){tmp++;if(tmp>maxStreak)maxStreak=tmp;}else tmp=0;});
-    for(let i=data.length-1;i>=0;i--){if(data[i].total>0)curStreak++;else break;}
-    const totalCi=data.reduce((a,d)=>a+d.checkins,0);
-    const totalMl=data.reduce((a,d)=>a+d.milestones,0);
-    const totalAmt=data.reduce((a,d)=>a+d.amount,0);
-
-    const cell=(lbl,val)=>`<div class="act-stat"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`;
-    box.innerHTML=[
-        cell('Aktive Tage', activeDays),
-        cell('Aktuelle Serie', curStreak+' 🔥'),
-        cell('Beste Serie', maxStreak),
-        cell('Check-ins', totalCi),
-        cell('Meilensteine', totalMl),
-        cell('Summe (365 T.)', fmtEur(totalAmt)),
-    ].join('');
-    box.hidden=false;
 }
 
 // --- Trophies ---

@@ -7,7 +7,7 @@
  * dort einen Pruefer und hier eine Karte — sonst nichts.
  */
 
-const SET = { modules: [], order: [] };
+const SET = { modules: [], order: [], hidden: new Set() };
 
 /* nav-switcher.js baut die Leiste asynchron (es fragt vorher, wer man ist).
  * Wir warten auf sein Signal, statt auf gut Glueck zu pollen. */
@@ -21,24 +21,51 @@ function navReady() {
     });
 }
 
+/* Auge offen / durchgestrichen -- der Zustand steht im Icon, nicht in einem
+ * Wort, damit die Zeile schmal bleibt. */
+const EYE = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/>' +
+    '<circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M4 4l16 16"/><path d="M9.9 5.9A9.5 9.5 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.8"/>' +
+    '<path d="M6.5 8.2A17 17 0 0 0 2.5 12S6 18.5 12 18.5c1 0 1.9-.2 2.7-.5"/>' +
+    '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+
 function renderDesktopList() {
     const box = document.getElementById('deskList');
     const byHref = new Map(SET.modules.map(m => [m.href, m]));
+    // Nur sichtbare Module bekommen eine Positionsnummer -- eine "3." neben
+    // einem ausgeblendeten Eintrag waere eine Reihenfolge, die niemand sieht.
+    let pos = 0;
     box.innerHTML = SET.order.map((href, i) => {
         const m = byHref.get(href);
         if (!m) return '';
+        const off = SET.hidden.has(href);
+        if (!off) pos++;
         const name = m.label.split(' ').slice(1).join(' ');
         const up = '<button type="button" class="navcfg-mini" data-act="up" data-href="' + href + '"' +
             (i === 0 ? ' disabled' : '') + ' aria-label="Nach vorn">↑</button>';
         const down = '<button type="button" class="navcfg-mini" data-act="down" data-href="' + href + '"' +
             (i === SET.order.length - 1 ? ' disabled' : '') + ' aria-label="Nach hinten">↓</button>';
-        return '<div class="navcfg-row">' +
-                   '<span class="set-pos">' + (i + 1) + '</span>' +
+        const eye = '<button type="button" class="navcfg-mini set-eye' + (off ? ' is-off' : '') +
+            '" data-act="toggle" data-href="' + href + '" aria-pressed="' + (off ? 'true' : 'false') +
+            '" title="' + (off ? 'In der Leiste zeigen' : 'Aus der Leiste nehmen') +
+            '" aria-label="' + (off ? 'In der Leiste zeigen' : 'Aus der Leiste nehmen') + '">' +
+            (off ? EYE_OFF : EYE) + '</button>';
+        return '<div class="navcfg-row' + (off ? ' is-off' : '') + '">' +
+                   '<span class="set-pos">' + (off ? '–' : pos) + '</span>' +
                    '<span class="navcfg-ico">' + VexNav.iconSvg(m) + '</span>' +
                    '<span class="navcfg-name">' + name + '</span>' +
-                   '<span class="navcfg-btns">' + up + down + '</span>' +
+                   '<span class="navcfg-btns">' + up + down + eye + '</span>' +
                '</div>';
     }).join('');
+}
+
+function toggleHidden(href) {
+    SET.hidden.has(href) ? SET.hidden.delete(href) : SET.hidden.add(href);
+    renderDesktopList();
 }
 
 function move(href, dir) {
@@ -53,8 +80,9 @@ async function saveDesktop(btn) {
     btn.disabled = true;
     try {
         await VexPrefs.set(VexNav.DESKTOP_PREF, SET.order);
+        await VexPrefs.set(VexNav.HIDDEN_PREF, [...SET.hidden]);
         VexNav.redrawDesktop();
-        if (window.Toast) Toast.success('Reihenfolge gespeichert');
+        if (window.Toast) Toast.success('Leiste gespeichert');
     } catch (e) {
         if (window.Toast) Toast.error(e.message || String(e));
     } finally { btn.disabled = false; }
@@ -64,10 +92,12 @@ async function resetDesktop(btn) {
     btn.disabled = true;
     try {
         await VexPrefs.reset(VexNav.DESKTOP_PREF);
+        await VexPrefs.reset(VexNav.HIDDEN_PREF);
         SET.order = SET.modules.map(m => m.href);
+        SET.hidden = new Set();
         VexNav.redrawDesktop();
         renderDesktopList();
-        if (window.Toast) Toast.success('Standardreihenfolge wiederhergestellt');
+        if (window.Toast) Toast.success('Standard wiederhergestellt');
     } catch (e) {
         if (window.Toast) Toast.error(e.message || String(e));
     } finally { btn.disabled = false; }
@@ -113,11 +143,13 @@ async function saveRange(preset) {
     const known = new Set(SET.modules.map(m => m.href));
     SET.order = wish.filter(h => known.has(h));
     SET.modules.forEach(m => { if (SET.order.indexOf(m.href) === -1) SET.order.push(m.href); });
+    SET.hidden = new Set(((window.VexNav && VexNav.readHidden()) || []).filter(h => known.has(h)));
     renderDesktopList();
 
     document.getElementById('deskList').addEventListener('click', (e) => {
         const btn = e.target.closest('button');
-        if (!btn) return;
+        if (!btn || btn.disabled) return;
+        if (btn.dataset.act === 'toggle') return toggleHidden(btn.dataset.href);
         move(btn.dataset.href, btn.dataset.act === 'up' ? -1 : 1);
     });
     document.getElementById('deskSave').onclick = (e) => saveDesktop(e.currentTarget);

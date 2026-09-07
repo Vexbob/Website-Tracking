@@ -24,6 +24,12 @@
     font-size: 0.8125rem; line-height: 1.55; }
 .set-pos { width: 1.5rem; text-align: right; color: var(--text-4);
     font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Ausgeblendet heisst zurücktreten, nicht verschwinden — sonst springt die
+   Liste bei jedem Schalter. */
+.navcfg-row.is-off { opacity: 0.5; }
+.navcfg-row.is-off .navcfg-name { text-decoration: line-through; }
+.set-eye.is-off { color: var(--text-4); }
+.navcfg-row.is-off .set-eye { opacity: 1; }
 </style>
 </head>
 <body style="visibility:hidden">
@@ -46,10 +52,11 @@
             <h3>Leiste am Rechner</h3>
             <span class="v-card-sub">Reihenfolge der Module</span>
         </div>
-        <p class="set-hint">Ab etwa 900 Pixeln Fensterbreite stehen die Module offen in der
+        <p class="set-hint">Auf breiten Bildschirmen stehen die Module offen in der
             Navigationszeile. Was nicht mehr hineinpasst, rutscht von selbst ins Punkte-Menü —
-            diese Reihenfolge entscheidet also, was als Erstes weicht. Neue Module hängen sich
-            hinten an, ohne dass du hier etwas tun musst.</p>
+            diese Reihenfolge entscheidet also, was als Erstes weicht. Mit dem Auge nimmst du ein
+            Modul ganz aus der Leiste; erreichbar bleibt es über das Punkte-Menü. Neue Module
+            hängen sich hinten an, ohne dass du hier etwas tun musst.</p>
         <div class="navcfg-list" id="deskList"></div>
         <div class="set-actions">
             <button type="button" class="v-btn" id="deskReset">Standard</button>

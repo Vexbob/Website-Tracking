@@ -169,17 +169,25 @@
     // Reihenfolge von MODULES. Der localStorage-Eintrag ist nur ein Cache,
     // damit die Leiste beim Seitenwechsel nicht erst umspringt.
     const DESKTOP_PREF = 'ui_nav_desktop';
+    const HIDDEN_PREF = 'ui_nav_hidden';
     let moduleRow = null;
+    // Zeigt die Leiste gerade alle erlaubten Module? Steuert, ob der
+    // Punkte-Schalter daneben noch gebraucht wird.
+    let rowShowsEverything = true;
 
     function readDesktopCache() {
         const arr = VexPrefs.get(DESKTOP_PREF, null);
         return (Array.isArray(arr) && arr.length) ? arr : null;
     }
+    function readHidden() {
+        const arr = VexPrefs.get(HIDDEN_PREF, null);
+        return Array.isArray(arr) ? arr : [];
+    }
 
     /* Die Wunschreihenfolge auf das, was dieses Konto sehen darf. Module, die
        in der Einstellung fehlen, haengen hinten an: ein neu dazugekommenes
        Modul soll auftauchen, ohne dass man die Einstellung anfassen muss. */
-    function desktopOrder(visible, wish) {
+    function desktopOrder(visible, wish, hidden) {
         const byHref = new Map(visible.map(m => [m.href, m]));
         const out = [];
         (wish || []).forEach(href => {
@@ -187,7 +195,11 @@
             if (m && out.indexOf(m) === -1) out.push(m);
         });
         visible.forEach(m => { if (out.indexOf(m) === -1) out.push(m); });
-        return out;
+        // Ausgeblendetes faellt erst hier heraus, nicht schon beim Sortieren:
+        // so bleibt die Reihenfolge dieselbe, wenn man ein Modul wieder
+        // einschaltet.
+        const skip = new Set(hidden || []);
+        return out.filter(m => !skip.has(m.href));
     }
 
     function moduleIconSvg(m) {
@@ -200,7 +212,8 @@
 
     function renderModuleRow(visible) {
         if (!moduleRow) return;
-        const items = desktopOrder(visible, readDesktopCache());
+        const items = desktopOrder(visible, readDesktopCache(), readHidden());
+        rowShowsEverything = items.length === visible.length;
         moduleRow.innerHTML = items.map(m => {
             const parts = m.label.split(' ');
             parts.shift();                       // Emoji weg, das Icon kommt als SVG
@@ -227,10 +240,12 @@
             if (links[i].classList.contains('active')) continue;
             links[i].hidden = true;
         }
-        const hidden = links.some(el => el.hidden);
-        // Der Punkte-Schalter ist am Rechner nur noch der Ueberlauf. Passt
-        // alles hinein, waere er ein Knopf ohne Aufgabe.
-        document.body.classList.toggle('nav-row-complete', !hidden);
+        const overflowed = links.some(el => el.hidden);
+        // Der Punkte-Schalter ist am Rechner nur noch der Ueberlauf. Er
+        // verschwindet nur, wenn die Zeile wirklich alles zeigt -- was der
+        // Nutzer ausgeblendet hat, ist sonst nirgends mehr erreichbar.
+        document.body.classList.toggle('nav-row-complete',
+            !overflowed && rowShowsEverything);
     }
 
     async function buildModuleRow(navbar, visible) {
@@ -550,6 +565,8 @@
         iconSvg: moduleIconSvg,
         openTabBarSettings: openNavSettings,
         readDesktopOrder: readDesktopCache,
+        readHidden: readHidden,
+        HIDDEN_PREF: HIDDEN_PREF,
         // Der Cache haengt an VexPrefs.set() -- hier wird nur neu gezeichnet.
         redrawDesktop: () => { if (visibleModules) renderModuleRow(visibleModules); },
         DESKTOP_PREF: DESKTOP_PREF,

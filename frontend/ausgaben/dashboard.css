@@ -7,10 +7,6 @@ body{visibility:hidden}body.ready{visibility:visible}
     flex-wrap:wrap;padding:var(--space-5) var(--space-5) var(--space-4);
     background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius-lg);
     position:relative;overflow:hidden}
-/* Der einzige Verlauf hier liegt hinter der Zahl, nicht unter ihr: ein sehr
-   leises Licht am oberen Rand, das die Karte vom Grund abhebt. */
-.kpi-hero::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
-    background:var(--grad-accent);opacity:0.85}
 /* Hero und Mini-Zeile sind EIN Block. Sobald die Zeile darunter steht, hoert
    die Rundung unten auf -- sonst schneidet die Kante des oberen Rechtecks
    sichtbar in die Kacheln, obwohl beides zusammengehoert. Ohne Mini-Zeile
