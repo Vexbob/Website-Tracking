@@ -666,6 +666,16 @@ function activateTab(tab) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (!isLoggedIn()) { location.href = '/private/login.html'; return; }
+    // css/statistics.css versteckt den Body (`body{visibility:hidden}`), bis
+    // die Seite sich freigibt — sonst blitzt vor einer Weiterleitung zum Login
+    // kurz die fertige Oberfläche auf. Jede Modulseite muss diesen Schalter
+    // umlegen; fehlt er, sieht man dauerhaft nur den Seitenhintergrund.
+    //
+    // Und zwar HIER, direkt nach dem synchronen Login-Check: ab hier steht
+    // fest, dass diese Seite bleibt. Erst nach dem Warten auf fetchMe
+    // freizugeben hiesse, dass eine hängende oder fehlschlagende Antwort die
+    // Seite unsichtbar lässt.
+    document.body.classList.add('ready');
     try {
         const me = await fetchMe();
         document.getElementById('userLabel').textContent = '👤 ' + me.username;

@@ -116,6 +116,14 @@ nicht fertig.
 
 Berührungsziele auf Mobilgeräten sind mindestens 44 px hoch.
 
+**Der achte Zustand: die Seite selbst.** Modulseiten starten unsichtbar
+(`body{visibility:hidden}` in `css/statistics.css`), damit vor einer
+Weiterleitung zum Login nicht kurz die fertige Oberfläche aufblitzt. Sie geben
+sich mit `body.classList.add('ready')` frei — **direkt nach dem synchronen
+Login-Check**, nie erst nach einer Serverantwort. Hängt die Freigabe an einem
+`await`, ist eine langsame oder fehlende Antwort nicht mehr von einer kaputten
+Seite zu unterscheiden: man sieht nur den Seitenhintergrund.
+
 ## 5. Bewegung
 
 Drei Dauern, eine Kurve: `--dur-1` 120 ms (Zustandswechsel), `--dur-2` 200 ms
