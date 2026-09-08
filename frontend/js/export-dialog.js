@@ -12,6 +12,11 @@
  *     Sie standen hier ein zweites Mal, also war eine neue Stufe zwei
  *     Änderungen an zwei Orten. Neu dabei: Tag, Jahr und „Automatisch",
  *     das sich nach der Länge des Zeitraums richtet.
+ *   - **Eine Höchstgröße stellt sich selbst ein** (v1.68.0): man sagt, wie
+ *     groß die Datei höchstens werden darf, und der Server sucht die feinste
+ *     Aggregation, die darunter bleibt. Gedreht wird dabei nur an der Zeit —
+ *     Sektionen und Spalten bleiben, wie sie gewählt sind. Was entschieden
+ *     wurde, landet sichtbar in den Auswahlfeldern, nicht in einer Blackbox.
  *   - **Die Spalten sind je Sektion wählbar.** Welche es gibt, sagt die
  *     Vorschau — sie baut den Export ohnehin und liest die Überschriften aus
  *     den fertigen Zeilen. Eine hier gepflegte Spaltenliste wäre spätestens
@@ -26,6 +31,18 @@
         { key: '365', label: '12 Monate' },
         { key: 'ytd', label: 'Dieses Jahr' },
         { key: 'custom', label: 'Eigener Zeitraum' },
+    ];
+
+    /* Höchstgrößen als Stufen, die man wirklich meint: eine Mail-Anlage, ein
+       Tabellenblatt, ein Archiv. „Aus" steht bewusst zuerst — der Normalfall
+       ist, dass die Größe egal ist. */
+    const LIMITS = [
+        { key: 0,        label: 'Aus' },
+        { key: 1048576,  label: '1 MB' },
+        { key: 5242880,  label: '5 MB' },
+        { key: 10485760, label: '10 MB' },
+        { key: 26214400, label: '25 MB' },
+        { key: -1,       label: 'Eigene' },
     ];
 
     const iso = (d) => {
@@ -69,6 +86,13 @@
             chosen: {},
             openCols: new Set(),
             resolved: {},
+            // Höchstgröße in Byte; 0 heißt „egal". `limitPick` ist nur der
+            // gewählte Knopf, damit „Eigene" auch bei gleichem Wert aktiv bleibt.
+            limit: 0,
+            limitPick: 0,
+            limitMb: '',
+            fitNote: '',
+            fitting: false,
         };
     }
 
@@ -123,6 +147,16 @@
             '          <label>Von<input type="date" id="expFrom"></label>',
             '          <label>Bis<input type="date" id="expTo"></label>',
             '        </div>',
+            '        <div class="exp-label" style="margin-top:1.15rem">Höchstgröße</div>',
+            '        <div class="exp-chip-row" id="expLimit">',
+                     LIMITS.map(l => '<button type="button" data-limit="' + l.key + '">' +
+                        l.label + '</button>').join(''),
+            '        </div>',
+            '        <div id="expLimitCustom" class="exp-custom">',
+            '          <label>Megabyte<input type="number" id="expLimitMb" min="1" step="1" placeholder="z. B. 8"></label>',
+            '          <button type="button" class="v-btn v-btn--sm" id="expLimitApply">Anpassen</button>',
+            '        </div>',
+            '        <p class="exp-hint" id="expLimitNote"></p>',
             '        <div class="exp-label" style="margin-top:1.15rem">Was soll hinein?</div>',
             '        <div id="expSections" class="exp-sections"><span class="skel skel-block"></span></div>',
             '      </div>',
@@ -226,7 +260,7 @@
         box.querySelectorAll('input[data-partial]').forEach(el => { el.indeterminate = true; });
     }
 
-    function renderPreview(overlay, data) {
+    function renderPreview(overlay, data, state) {
         const sum = overlay.querySelector('#expSummary');
         const table = overlay.querySelector('#expTable');
         const sample = overlay.querySelector('#expSample');
@@ -242,8 +276,16 @@
             sample.textContent = '';
             return;
         }
+        // Ist eine Grenze gesetzt, steht der Stand DARAN -- eine nackte
+        // Zahl beantwortet die Frage "passt das noch?" nicht.
+        var against = '';
+        if (state && state.limit > 0) {
+            var over = data.bytes > state.limit;
+            against = ' <span class="' + (over ? 'exp-warn' : 'exp-ok') + '">' +
+                (over ? 'über' : 'von') + ' ' + fmtBytes(state.limit) + '</span>';
+        }
         sum.innerHTML = '<strong>' + data.total_rows.toLocaleString('de-DE') + '</strong> Datenzeilen · ' +
-            '<strong>' + fmtBytes(data.bytes) + '</strong> als CSV';
+            '<strong>' + fmtBytes(data.bytes) + '</strong> als CSV' + against;
         const max = Math.max(1, ...data.sections.map(s => s.rows));
         table.innerHTML = data.sections.map(s =>
             '<div class="exp-prow' + (s.rows ? '' : ' is-empty') + '">' +
@@ -316,16 +358,76 @@
             if (changed) renderSections(sectionBox, state);
         }
 
+        const limitNote = overlay.querySelector('#expLimitNote');
+        const limitMbEl = overlay.querySelector('#expLimitMb');
+
+        function paintLimit() {
+            overlay.querySelectorAll('#expLimit button').forEach(b => {
+                b.classList.toggle('active', Number(b.dataset.limit) === state.limitPick);
+                b.disabled = state.fitting;
+            });
+            overlay.querySelector('#expLimitCustom').style.display =
+                state.limitPick === -1 ? 'flex' : 'none';
+            if (state.fitting) {
+                // Laden heißt Skeleton, nicht „Lade …" als Fließtext.
+                limitNote.innerHTML = '<span class="skel" style="display:inline-block;width:14rem;height:0.85rem"></span>';
+            } else {
+                limitNote.textContent = state.fitNote || '';
+            }
+        }
+
+        /* Der Server sucht die feinste Aggregation, die unter die Grenze
+           passt, und liefert die fertige Vorschau gleich mit. Was er
+           entschieden hat, landet in den Auswahlfeldern links — sonst wäre
+           die Einstellung eine Blackbox. */
+        async function fitToLimit() {
+            if (!state.limit || !state.picked.size) return;
+            state.fitting = true;
+            paintLimit();
+            renderPreview(overlay, null, state);
+            const seq = ++previewSeq;
+            const p = queryOf(state);
+            p.set('max_bytes', state.limit);
+            try {
+                const data = await apiCall('/api/export/fit?' + p.toString());
+                if (seq !== previewSeq) return;
+                Object.keys(data.aggregate || {}).forEach(g => {
+                    if (g in state.agg) state.agg[g] = data.aggregate[g];
+                });
+                state.fitNote = (data.fits ? 'Passt: ' + fmtBytes(data.bytes) + '. ' : '')
+                    + (data.note || '');
+                if (!data.fits && data.largest_section) {
+                    state.fitNote += ' Am schwersten wiegt „' + data.largest_section.label
+                        + '" mit ' + fmtBytes(data.largest_section.bytes) + '.';
+                }
+                state.fitting = false;
+                renderSections(sectionBox, state);
+                if (data.preview) {
+                    renderPreview(overlay, data.preview, state);
+                    absorb(data.preview);
+                } else {
+                    refreshPreview();
+                }
+                paintLimit();
+            } catch (e) {
+                if (seq !== previewSeq) return;
+                state.fitting = false;
+                state.fitNote = 'Konnte nicht eingestellt werden: ' + (e.message || e);
+                paintLimit();
+                refreshPreview();
+            }
+        }
+
         function refreshPreview() {
             clearTimeout(previewTimer);
             // Ohne Sektion waere die Anfrage sinnlos: der Server versteht eine
             // leere Auswahl als "alles" und zeigte dann etwas anderes an, als
             // hier angehakt ist.
             if (!state.picked.size) {
-                renderPreview(overlay, { sections: [], total_rows: 0, bytes: 0, sample: '' });
+                renderPreview(overlay, { sections: [], total_rows: 0, bytes: 0, sample: '' }, state);
                 return;
             }
-            renderPreview(overlay, null);
+            renderPreview(overlay, null, state);
             // Die Vorschau baut serverseitig den echten Export -- deshalb erst
             // kurz warten, statt bei jedem Haken eine Anfrage zu schicken.
             previewTimer = setTimeout(async () => {
@@ -334,11 +436,11 @@
                 try {
                     const data = await apiCall('/api/export/preview' + (qs ? '?' + qs : ''));
                     if (seq !== previewSeq) return;   // eine neuere Anfrage laeuft
-                    renderPreview(overlay, data);
+                    renderPreview(overlay, data, state);
                     absorb(data);
                 } catch (e) {
                     if (seq !== previewSeq) return;
-                    renderPreview(overlay, { error: e.message || String(e) });
+                    renderPreview(overlay, { error: e.message || String(e) }, state);
                 }
             }, 400);
         }
@@ -350,6 +452,35 @@
             overlay.querySelector('#expCustom').style.display =
                 state.preset === 'custom' ? 'flex' : 'none';
         }
+
+        overlay.querySelector('#expLimit').addEventListener('click', (e) => {
+            const b = e.target.closest('button');
+            if (!b || state.fitting) return;
+            const value = Number(b.dataset.limit);
+            state.limitPick = value;
+            if (value === -1) {
+                // „Eigene" öffnet nur das Feld -- gerechnet wird erst auf
+                // „Anpassen", sonst liefe die Suche bei jeder getippten Ziffer.
+                paintLimit();
+                limitMbEl.focus();
+                return;
+            }
+            state.limit = value;
+            state.fitNote = '';
+            paintLimit();
+            if (value > 0) fitToLimit(); else refreshPreview();
+        });
+
+        overlay.querySelector('#expLimitApply').addEventListener('click', () => {
+            const mb = parseFloat(limitMbEl.value);
+            if (!mb || mb <= 0) {
+                if (window.Toast) Toast.error('Bitte eine Größe in Megabyte angeben');
+                return;
+            }
+            state.limit = Math.round(mb * 1048576);
+            state.fitNote = '';
+            fitToLimit();
+        });
 
         overlay.querySelector('#expRange').addEventListener('click', (e) => {
             const b = e.target.closest('button');
@@ -449,6 +580,7 @@
         };
 
         paintRange();
+        paintLimit();
         return { refreshPreview };
     }
 

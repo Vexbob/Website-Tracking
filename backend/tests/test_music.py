@@ -240,3 +240,122 @@ def test_empty_column_choice_means_everything():
     assert fx._filter_columns(SECTION, None) == SECTION
     assert fx.clean_column_map({"music_register": []}) == {}
     assert fx.clean_column_map({"gibtsnicht": ["Titel"]}) == {}
+
+
+# ------------------------------------------- Export: auf Hoechstgroesse einstellen
+
+import asyncio
+
+
+def _run(coro):
+    return asyncio.new_event_loop().run_until_complete(coro)
+
+
+# Modell statt echter Datenbank: die Groesse einer Sektion haengt nur von der
+# Stufe ihres Moduls ab. Damit laesst sich pruefen, was hier wirklich zaehlt --
+# findet die Suche die FEINSTE passende Einstellung, und wie viele Exporte baut
+# sie dafuer.
+LEVEL_BYTES = {"none": 1000, "day": 500, "week": 200, "month": 80, "year": 30}
+
+
+def _fake_preview(sizes, counter):
+    """Baut einen Ersatz fuer build_export_preview. ``sizes`` skaliert je
+    Gruppe, ``counter`` zaehlt die Bauten."""
+    async def preview(db, user, date_from=None, date_to=None, aggregate="none",
+                      sections=None, aggregate_map=None, column_map=None,
+                      sample_lines=40):
+        counter.append(1)
+        agg = aggregate_map or {}
+        detail = []
+        for s in fx.EXPORT_SECTIONS:
+            g = s["group"]
+            if g not in sizes:
+                continue
+            # Stammdaten haengen nicht an der Zeit: ihre Groesse aendert
+            # sich durch Aggregation nicht und ist klein.
+            size = (LEVEL_BYTES[agg.get(g, "none")] if s.get("aggregatable") else 50)
+            detail.append({"key": s["key"], "label": s["label"],
+                           "rows": 1, "bytes": size * sizes[g],
+                           "columns": ["A", "B"]})
+        return {"sections": detail, "total_rows": len(detail),
+                "bytes": sum(d["bytes"] for d in detail), "lines": 1,
+                "aggregate": agg, "sample": "", "truncated": False}
+    return preview
+
+
+def _fit(monkeypatch, sizes, max_bytes, aggregate_map=None, sections=None):
+    counter = []
+    monkeypatch.setattr(fx, "build_export_preview", _fake_preview(sizes, counter))
+    out = _run(fx.fit_export_to_size(None, None, max_bytes, sections=sections,
+                                     aggregate_map=aggregate_map))
+    out["_builds"] = len(counter)
+    return out
+
+
+def test_fit_leaves_everything_alone_when_it_already_fits(monkeypatch):
+    got = _fit(monkeypatch, {"musik": 1}, 10_000_000)
+    assert got["fits"] is True
+    assert got["changed"] == {}
+    # Genau ein Bau: nachsehen, ob es passt, ist die haeufigste Antwort.
+    assert got["_builds"] == 1
+
+
+def test_fit_picks_the_finest_level_that_fits(monkeypatch):
+    # Nur Musik, Faktor 10: none=10000, day=5000, week=2000, month=800, year=300
+    got = _fit(monkeypatch, {"musik": 10}, 2500)
+    assert got["fits"] is True
+    assert got["aggregate"]["musik"] == "week"      # month waere unnoetig grob
+    assert got["bytes"] <= 2500
+
+
+def test_fit_never_builds_more_exports_than_erlaubt(monkeypatch):
+    """Jeder Bau ist ein echter Export -- die Suche muss gedeckelt sein,
+    sonst kostet eine Zielgroesse mehr als der Export selbst."""
+    got = _fit(monkeypatch, {"musik": 10}, 2500)
+    assert got["_builds"] <= 8
+    assert got["builds"] == got["_builds"]
+
+
+def test_fit_refinement_shares_the_budget_between_modules(monkeypatch):
+    """Reihum statt der Reihe nach: sonst verbraucht das erste Modul das
+    ganze Budget und die uebrigen bleiben grob, obwohl sie fast nichts
+    kosten."""
+    got = _fit(monkeypatch, {"musik": 50, "sparziel": 1, "health": 1}, 12_000)
+    assert got["fits"] is True
+    levels = fx.FIT_LADDER
+    # Beide kleinen Module sind feiner geworden, nicht nur das erste.
+    assert levels.index(got["aggregate"]["sparziel"]) < levels.index(got["aggregate"]["musik"])
+    assert levels.index(got["aggregate"]["health"]) < levels.index(got["aggregate"]["musik"])
+
+
+def test_fit_reports_honestly_when_even_yearly_is_too_big(monkeypatch):
+    got = _fit(monkeypatch, {"musik": 100}, 1000)   # year = 3000
+    assert got["fits"] is False
+    assert got["aggregate"]["musik"] == "year"
+    assert "jahresweise" in got["note"]
+    # Es sagt auch, WER die Datei traegt -- sonst weiss niemand, wo anzusetzen.
+    assert got["largest_section"]["key"].startswith("music_")
+
+
+def test_fit_keeps_small_modules_finer_than_the_big_one(monkeypatch):
+    """Eine grobe Stufe fuer alle ist selten die beste Antwort: meist traegt
+    ein Modul die Datei und die uebrigen duerfen genau bleiben."""
+    got = _fit(monkeypatch, {"musik": 100, "sparziel": 1}, 9000)
+    assert got["fits"] is True
+    levels = fx.FIT_LADDER
+    assert levels.index(got["aggregate"]["sparziel"]) < levels.index(got["aggregate"]["musik"])
+
+
+def test_fit_never_drops_sections_or_columns(monkeypatch):
+    """Kleiner wird die Datei ausschliesslich ueber die Zeit -- was drin ist,
+    entscheidet der Nutzer."""
+    got = _fit(monkeypatch, {"musik": 10}, 2500)
+    assert set(got["changed"]) <= set(g["key"] for g in fx.EXPORT_GROUPS)
+    assert all(v in fx.FIT_LADDER for v in got["aggregate"].values())
+
+
+def test_fit_says_so_when_nothing_is_aggregatable(monkeypatch):
+    # Nur das Upload-Protokoll gewaehlt: daran laesst sich nichts drehen.
+    got = _fit(monkeypatch, {"musik": 100}, 1000, sections=["music_imports"])
+    assert got["fits"] is False
+    assert "Stammdaten" in got["note"]

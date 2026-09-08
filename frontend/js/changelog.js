@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.68.0', date: '2026-09-08', title: 'Export mit Höchstgröße', notes: [
+        'Der Gesamt-Export kennt jetzt eine Höchstgröße: Größe wählen, und er stellt die Aggregation selbst so ein, dass die Datei darunter bleibt.',
+        'Gröber wird dabei nur die Zeit — Sektionen und Spalten bleiben, wie du sie gewählt hast.',
+        'Kleine Module bleiben so genau wie möglich; grob wird zuerst, was die Datei wirklich schwer macht.',
+        'Was entschieden wurde, steht danach sichtbar in den Auswahlfeldern, und die Vorschau zeigt den Stand gegen die Grenze.',
+        'Passt es auch jahresweise nicht, sagt der Dialog das und nennt die größte Sektion, statt heimlich zu kürzen.',
+    ]},
     { v: 'v1.67.2', date: '2026-09-08', title: 'Musik-Modul und ein zusammenstellbarer Export', notes: [
         'Neues Modul „Musik“: die CSV aus dem Spotify-Export wird zum durchsuchbaren Hörregister mit Verlauf, Ranglisten und einem Filter, der für Überblick und Register derselbe ist.',
         'Der Import zeigt vor dem Schreiben, welche Blöcke er erkannt hat und welchen Zeitraum jeder ersetzen würde — derselbe Upload zweimal hintereinander bleibt dadurch folgenlos.',

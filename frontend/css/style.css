@@ -872,12 +872,19 @@ input[type="checkbox"] { display: inline; width: auto; }
     flex: 1; display: flex; flex-direction: column; gap: 0.25rem;
     font-size: 0.75rem; color: var(--text-muted);
 }
-.exp-custom input[type="date"] {
+.exp-custom input[type="date"],
+.exp-custom input[type="number"] {
     padding: 0.4375rem 0.625rem; font-size: 0.875rem;
     background: var(--surface-2); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px;
     font-family: inherit; margin: 0; width: 100%;
 }
+/* Die eigene Höchstgröße wird bestätigt, nicht bei jeder Ziffer gerechnet --
+   deshalb steht hier ein Knopf neben dem Feld. */
+.exp-custom .v-btn { align-self: flex-end; flex: none; }
+/* Der Stand gegen die Grenze: erreicht (--ok) oder überschritten (--warn,
+   über .exp-warn). Beides Text auf dunklem Grund, keine Fläche. */
+.exp-ok { color: var(--ok); font-weight: 650; }
 .exp-hint {
     margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-faint);
     line-height: 1.5;

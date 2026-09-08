@@ -542,6 +542,182 @@ async def build_export_preview(
     }
 
 
+# ---------- Auf eine Hoechstgroesse einstellen (v1.68.0) ----------
+#
+# "Die Datei soll unter 5 MB bleiben" ist die Frage, die man tatsaechlich
+# hat -- "welche Aggregationsstufe brauche ich dafuer" ist nur der Umweg
+# dorthin. Diese Funktion geht ihn.
+#
+# Gedreht wird ausschliesslich an der ZEIT. Sektionen oder Spalten
+# stillschweigend zu streichen waere der billigere Weg zu einer kleinen Datei
+# und der schlechtere: eine Luecke, die man ein Jahr spaeter nicht mehr von
+# fehlenden Daten unterscheiden kann. Passt es selbst jaehrlich nicht, sagt
+# das Ergebnis das -- und nennt die groesste Sektion, damit die Entscheidung
+# beim Nutzer bleibt.
+#
+# Gemessen statt geschaetzt: jede Stufe wird wirklich gebaut. Eine Formel
+# ueber Zeilenlaengen waere schneller und laege je nach Modul um Faktoren
+# daneben. Damit das bezahlbar bleibt, ist die Suche binaer (~3 Bauten statt
+# 5) und die Verfeinerung hart gedeckelt.
+
+FIT_LADDER = ["none", "day", "week", "month", "year"]
+
+
+def _aggregatable_groups(picked: list[str]) -> list[str]:
+    """Die Gruppen, an denen Drehen ueberhaupt etwas bewirkt: nur solche mit
+    mindestens einer gewaehlten, zusammenfassbaren Sektion. Stammdaten
+    (Ziele, Achievements, Upload-Protokoll) aendern sich durch Aggregation
+    nicht -- sie mitzudrehen kostete Bauten ohne Wirkung."""
+    want = set(picked)
+    out: list[str] = []
+    for s in EXPORT_SECTIONS:
+        if s["key"] in want and s.get("aggregatable") and s["group"] not in out:
+            out.append(s["group"])
+    return out
+
+
+def _group_bytes(preview: dict) -> dict:
+    """Byte-Anteil je Gruppe aus einer Vorschau."""
+    of_section = {s["key"]: s["group"] for s in EXPORT_SECTIONS}
+    out: dict[str, int] = {}
+    for d in preview.get("sections", []):
+        g = of_section.get(d["key"])
+        if g:
+            out[g] = out.get(g, 0) + int(d.get("bytes") or 0)
+    return out
+
+
+async def fit_export_to_size(
+    db,
+    user,
+    max_bytes: int,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    sections: Optional[list] = None,
+    aggregate_map: Optional[dict] = None,
+    column_map: Optional[dict] = None,
+    max_builds: int = 8,
+) -> dict:
+    """Sucht die FEINSTE Einstellung, mit der die Datei unter ``max_bytes``
+    bleibt, und liefert sie samt fertiger Vorschau zurueck.
+
+    ``fits`` sagt, ob das Ziel erreicht wurde; ``aggregate`` ist die gefundene
+    Einstellung je Modul, ``builds`` die Zahl der dafuer gebauten Exporte.
+    Die Oberflaeche uebernimmt ``aggregate`` in ihre Auswahlfelder -- der
+    Nutzer sieht damit, was entschieden wurde, statt einer Blackbox.
+    """
+    picked = clean_sections(sections)
+    base = clean_aggregate_map(aggregate_map, "none", date_from, date_to)
+    groups = _aggregatable_groups(picked)
+    builds = 0
+
+    async def measure(agg: dict) -> dict:
+        nonlocal builds
+        builds += 1
+        return await build_export_preview(
+            db, user, date_from=date_from, date_to=date_to, sections=picked,
+            aggregate_map=agg, column_map=column_map)
+
+    def result(agg, preview, fits, note=""):
+        biggest = max(preview.get("sections", []),
+                      key=lambda s: s.get("bytes") or 0, default=None)
+        return {
+            "fits": fits,
+            "max_bytes": max_bytes,
+            "bytes": preview["bytes"],
+            "aggregate": agg,
+            "changed": {g: v for g, v in agg.items() if base.get(g) != v},
+            "builds": builds,
+            "note": note,
+            "largest_section": ({"key": biggest["key"], "label": biggest["label"],
+                                 "bytes": biggest["bytes"]} if biggest else None),
+            "preview": preview,
+        }
+
+    # Vielleicht passt es schon. Das ist der haeufigste Fall und kostet
+    # genau einen Bau -- danach ist auch klar, wie weit es ueberhaupt weg ist.
+    current = await measure(base)
+    if current["bytes"] <= max_bytes:
+        return result(base, current, True, "Die aktuelle Zusammenstellung passt bereits.")
+
+    if not groups:
+        return result(base, current, False,
+                      "Hier laesst sich nichts zusammenfassen: die gewaehlten "
+                      "Sektionen sind Stammdaten. Kleiner wird die Datei nur "
+                      "ueber einen kuerzeren Zeitraum oder weniger Sektionen.")
+
+    # ---- Binaere Suche auf der Leiter, gleiche Stufe fuer alle Gruppen ----
+    # Groeber ist immer kleiner, die Leiter ist also monoton -- damit genuegt
+    # eine binaere Suche und es braucht keine fuenf Bauten.
+    lo, hi = 1, len(FIT_LADDER) - 1
+    best: Optional[tuple] = None
+    coarsest: Optional[dict] = None
+    while lo <= hi and builds < max_builds:
+        mid = (lo + hi) // 2
+        agg = dict(base)
+        for g in groups:
+            agg[g] = FIT_LADDER[mid]
+        preview = await measure(agg)
+        if mid == len(FIT_LADDER) - 1:
+            coarsest = preview
+        if preview["bytes"] <= max_bytes:
+            best = (mid, agg, preview)
+            hi = mid - 1
+        else:
+            lo = mid + 1
+
+    if best is None:
+        # Selbst jahresweise zu gross. Ehrlich sagen statt heimlich kuerzen.
+        agg = dict(base)
+        for g in groups:
+            agg[g] = "year"
+        preview = coarsest if coarsest else await measure(agg)
+        return result(agg, preview, False,
+                      "Auch jahresweise bleibt die Datei ueber der Grenze. "
+                      "Kleiner wird sie nur noch, indem du Sektionen abwaehlst, "
+                      "Spalten reduzierst oder den Zeitraum enger ziehst.")
+
+    level, agg, preview = best
+
+    # ---- Verfeinern: kleine Module duerfen genauer bleiben ----
+    # Die eine grobe Stufe fuer alle ist selten die beste Antwort -- meist
+    # traegt EIN Modul die Datei, und die uebrigen koennen genau bleiben.
+    #
+    # Reihum, eine Stufe je Durchgang, kleinste Gruppe zuerst: sonst
+    # verbraucht das erste Modul das ganze Bau-Budget und die uebrigen
+    # bleiben grob, obwohl sie fast nichts kosten. Wer einmal nicht mehr
+    # passt, ist fertig -- feiner wird er danach auch nicht.
+    shares = _group_bytes(preview)
+    order = sorted(groups, key=lambda g: shares.get(g, 0))
+    done: set = set()
+    while builds < max_builds and len(done) < len(order):
+        improved = False
+        for g in order:
+            if g in done or builds >= max_builds:
+                continue
+            idx = FIT_LADDER.index(agg[g])
+            # Feiner als vom Nutzer gewuenscht wird nie -- die Einstellung
+            # soll seiner Wahl entgegenkommen, sie nicht ueberschreiben.
+            if idx <= FIT_LADDER.index(base.get(g, "none")) or idx == 0:
+                done.add(g)
+                continue
+            probe = dict(agg)
+            probe[g] = FIT_LADDER[idx - 1]
+            got = await measure(probe)
+            if got["bytes"] > max_bytes:
+                done.add(g)
+                continue
+            agg, preview = probe, got
+            improved = True
+        if not improved:
+            break
+
+    same = all(agg[g] == agg[groups[0]] for g in groups)
+    note = ("Zeit zusammengefasst auf %s." % _period_adverb(agg[groups[0]])
+            if same else "Je Modul die feinste Stufe, die noch passt.")
+    return result(agg, preview, True, note)
+
+
 async def build_health_export_csv(db, user) -> str:
     """Dedizierter Health-CSV-Export (nur Gesundheit). Nutzt exakt
     dieselben Sektions-Helfer wie der Gesamt-Export."""
