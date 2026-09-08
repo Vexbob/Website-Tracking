@@ -94,6 +94,7 @@
             <div class="sg-swatch"><div class="fill" style="background:var(--m-sparziel)"></div><div class="lbl"><b>Sparziel</b><span>--m-sparziel</span></div></div>
             <div class="sg-swatch"><div class="fill" style="background:var(--m-notizen)"></div><div class="lbl"><b>Notizen</b><span>--m-notizen</span></div></div>
             <div class="sg-swatch"><div class="fill" style="background:var(--m-blog)"></div><div class="lbl"><b>Blog</b><span>--m-blog</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--m-musik)"></div><div class="lbl"><b>Musik</b><span>--m-musik</span></div></div>
         </div>
         <div class="sg-row" style="margin-top:var(--space-3)">
             <span class="v-tag">neutral</span>
@@ -108,6 +109,7 @@
             <span class="v-icon-tile" style="--tone:var(--m-sparziel)">💰</span>
             <span class="v-icon-tile" style="--tone:var(--m-notizen)">📝</span>
             <span class="v-icon-tile" style="--tone:var(--m-blog)">📰</span>
+            <span class="v-icon-tile" style="--tone:var(--m-musik)">🎧</span>
             <span class="sg-label">Icon-Kacheln sind eine der vier Stellen mit Verlauf — sie tragen keinen Text</span>
         </div>
     </section>
@@ -163,6 +165,27 @@
             <span class="empty-mark">⚠️</span>
             <p class="empty-text">Die Ausgaben konnten nicht geladen werden.</p>
             <button class="v-btn v-btn--sm">Erneut versuchen</button>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Ablegefläche für Dateien</h2>
+        <p class="sg-note">Dieselbe gestrichelte Kante wie beim leeren Zustand: hier ist noch nichts,
+        hier könnte etwas hin. Drei Zustände, die man auseinanderhalten muss — bereit, eine Datei
+        schwebt darüber, eine Datei liegt drin. Der letzte wechselt auf eine <strong>durchgezogene</strong>
+        Kante, weil gestrichelt „leer" heißt und das dann nicht mehr stimmt.
+        Benutzt von Gesundheit (<code>/health/</code>) und Musik (<code>/musik/</code>).</p>
+        <div class="sg-do-dont">
+            <div class="dropzone">
+                <div class="dropzone-icon">📄</div>
+                <div class="dropzone-title">CSV hier ablegen oder klicken</div>
+                <div class="dropzone-sub">Eine Datei, Semikolon oder Tabulator getrennt</div>
+            </div>
+            <div class="dropzone has-files">
+                <div class="dropzone-icon">📄</div>
+                <div class="dropzone-title">CSV hier ablegen oder klicken</div>
+                <div class="dropzone-sub">spotify-2026-01.csv</div>
+            </div>
         </div>
     </section>
 
@@ -225,6 +248,26 @@
                 </div>
             </div>
             <div class="rank-rest">Top 3 · 199,60 € übrige</div>
+        </div>
+        <p class="sg-note" style="margin-top:var(--space-4)">Führt der Klick nicht auf eine Seite,
+        sondern setzt einen <strong>Filter</strong>, ist die Zeile ein <code>&lt;button class="rank-row"&gt;</code>.
+        Das ist eine Ergänzung derselben Komponente, keine zweite Variante — die globale Button-Base
+        wird dafür in <code>style.css</code> zurückgenommen.</p>
+        <div class="v-card">
+            <div class="rank-list">
+                <button type="button" class="rank-row" style="--tone:var(--m-musik)">
+                    <span class="rank-mark">1</span>
+                    <span class="rank-name">Marsimoto</span>
+                    <span class="rank-val">412</span>
+                    <span class="rank-bar"><i style="width:100%"></i></span>
+                </button>
+                <button type="button" class="rank-row" style="--tone:var(--m-musik)">
+                    <span class="rank-mark">2</span>
+                    <span class="rank-name">Peter Fox</span>
+                    <span class="rank-val">287</span>
+                    <span class="rank-bar"><i style="width:70%"></i></span>
+                </button>
+            </div>
         </div>
     </section>
 

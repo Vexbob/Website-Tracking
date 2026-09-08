@@ -26,6 +26,7 @@ v1.60.0 - der Export ist zusammenstellbar:
 """
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime, timezone
 from typing import Optional
@@ -39,34 +40,95 @@ from helpers import (
 
 
 # ---------- v1.37.1 Zeitraum- + Aggregations-Helfer ----------
+#
+# v1.67.0: Die Stufen stehen in EINER Liste. Vorher kannte der Export nur
+# Woche und Monat, und die Oberflaeche fuehrte dieselben drei Eintraege ein
+# zweites Mal -- eine neue Stufe war damit zwei Aenderungen an zwei Orten.
+# ``/api/export/sections`` liefert diese Liste jetzt mit.
+
+EXPORT_AGGREGATES: list[dict] = [
+    {"key": "none", "label": "Einzeln",
+     "hint": "Jeder Eintrag steht einzeln in der Datei."},
+    {"key": "auto", "label": "Automatisch",
+     "hint": "Die Stufe richtet sich nach der Laenge des Zeitraums."},
+    {"key": "day", "label": "Pro Tag",
+     "hint": "Je Tag eine Summenzeile."},
+    {"key": "week", "label": "Pro Woche",
+     "hint": "Je Woche eine Summenzeile; Einkaeufe bleiben einzeln, aber ohne Positionen."},
+    {"key": "month", "label": "Pro Monat",
+     "hint": "Je Monat eine Summenzeile."},
+    {"key": "year", "label": "Pro Jahr",
+     "hint": "Je Jahr eine Zeile. Fuer zehn Jahre Historie die einzige lesbare Form."},
+]
+AGG_KEYS = [a["key"] for a in EXPORT_AGGREGATES]
+# Die Stufen, die wirklich zusammenfassen -- ``none`` und ``auto`` sind keine.
+AGG_LEVELS = ["day", "week", "month", "year"]
+
+# Ab welcher Laenge welche Stufe, wenn "Automatisch" gewaehlt ist. Die
+# Schwellen sind so gesetzt, dass eine Sektion selten mehr als rund
+# 120 Perioden bekommt.
+_AUTO_STEPS = [(92, "day"), (800, "week"), (2200, "month")]
+
+
+def resolve_auto(date_from: Optional[date], date_to: Optional[date]) -> str:
+    """Welche Stufe ``auto`` bedeutet. Ohne begrenzten Zeitraum ist es das
+    Jahr: "Gesamt" reicht bei diesem Nutzer ueber zehn Jahre zurueck, und
+    monatsweise waeren das 120 Zeilen je Sektion nur fuer den Kontext."""
+    if not date_from or not date_to:
+        return "year"
+    span = (date_to - date_from).days + 1
+    for limit, step in _AUTO_STEPS:
+        if span <= limit:
+            return step
+    return "year"
+
+
+def _agg_on(mode: str) -> bool:
+    """Fasst diese Einstellung ueberhaupt zusammen?"""
+    return mode in AGG_LEVELS
+
 
 def _period_key(d: date, mode: str) -> str:
     """Liefert einen Sortier- und Anzeige-freundlichen Perioden-Key.
 
+    ``day``   -> ``YYYY-MM-DD``
     ``week``  -> ISO-Woche ``YYYY-Www`` (z. B. ``2024-W03``)
     ``month`` -> ``YYYY-MM``
+    ``year``  -> ``YYYY``
     """
+    if mode == "day":
+        return d.isoformat()
     if mode == "week":
         iso = d.isocalendar()
         return f"{iso[0]:04d}-W{iso[1]:02d}"
+    if mode == "year":
+        return f"{d.year:04d}"
     return f"{d.year:04d}-{d.month:02d}"
+
+
+_PERIOD_WORDS = {
+    "day":   ("Tag",    "Tages",   "tageweise"),
+    "week":  ("Woche",  "Wochen",  "wochenweise"),
+    "month": ("Monat",  "Monats",  "monatsweise"),
+    "year":  ("Jahr",   "Jahres",  "jahresweise"),
+}
 
 
 def _period_label(mode: str) -> str:
     """Singular-Label fuer eine Periode (``Woche`` / ``Monat``)."""
-    return "Woche" if mode == "week" else ("Monat" if mode == "month" else "Periode")
+    return _PERIOD_WORDS.get(mode, ("Periode",))[0]
 
 
 def _period_prefix(mode: str) -> str:
     """Wortstamm fuer Substantiv-Zusammensetzungen wie ``Wochen-Zusammenfassung``
     oder ``Monats-Zusammenfassung``. Vermeidet den frueheren Bug ``Woches-...``.
     """
-    return "Wochen" if mode == "week" else ("Monats" if mode == "month" else "Perioden")
+    return _PERIOD_WORDS.get(mode, (None, "Perioden"))[1]
 
 
 def _period_adverb(mode: str) -> str:
     """Adverb fuer Beschreibungen wie ``wochenweise aggregiert``."""
-    return "wochenweise" if mode == "week" else ("monatsweise" if mode == "month" else "periodenweise")
+    return _PERIOD_WORDS.get(mode, (None, None, "periodenweise"))[2]
 
 
 def _date_from_iso_prefix(s: str) -> Optional[date]:
@@ -163,12 +225,17 @@ EXPORT_SECTIONS: list[dict] = [
      "label": "Schlaf inkl. Phasen"},
     {"key": "health_workouts", "group": "health", "aggregatable": True, "dated": True,
      "label": "Workouts inkl. Zusatzmetriken"},
+    {"key": "music_register", "group": "musik", "aggregatable": True, "dated": True,
+     "label": "Hörregister (Periode, Interpret, Titel, Wiedergaben)"},
+    {"key": "music_imports", "group": "musik", "aggregatable": False, "dated": False,
+     "label": "Protokoll der CSV-Uploads"},
 ]
 
 EXPORT_GROUPS: list[dict] = [
     {"key": "sparziel", "label": "Sparziel"},
     {"key": "ausgaben", "label": "Ausgaben"},
     {"key": "health", "label": "Gesundheit"},
+    {"key": "musik", "label": "Musik"},
 ]
 
 ALL_SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS]
@@ -184,14 +251,101 @@ def clean_sections(raw) -> list[str]:
     return picked or list(ALL_SECTION_KEYS)
 
 
-def clean_aggregate_map(raw, fallback: str = "none") -> dict:
+def clean_aggregate_map(raw, fallback: str = "none",
+                        date_from: Optional[date] = None,
+                        date_to: Optional[date] = None) -> dict:
     """Aggregation je Modul. Was fehlt oder unbekannt ist, bekommt den
-    Gesamtwert -- so bleibt der alte Aufruf mit nur ``aggregate`` gueltig."""
-    fallback = fallback if fallback in ("none", "week", "month") else "none"
+    Gesamtwert -- so bleibt der alte Aufruf mit nur ``aggregate`` gueltig.
+
+    ``auto`` wird hier schon in eine echte Stufe uebersetzt: ab hier
+    rechnet niemand mehr mit einer Einstellung, die keine Periode benennt,
+    und der Datei-Vorspann kann die tatsaechlich benutzte Stufe nennen.
+    """
+    fallback = fallback if fallback in AGG_KEYS else "none"
     out = {g["key"]: fallback for g in EXPORT_GROUPS}
     for key, value in (raw or {}).items():
-        if key in out and value in ("none", "week", "month"):
+        if key in out and value in AGG_KEYS:
             out[key] = value
+    auto = resolve_auto(date_from, date_to)
+    return {k: (auto if v == "auto" else v) for k, v in out.items()}
+
+
+# ---------- Spaltenauswahl (v1.67.0) ----------
+# Welche Spalten eine Sektion hat, haengt von ihrer Aggregation ab: die
+# Ausgaben tragen einzeln andere als monatsweise. Eine fest hinterlegte
+# Spaltenliste waere deshalb entweder unvollstaendig oder falsch -- also wird
+# sie aus den GEBAUTEN Zeilen gelesen. Die Vorschau baut den Export ohnehin
+# und liefert sie mit; die Oberflaeche lernt daraus, was es zu waehlen gibt.
+#
+# Aufbau einer Sektion:
+#     # SEKTION: ...        <- Kommentar, danach folgt genau ein Spalten-Header
+#     Datum;Typ;Titel       <- Header
+#     2026-01-05;...        <- Daten, bis Leerzeile oder naechste Marke
+# Eine Sektion darf mehrere solcher Bloecke enthalten (Bons + Positionen).
+
+
+def _section_columns(lines: list[str]) -> list[str]:
+    """Die Spaltennamen einer Sektion, in Reihenfolge und ohne Dubletten."""
+    out: list[str] = []
+    expect_header = False
+    for line in lines:
+        if line.startswith("# SEKTION:"):
+            expect_header = True
+            continue
+        if line.startswith("#") or not line.strip():
+            continue
+        if expect_header:
+            for name in line.split(";"):
+                name = name.strip()
+                if name and name not in out:
+                    out.append(name)
+            expect_header = False
+    return out
+
+
+def _filter_columns(lines: list[str], keep: Optional[set]) -> list[str]:
+    """Behaelt in jedem Block dieser Sektion nur die gewaehlten Spalten.
+
+    Bleibt fuer einen Block nichts uebrig, bleibt er unveraendert: eine Datei
+    mit einem Spalten-Header ohne Spalten waere kaputt, und die Auswahl war
+    dann offensichtlich fuer den anderen Block der Sektion gemeint.
+    """
+    if not keep:
+        return lines
+    out: list[str] = []
+    expect_header = False
+    idx: Optional[list[int]] = None
+    for line in lines:
+        if line.startswith("# SEKTION:"):
+            expect_header, idx = True, None
+            out.append(line)
+            continue
+        if line.startswith("#") or not line.strip():
+            out.append(line)
+            continue
+        if expect_header:
+            names = [n.strip() for n in line.split(";")]
+            picked = [i for i, n in enumerate(names) if n in keep]
+            idx = picked if picked else None
+            expect_header = False
+        if idx is None:
+            out.append(line)
+        else:
+            parts = line.split(";")
+            out.append(";".join(parts[i] if i < len(parts) else "" for i in idx))
+    return out
+
+
+def clean_column_map(raw) -> dict:
+    """``{sektion: {spalte, ...}}``. Leere Auswahl heisst "alle" -- dieselbe
+    Regel wie bei den Sektionen, aus demselben Grund."""
+    out: dict[str, set] = {}
+    for key, names in (raw or {}).items():
+        if key not in ALL_SECTION_KEYS:
+            continue
+        wanted = {str(n).strip() for n in (names or []) if str(n).strip()}
+        if wanted:
+            out[key] = wanted
     return out
 
 
@@ -214,6 +368,7 @@ async def build_full_export_csv(
     aggregate: str = "none",
     sections: Optional[list] = None,
     aggregate_map: Optional[dict] = None,
+    column_map: Optional[dict] = None,
 ) -> str:
     """Baut die komplette CSV als String. Gibt Zeilen (``\\n``-getrennt) zurueck.
 
@@ -223,20 +378,23 @@ async def build_full_export_csv(
         Metadaten-Sektionen (Sparziele, Achievements, Wochen-/Monatsziele,
         Trophaeen, ...) bleiben ungefiltert, damit die aggregierten Zahlen
         weiter im Kontext lesbar bleiben.
-      * ``aggregate`` = ``none|week|month``: fasst Ausgaben und Vitalwerte
-        zu Perioden zusammen (Anzahl Bons + Summe je Woche/Monat, avg/min/max
-        je Metrik). Fuer lange Zeitraeume (Jahre) enorm platzsparend.
+      * ``aggregate``: fasst Ausgaben und Vitalwerte zu Perioden zusammen
+        (Anzahl Bons + Summe je Periode, avg/min/max je Metrik). Fuer lange
+        Zeitraeume (Jahre) enorm platzsparend. Erlaubt sind die Schluessel aus
+        ``EXPORT_AGGREGATES``; v1.67.0 kamen Tag, Jahr und ``auto`` dazu.
         v1.40.1: Ausgaben behalten dabei zusaetzlich eine Zeile je Bon
         (Datum, Laden, Typ, Anzahl Positionen, Summe, Kategorien-Split) --
         weg fallen nur die Einzelpositionen.
+      * ``column_map`` (v1.67.0): je Sektion die gewuenschten Spalten.
     """
     picked = clean_sections(sections)
-    agg_map = clean_aggregate_map(aggregate_map, aggregate)
+    agg_map = clean_aggregate_map(aggregate_map, aggregate, date_from, date_to)
+    cols = clean_column_map(column_map)
     built = await _build_sections(db, user, picked, date_from, date_to, agg_map)
 
     lines = _export_header(user, picked, date_from, date_to, agg_map)
-    for _key, section_lines in built:
-        lines.extend(section_lines)
+    for key, section_lines in built:
+        lines.extend(_filter_columns(section_lines, cols.get(key)))
     return _compact_timestamps("\n".join(lines) + "\n")
 
 
@@ -292,7 +450,7 @@ async def _build_sections(db, user, picked: list[str], date_from, date_to,
         else:
             proto = proto_all
         agg = agg_map.get("sparziel", "none")
-        if agg in ("week", "month"):
+        if _agg_on(agg):
             # v1.37.2: Bei Aggregation kompakte Perioden-Zusammenfassung statt
             # Einzel-Eintraege. Bei ~130 Checkins/Woche wird das sonst unlesbar.
             out.append(("sparziel_log", _sparziel_protocol_aggregated(proto, agg)))
@@ -315,6 +473,14 @@ async def _build_sections(db, user, picked: list[str], date_from, date_to,
         out.extend(await _health_section(
             db, uid, date_from=date_from, date_to=date_to,
             aggregate=agg_map.get("health", "none"), sections=health_keys))
+
+    if "music_register" in want:
+        out.append(("music_register", await _music_register_section(
+            db, uid, date_from=date_from, date_to=date_to,
+            aggregate=agg_map.get("musik", "none"))))
+
+    if "music_imports" in want:
+        out.append(("music_imports", await _music_imports_section(db, uid)))
     return out
 
 
@@ -326,13 +492,20 @@ async def build_export_preview(
     aggregate: str = "none",
     sections: Optional[list] = None,
     aggregate_map: Optional[dict] = None,
+    column_map: Optional[dict] = None,
     sample_lines: int = 40,
 ) -> dict:
     """Was der Export enthalten wuerde: je Sektion die Zeilenzahl und ihr
     Anteil, die Gesamtgroesse und die ersten Zeilen der echten Datei. Baut den
-    Export dafuer wirklich -- eine Schaetzung waere schneller und falsch."""
+    Export dafuer wirklich -- eine Schaetzung waere schneller und falsch.
+
+    Je Sektion kommen ausserdem ``columns`` mit: alle Spalten, die sie in
+    DIESER Zusammenstellung hat. Die Oberflaeche baut ihre Spaltenauswahl
+    daraus, statt eine zweite Liste zu fuehren, die bei jeder Aenderung an
+    einer Sektion nachgepflegt werden muesste."""
     picked = clean_sections(sections)
-    agg_map = clean_aggregate_map(aggregate_map, aggregate)
+    agg_map = clean_aggregate_map(aggregate_map, aggregate, date_from, date_to)
+    cols = clean_column_map(column_map)
     built = await _build_sections(db, user, picked, date_from, date_to, agg_map)
 
     header = _export_header(user, picked, date_from, date_to, agg_map)
@@ -340,14 +513,20 @@ async def build_export_preview(
     labels = {s["key"]: s["label"] for s in EXPORT_SECTIONS}
     detail = []
     for key, section_lines in built:
-        text = _compact_timestamps("\n".join(section_lines))
+        # Die Spaltenliste stammt aus den UNGEFILTERTEN Zeilen: sonst
+        # verschwaende eine abgewaehlte Spalte aus der Auswahl und liesse
+        # sich nie wieder anhaken.
+        available = _section_columns(section_lines)
+        shown = _filter_columns(section_lines, cols.get(key))
+        text = _compact_timestamps("\n".join(shown))
         detail.append({
             "key": key,
             "label": labels.get(key, key),
-            "rows": _count_rows(section_lines),
+            "rows": _count_rows(shown),
             "bytes": len(text.encode("utf-8")),
+            "columns": available,
         })
-        all_lines.extend(section_lines)
+        all_lines.extend(shown)
 
     csv = _compact_timestamps("\n".join(all_lines) + "\n")
     body = ("\ufeff" + csv).encode("utf-8")
@@ -357,6 +536,7 @@ async def build_export_preview(
         "total_rows": sum(d["rows"] for d in detail),
         "bytes": len(body),
         "lines": csv.count("\n"),
+        "aggregate": agg_map,
         "sample": "\n".join(sample),
         "truncated": csv.count("\n") > len(sample),
     }
@@ -417,7 +597,7 @@ async def _expenses_sections(
     # der CSV -- ohne Einzelpositionen, aber mit Kategorien-Aufschluesselung.
     # Die reine Wochensumme sagt nichts darueber, wofuer das Geld ausgegeben
     # wurde; die Positionsliste macht lange Zeitraeume dagegen unlesbar.
-    if aggregate in ("week", "month") and rows:
+    if _agg_on(aggregate) and rows:
         out = _expenses_aggregated_section(rows, aggregate)
         out.extend(await _expenses_compact_bons_section(db, user_id, rows, aggregate))
         return out
@@ -790,7 +970,7 @@ async def _health_vitals_wide_section(
     # Wir aggregieren pro Metrik die Tageswerte per Mittelwert (fuer Vitals
     # das sinnvollste Default), zusaetzlich min/max ueber die Periode.
     aggregated_per_period: dict[str, dict[str, dict]] = {}
-    if aggregate in ("week", "month"):
+    if _agg_on(aggregate):
         period_label = _period_label(aggregate)
         header_first_col = period_label
         for day_str, day_data in per_day.items():
@@ -816,7 +996,7 @@ async def _health_vitals_wide_section(
                 if q > mb["max"]:
                     mb["max"] = q
 
-    if aggregate in ("week", "month"):
+    if _agg_on(aggregate):
         out.append(
             f"# SEKTION: Gesundheit - Vitalwerte ({_period_adverb(aggregate)} "
             "aggregiert; pro Metrik durchschnittlicher Tageswert; _min/_max "
@@ -841,12 +1021,12 @@ async def _health_vitals_wide_section(
         header_cols.append(m)
         # Im Aggregations-Modus haben ALLE Metriken min/max (ueber die
         # Periode berechnet), nicht nur die urspruenglich aggregierten.
-        if aggregate in ("week", "month") or m in has_aggregate:
+        if _agg_on(aggregate) or m in has_aggregate:
             header_cols.append(f"{m}_min")
             header_cols.append(f"{m}_max")
     out.append(";".join(header_cols))
 
-    if aggregate in ("week", "month"):
+    if _agg_on(aggregate):
         for key in sorted(aggregated_per_period.keys()):
             row_cells = [key]
             bucket = aggregated_per_period[key]
@@ -1039,7 +1219,7 @@ async def _health_section(
         "health_summary", "health_vitals", "health_bp",
         "health_glucose", "health_sleep", "health_workouts"}
     result: list = []
-    agg_on = aggregate in ("week", "month")
+    agg_on = _agg_on(aggregate)
 
     if "health_summary" in want:
         # Zusammenfassung bleibt unveraendert (keys/counts ueber den gesamten
@@ -1167,3 +1347,133 @@ async def _health_section(
         result.append(("health_workouts", out))
 
     return result
+
+
+# ---------- Musik (v1.67.0) ----------
+# Das Register ist bereits zusammengefasst in die Datenbank gekommen -- je
+# Zeile eine Periode und eine Gruppe (Titel, Interpret, Album). Der Export
+# fasst deshalb hoechstens noch WEITER zusammen: aus Wochen werden Monate,
+# aus Monaten Jahre. Der umgekehrte Weg existiert nicht; die Rohwiedergaben
+# hat nur das Export-Programm, aus dem die CSV stammt.
+
+_MUSIC_GRAIN_LABEL = {"tag": "täglich", "woche": "wöchentlich",
+                      "monat": "monatlich", "jahr": "jährlich"}
+
+
+async def _music_register_section(db, user_id: int, date_from=None, date_to=None,
+                                  aggregate: str = "none") -> list[str]:
+    where = "WHERE user_id=$1"
+    params: list = [user_id]
+    # Eine Periode gehoert dazu, sobald sie den Zeitraum beruehrt -- eine
+    # Jahreszeile 2024 faellt bei "ab Juli 2024" sonst raus, obwohl sie die
+    # gesuchte Zeit enthaelt.
+    if date_from:
+        params.append(date_from)
+        where += f" AND period_end >= ${len(params)}"
+    if date_to:
+        params.append(date_to)
+        where += f" AND period_start <= ${len(params)}"
+
+    rows = await db.fetch(
+        "SELECT grain, period_key, period_start, period_end, group_by, kind, "
+        "       artist, title, album, plays, ms_played, skipped, block "
+        f"  FROM music_entries {where} "
+        " ORDER BY period_start, plays DESC NULLS LAST", *params)
+
+    out: list[str] = []
+    if not _agg_on(aggregate):
+        out.append(
+            "# SEKTION: Musik - Hoerregister (eine Zeile je Periode und Gruppe, "
+            "so wie sie aus dem Spotify-Export gekommen ist). Die Spalte "
+            "'Raster' sagt, wie fein die Zeile ist - aeltere Zeitraeume liegen "
+            "bewusst groeber vor.")
+        out.append("Periode;Raster;Von;Bis;Art;Interpret;Titel;Album;"
+                   "Wiedergaben;Minuten;Übersprungen;Block")
+        for r in rows:
+            minutes = _num(r["ms_played"] / 60000) if r["ms_played"] is not None else ""
+            out.append(
+                f'{r["period_key"]};{_MUSIC_GRAIN_LABEL.get(r["grain"], r["grain"])};'
+                f'{r["period_start"].isoformat()};{r["period_end"].isoformat()};'
+                f'{_f(r["kind"])};{_f(r["artist"])};{_f(r["title"])};{_f(r["album"])};'
+                f'{r["plays"]};{minutes};'
+                f'{"" if r["skipped"] is None else r["skipped"]};{_f(r["block"])}'
+            )
+        out.append("")
+        return out
+
+    label = _period_label(aggregate)
+    prefix = _period_prefix(aggregate)
+    buckets: dict[tuple, dict] = {}
+    coarser = 0
+    finer_than = AGG_LEVELS.index(aggregate) if aggregate in AGG_LEVELS else -1
+    grain_rank = {"tag": 0, "woche": 1, "monat": 2, "jahr": 3}
+    for r in rows:
+        key = (_period_key(r["period_start"], aggregate), r["kind"],
+               r["artist"], r["title"], r["album"])
+        b = buckets.setdefault(key, {"plays": 0, "ms": None, "skipped": 0,
+                                     "von": r["period_start"], "bis": r["period_end"]})
+        b["plays"] += int(r["plays"] or 0)
+        if r["ms_played"] is not None:
+            b["ms"] = (b["ms"] or 0) + int(r["ms_played"])
+        b["skipped"] += int(r["skipped"] or 0)
+        b["von"] = min(b["von"], r["period_start"])
+        b["bis"] = max(b["bis"], r["period_end"])
+        if grain_rank.get(r["grain"], 0) > finer_than:
+            coarser += 1
+
+    out.append(
+        f"# SEKTION: Musik - Hoerregister, {prefix}-Zusammenfassung "
+        f"({_period_adverb(aggregate)} aggregiert; Interpret und Titel bleiben "
+        "erhalten, nur die Zeit wird groeber)")
+    if coarser:
+        out.append(
+            f"# Hinweis: {coarser} Zeile(n) liegen groeber vor als '{label}' und "
+            "zaehlen in die Periode ihres ersten Tages. Feiner als importiert "
+            "laesst sich nicht aufteilen - die Einzelwiedergaben stehen nur im "
+            "Spotify-Export selbst.")
+    out.append(f"{label};Von;Bis;Art;Interpret;Titel;Album;Wiedergaben;Minuten;Übersprungen")
+    for key in sorted(buckets.keys(), key=lambda k: (k[0], -buckets[k]["plays"])):
+        b = buckets[key]
+        period, kind, artist, title, album = key
+        out.append(
+            f'{period};{b["von"].isoformat()};{b["bis"].isoformat()};'
+            f'{_f(kind)};{_f(artist)};{_f(title)};{_f(album)};'
+            f'{b["plays"]};{_num(b["ms"] / 60000) if b["ms"] is not None else ""};'
+            f'{b["skipped"]}'
+        )
+    out.append("")
+    return out
+
+
+async def _music_imports_section(db, user_id: int) -> list[str]:
+    """Wann welche Datei hochgeladen wurde. Stammdaten: ohne dieses Protokoll
+    sieht ein ersetzter Zeitraum spaeter aus wie ein Datenverlust."""
+    rows = await db.fetch(
+        "SELECT uploaded_at, filename, size_bytes, rows_read, rows_written, "
+        "       rows_skipped, rows_replaced, blocks "
+        "  FROM music_imports WHERE user_id=$1 ORDER BY uploaded_at", user_id)
+    out = [
+        "# SEKTION: Musik - Protokoll der CSV-Uploads (Herkunft der Zeilen im "
+        "Hoerregister). 'Ersetzt' sind Zeilen, die dieser Upload aus seinem "
+        "Zeitraum entfernt hat.",
+        "Hochgeladen;Datei;Größe (Byte);Zeilen gelesen;Übernommen;"
+        "Übersprungen;Ersetzt;Blöcke",
+    ]
+    for r in rows:
+        blocks = r["blocks"]
+        if isinstance(blocks, str):
+            try:
+                blocks = json.loads(blocks)
+            except ValueError:
+                blocks = []
+        summary = " | ".join(
+            f'{b.get("label", "?")} ({b.get("replace_from", "?")} bis {b.get("replace_to", "?")})'
+            for b in (blocks or []))
+        out.append(
+            f'{r["uploaded_at"].isoformat() if r["uploaded_at"] else ""};'
+            f'{_f(r["filename"] or "")};{r["size_bytes"]};{r["rows_read"]};'
+            f'{r["rows_written"]};{r["rows_skipped"]};{r["rows_replaced"]};'
+            f'{_f(summary)}'
+        )
+    out.append("")
+    return out

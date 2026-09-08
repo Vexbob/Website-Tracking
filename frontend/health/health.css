@@ -140,13 +140,9 @@ body{visibility:hidden}body.ready{visibility:visible}
 .h-form-row button{width:auto;margin:0}
 
 /* Drag & Drop-Zone */
-.h-dropzone{border:2px dashed var(--line-strong);border-radius:12px;padding:1.5rem 1rem;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface-2)}
-.h-dropzone:hover{border-color:var(--accent);background:var(--surface-1)}
-.h-dropzone.drag{border-color:var(--accent);background:var(--accent-soft)}
-.h-dropzone.has-files{border-style:solid;border-color:var(--green-dark);background:rgba(34,197,94,0.06)}
-.h-dropzone-icon{font-size:1.75rem;opacity:0.7;margin-bottom:0.25rem}
-.h-dropzone-title{font-weight:600;font-size:0.9375rem;color:var(--text-1)}
-.h-dropzone-sub{font-size:0.75rem;color:var(--text-2);margin-top:0.2rem}
+/* .h-dropzone steht seit v1.67.0 als .dropzone in css/style.css und wird
+   dort mitbedient -- eine zweite Fassung waere eine zweite Variante
+   derselben Komponente. */
 
 /* .toast ausgelagert in css/style.css (v1.30.0) */
 

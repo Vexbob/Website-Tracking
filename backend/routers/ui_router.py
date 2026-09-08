@@ -38,7 +38,7 @@ NAV_TABS_PREF = "ui_nav_tabs"
 # ueber einen getippten Link. Das Frontend blendet Ziele, die dem Konto
 # fehlen (Admin-Bereich), beim Zeichnen ohnehin aus.
 ALLOWED_NAV_TABS = [
-    "/", "/sparziel/", "/ausgaben/", "/notizen/", "/health/",
+    "/", "/sparziel/", "/ausgaben/", "/notizen/", "/health/", "/musik/",
     "/blog/", "/blog/admin/", "/admin/",
 ]
 

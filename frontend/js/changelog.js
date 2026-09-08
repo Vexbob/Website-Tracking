@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.67.0', date: '2026-09-08', title: 'Musik-Modul und ein zusammenstellbarer Export', notes: [
+        'Neues Modul „Musik“: die CSV aus dem Spotify-Export wird zum durchsuchbaren Hörregister mit Verlauf, Ranglisten und einem Filter, der für Überblick und Register derselbe ist.',
+        'Der Import zeigt vor dem Schreiben, welche Blöcke er erkannt hat und welchen Zeitraum jeder ersetzen würde — derselbe Upload zweimal hintereinander bleibt dadurch folgenlos.',
+        'Der Verlauf fasst nur nach oben zusammen und sagt es, wenn ältere Zeilen gröber vorliegen als die gewählte Stufe.',
+        'Der Gesamt-Export kennt jetzt Tag, Jahr und „Automatisch“ je Modul, und die Spalten jeder Sektion lassen sich einzeln abwählen.',
+        'Dateien werden überall über dieselbe Ablegefläche entgegengenommen; der Gesundheits-Import hatte bis jetzt seine eigene.',
+    ]},
     { v: 'v1.66.0', date: '2026-09-08', title: 'Bild-Upload im Blog: die eigentliche Ursache', notes: [
         'Ein nicht lesbares Bild wurde stillschweigend als Rohdatei gespeichert — der Upload meldete Erfolg, der Browser konnte daraus aber nie ein Bild zeichnen.',
         'HEIC-Fotos vom iPhone kann der Server jetzt öffnen; vorher landete jedes davon in genau diesem stillen Rückfall.',

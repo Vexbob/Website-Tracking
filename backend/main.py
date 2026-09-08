@@ -1800,7 +1800,13 @@ from routers.health_router import router as health_router
 app.include_router(health_router)
 
 # ==========================================================================
-# Gesamt-Export (v1.23.0) — Sparziel + Ausgaben + Gesundheit in einer CSV
+# Musik-Modul (v1.67.0) — Hoerregister aus dem Spotify-Datenexport (CSV)
+# --------------------------------------------------------------------------
+from routers.music_router import router as music_router
+app.include_router(music_router)
+
+# ==========================================================================
+# Gesamt-Export (v1.23.0) — alle Module in einer CSV
 # --------------------------------------------------------------------------
 from routers.export_router import router as export_router
 app.include_router(export_router)

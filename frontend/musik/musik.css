@@ -1,0 +1,126 @@
+/* musik.css — v1.67.0
+ *
+ * Nur das, was es noch nicht gibt. Karten, Kacheln, Ranglisten, Tabellen,
+ * Knöpfe, Ablegefläche und der Zeitraum-Filter kommen aus style.css und
+ * statistics.css; hier stehen die vier Dinge, die dieses Modul eigen hat:
+ * das Suchfeld in der Filterleiste, die entfernbaren Filter-Chips, die
+ * Vorschau eines Imports und die Spotify-Marke.
+ */
+
+/* ---------- Filterleiste ---------- */
+.m-filterbar { flex-wrap: wrap; }
+
+.m-search {
+    display: flex; align-items: center; gap: 0.4rem;
+    flex: 1 1 14rem; min-width: 10rem;
+    padding: 0 0.625rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    transition: border-color var(--dur-1) var(--ease);
+}
+.m-search:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.m-search-ico { font-size: 0.8125rem; opacity: 0.6; flex: none; }
+.m-search input {
+    flex: 1; min-width: 0; width: auto; margin: 0;
+    padding: 0.4375rem 0;
+    font-size: 0.8125rem; color: var(--text-1);
+    background: transparent; border: none;
+}
+.m-search input:focus { outline: none; box-shadow: none; }
+.m-search input::placeholder { color: var(--text-4); }
+
+.m-more-slot { display: flex; }
+
+/* Was gerade filtert, steht sichtbar da und lässt sich einzeln wegnehmen.
+   Ein Filter, den man nicht sieht, ist eine Falle (DESIGN.md 6b). */
+.m-chips { display: flex; flex-wrap: wrap; gap: 0.375rem; margin: -0.5rem 0 1rem; }
+.m-chips:empty { display: none; }
+.m-chip {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    width: auto; margin: 0;
+    padding: 0.25rem 0.5rem 0.25rem 0.625rem;
+    font-size: 0.75rem; font-weight: 600;
+    color: var(--accent); background: var(--accent-soft);
+    border: 1px solid transparent; border-radius: 999px;
+    cursor: pointer;
+}
+.m-chip:hover { border-color: var(--accent); }
+.m-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.m-chip .m-chip-x { font-weight: 700; opacity: 0.7; }
+
+/* ---------- Überblick ---------- */
+.m-note, .m-hint {
+    font-size: 0.8125rem; line-height: 1.55; color: var(--text-3);
+    margin: var(--space-3) 0 0;
+}
+.m-hint { color: var(--text-2); margin: 0 0 var(--space-4); }
+.m-hint strong { color: var(--text-1); font-weight: 600; }
+.m-note:empty { display: none; }
+
+/* ---------- Register ---------- */
+/* Die Tabelle hat acht Spalten und muss auf dem Handy waagerecht scrollen
+   dürfen — die Seite selbst darf das nie. */
+.m-table-scroll { overflow-x: auto; }
+.m-table-scroll .stat-table { min-width: 44rem; }
+.m-grain-tag {
+    display: inline-block; padding: 0.05rem 0.375rem;
+    font-size: 0.6875rem; font-weight: 600;
+    color: var(--text-3); background: var(--surface-2);
+    border-radius: 5px;
+}
+.m-pager {
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    margin-top: var(--space-4);
+}
+.m-pager:empty { display: none; }
+.m-pager-pos { font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+/* ---------- Import ---------- */
+.m-stack { display: flex; flex-direction: column; gap: var(--space-2); }
+.m-plan { margin-top: var(--space-4); }
+.m-plan:empty { display: none; }
+
+.m-plan-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3);
+}
+.m-plan-title { font-size: 0.9375rem; font-weight: 650; color: var(--text-1); }
+.m-plan-sub { font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+.m-block-name { font-weight: 600; font-size: 0.875rem; color: var(--text-1); }
+.m-block-meta {
+    font-size: 0.75rem; color: var(--text-3); margin-top: 0.2rem;
+    font-variant-numeric: tabular-nums;
+}
+/* Was ersetzt wird, ist die einzige Zahl mit Folgen — sie trägt die
+   Warnfarbe als Text, nicht als Fläche. */
+.m-block-replace { color: var(--warn); font-weight: 600; }
+
+.m-plan-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: var(--space-4); }
+
+.m-imp-name { font-weight: 600; font-size: 0.875rem; color: var(--text-1); }
+.m-imp-meta {
+    font-size: 0.75rem; color: var(--text-3); margin-top: 0.2rem;
+    font-variant-numeric: tabular-nums;
+}
+.m-imp-row { display: flex; align-items: flex-start; gap: var(--space-3); }
+.m-imp-row > div:first-child { flex: 1; min-width: 0; }
+
+/* ---------- Spotify-Marke ---------- */
+/* Der Modulton als kleine Identitätsmarke, nicht als Fläche: ein Punkt und
+   ein Wort. Er sagt in einem Blick, woher die Zahlen kommen. */
+.m-source {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-size: 0.75rem; font-weight: 600; color: var(--text-3);
+}
+.m-source-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--m-musik);
+    box-shadow: 0 0 0 3px var(--m-musik-soft);
+}
+
+@media (max-width: 700px) {
+    .m-search { flex-basis: 100%; order: -1; }
+    .m-table-scroll .stat-table { min-width: 38rem; }
+}

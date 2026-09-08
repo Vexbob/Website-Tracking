@@ -39,6 +39,11 @@ TABLES_ORDERED = [
     # Puls-Minutenreihe je Workout (v1.50.0) -- haengt wie die Zusatzmetriken
     # per workout_id am Workout und hat selbst keine user_id.
     "health_workout_hr_samples",
+    # Musik-Modul (v1.67.0). Das Protokoll steht VOR dem Register: dessen
+    # import_id zeigt darauf, und beim Wiederherstellen muss das Ziel eines
+    # Fremdschluessels schon existieren.
+    "music_imports",
+    "music_entries",
     # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
     # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
     "user_prefs",
@@ -91,7 +96,7 @@ async def _table_exists(conn: asyncpg.Connection, table: str) -> bool:
         table))
 
 async def _table_columns(conn: asyncpg.Connection, table: str) -> set:
-    """Die echten Spaltennamen einer Tabelle.
+    """Die BESCHREIBBAREN Spaltennamen einer Tabelle.
 
     Sicherheitsrelevant (gefunden v1.65.0): der Restore hat die Spaltenliste
     fuer sein INSERT aus den Schluesseln der hochgeladenen JSON-Datei gebaut
@@ -99,10 +104,16 @@ async def _table_columns(conn: asyncpg.Connection, table: str) -> set:
     Parameter binden -- also muessen sie gegen das echte Schema gefiltert
     werden. Nebeneffekt: ein Backup aus einer aelteren Schema-Version mit
     inzwischen entfernten Spalten laesst sich weiterhin einspielen.
+
+    v1.67.0: berechnete Spalten (``GENERATED ALWAYS AS ... STORED``) fliegen
+    raus. Sie stehen im Snapshot, weil er mit ``SELECT *`` liest -- ein INSERT
+    mit ihnen lehnt Postgres aber ab, und die betroffene Zeile waere still als
+    "skip" verbucht worden. Betrifft ``music_entries.entry_hash``.
     """
     rows = await conn.fetch(
         "SELECT column_name FROM information_schema.columns "
-        "WHERE table_schema='public' AND table_name=$1", table)
+        "WHERE table_schema='public' AND table_name=$1 "
+        "  AND COALESCE(is_generated, 'NEVER') <> 'ALWAYS'", table)
     return {r["column_name"] for r in rows}
 
 

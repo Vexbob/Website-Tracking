@@ -78,8 +78,14 @@ Farbe ist Information, nicht Dekoration.
   gilt in der ganzen App dieselbe Regel wie bei den Statusfarben: helle
   Farbe, dunkle Schrift.
 - **Modultöne**: Ausgaben Türkis, Gesundheit Rosa, Sparziel Grün, Notizen Blau,
-  Blog Bernstein, Verwaltung Violett. Sie färben Modul-Icons, die aktive
-  Diagrammreihe und kleine Identitätsmarken — nie ganze Flächen.
+  Blog Bernstein, Verwaltung Violett, Musik Spotify-Grün. Sie färben Modul-Icons,
+  die aktive Diagrammreihe und kleine Identitätsmarken — nie ganze Flächen.
+  Das Musik-Modul ist der Fall, an dem sich zeigt, wofür ein Modulton gut ist:
+  seine Daten kommen aus dem Spotify-Datenexport, und `--m-musik` sagt das
+  schneller als jede Beschriftung. Aufgehellt gegenüber dem Original, damit der
+  Ton auch als Text auf dunklem Grund lesbar bleibt (6,4:1). Auch hier gilt die
+  Grenze: Icon-Kachel, erste Diagrammreihe, ein Punkt neben „Quelle: Spotify" —
+  keine grüne Fläche.
 - **Statusfarben** `--ok` `--warn` `--danger` `--info` sind helle Töne für
   **Text und Marken auf dunklem Grund**. Sie tragen **niemals weiße Schrift**
   (weiß auf `--ok` wäre 1,7:1). Wo eine Statusfläche nötig ist: getönter
@@ -136,6 +142,21 @@ Handlung.
 - Gestrichelte Kante, `--surface-2`, `--text-3`. Kein Bild, keine Illustration.
 - Ein **Fehler** ist kein leerer Zustand: `.empty.is-error` zeigt die Meldung
   und einen „Erneut versuchen"-Knopf.
+
+## 6a. Dateien ablegen
+
+Eine Ablegefläche (`.dropzone`) trägt dieselbe gestrichelte Kante wie der leere
+Zustand — die Aussage ist dieselbe: hier ist noch nichts, hier könnte etwas hin.
+
+- Drei Zustände: **bereit**, **eine Datei schwebt darüber** (`.drag`, Akzent),
+  **eine Datei liegt drin** (`.has-files`). Der letzte wechselt auf eine
+  durchgezogene Kante in `--ok` — gestrichelt heißt „leer", und das stimmt dann
+  nicht mehr.
+- Sie ist immer auch mit der Tastatur bedienbar (`tabindex`, Enter/Leertaste)
+  und hat ein verstecktes `<input type="file">` dahinter, nie nur Drag & Drop.
+- Ein Import, der etwas ersetzt, zeigt **vor** dem Schreiben, was er ersetzen
+  würde. Das Musik-Modul lädt dafür dieselbe Datei erst als Vorschau hoch
+  (`dry_run`) — eine zweite Rechnung wäre irgendwann eine andere.
 
 ## 6b. Filter
 

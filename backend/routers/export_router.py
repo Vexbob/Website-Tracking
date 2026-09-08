@@ -1,4 +1,4 @@
-"""Export-Router — kombinierter Gesamt-Export (Sparziel + Ausgaben + Gesundheit).
+"""Export-Router — kombinierter Gesamt-Export aller Module.
 
 Kein Prefix: absolute Pfade ``/api/export/...``.
 
@@ -9,25 +9,29 @@ wiederkehrenden Werten komprimieren extrem gut).
 
 v1.37.1: Optionale Query-Parameter
     * ``from`` / ``to`` (ISO-Datum, YYYY-MM-DD) - filtert alle
-      zeitreihen-basierten Sektionen (Ausgaben, Sparziel-Protokoll,
-      Health-Vitalwerte, Blutdruck, Blutzucker, Schlaf, Workouts).
-      Metadaten-Sektionen (Sparziel-Definitionen, Achievements, ...)
-      bleiben unveraendert, sonst wird der Kontext der aggregierten
-      Zahlen unverstaendlich.
-    * ``aggregate`` = ``none`` | ``week`` | ``month`` - fasst grosse
-      Zeitraeume zu Perioden zusammen.
+      zeitreihen-basierten Sektionen.
+    * ``aggregate`` - fasst grosse Zeitraeume zu Perioden zusammen.
 
 v1.60.0: Der Export ist zusammenstellbar.
     * ``sections`` - kommagetrennte Sektions-Schluessel. Ohne Angabe ist
       alles dabei; unbekannte Schluessel werden verworfen, eine leere
       Auswahl faellt auf "alles" zurueck (eine leere Datei hilft niemandem).
-    * ``agg_sparziel`` / ``agg_ausgaben`` / ``agg_health`` - Aggregation je
-      Modul. Was fehlt, erbt ``aggregate``; damit bleiben alte Aufrufe
-      (nur ``aggregate``) unveraendert gueltig.
     * ``GET /api/export/sections`` liefert die Sektions- und Gruppenliste,
       damit die Oberflaeche sie nicht ein zweites Mal fuehrt.
     * ``GET /api/export/preview`` liefert dieselbe Zusammenstellung als
       Kennzahlen samt der ersten Zeilen der echten Datei.
+
+v1.67.0: Der Export ist dynamisch statt fest verdrahtet.
+    * Die Aggregation je Modul heisst ``agg_<gruppe>`` und wird aus der
+      Anfrage GELESEN statt einzeln deklariert. Ein neues Modul braucht
+      damit keine neue Zeile in diesem Router mehr -- vorher standen
+      ``agg_sparziel``, ``agg_ausgaben`` und ``agg_health`` je dreimal hier.
+    * Die Stufen kommen aus ``EXPORT_AGGREGATES``: none, auto, day, week,
+      month, year. ``auto`` waehlt nach Laenge des Zeitraums.
+    * ``cols_<sektion>`` waehlt die Spalten einer Sektion (Kommaliste ihrer
+      Ueberschriften). Welche es gibt, sagt die Vorschau je Sektion mit --
+      sie haengen von der Aggregation ab und lassen sich deshalb nicht
+      statisch auflisten.
 """
 import gzip
 from datetime import date
@@ -38,6 +42,8 @@ from fastapi.responses import Response
 from database import get_db
 from auth import get_current_user
 from services.full_export import (
+    AGG_KEYS,
+    EXPORT_AGGREGATES,
     EXPORT_GROUPS,
     EXPORT_SECTIONS,
     build_export_preview,
@@ -47,7 +53,8 @@ from services.full_export import (
 
 router = APIRouter(tags=["export"])
 
-AGG_PATTERN = "^(none|week|month)$"
+GROUP_KEYS = [g["key"] for g in EXPORT_GROUPS]
+SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS]
 
 
 def _parse_date(v: str | None, name: str) -> date | None:
@@ -68,11 +75,33 @@ def _parse_sections(raw: str | None) -> list[str] | None:
     return [p.strip() for p in raw.split(",") if p.strip()]
 
 
-def _agg_map(sparziel, ausgaben, health) -> dict:
-    """Nur die tatsaechlich uebergebenen Module. Der Rest erbt in
-    ``clean_aggregate_map`` den Gesamtwert."""
-    given = {"sparziel": sparziel, "ausgaben": ausgaben, "health": health}
-    return {k: v for k, v in given.items() if v}
+def _agg_map(request: Request) -> dict:
+    """``agg_<gruppe>=<stufe>`` aus der Anfrage. Unbekannte Gruppen und
+    unbekannte Stufen werden still verworfen -- der Rest erbt in
+    ``clean_aggregate_map`` den Gesamtwert aus ``aggregate``."""
+    out = {}
+    for key, value in request.query_params.items():
+        if not key.startswith("agg_"):
+            continue
+        group = key[4:]
+        if group in GROUP_KEYS and value in AGG_KEYS:
+            out[group] = value
+    return out
+
+
+def _column_map(request: Request) -> dict:
+    """``cols_<sektion>=Spalte,Spalte`` aus der Anfrage."""
+    out = {}
+    for key, value in request.query_params.items():
+        if not key.startswith("cols_"):
+            continue
+        section = key[5:]
+        if section not in SECTION_KEYS:
+            continue
+        names = [p.strip() for p in value.split(",") if p.strip()]
+        if names:
+            out[section] = names
+    return out
 
 
 def _validated_range(date_from: str | None, date_to: str | None):
@@ -83,31 +112,40 @@ def _validated_range(date_from: str | None, date_to: str | None):
     return d_from, d_to
 
 
+def _validated_aggregate(value: str) -> str:
+    if value not in AGG_KEYS:
+        raise HTTPException(400, "Unbekannte Aggregation: " + str(value))
+    return value
+
+
 @router.get("/api/export/sections")
 async def export_sections(user=Depends(get_current_user)):
-    """Was sich exportieren laesst. Die Oberflaeche baut ihre Auswahl daraus,
-    damit eine neue Sektion nur an einer Stelle eingetragen werden muss."""
-    return {"sections": EXPORT_SECTIONS, "groups": EXPORT_GROUPS}
+    """Was sich exportieren laesst und wie es sich zusammenfassen laesst. Die
+    Oberflaeche baut ihre Auswahl daraus, damit eine neue Sektion oder eine
+    neue Aggregationsstufe nur an einer Stelle eingetragen werden muss."""
+    return {"sections": EXPORT_SECTIONS, "groups": EXPORT_GROUPS,
+            "aggregates": EXPORT_AGGREGATES}
 
 
 @router.get("/api/export/preview")
 async def export_preview(
+    request: Request,
     date_from: str | None = Query(None, alias="from", description="ISO-Datum YYYY-MM-DD"),
     date_to: str | None = Query(None, alias="to", description="ISO-Datum YYYY-MM-DD"),
-    aggregate: str = Query("none", pattern=AGG_PATTERN),
+    aggregate: str = Query("none"),
     sections: str | None = Query(None, description="Kommaliste von Sektions-Schluesseln"),
-    agg_sparziel: str | None = Query(None, pattern=AGG_PATTERN),
-    agg_ausgaben: str | None = Query(None, pattern=AGG_PATTERN),
-    agg_health: str | None = Query(None, pattern=AGG_PATTERN),
     db=Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Zeilen und Groesse je Sektion plus die ersten Zeilen der Datei."""
+    """Zeilen, Groesse und verfuegbare Spalten je Sektion plus die ersten
+    Zeilen der Datei."""
     d_from, d_to = _validated_range(date_from, date_to)
     return await build_export_preview(
-        db, user, date_from=d_from, date_to=d_to, aggregate=aggregate,
+        db, user, date_from=d_from, date_to=d_to,
+        aggregate=_validated_aggregate(aggregate),
         sections=_parse_sections(sections),
-        aggregate_map=_agg_map(agg_sparziel, agg_ausgaben, agg_health))
+        aggregate_map=_agg_map(request),
+        column_map=_column_map(request))
 
 
 @router.get("/api/export/all")
@@ -115,26 +153,25 @@ async def export_all(
     request: Request,
     date_from: str | None = Query(None, alias="from", description="ISO-Datum YYYY-MM-DD"),
     date_to: str | None = Query(None, alias="to", description="ISO-Datum YYYY-MM-DD"),
-    aggregate: str = Query("none", pattern=AGG_PATTERN),
+    aggregate: str = Query("none"),
     sections: str | None = Query(None, description="Kommaliste von Sektions-Schluesseln"),
-    agg_sparziel: str | None = Query(None, pattern=AGG_PATTERN),
-    agg_ausgaben: str | None = Query(None, pattern=AGG_PATTERN),
-    agg_health: str | None = Query(None, pattern=AGG_PATTERN),
     db=Depends(get_db),
     user=Depends(get_current_user),
 ):
     """Eine CSV mit den gewaehlten Sektionen, inkl. erklaerender
-    Kommentarzeilen vor jeder Sektion. Optional per Zeitraum gefiltert und
-    je Modul wochen-/monatsweise zusammengefasst."""
+    Kommentarzeilen vor jeder Sektion. Optional per Zeitraum gefiltert, je
+    Modul zusammengefasst und je Sektion auf bestimmte Spalten beschraenkt."""
     d_from, d_to = _validated_range(date_from, date_to)
     picked = _parse_sections(sections)
-    agg_map = _agg_map(agg_sparziel, agg_ausgaben, agg_health)
+    agg = _validated_aggregate(aggregate)
+    agg_map = _agg_map(request)
+    col_map = _column_map(request)
 
     csv = await build_full_export_csv(
-        db, user, date_from=d_from, date_to=d_to, aggregate=aggregate,
-        sections=picked, aggregate_map=agg_map)
+        db, user, date_from=d_from, date_to=d_to, aggregate=agg,
+        sections=picked, aggregate_map=agg_map, column_map=col_map)
     # UTF-8 mit BOM, damit Excel Umlaute (ä/ö/ü/ß) korrekt darstellt
-    body = ("\ufeff" + csv).encode("utf-8")
+    body = ("﻿" + csv).encode("utf-8")
 
     # Dateiname mit Optionen anreichern, damit mehrere Exports im Downloads-
     # Ordner nicht kollidieren.
@@ -144,13 +181,15 @@ async def export_all(
     # Der Dateiname nennt die Aggregation nur, wenn sie ueberall dieselbe ist;
     # sonst waere "…-month" eine Behauptung ueber Sektionen, die einzeln
     # exportiert wurden.
-    used_aggs = set(clean_aggregate_map(agg_map, aggregate).values())
+    used_aggs = set(clean_aggregate_map(agg_map, agg, d_from, d_to).values())
     if len(used_aggs) == 1 and used_aggs != {"none"}:
         parts.append(used_aggs.pop())
     elif len(used_aggs) > 1:
         parts.append("gemischt")
     if picked:
         parts.append("auswahl")
+    if col_map:
+        parts.append("spalten")
     filename = "-".join(parts) + ".csv"
 
     headers = {

@@ -1,17 +1,22 @@
-/* export-dialog.js — v1.60.0
+/* export-dialog.js — v1.67.0
  * Der Gesamt-Export als zusammenstellbarer Dialog.
  *
  * Bis v1.59.x gab es zwei Entscheidungen: Zeitraum und eine Aggregation für
  * die ganze Datei. Alles andere war fest — jeder Export enthielt jedes Modul,
- * und man sah erst nach dem Herunterladen, was drin gelandet war. Jetzt:
+ * und man sah erst nach dem Herunterladen, was drin gelandet war. Seit
+ * v1.60.0 sind Sektionen einzeln wählbar und die Aggregation gilt je Modul.
  *
- *   - Sektionen einzeln an- und abwählbar, gruppiert nach Modul.
- *   - Aggregation je Modul (Ausgaben monatsweise, Gesundheit einzeln).
- *   - Eine Vorschau, die den Export wirklich baut: Zeilen je Sektion, Größe
- *     der Datei und die ersten Zeilen im Original.
+ * v1.67.0 nimmt die letzten beiden festen Listen heraus:
  *
- * Die Sektionsliste kommt vom Server (/api/export/sections) — sie hier ein
- * zweites Mal zu führen hieße, sie irgendwann falsch zu führen.
+ *   - **Die Aggregationsstufen kommen vom Server** (/api/export/sections).
+ *     Sie standen hier ein zweites Mal, also war eine neue Stufe zwei
+ *     Änderungen an zwei Orten. Neu dabei: Tag, Jahr und „Automatisch",
+ *     das sich nach der Länge des Zeitraums richtet.
+ *   - **Die Spalten sind je Sektion wählbar.** Welche es gibt, sagt die
+ *     Vorschau — sie baut den Export ohnehin und liest die Überschriften aus
+ *     den fertigen Zeilen. Eine hier gepflegte Spaltenliste wäre spätestens
+ *     bei der nächsten Änderung an einer Sektion falsch, und in der
+ *     Aggregation hat dieselbe Sektion ohnehin andere Spalten.
  */
 (function () {
     const PRESETS = [
@@ -22,16 +27,6 @@
         { key: 'ytd', label: 'Dieses Jahr' },
         { key: 'custom', label: 'Eigener Zeitraum' },
     ];
-    const AGGS = [
-        { key: 'none',  label: 'Einzeln' },
-        { key: 'week',  label: 'Pro Woche' },
-        { key: 'month', label: 'Pro Monat' },
-    ];
-    const AGG_HINT = {
-        none:  'Jeder Eintrag steht einzeln in der Datei.',
-        week:  'Je Woche eine Summenzeile; Einkäufe bleiben einzeln, aber ohne Positionen.',
-        month: 'Je Monat eine Summenzeile. Für lange Zeiträume die kompakteste Form.',
-    };
 
     const iso = (d) => {
         const p = (n) => String(n).padStart(2, '0');
@@ -51,15 +46,29 @@
     }
 
     /* ------------------------------------------------------------- Zustand */
-    function newState(sections) {
+    function newState(meta) {
+        const sections = meta.sections || [];
+        const groups = meta.groups || [];
+        const aggregates = meta.aggregates ||
+            [{ key: 'none', label: 'Einzeln', hint: '' }];
+        const agg = {};
+        groups.forEach(g => { agg[g.key] = 'none'; });
         return {
             preset: 'all',
             from: '',
             to: '',
             picked: new Set(sections.map(s => s.key)),
-            agg: { sparziel: 'none', ausgaben: 'none', health: 'none' },
+            agg: agg,
             sections: sections,
-            groups: [],
+            groups: groups,
+            aggregates: aggregates,
+            // Was die Vorschau an Spalten gemeldet hat, und was davon gewählt
+            // ist. `chosen[key] === undefined` heisst "alle" -- so bleibt die
+            // Anfrage ohne cols_-Parameter, solange nichts abgewählt wurde.
+            columns: {},
+            chosen: {},
+            openCols: new Set(),
+            resolved: {},
         };
     }
 
@@ -83,6 +92,13 @@
         }
         Object.keys(state.agg).forEach(g => {
             if (state.agg[g] !== 'none') p.set('agg_' + g, state.agg[g]);
+        });
+        Object.keys(state.chosen).forEach(key => {
+            const all = state.columns[key] || [];
+            const pickedCols = state.chosen[key];
+            if (!pickedCols || !pickedCols.size) return;
+            if (pickedCols.size >= all.length) return;   // alles = kein Parameter
+            p.set('cols_' + key, all.filter(c => pickedCols.has(c)).join(','));
         });
         return p;
     }
@@ -127,6 +143,43 @@
         ].join('');
     }
 
+    /* Der Hinweis unter einer Gruppe. Bei „Automatisch" nennt er die Stufe,
+       auf die es hinausläuft — sonst wäre die Einstellung eine Blackbox. */
+    function aggHint(state, groupKey) {
+        const key = state.agg[groupKey];
+        const entry = state.aggregates.find(a => a.key === key);
+        let text = entry ? entry.hint || '' : '';
+        const real = state.resolved[groupKey];
+        if (key === 'auto' && real && real !== 'auto') {
+            const named = state.aggregates.find(a => a.key === real);
+            text += ' Für diesen Zeitraum: ' + (named ? named.label.toLowerCase() : real) + '.';
+        }
+        return text;
+    }
+
+    function columnsHtml(state, section) {
+        const all = state.columns[section.key];
+        if (!all || !all.length || !state.picked.has(section.key)) return '';
+        const chosen = state.chosen[section.key];
+        const count = chosen ? chosen.size : all.length;
+        const open = state.openCols.has(section.key);
+        return '<div class="exp-colpick' + (open ? ' is-open' : '') + '">' +
+            '<button type="button" class="exp-colpick-btn" data-cols-toggle="' + section.key + '"' +
+                    ' aria-expanded="' + open + '">' +
+                (count >= all.length ? 'Alle ' + all.length + ' Spalten'
+                                     : count + ' von ' + all.length + ' Spalten') +
+                '<span class="exp-colpick-caret" aria-hidden="true">' + (open ? '▴' : '▾') + '</span>' +
+            '</button>' +
+            (open ? '<div class="exp-colpick-list">' + all.map(name =>
+                '<label class="exp-check exp-check-col">' +
+                    '<input type="checkbox" data-col-section="' + esc(section.key) + '"' +
+                        ' data-col="' + esc(name) + '"' +
+                        (!chosen || chosen.has(name) ? ' checked' : '') + '>' +
+                    '<span>' + esc(name) + '</span>' +
+                '</label>').join('') + '</div>' : '') +
+        '</div>';
+    }
+
     function renderSections(box, state) {
         const byGroup = new Map();
         state.sections.forEach(s => {
@@ -149,19 +202,23 @@
                         '<span>' + esc(g.label) + '</span>' +
                     '</label>' +
                     '<select class="exp-agg" data-agg-group="' + g.key + '"' + (canAgg ? '' : ' disabled') + '>' +
-                        AGGS.map(a => '<option value="' + a.key + '"' +
-                            (state.agg[g.key] === a.key ? ' selected' : '') + '>' + a.label + '</option>').join('') +
+                        state.aggregates.map(a => '<option value="' + a.key + '"' +
+                            (state.agg[g.key] === a.key ? ' selected' : '') + '>' +
+                            esc(a.label) + '</option>').join('') +
                     '</select>' +
                 '</div>' +
                 '<div class="exp-group-body">' +
-                    items.map(s => '<label class="exp-check">' +
-                        '<input type="checkbox" data-section="' + s.key + '"' +
-                            (state.picked.has(s.key) ? ' checked' : '') + '>' +
-                        '<span>' + esc(s.label) + '</span>' +
-                        (s.aggregatable ? '' : '<em class="exp-tag">Stammdaten</em>') +
-                    '</label>').join('') +
+                    items.map(s => '<div class="exp-item">' +
+                        '<label class="exp-check">' +
+                            '<input type="checkbox" data-section="' + s.key + '"' +
+                                (state.picked.has(s.key) ? ' checked' : '') + '>' +
+                            '<span>' + esc(s.label) + '</span>' +
+                            (s.aggregatable ? '' : '<em class="exp-tag">Stammdaten</em>') +
+                        '</label>' +
+                        columnsHtml(state, s) +
+                    '</div>').join('') +
                 '</div>' +
-                (canAgg ? '<p class="exp-hint">' + esc(AGG_HINT[state.agg[g.key]]) + '</p>' : '') +
+                (canAgg ? '<p class="exp-hint">' + esc(aggHint(state, g.key)) + '</p>' : '') +
             '</div>';
         }).join('');
         // Teilweise gewaehlte Gruppen bekommen den Zwischenzustand -- als
@@ -228,6 +285,37 @@
         let previewTimer = null;
         let previewSeq = 0;
 
+        /* Was die Vorschau über den Aufbau der Datei verrät, fließt zurück in
+           die Auswahl links: die Spaltenlisten und die Stufe, auf die
+           „Automatisch" hinausläuft. */
+        function absorb(data) {
+            let changed = false;
+            (data.sections || []).forEach(s => {
+                const before = (state.columns[s.key] || []).join(' ');
+                const now = (s.columns || []).join(' ');
+                if (before !== now) {
+                    state.columns[s.key] = s.columns || [];
+                    // Eine Auswahl, die es in der neuen Spaltenliste nicht mehr
+                    // gibt (andere Aggregation), gilt nicht weiter.
+                    if (state.chosen[s.key]) {
+                        const kept = new Set(
+                            (s.columns || []).filter(c => state.chosen[s.key].has(c)));
+                        if (kept.size) state.chosen[s.key] = kept;
+                        else delete state.chosen[s.key];
+                    }
+                    changed = true;
+                }
+            });
+            const resolved = data.aggregate || {};
+            Object.keys(resolved).forEach(g => {
+                if (state.resolved[g] !== resolved[g]) {
+                    state.resolved[g] = resolved[g];
+                    if (state.agg[g] === 'auto') changed = true;
+                }
+            });
+            if (changed) renderSections(sectionBox, state);
+        }
+
         function refreshPreview() {
             clearTimeout(previewTimer);
             // Ohne Sektion waere die Anfrage sinnlos: der Server versteht eine
@@ -247,6 +335,7 @@
                     const data = await apiCall('/api/export/preview' + (qs ? '?' + qs : ''));
                     if (seq !== previewSeq) return;   // eine neuere Anfrage laeuft
                     renderPreview(overlay, data);
+                    absorb(data);
                 } catch (e) {
                     if (seq !== previewSeq) return;
                     renderPreview(overlay, { error: e.message || String(e) });
@@ -279,6 +368,16 @@
             refreshPreview();
         }));
 
+        // Die Spaltenliste auf- und zuklappen aendert nichts an der Datei --
+        // deshalb nur neu zeichnen, keine neue Vorschau.
+        sectionBox.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-cols-toggle]');
+            if (!b) return;
+            const key = b.dataset.colsToggle;
+            state.openCols.has(key) ? state.openCols.delete(key) : state.openCols.add(key);
+            renderSections(sectionBox, state);
+        });
+
         sectionBox.addEventListener('change', (e) => {
             const el = e.target;
             // Das Auswahlfeld zuerst: es trug frueher dasselbe data-group wie
@@ -291,7 +390,21 @@
                 // den Fokus.
                 const group = el.closest('.exp-group');
                 const hint = group ? group.querySelector('.exp-hint') : null;
-                if (hint) hint.textContent = AGG_HINT[el.value] || '';
+                if (hint) hint.textContent = aggHint(state, el.dataset.aggGroup);
+                refreshPreview();
+                return;
+            }
+            if (el.dataset.colSection) {
+                const key = el.dataset.colSection;
+                const all = state.columns[key] || [];
+                const set = state.chosen[key] || new Set(all);
+                el.checked ? set.add(el.dataset.col) : set.delete(el.dataset.col);
+                // Nichts mehr gewaehlt heisst hier "alles" -- eine Sektion
+                // ohne Spalten waere eine kaputte Datei, und wer nichts von
+                // ihr will, haekelt die Sektion selbst ab.
+                if (!set.size || set.size >= all.length) delete state.chosen[key];
+                else state.chosen[key] = set;
+                renderSections(sectionBox, state);
                 refreshPreview();
                 return;
             }
@@ -358,8 +471,7 @@
                 'Ohne sie lässt sich nichts zusammenstellen.</p></div>';
             return;
         }
-        const state = newState(meta.sections || []);
-        state.groups = meta.groups || [];
+        const state = newState(meta);
         renderSections(overlay.querySelector('#expSections'), state);
         wire(overlay, state).refreshPreview();
     };
