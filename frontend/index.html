@@ -110,10 +110,14 @@
     <div class="version-tag"></div>
     <script src="/js/export-dialog.js"></script>
     <script>
-        // FOUC-Timeout: wenn Init in 4s nicht durchläuft, zeige Fehler-UI
-        // statt die Seite dauerhaft unsichtbar zu lassen.
+        // Wenn der Start in 4s nicht durchläuft, zeige Fehler-UI. Die Marke
+        // ist seit v1.67.1 ein eigenes Flag statt der Sichtbarkeit: die Seite
+        // deckt sich jetzt schon vor dem Warten auf, dadurch wäre die alte
+        // Bedingung nie wieder wahr geworden und eine hängende Antwort hätte
+        // gar keine Meldung mehr erzeugt.
+        let booted = false;
         const bootTimeout = setTimeout(() => {
-            if (document.body.style.visibility === 'hidden') {
+            if (!booted) {
                 document.body.style.visibility = 'visible';
                 const err = document.createElement('div');
                 err.className = 'boot-error';
@@ -125,6 +129,14 @@
         }, 4000);
         (async function() {
             if (!isLoggedIn()) { window.location.href = '/private/login.html'; return; }
+            // Ab hier steht fest, dass diese Seite bleibt -- also sofort
+            // zeigen. Vorher wurde erst nach fetchMe() aufgedeckt: haengt die
+            // Antwort, sieht man bis zu vier Sekunden lang NUR den
+            // Seitenhintergrund, nicht einmal die Navigationsleiste. Das ist
+            // von einer kaputten Seite nicht zu unterscheiden.
+            // Der Schutz, um den es hier geht, ist der Login-Check darueber --
+            // und der ist synchron (localStorage), also bleibt er wirksam.
+            document.body.style.visibility = 'visible';
             try {
                 const me = await fetchMe(true);
                 document.getElementById('userLabel').textContent = '👤 ' + me.username;
@@ -134,6 +146,7 @@
                 document.getElementById('dashGreeting').textContent = `${greet}, ${me.username} 👋`;
                 if (me.is_admin) document.getElementById('adminLink').hidden = false;
             } catch (e) {
+                booted = true;
                 clearTimeout(bootTimeout);
                 document.body.style.visibility = 'visible';
                 const err = document.createElement('div');
@@ -144,8 +157,8 @@
                 document.body.appendChild(err);
                 return;
             }
+            booted = true;
             clearTimeout(bootTimeout);
-            document.body.style.visibility = 'visible';
             document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
             loadHomeStats();
         })();
