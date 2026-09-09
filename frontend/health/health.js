@@ -1090,19 +1090,53 @@ async function loadSleepChart() {
 // Innerhalb des 18:00-Fensters sind die Werte linear, Mittelwert und
 // Standardabweichung sind dort also unproblematisch.
 //
-// Streuung = Standardabweichung der Stichprobe (n-1), ausgewiesen in Stunden
-// (v1.50.1). Sie ist die eigentliche Aussage: Ein Mittelwert aus einem
-// Nachtschlaf und einem Tagschlaf ist fuer sich genommen wenig wert, die
-// grosse Streuung daneben macht genau das sichtbar. Stunden passen dabei zur
-// Groessenordnung -- eine typische Streuung liegt bei ein bis zwei Stunden,
-// als Minutenzahl (78 min) liest sich das genauer als es ist.
-function meanAndSd(values) {
+// v1.71.0: Median und typischer Bereich statt Mittelwert ± Standardabweichung.
+//
+// Die alte Fassung war eine echte Stichproben-Standardabweichung (n-1), hatte
+// aber zwei Schwaechen, die genau bei Zubettgehzeiten zuschlagen:
+//
+//   1. „±" verspricht eine symmetrische Streuung. Zubettgehzeiten sind aber
+//      rechtsschief -- man geht gelegentlich sehr viel spaeter ins Bett, aber
+//      nie sehr viel frueher. Eine einzige durchgemachte Nacht verschob
+//      Mittelwert UND Streuung sichtbar.
+//   2. Die Naht des 18:00-Fensters. Eine „Nacht", die vor 18:00 beginnt (ein
+//      Mittagsschlaf ab einer Stunde zaehlt mit), landete bei Offset 23,x
+//      statt -0,x. Ein solcher Eintrag unter dreissig Naechten verschob den
+//      Schnitt um eine Dreiviertelstunde und blies die Streuung auf.
+//
+// Median und Quartilsabstand loesen (1), das Neuverankern um den Median
+// loest (2): ein Wert, der mehr als zwoelf Stunden vom Median entfernt liegt,
+// liegt in Wahrheit auf der anderen Seite der Tagesgrenze und wird dorthin
+// zurueckgeholt. Das ist der uebliche Umgang mit Uhrzeiten und macht die
+// Kennzahl unabhaengig davon, wo das Fenster zufaellig aufgeschnitten wurde.
+function quantile(sorted, p) {
+    if (!sorted.length) return null;
+    if (sorted.length === 1) return sorted[0];
+    const pos = (sorted.length - 1) * p;
+    const lo = Math.floor(pos), hi = Math.ceil(pos);
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+
+// ``circular`` fuer Uhrzeiten, ohne fuer Dauern (eine Schlafdauer hat keine
+// Tagesgrenze, die man ueberschreiten koennte).
+function spreadStats(values, circular) {
     const arr = values.filter(v => Number.isFinite(v));
     if (!arr.length) return null;
-    const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
-    if (arr.length < 2) return { mean, sd: null, n: 1 };
-    const varSample = arr.reduce((s, v) => s + (v - mean) * (v - mean), 0) / (arr.length - 1);
-    return { mean, sd: Math.sqrt(varSample), n: arr.length };
+    let work = arr;
+    if (circular && arr.length > 1) {
+        const first = quantile(arr.slice().sort((a, b) => a - b), 0.5);
+        work = arr.map(v => {
+            const d = v - first;
+            return d > 12 ? v - 24 : (d < -12 ? v + 24 : v);
+        });
+    }
+    const sorted = work.slice().sort((a, b) => a - b);
+    return {
+        median: quantile(sorted, 0.5),
+        q1: quantile(sorted, 0.25),
+        q3: quantile(sorted, 0.75),
+        n: arr.length,
+    };
 }
 
 function renderSleepRhythm(windows) {
@@ -1111,30 +1145,33 @@ function renderSleepRhythm(windows) {
     const valid = (windows || []).filter(Boolean);
     if (!valid.length) { box.innerHTML = ''; return; }
 
-    const bed = meanAndSd(valid.map(w => w[0]));
-    const wake = meanAndSd(valid.map(w => w[1]));
-    const span = meanAndSd(valid.map(w => w[1] - w[0]));
-    // Die Offsets sind bereits Stunden -- die Standardabweichung damit auch.
-    const spread = (st) => st && st.sd != null
-        ? `<small>± ${fmt1(st.sd)} h</small>` : '';
+    const bed = spreadStats(valid.map(w => w[0]), true);
+    const wake = spreadStats(valid.map(w => w[1]), true);
+    const span = spreadStats(valid.map(w => w[1] - w[0]), false);
     const items = [
-        { lbl: '🌙 Zubettgehen', val: sleepOffsetToClock(bed.mean), st: bed },
-        { lbl: '☀️ Aufstehen',   val: sleepOffsetToClock(wake.mean), st: wake },
-        { lbl: '🛏️ Zeit im Bett', val: fmt1(span.mean) + ' h', st: span },
+        { lbl: '🌙 Zubettgehen', st: bed,  clock: true },
+        { lbl: '☀️ Aufstehen',   st: wake, clock: true },
+        { lbl: '🛏️ Zeit im Bett', st: span, clock: false },
     ];
-    // Bei einer Streuung von mehreren Stunden liegt der Mittelwert womoeglich
-    // in einer Zeit, zu der nie jemand ins Bett geht (Nacht- und Tagschlaf
-    // gemischt). Das dazuzuschreiben ist ehrlicher, als die Zahl fuer sich
-    // stehen zu lassen.
+    // Liegt die Haelfte der Naechte ueber mehr als zwei Stunden verteilt, ist
+    // auch der Median wenig wert (Nacht- und Tagschlaf gemischt). Das
+    // dazuzuschreiben ist ehrlicher, als die Zahl fuer sich stehen zu lassen.
     const WOBBLY_H = 2;
     box.innerHTML = items.map(i => {
-        const wobbly = i.st && i.st.sd != null && i.st.sd > WOBBLY_H;
-        const sub = `Ø aus ${valid.length === 1 ? '1 Nacht' : valid.length + ' Nächten'}`
-            + (wobbly ? ' · stark schwankend' : '');
+        const st = i.st;
+        const fmtV = (v) => i.clock ? sleepOffsetToClock(v) : fmt1(v) + ' h';
+        const iqr = (st && st.q1 != null && st.q3 != null) ? st.q3 - st.q1 : null;
+        // Der typische Bereich statt "±": er sagt, wo die mittlere Haelfte der
+        // Naechte liegt, und muss dafuer nicht symmetrisch sein.
+        const range = (iqr != null && st.n > 2)
+            ? `meist ${fmtV(st.q1)}–${fmtV(st.q3)}` : null;
+        const nights = valid.length === 1 ? '1 Nacht' : valid.length + ' Nächte';
+        const sub = [range, nights, (iqr != null && iqr > WOBBLY_H) ? 'stark schwankend' : null]
+            .filter(Boolean).join(' · ');
         return `
         <div class="h-rhythm-item">
             <div class="h-rhythm-lbl">${i.lbl}</div>
-            <div class="h-rhythm-val">${i.val} ${spread(i.st)}</div>
+            <div class="h-rhythm-val">${fmtV(st.median)}</div>
             <div class="h-rhythm-sub">${sub}</div>
         </div>`;
     }).join('');

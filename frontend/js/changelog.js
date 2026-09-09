@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.71.0', date: '2026-09-09', title: 'Schlafrhythmus: typischer Bereich statt ±', notes: [
+        'Zubettgeh- und Aufstehzeit stehen jetzt als Median mit typischem Bereich da („23:25 · meist 23:11–23:39“) statt als Mittelwert mit ± Standardabweichung.',
+        'Das „±“ hat eine symmetrische Streuung versprochen, die es bei Zubettgehzeiten nicht gibt: eine einzige durchgemachte Nacht verschob den Wert sichtbar.',
+        'Eine „Nacht“, die vor 18 Uhr begann — ein Mittagsschlaf zählt ab einer Stunde mit —, sprang bisher auf die falsche Seite der Tagesgrenze und riss den Schnitt um Stunden mit.',
+        'Uhrzeiten werden dafür um ihren eigenen Median herum verankert, statt an einer festen 18-Uhr-Naht.',
+    ]},
     { v: 'v1.70.0', date: '2026-09-09', title: 'Musik und Podcast sind nicht dasselbe', notes: [
         'Der Spotify-Export legt bei Podcasts die Show ins Feld „Interpret“ und die Episode in „Titel“ — das Musik-Modul benennt sie jetzt auch so.',
         'Mit der gewählten Art wechselt das ganze Vokabular: aus „Interpreten“ und „Titel“ werden „Shows“ und „Episoden“, aus Wiedergaben gehörte Folgen.',
