@@ -81,6 +81,16 @@
     --g-schlicht: linear-gradient(135deg, #ff4d72 0%, #ff4d72 100%);
     --gl-schlicht: none;
 
+    /* Dieselben Presets als FLACHE Farbe. Ein Fuellkreis, eine Kurve und ein
+       Betrag brauchen einen Farbwert, keinen Verlauf -- und es soll dieselbe
+       Farbfamilie sein, damit ein Thema zusammenhaengt. */
+    --c-sonnenaufgang: #ff5c7a;
+    --c-nordlicht: #7ab8ff;
+    --c-waldlauf: #34e2cd;
+    --c-abendrot: #ff8a5c;
+    --c-amethyst: #b79cff;
+    --c-schlicht: #ff4d72;
+
     /* --- Status: helle Toene fuer Text/Marken, NIE mit weisser Schrift --- */
     --ok: #5eea92;      --ok-soft: rgba(94,234,146,0.16);
     --warn: #ffcb45;    --warn-soft: rgba(255,203,69,0.16);
@@ -174,6 +184,15 @@
 :root[data-grad-progress="abendrot"] { --grad-progress: var(--g-abendrot); }
 :root[data-grad-progress="amethyst"] { --grad-progress: var(--g-amethyst); }
 :root[data-grad-progress="schlicht"] { --grad-progress: var(--g-schlicht); }
+:root[data-grad-figure="sonnenaufgang"] { --figure: var(--c-sonnenaufgang); --grad-figure: var(--g-sonnenaufgang); }
+:root[data-grad-figure="nordlicht"] { --figure: var(--c-nordlicht); --grad-figure: var(--g-nordlicht); }
+:root[data-grad-figure="waldlauf"] { --figure: var(--c-waldlauf); --grad-figure: var(--g-waldlauf); }
+:root[data-grad-figure="abendrot"] { --figure: var(--c-abendrot); --grad-figure: var(--g-abendrot); }
+:root[data-grad-figure="amethyst"] { --figure: var(--c-amethyst); --grad-figure: var(--g-amethyst); }
+:root[data-grad-figure="schlicht"] { --figure: var(--c-schlicht); --grad-figure: var(--g-schlicht); }
+/* "modulton" setzt --figure absichtlich NICHT -- dann faellt jedes Modul auf
+   seinen eigenen Ton zurueck (var(--figure, var(--m-sparziel))). So bleibt
+   die Modul-Identitaet der Standard und wird nur auf Wunsch ueberschrieben. */
 :root[data-grad-backdrop="standard"] { --backdrop: var(--bd-standard); }
 :root[data-grad-backdrop="nordlicht"] { --backdrop: var(--bd-nordlicht); }
 :root[data-grad-backdrop="warm"] { --backdrop: var(--bd-warm); }
@@ -1510,6 +1529,9 @@ button.rank-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .grad-opt.is-backdrop[data-grad="nordlicht"] i { background-image: var(--bd-nordlicht); }
 .grad-opt.is-backdrop[data-grad="warm"] i      { background-image: var(--bd-warm); }
 .grad-opt.is-backdrop[data-grad="aus"] i       { background-image: none; }
+.grad-opt.is-figure[data-grad="modulton"] i {
+    background-image: linear-gradient(135deg, var(--m-sparziel), var(--m-ausgaben));
+}
 
 .rf-presets { display: flex; flex-direction: column; gap: 2px; }
 .rf-opt {

@@ -129,10 +129,24 @@ const GRADIENT_SLOTS = [
     { pref: 'ui_grad_progress', attr: 'data-grad-progress', fallback: 'sonnenaufgang',
       label: 'Fortschrittsbalken',
       hint: 'Der Balken unter einem Sparziel, in der Export-Vorschau und beim erneuten Auswerten von Bons.' },
+    { pref: 'ui_grad_figure', attr: 'data-grad-figure', fallback: 'modulton',
+      label: 'Zahlen und Diagramme',
+      hint: 'Der Füllkreis am Sparziel, die Verlaufskurve und der gesparte Betrag. „Modulton“ lässt jedem Modul seine eigene Farbe — Sparziel grün, Ausgaben türkis.' },
     { pref: 'ui_grad_backdrop', attr: 'data-grad-backdrop', fallback: 'standard',
       label: 'Hintergrundlichter',
       hint: 'Die drei sehr leisen Lichter hinter allem. Sie tragen nie Text und dürfen deshalb frei gewählt sein.' },
 ];
+
+// Die vierte Stelle kennt zusaetzlich "Modulton": jedes Modul behaelt dann
+// seine Identitaetsfarbe. Das ist der Standard -- ein Thema darf sie
+// ueberschreiben, aber nur, wenn man es ausdruecklich will.
+const FIGURE_PRESETS = [{ key: 'modulton', label: 'Modulton' }].concat(
+    [{ key: 'sonnenaufgang', label: 'Sonnenaufgang' },
+     { key: 'nordlicht', label: 'Nordlicht' },
+     { key: 'waldlauf', label: 'Waldlauf' },
+     { key: 'abendrot', label: 'Abendrot' },
+     { key: 'amethyst', label: 'Amethyst' },
+     { key: 'schlicht', label: 'Schlicht' }]);
 
 // Nur Schlüssel und Beschriftung — wie ein Preset aussieht, weiß allein die CSS.
 const GRADIENT_PRESETS = [
@@ -164,17 +178,23 @@ const BACKDROP_PRESETS = [
  */
 const THEMES = [
     { key: 'sonnenaufgang', label: 'Sonnenaufgang',
-      slots: { ui_grad_action: 'sonnenaufgang', ui_grad_progress: 'sonnenaufgang', ui_grad_backdrop: 'standard' } },
+      slots: { ui_grad_action: 'sonnenaufgang', ui_grad_progress: 'sonnenaufgang',
+               ui_grad_figure: 'modulton', ui_grad_backdrop: 'standard' } },
     { key: 'nordlicht', label: 'Nordlicht',
-      slots: { ui_grad_action: 'nordlicht', ui_grad_progress: 'nordlicht', ui_grad_backdrop: 'nordlicht' } },
+      slots: { ui_grad_action: 'nordlicht', ui_grad_progress: 'nordlicht',
+               ui_grad_figure: 'nordlicht', ui_grad_backdrop: 'nordlicht' } },
     { key: 'waldlauf', label: 'Waldlauf',
-      slots: { ui_grad_action: 'waldlauf', ui_grad_progress: 'waldlauf', ui_grad_backdrop: 'nordlicht' } },
+      slots: { ui_grad_action: 'waldlauf', ui_grad_progress: 'waldlauf',
+               ui_grad_figure: 'waldlauf', ui_grad_backdrop: 'nordlicht' } },
     { key: 'abendrot', label: 'Abendrot',
-      slots: { ui_grad_action: 'abendrot', ui_grad_progress: 'abendrot', ui_grad_backdrop: 'warm' } },
+      slots: { ui_grad_action: 'abendrot', ui_grad_progress: 'abendrot',
+               ui_grad_figure: 'abendrot', ui_grad_backdrop: 'warm' } },
     { key: 'amethyst', label: 'Amethyst',
-      slots: { ui_grad_action: 'amethyst', ui_grad_progress: 'amethyst', ui_grad_backdrop: 'standard' } },
+      slots: { ui_grad_action: 'amethyst', ui_grad_progress: 'amethyst',
+               ui_grad_figure: 'amethyst', ui_grad_backdrop: 'standard' } },
     { key: 'schlicht', label: 'Schlicht',
-      slots: { ui_grad_action: 'schlicht', ui_grad_progress: 'schlicht', ui_grad_backdrop: 'aus' } },
+      slots: { ui_grad_action: 'schlicht', ui_grad_progress: 'schlicht',
+               ui_grad_figure: 'modulton', ui_grad_backdrop: 'aus' } },
 ];
 const THEMES_PREF = 'ui_themes';
 const THEMES_MAX = 12;
@@ -188,6 +208,7 @@ const VexTheme = {
             .concat(own.map((t, i) => ({
                 key: 'eigen-' + i, label: t.name, own: true,
                 slots: { ui_grad_action: t.action, ui_grad_progress: t.progress,
+                         ui_grad_figure: t.figure || 'modulton',
                          ui_grad_backdrop: t.backdrop },
             })));
     },
@@ -214,6 +235,7 @@ const VexTheme = {
             name: clean,
             action: VexPrefs.get('ui_grad_action', 'sonnenaufgang'),
             progress: VexPrefs.get('ui_grad_progress', 'sonnenaufgang'),
+            figure: VexPrefs.get('ui_grad_figure', 'modulton'),
             backdrop: VexPrefs.get('ui_grad_backdrop', 'standard'),
         };
         const at = own.findIndex(t => t.name === clean);

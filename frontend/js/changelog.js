@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.78.0', date: '2026-09-09', title: 'Themen reichen weiter, Musik-Übersicht getrennt', notes: [
+        'Ein Thema färbt jetzt auch Zahlen und Diagramme: den Füllkreis am Sparziel, die Verlaufskurve samt Fläche und den gesparten Betrag.',
+        'Der Standard heißt „Modulton“ und lässt jedem Modul seine eigene Farbe — erst wer ausdrücklich umstellt, überschreibt sie.',
+        'Der Musik-Überblick zeigt Musik und Podcast in getrennten Blöcken mit eigenen Kennzahlen und Ranglisten; nur der Verlauf oben bleibt gemeinsam.',
+        'Auf dem Handy stand der Füllkreis links und drückte die Beträge in 213 Pixel — jetzt liegt er neben dem Namen und die Beträge bekommen die volle Breite.',
+        'Die Erklärsätze unter „Wochenziele“ und „Achievements“ sind weg.',
+    ]},
     { v: 'v1.77.0', date: '2026-09-09', title: 'Podcasts werden anders gezählt als Musik', notes: [
         'Shows stehen jetzt nach Anzahl der Folgen im Rang, nicht nach Wiedergaben — eine Episode hört man einmal, „Top-Episode nach Wiedergaben“ wäre eine Liste von Einsen.',
         'Die zweite Karte zeigt bei Podcasts das zuletzt Gehörte mit Datum statt einer Rangliste, die keine ist.',

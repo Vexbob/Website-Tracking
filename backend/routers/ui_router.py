@@ -196,11 +196,16 @@ def _check_default_range(value: Any) -> str:
 # verlassen.
 GRAD_ACTION_PREF = "ui_grad_action"
 GRAD_PROGRESS_PREF = "ui_grad_progress"
+GRAD_FIGURE_PREF = "ui_grad_figure"
 GRAD_BACKDROP_PREF = "ui_grad_backdrop"
 
 ALLOWED_GRADIENTS = ["sonnenaufgang", "nordlicht", "waldlauf", "abendrot",
                      "amethyst", "schlicht"]
 ALLOWED_BACKDROPS = ["standard", "nordlicht", "warm", "aus"]
+# "modulton" heisst: jedes Modul behaelt seine Identitaetsfarbe. Das ist der
+# Standard, damit ein Thema die Zuordnung Modul->Farbe nicht ungefragt
+# aufloest.
+ALLOWED_FIGURES = ["modulton"] + ALLOWED_GRADIENTS
 
 
 def _one_of(allowed: List[str]):
@@ -243,12 +248,13 @@ def _check_themes(value: Any) -> List[dict]:
         action = str(item.get("action", ""))
         progress = str(item.get("progress", ""))
         backdrop = str(item.get("backdrop", ""))
+        figure = str(item.get("figure", "modulton"))
         for key, allowed in ((action, ALLOWED_GRADIENTS), (progress, ALLOWED_GRADIENTS),
-                             (backdrop, ALLOWED_BACKDROPS)):
+                             (figure, ALLOWED_FIGURES), (backdrop, ALLOWED_BACKDROPS)):
             if key not in allowed:
                 raise ValueError(f"unbekanntes Preset: {key}")
         out.append({"name": name, "action": action, "progress": progress,
-                    "backdrop": backdrop})
+                    "figure": figure, "backdrop": backdrop})
     return out
 
 
@@ -258,6 +264,7 @@ UI_PREFS = {
     DEFAULT_RANGE_PREF: _check_default_range,
     GRAD_ACTION_PREF: _one_of(ALLOWED_GRADIENTS),
     GRAD_PROGRESS_PREF: _one_of(ALLOWED_GRADIENTS),
+    GRAD_FIGURE_PREF: _one_of(ALLOWED_FIGURES),
     GRAD_BACKDROP_PREF: _one_of(ALLOWED_BACKDROPS),
     THEMES_PREF: _check_themes,
 }

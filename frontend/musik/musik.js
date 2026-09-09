@@ -344,25 +344,39 @@ function kpiCard(label, value, sub, icon) {
     '</div>';
 }
 
-function renderKpis(sum) {
-    const box = document.getElementById('mKpis');
-    const v = vocab(state.kind);
-    const span = (sum.from && sum.to)
-        ? fmtDay(sum.from) + ' – ' + fmtDay(sum.to) : 'noch nichts importiert';
-    const dur = fmtDuration(sum.ms_played);
-    // Steht keine Art im Filter, aber mehrere im Register, sagt die Kachel
-    // gleich die Aufteilung — sonst ist "4.320" eine Zahl über zwei Dinge.
-    const kinds = (sum.by_kind || []).filter(k => k.plays > 0);
-    const splitSub = (!state.kind && kinds.length > 1)
-        ? kinds.map(k => k.kind + ' ' + fmtInt(k.plays)).join(' · ')
-        : span;
-    box.innerHTML =
-        kpiCard(v.plays, fmtInt(sum.plays), splitSub, '🎧') +
-        kpiCard(v.whats, fmtInt(sum.titles), fmtInt(sum.rows) + ' Registerzeilen', v.mark) +
-        kpiCard(v.whos, fmtInt(sum.artists), null, v.whoMark) +
+/* Ein Block je Art: Kopfzeile, Kennzahlen, zwei Ranglisten.
+ *
+ * Eine gemeinsame Statistik ueber Musik UND Podcast waere eine Zahl ueber
+ * zwei Dinge: "610 Titel" sind Lieder und Episoden zusammengezaehlt, und in
+ * derselben Rangliste stuende ein Interpret neben einer Show. Deshalb wird
+ * bei "Alle" je Art ein eigener Block gezeichnet -- nur der Verlauf oben
+ * bleibt gemeinsam, denn dort ist der Vergleich der Punkt.
+ */
+function kpiRow(v, data, subFirst) {
+    const dur = fmtDuration(data.ms_played);
+    return '<div class="stat-kpi-grid">' +
+        kpiCard(v.plays, fmtInt(data.plays), subFirst, '🎧') +
+        kpiCard(v.whats, fmtInt(data.titles), (data.rows != null
+            ? fmtInt(data.rows) + ' Registerzeilen' : null), v.mark) +
+        kpiCard(v.whos, fmtInt(data.artists), null, v.whoMark) +
         (dur
             ? kpiCard('Hörzeit', dur, null, '⏱️')
-            : kpiCard('Hörzeit', '—', 'die CSV enthielt keine Minuten', '⏱️'));
+            : kpiCard('Hörzeit', '—', 'die CSV enthielt keine Minuten', '⏱️')) +
+    '</div>';
+}
+
+function rankCards(v, artists, titles) {
+    return '<div class="split-2">' +
+        '<div class="stat-card"><div class="stat-card-head">' +
+            '<h3>' + v.whoMark + ' ' + esc(v.whos) + '</h3>' +
+            '<span class="stat-range-lbl">' + esc(v.whoNote) + ' · Klick filtert</span>' +
+        '</div>' + rankList(artists, { clickable: true, empty: v.whos,
+                                       metric: v.whoMetric, unit: v.countUnit }) + '</div>' +
+        '<div class="stat-card"><div class="stat-card-head">' +
+            '<h3>' + v.mark + ' ' + esc(v.whats) + '</h3>' +
+            '<span class="stat-range-lbl">' + esc(v.whatNote) + '</span>' +
+        '</div>' + rankList(titles, { empty: v.whats, metric: v.whatMetric }) + '</div>' +
+    '</div>';
 }
 
 function rankList(items, opts) {
@@ -403,29 +417,14 @@ function rankList(items, opts) {
 }
 
 async function loadOverview() {
-    const box = { kpis: document.getElementById('mKpis') };
+    const box = document.getElementById('mBlocks');
     try {
-        const [sum, ser, artists, titles] = await Promise.all([
-            API.summary(qs()),
-            API.series(qs({ step: state.step, split: 'kind' })),
-            API.top(qs({ by: 'interpret', limit: 12, metric: vocab(state.kind).whoMetric })),
-            API.top(qs({ by: 'titel', limit: 12, metric: vocab(state.kind).whatMetric })),
-        ]);
-        renderKpis(sum);
-        // Die Karten heißen, wie das heißt, was in ihnen steht.
-        const v = vocab(state.kind);
-        document.getElementById('mTopArtistsHead').textContent = v.whoMark + ' ' + v.whos;
-        document.getElementById('mTopTitlesHead').textContent = v.mark + ' ' + v.whats;
-        // Die Unterzeile sagt, WONACH sortiert ist -- sonst liest man eine
-        // Show-Rangliste als Wiedergabezahl.
-        const noteA = document.getElementById('mTopArtistsNote');
-        const noteT = document.getElementById('mTopTitlesNote');
-        if (noteA) noteA.textContent = v.whoNote + ' · Klick filtert';
-        if (noteT) noteT.textContent = v.whatNote;
+        const sum = await API.summary(qs());
+        const ser = await API.series(qs({ step: state.step, split: 'kind' }));
+
         document.getElementById('mSeriesLbl').textContent =
             '· ' + (ser.grain_label || '');
         drawSeries(ser);
-
         const coarser = (ser.points || []).reduce((n, p) => n + (p.coarser || 0), 0);
         document.getElementById('mSeriesNote').textContent = coarser
             ? coarser.toLocaleString('de-DE') + ' Zeilen liegen gröber vor als ' +
@@ -433,13 +432,38 @@ async function loadOverview() {
               'ersten Tages. Feiner als importiert lässt sich nicht aufteilen.'
             : '';
 
-        document.getElementById('mTopArtists').innerHTML =
-            rankList(artists.items || [], { clickable: true, empty: v.whos,
-                                            metric: v.whoMetric, unit: v.countUnit });
-        document.getElementById('mTopTitles').innerHTML =
-            rankList(titles.items || [], { empty: v.whats, metric: v.whatMetric });
+        // Welche Bloecke: die gefilterte Art allein, sonst jede vorhandene.
+        // Ohne Spalte "Art" bleibt es bei einem Block ohne Kopfzeile.
+        const kinds = (sum.by_kind || []).filter(k => k.plays > 0);
+        const blocks = state.kind
+            ? [{ kind: state.kind, data: sum, head: false }]
+            : (kinds.length > 1
+                ? kinds.map(k => ({ kind: k.kind, data: k, head: true }))
+                : [{ kind: kinds.length ? kinds[0].kind : '', data: sum, head: false }]);
+
+        const span = (sum.from && sum.to)
+            ? fmtDay(sum.from) + ' – ' + fmtDay(sum.to) : 'noch nichts importiert';
+
+        const parts = await Promise.all(blocks.map(async (b) => {
+            const v = vocab(b.kind);
+            // Jeder Block fragt SEINE Art ab -- sonst stuenden unter
+            // "Shows" die Interpreten mit.
+            const extra = b.head ? { kind: b.kind } : {};
+            const [artists, titles] = await Promise.all([
+                API.top(qs(Object.assign({ by: 'interpret', limit: 12, metric: v.whoMetric }, extra))),
+                API.top(qs(Object.assign({ by: 'titel', limit: 12, metric: v.whatMetric }, extra))),
+            ]);
+            return '<section class="m-block">' +
+                (b.head ? '<div class="m-block-head"><span class="m-kind" ' +
+                          'style="--tone:var(' + v.tone + ')">' + v.mark + ' ' +
+                          esc(b.kind) + '</span></div>' : '') +
+                kpiRow(v, b.data, b.head ? null : span) +
+                rankCards(v, artists.items || [], titles.items || []) +
+            '</section>';
+        }));
+        box.innerHTML = parts.join('');
     } catch (e) {
-        box.kpis.innerHTML = '<div class="empty is-error" style="grid-column:1/-1">' +
+        box.innerHTML = '<div class="empty is-error">' +
             '<span class="empty-mark" aria-hidden="true">⚠️</span>' +
             '<p class="empty-text">' + esc(e.message || e) + '</p></div>';
     }
@@ -890,7 +914,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Ein Klick auf einen Interpreten filtert alles darauf — der Chip
     // darüber zeigt, dass er greift, und nimmt ihn auch wieder weg.
-    document.getElementById('mTopArtists').addEventListener('click', (e) => {
+    document.getElementById('mBlocks').addEventListener('click', (e) => {
         const b = e.target.closest('[data-artist]');
         if (!b) return;
         state.artist = state.artist === b.dataset.artist ? '' : b.dataset.artist;

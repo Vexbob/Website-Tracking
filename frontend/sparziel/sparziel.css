@@ -28,7 +28,9 @@ body{visibility:hidden}body.ready{visibility:visible}
     overflow-wrap:anywhere}
 /* --green-dark ist eine Fuellfarbe fuer weisse Schrift, kein Textton auf
    dunklem Grund (3,1:1). Der Sparstand nimmt den Modulton. */
-.hero-stat strong.pos{color:var(--m-sparziel)}
+/* Der gesparte Betrag folgt der Theme-Einstellung "Zahlen und Diagramme";
+   ohne Einstellung bleibt es der Modulton. */
+.hero-stat strong.pos{color:var(--figure, var(--m-sparziel))}
 .hero-edit{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:0.875rem;margin-top:0.875rem;display:none}
 .hero-edit.open{display:block}
 .hero-edit-row{display:flex;flex-wrap:wrap;gap:0.625rem;align-items:flex-end}
@@ -138,12 +140,12 @@ body{visibility:hidden}body.ready{visibility:visible}
 .pg-dot.filled{background:var(--green);border-color:var(--green)}
 .pg-bar{height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:0.625rem}
 .pg-bar-fill{height:100%;border-radius:3px;transition:width .35s ease}
-.pg-bar-fill.g{background:linear-gradient(90deg,color-mix(in srgb,var(--m-sparziel) 60%,transparent),var(--m-sparziel))}
+.pg-bar-fill.g{background:linear-gradient(90deg,color-mix(in srgb,var(--figure, var(--m-sparziel)) 60%,transparent),var(--figure, var(--m-sparziel)))}
 /* Beide Zustaende tragen den Modulton -- der Balken zeigt Fortschritt, nicht
    Zustand. Ob erreicht oder nicht, sagen Kartenrahmen und Knopf darunter.
    Das Blau davor war die Identitaetsfarbe der Notizen und hatte hier ohnehin
    nichts zu suchen. */
-.pg-bar-fill.b{background:linear-gradient(90deg,color-mix(in srgb,var(--m-sparziel) 35%,transparent),color-mix(in srgb,var(--m-sparziel) 75%,transparent))}
+.pg-bar-fill.b{background:linear-gradient(90deg,color-mix(in srgb,var(--figure, var(--m-sparziel)) 35%,transparent),color-mix(in srgb,var(--figure, var(--m-sparziel)) 75%,transparent))}
 .pg-streak-row{display:flex;align-items:center;gap:0.5rem;padding:0.5rem;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;margin-bottom:0.5rem;font-size:0.75rem}
 .pg-streak-row .lbl{color:var(--text-2);font-weight:500}
 .pg-streak-row .gold-dots{display:flex;gap:3px;flex-wrap:wrap}
@@ -415,7 +417,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .sg-amt{font-size:1.5rem;font-weight:800;line-height:1.1;color:var(--text-1);font-variant-numeric:tabular-nums}
 .sg-amt small{font-size:0.8125rem;font-weight:600;color:var(--text-3);margin-left:3px}
 .sg-bar{height:8px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden;margin:0.625rem 0 0.375rem}
-.sg-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,color-mix(in srgb,var(--m-sparziel) 60%,transparent),var(--m-sparziel));transition:width .4s ease}
+.sg-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,color-mix(in srgb,var(--figure, var(--m-sparziel)) 60%,transparent),var(--figure, var(--m-sparziel)));transition:width .4s ease}
 .sg-card.is-full .sg-bar i{background:linear-gradient(90deg,color-mix(in srgb,var(--warn) 70%,transparent),var(--warn))}
 .sg-meta{display:flex;justify-content:space-between;gap:0.5rem;font-size:0.75rem;color:var(--text-2);font-variant-numeric:tabular-nums}
 .sg-actions{display:flex;gap:0.375rem;flex-wrap:wrap;margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--line)}
@@ -473,11 +475,30 @@ body{visibility:hidden}body.ready{visibility:visible}
     .hero-top{gap:1rem}
     .hero-radial{width:110px;height:110px}
     .hero-radial-pct{font-size:1.375rem}
-    .hero-stats{grid-template-columns:1fr;gap:0.375rem}
+    /* Auf dem Handy behielt der Ring seinen Platz links, und die drei
+       Kacheln quetschten sich in die 213px daneben. Als Raster liegt der
+       Ring neben dem Namen, die Betraege bekommen die volle Breite --
+       `display:contents` loest dafuer die Zwischenebene .hero-info auf,
+       damit ihre Kinder direkt im Raster stehen. */
+    .hero{padding:1.125rem}
+    .hero-top{display:grid;grid-template-columns:auto 1fr;
+        align-items:center;gap:0.75rem 1rem}
+    .hero-info{display:contents}
+    .hero-radial{width:104px;height:104px}
+    .hero-radial-pct{font-size:1.375rem}
+    /* Der Zielname darf umbrechen, aber nicht gekuerzt werden: "Reise ..."
+       beantwortet die Frage, welches Ziel das ist, nicht mehr. */
+    .hero-name{grid-column:2;margin:0;font-size:1.1875rem;min-width:0;
+        align-items:flex-start;line-height:1.25}
+    .hero-name span{overflow-wrap:anywhere}
+    .hero-stats{grid-column:1 / -1;grid-template-columns:1fr;gap:0.375rem}
     .hero-stat{display:flex;align-items:baseline;justify-content:space-between;
         gap:0.75rem;padding:0.5rem 0.75rem}
     .hero-stat .lbl{margin:0;flex:none}
     .hero-stat strong{font-size:1rem;text-align:right;overflow:visible}
+    /* Der Zeitraum hinter "Wochenziele" bricht auf schmalen Schirmen um --
+       dann darf er nicht mit einem einsamen Mittepunkt beginnen. */
+    .sh .period-lbl{margin-left:0;flex-basis:100%}
     .ach-edit-form .grid2{grid-template-columns:1fr}
     .if-grid{grid-template-columns:1fr}
     .sg-grid,.wish-grid{grid-template-columns:1fr}

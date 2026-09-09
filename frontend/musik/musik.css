@@ -58,6 +58,14 @@
 .m-hint strong { color: var(--text-1); font-weight: 600; }
 .m-note:empty { display: none; }
 
+/* Ein Block je Art im Überblick. Die Kopfzeile trägt die Marke der Art,
+   damit man beim Scrollen weiß, welche Zahlen man gerade liest. */
+.m-block + .m-block { margin-top: var(--space-6); padding-top: var(--space-5);
+    border-top: 1px solid var(--line); }
+.m-block-head { display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: var(--space-3); }
+.m-block-head .m-kind { font-size: 0.8125rem; padding: 0.2rem 0.625rem; }
+
 /* ---------- Register ---------- */
 /* Die Tabelle hat acht Spalten und muss auf dem Handy waagerecht scrollen
    dürfen — die Seite selbst darf das nie. */

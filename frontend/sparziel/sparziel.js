@@ -165,7 +165,7 @@ function updatePeriodLabel(){
     const w=currentWeekInfo();
     const s=w.start.toLocaleDateString('de-DE',{day:'2-digit',month:'short'});
     const e=w.end.toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'});
-    document.getElementById('pgPeriodLbl').textContent=`· KW ${w.week} (${s} – ${e})`;
+    document.getElementById('pgPeriodLbl').textContent=`KW ${w.week} (${s} – ${e})`;
 }
 
 function activateTab(t){
@@ -390,6 +390,27 @@ async function saveSparziel(){
  * man auf einen Blick, WANN etwas dazukam, ohne dass die Linie in Punkten
  * ertrinkt.
  */
+/* Die Farbe der Kurve folgt der Theme-Stelle "Zahlen und Diagramme".
+   Ohne Einstellung ist --figure gar nicht definiert, dann greift der
+   Modulton -- die Identitaet bleibt also der Standard. */
+function figureColor(){
+    const css=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    return css('--figure') || css('--m-sparziel');
+}
+
+/* Die Flaeche unter der Linie ist derselbe Ton bei 18 % (DESIGN.md 7).
+   color-mix() ginge in CSS, aber Chart.js reicht den Wert an die Leinwand
+   weiter, und die kennt es nicht -- deshalb hier von Hand aus dem Hexwert. */
+function figureFill(){
+    const c=figureColor();
+    const m=/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c);
+    if(!m) return 'rgba(94,234,146,0.18)';
+    let h=m[1];
+    if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+    return 'rgba('+r+','+g+','+b+',0.18)';
+}
+
 function renderSparzielChart(){
     try{
         const ctx=document.getElementById('chartSavings').getContext('2d');
@@ -403,10 +424,10 @@ function renderSparzielChart(){
             type:'line',
             data:{labels:pts.map(x=>fmtShortDate(x.date)),datasets:[{
                 data:pts.map(x=>Number(x.cumulative||0)),
-                borderColor:cssVar('--m-sparziel'),backgroundColor:cssVar('--ok-soft'),
+                borderColor:figureColor(),backgroundColor:figureFill(),
                 fill:true,tension:0.2,borderWidth:2,
                 pointRadius:pts.map((x,i)=>marks[i]?3:0),
-                pointBackgroundColor:cssVar('--m-sparziel'),
+                pointBackgroundColor:figureColor(),
                 pointBorderColor:cssVar('--surface-1'),pointBorderWidth:1.5,
                 pointHoverRadius:5}]},
             options:{responsive:true,maintainAspectRatio:false,

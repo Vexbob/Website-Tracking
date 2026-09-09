@@ -133,14 +133,16 @@ function renderGradients() {
     if (!box) return;
     box.innerHTML = GRADIENT_SLOTS.map(slot => {
         const backdrop = slot.pref === 'ui_grad_backdrop';
-        const presets = backdrop ? BACKDROP_PRESETS : GRADIENT_PRESETS;
+        const figure = slot.pref === 'ui_grad_figure';
+        const presets = backdrop ? BACKDROP_PRESETS
+                      : (figure ? FIGURE_PRESETS : GRADIENT_PRESETS);
         const cur = VexPrefs.get(slot.pref, slot.fallback);
         return '<div class="grad-slot">' +
             '<div class="grad-slot-head">' + escHtml(slot.label) + '</div>' +
             '<p class="grad-slot-hint">' + escHtml(slot.hint) + '</p>' +
             '<div class="grad-opts">' + presets.map(pre =>
                 '<button type="button" class="grad-opt' +
-                    (backdrop ? ' is-backdrop' : '') +
+                    (backdrop ? ' is-backdrop' : '') + (figure ? ' is-figure' : '') +
                     (pre.key === cur ? ' is-active' : '') +
                 '" data-slot="' + slot.pref + '" data-grad="' + pre.key + '">' +
                     '<i aria-hidden="true"></i>' +

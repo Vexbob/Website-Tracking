@@ -99,11 +99,18 @@ Farbe ist Information, nicht Dekoration.
 die primäre Aktion, Fortschrittsbalken und Diagrammfüllungen. Alle vier tragen
 keinen Text. Hinter Zahlen liegt nie ein Verlauf.
 
-**Drei davon sind einstellbar** (v1.74.0). In den Einstellungen wählt man je
-ein Preset für die primäre Aktion (`--grad-accent`), die Fortschrittsbalken
-(`--grad-progress`) und die Hintergrundlichter (`--backdrop`). Die vierte
-Stelle — Diagrammfüllungen — bleibt fest: sie bekommt ihre Farbe vom Modulton,
-und der ist Identität, keine Vorliebe.
+**Alle vier sind einstellbar** (v1.74.0, erweitert in v1.78.0). In den
+Einstellungen wählt man je ein Preset für die primäre Aktion
+(`--grad-accent`), die Fortschrittsbalken (`--grad-progress`), die Zahlen und
+Diagramme (`--figure`) und die Hintergrundlichter (`--backdrop`). Ein *Thema*
+setzt alle vier auf einmal.
+
+Bei den Zahlen und Diagrammen gilt eine Besonderheit, weil dort die
+Modul-Identität hängt: der Standard heißt **„Modulton"** und definiert
+`--figure` bewusst gar nicht. Jedes Modul fällt dann über
+`var(--figure, var(--m-sparziel))` auf seine eigene Farbe zurück — Sparziel
+grün, Ausgaben türkis. Erst wer ausdrücklich ein anderes Preset wählt,
+überschreibt das. Identität ist damit der Standard, nicht die Ausnahme.
 
 - Die Presets stehen als Tokens (`--g-…`, `--bd-…`) **ausschließlich** in
   `css/style.css`. Das Frontend setzt nur ein Attribut am `<html>`
