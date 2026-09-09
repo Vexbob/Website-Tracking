@@ -117,6 +117,52 @@ function renderRangeList() {
         '<span class="rf-check" aria-hidden="true">✓</span></button>').join('');
 }
 
+const escHtml = (v) => String(v == null ? '' : v)
+    .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* Verlaufs-Presets — v1.74.0
+ *
+ * Slots und Presets kommen aus js/api.js, die Farben aus css/style.css. Hier
+ * steht nur, wie man sie anklickt. Angewendet wird sofort: VexPrefs schreibt
+ * in den Zwischenspeicher, und daran haengt das Setzen der Attribute am
+ * <html> — die Seite faerbt sich also noch waehrend man waehlt um, ohne dass
+ * diese Datei etwas davon wissen muss.
+ */
+function renderGradients() {
+    const box = document.getElementById('gradList');
+    if (!box) return;
+    box.innerHTML = GRADIENT_SLOTS.map(slot => {
+        const backdrop = slot.pref === 'ui_grad_backdrop';
+        const presets = backdrop ? BACKDROP_PRESETS : GRADIENT_PRESETS;
+        const cur = VexPrefs.get(slot.pref, slot.fallback);
+        return '<div class="grad-slot">' +
+            '<div class="grad-slot-head">' + escHtml(slot.label) + '</div>' +
+            '<p class="grad-slot-hint">' + escHtml(slot.hint) + '</p>' +
+            '<div class="grad-opts">' + presets.map(pre =>
+                '<button type="button" class="grad-opt' +
+                    (backdrop ? ' is-backdrop' : '') +
+                    (pre.key === cur ? ' is-active' : '') +
+                '" data-slot="' + slot.pref + '" data-grad="' + pre.key + '">' +
+                    '<i aria-hidden="true"></i>' +
+                    '<span>' + escHtml(pre.label) + '</span>' +
+                '</button>').join('') +
+            '</div></div>';
+    }).join('');
+}
+
+async function saveGradient(pref, value) {
+    try {
+        await VexPrefs.set(pref, value);
+        renderGradients();
+        if (window.Toast) Toast.success('Gespeichert');
+    } catch (e) {
+        // Fehlgeschlagen heisst: der Server hat es nicht. Die Anzeige muss
+        // zurueck auf den Stand, der wirklich gespeichert ist.
+        renderGradients();
+        if (window.Toast) Toast.error(e.message || String(e));
+    }
+}
+
 async function saveRange(preset) {
     try {
         await VexPrefs.set(RANGE_PREF, preset);
@@ -158,6 +204,11 @@ async function saveRange(preset) {
     document.getElementById('rangeList').addEventListener('click', (e) => {
         const b = e.target.closest('.rf-opt');
         if (b) saveRange(b.dataset.preset);
+    });
+    renderGradients();
+    document.getElementById('gradList').addEventListener('click', (e) => {
+        const b = e.target.closest('.grad-opt');
+        if (b) saveGradient(b.dataset.slot, b.dataset.grad);
     });
     document.getElementById('tabCfg').onclick = () => VexNav.openTabBarSettings();
     document.getElementById('expBtn').onclick = () => exportAll();

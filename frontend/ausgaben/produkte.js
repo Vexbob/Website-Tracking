@@ -457,7 +457,7 @@ function openReparseModal() {
         </div>
         <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
             <button class="cancel" style="width:auto;margin:0;background:var(--surface-2);color:var(--text-1);border:1px solid var(--line-strong)">Abbrechen</button>
-            <button class="start primary" style="width:auto;margin:0;background:var(--grad-accent);color:#fff">Los geht's</button>
+            <button class="start primary" style="width:auto;margin:0;background:var(--grad-accent);color:var(--accent-ink)">Los geht's</button>
         </div>
     `, { wide: true });
     modal.root.querySelector('.cancel').onclick = () => modal.close();
@@ -522,7 +522,7 @@ async function runReparse() {
             } else if (msg.type === 'done') {
                 st.textContent = `Fertig — ${msg.updated_items} Positionen aktualisiert, ${msg.errors} Fehler`;
                 bar.style.width = '100%';
-                bar.style.background = msg.errors ? 'var(--warn)' : 'var(--grad-accent)';
+                bar.style.background = msg.errors ? 'var(--warn)' : 'var(--grad-progress)';
             }
         }
     }

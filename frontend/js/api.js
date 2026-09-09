@@ -111,6 +111,56 @@ async function askAlert(opts) {
 document.documentElement.setAttribute('data-theme', 'dark');
 try { localStorage.removeItem('theme'); } catch (e) {}
 
+/* Verlaufs-Presets — v1.74.0
+ *
+ * Verläufe gibt es an genau vier Stellen (docs/DESIGN.md 3); drei davon sind
+ * einstellbar. Hier steht bewusst KEIN einziger Farbwert: die Verläufe sind
+ * Tokens in css/style.css, und diese Datei setzt nur ein Attribut am <html> —
+ * dieselbe Mechanik wie beim Theme.
+ *
+ * Gesetzt wird sofort aus dem localStorage-Zwischenspeicher, noch bevor die
+ * Seite gezeichnet ist. Ohne das läge beim Laden für einen Moment der
+ * Standardverlauf auf den Knöpfen und spränge dann um.
+ */
+const GRADIENT_SLOTS = [
+    { pref: 'ui_grad_action',   attr: 'data-grad-action',   fallback: 'sonnenaufgang',
+      label: 'Primäre Aktion',
+      hint: 'Knöpfe, die den Schritt auslösen, um den es auf der Seite geht — Check-in, Speichern, Exportieren.' },
+    { pref: 'ui_grad_progress', attr: 'data-grad-progress', fallback: 'sonnenaufgang',
+      label: 'Fortschrittsbalken',
+      hint: 'Der Balken unter einem Sparziel, in der Export-Vorschau und beim erneuten Auswerten von Bons.' },
+    { pref: 'ui_grad_backdrop', attr: 'data-grad-backdrop', fallback: 'standard',
+      label: 'Hintergrundlichter',
+      hint: 'Die drei sehr leisen Lichter hinter allem. Sie tragen nie Text und dürfen deshalb frei gewählt sein.' },
+];
+
+// Nur Schlüssel und Beschriftung — wie ein Preset aussieht, weiß allein die CSS.
+const GRADIENT_PRESETS = [
+    { key: 'sonnenaufgang', label: 'Sonnenaufgang' },
+    { key: 'nordlicht',     label: 'Nordlicht' },
+    { key: 'waldlauf',      label: 'Waldlauf' },
+    { key: 'abendrot',      label: 'Abendrot' },
+    { key: 'amethyst',      label: 'Amethyst' },
+    { key: 'schlicht',      label: 'Schlicht' },
+];
+const BACKDROP_PRESETS = [
+    { key: 'standard',  label: 'Standard' },
+    { key: 'nordlicht', label: 'Nordlicht' },
+    { key: 'warm',      label: 'Warm' },
+    { key: 'aus',       label: 'Aus' },
+];
+
+function applyGradients(prefs) {
+    const root = document.documentElement;
+    GRADIENT_SLOTS.forEach(slot => {
+        const value = (prefs && prefs[slot.pref]) || slot.fallback;
+        root.setAttribute(slot.attr, value);
+    });
+}
+
+// Angewendet wird weiter unten, sobald VexPrefs den Zwischenspeicher kennt --
+// immer noch vor dem ersten Zeichnen, weil diese Datei synchron im <head> steht.
+
 // German locale helpers
 const _eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const _numFmt = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 });
@@ -165,8 +215,20 @@ const VexPrefs = {
         const o = VexPrefs.all();
         delete o[key];
         VexPrefs._write(o);
+        applyGradients(o);
     },
 };
+
+/* Jetzt anwenden: der Zwischenspeicher steht, gezeichnet ist noch nichts.
+   `_write` ist der eine Ort, durch den jede Änderung geht (laden, setzen,
+   zurücksetzen) -- daran hängt das Nachziehen, damit die Einstellungsseite
+   ohne eigenes Zutun sofort umschaltet. */
+const _prefsWrite = VexPrefs._write;
+VexPrefs._write = function (obj) {
+    _prefsWrite.call(VexPrefs, obj);
+    applyGradients(obj);
+};
+applyGradients(VexPrefs.all());
 
 /* Bild-Adressen aus der eigenen API — v1.62.1
  *

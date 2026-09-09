@@ -186,10 +186,40 @@ def _check_default_range(value: Any) -> str:
     return v
 
 
+# ---------- Verlaufs-Presets (v1.74.0) ----------
+# Verlaeufe gibt es an genau vier Stellen (docs/DESIGN.md 3); drei davon sind
+# einstellbar. WIE ein Preset aussieht, steht ausschliesslich in
+# frontend/css/style.css -- hier stehen nur die erlaubten Schluessel, damit
+# eine kaputte oder erfundene Einstellung gar nicht erst gespeichert wird.
+# Kommt ein Preset dazu, gehoert es an beide Stellen; die Liste ist kurz genug,
+# dass das auffaellt, und der Server darf sich nicht auf das Frontend
+# verlassen.
+GRAD_ACTION_PREF = "ui_grad_action"
+GRAD_PROGRESS_PREF = "ui_grad_progress"
+GRAD_BACKDROP_PREF = "ui_grad_backdrop"
+
+ALLOWED_GRADIENTS = ["sonnenaufgang", "nordlicht", "waldlauf", "abendrot",
+                     "amethyst", "schlicht"]
+ALLOWED_BACKDROPS = ["standard", "nordlicht", "warm", "aus"]
+
+
+def _one_of(allowed: List[str]):
+    """Prueferfabrik fuer die Presets -- drei Einstellungen, dieselbe Pruefung."""
+    def check(value: Any) -> str:
+        v = str(value)
+        if v not in allowed:
+            raise ValueError(f"erlaubt sind {', '.join(allowed)}")
+        return v
+    return check
+
+
 UI_PREFS = {
     DESKTOP_NAV_PREF: _check_nav_desktop,
     NAV_HIDDEN_PREF: _check_nav_hidden,
     DEFAULT_RANGE_PREF: _check_default_range,
+    GRAD_ACTION_PREF: _one_of(ALLOWED_GRADIENTS),
+    GRAD_PROGRESS_PREF: _one_of(ALLOWED_GRADIENTS),
+    GRAD_BACKDROP_PREF: _one_of(ALLOWED_BACKDROPS),
 }
 
 

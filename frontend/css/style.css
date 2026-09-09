@@ -30,8 +30,12 @@
     --accent-strong: #ff4d72;   /* Flaeche mit --accent-ink darauf (6.1:1) */
     --accent-ink: #0a0c10;      /* Schrift auf jeder Akzentflaeche */
     --accent-soft: rgba(255,92,122,0.16);
-    --grad-accent: linear-gradient(135deg, #ff8a5c 0%, #ff5c7a 52%, #ff4d9e 100%);
-    --glow-accent: 0 10px 30px rgba(255,92,122,0.30);
+    --grad-accent: var(--g-sonnenaufgang);
+    --glow-accent: var(--gl-sonnenaufgang);
+    /* Fortschrittsbalken sind eine der vier Stellen mit Verlauf und lassen
+       sich getrennt von der primaeren Aktion einstellen -- deshalb ein
+       eigenes Token statt ueberall --grad-accent. */
+    --grad-progress: var(--grad-accent);
 
     /* --- Modultoene: Identitaet, keine Vollflaechen --- */
     --m-ausgaben: #34e2cd;
@@ -48,6 +52,34 @@
        bleiben: gruener, weniger Cyan. */
     --m-musik:    #1ed760;
     --m-musik-soft: rgba(30,215,96,0.16);
+
+    /* =====================================================================
+       Verlaufs-Presets (v1.74.0)
+       ---------------------------------------------------------------------
+       Verlaeufe gibt es an genau vier Stellen (siehe docs/DESIGN.md 3), und
+       drei davon lassen sich in den Einstellungen umstellen. Die Werte stehen
+       NUR hier: das Frontend setzt lediglich ein Attribut am <html>, so wie
+       beim Theme. Damit bleibt die Regel "keine Hex-Werte in JS" heil.
+
+       Jeder Verlauf ist so hell gewaehlt, dass er --accent-ink (dunkel)
+       tragen kann. Genau deshalb ist das eine feste Liste und kein freier
+       Farbwaehler: bei frei gewaehlten Farben liesse sich der Kontrast der
+       Beschriftung nicht mehr zusichern.
+       ===================================================================== */
+    --g-sonnenaufgang: linear-gradient(135deg, #ff8a5c 0%, #ff5c7a 52%, #ff4d9e 100%);
+    --gl-sonnenaufgang: 0 10px 30px rgba(255,92,122,0.30);
+    --g-nordlicht: linear-gradient(135deg, #34e2cd 0%, #7ab8ff 55%, #b79cff 100%);
+    --gl-nordlicht: 0 10px 30px rgba(122,184,255,0.30);
+    --g-waldlauf: linear-gradient(135deg, #5eea92 0%, #34e2cd 100%);
+    --gl-waldlauf: 0 10px 30px rgba(94,234,146,0.28);
+    --g-abendrot: linear-gradient(135deg, #ffcb45 0%, #ff8a5c 55%, #ff5c7a 100%);
+    --gl-abendrot: 0 10px 30px rgba(255,138,92,0.30);
+    --g-amethyst: linear-gradient(135deg, #b79cff 0%, #fb85c4 100%);
+    --gl-amethyst: 0 10px 30px rgba(183,156,255,0.30);
+    /* "Schlicht" ist bewusst kein Verlauf, sondern die flache Akzentflaeche --
+       fuer alle, denen Verlaeufe zu viel sind. */
+    --g-schlicht: linear-gradient(135deg, #ff4d72 0%, #ff4d72 100%);
+    --gl-schlicht: none;
 
     /* --- Status: helle Toene fuer Text/Marken, NIE mit weisser Schrift --- */
     --ok: #5eea92;      --ok-soft: rgba(94,234,146,0.16);
@@ -79,11 +111,23 @@
     --glass-bg: rgba(18,21,28,0.72);
     --glass-border: rgba(255,255,255,0.08);
 
-    /* --- Backdrop: drei sehr leise Lichter, damit der Grund nicht tot wirkt --- */
-    --backdrop:
+    /* --- Backdrop: drei sehr leise Lichter, damit der Grund nicht tot wirkt.
+       Auch das ist in den Einstellungen umstellbar; die Lichter liegen hinter
+       allem und tragen nie Text, ihre Farbe ist also frei waehlbar. --- */
+    --bd-standard:
         radial-gradient(1200px 600px at 8% -10%, rgba(255,92,122,0.12), transparent 60%),
         radial-gradient(900px 500px at 100% 10%, rgba(122,184,255,0.09), transparent 60%),
         radial-gradient(700px 500px at 50% 110%, rgba(183,156,255,0.08), transparent 60%);
+    --bd-nordlicht:
+        radial-gradient(1200px 600px at 8% -10%, rgba(52,226,205,0.11), transparent 60%),
+        radial-gradient(900px 500px at 100% 10%, rgba(122,184,255,0.10), transparent 60%),
+        radial-gradient(700px 500px at 50% 110%, rgba(94,234,146,0.07), transparent 60%);
+    --bd-warm:
+        radial-gradient(1200px 600px at 8% -10%, rgba(255,203,69,0.10), transparent 60%),
+        radial-gradient(900px 500px at 100% 10%, rgba(255,138,92,0.10), transparent 60%),
+        radial-gradient(700px 500px at 50% 110%, rgba(255,92,122,0.07), transparent 60%);
+    --bd-aus: none;
+    --backdrop: var(--bd-standard);
 
     --focus-ring: 0 0 0 3px rgba(255,92,122,0.45);
 
@@ -112,6 +156,28 @@
     --pink: #fb85c4;  --pink-dark: #db2777;
     --gold: #ffcb45;  --gold-dark: #ca8a04;
 }
+
+/* ---------- Verlaufs-Presets anwenden (v1.74.0) ----------
+   Ein Preset ist ein Attribut am <html>, gesetzt von js/api.js aus den
+   Kontoeinstellungen. Diese Regeln sind KEIN zweites Theme -- das dunkle
+   bleibt das einzige. Sie stellen nur ein, welcher der vier erlaubten
+   Verlaufsplaetze welchen Verlauf traegt. Nicht "aufraeumen". */
+:root[data-grad-action="sonnenaufgang"] { --grad-accent: var(--g-sonnenaufgang); --glow-accent: var(--gl-sonnenaufgang); }
+:root[data-grad-action="nordlicht"] { --grad-accent: var(--g-nordlicht); --glow-accent: var(--gl-nordlicht); }
+:root[data-grad-action="waldlauf"] { --grad-accent: var(--g-waldlauf); --glow-accent: var(--gl-waldlauf); }
+:root[data-grad-action="abendrot"] { --grad-accent: var(--g-abendrot); --glow-accent: var(--gl-abendrot); }
+:root[data-grad-action="amethyst"] { --grad-accent: var(--g-amethyst); --glow-accent: var(--gl-amethyst); }
+:root[data-grad-action="schlicht"] { --grad-accent: var(--g-schlicht); --glow-accent: var(--gl-schlicht); }
+:root[data-grad-progress="sonnenaufgang"] { --grad-progress: var(--g-sonnenaufgang); }
+:root[data-grad-progress="nordlicht"] { --grad-progress: var(--g-nordlicht); }
+:root[data-grad-progress="waldlauf"] { --grad-progress: var(--g-waldlauf); }
+:root[data-grad-progress="abendrot"] { --grad-progress: var(--g-abendrot); }
+:root[data-grad-progress="amethyst"] { --grad-progress: var(--g-amethyst); }
+:root[data-grad-progress="schlicht"] { --grad-progress: var(--g-schlicht); }
+:root[data-grad-backdrop="standard"] { --backdrop: var(--bd-standard); }
+:root[data-grad-backdrop="nordlicht"] { --backdrop: var(--bd-nordlicht); }
+:root[data-grad-backdrop="warm"] { --backdrop: var(--bd-warm); }
+:root[data-grad-backdrop="aus"] { --backdrop: var(--bd-aus); }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -992,7 +1058,7 @@ input[type="checkbox"] { display: inline; width: auto; }
 .exp-prow.is-empty { opacity: 0.45; }
 .exp-pname { color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .exp-pbar { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
-.exp-pbar i { display: block; height: 100%; background: var(--grad-accent); }
+.exp-pbar i { display: block; height: 100%; background: var(--grad-progress); }
 .exp-pnum { color: var(--text-2); font-weight: 650; font-variant-numeric: tabular-nums; }
 .exp-sample {
     margin: 0; max-height: 210px; overflow: auto;
@@ -1336,6 +1402,44 @@ button.rank-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
    die Auswahl ist einwertig, und untereinander liest man sie schneller. */
 .rf .rf-btn { font-variant-numeric: tabular-nums; }
 .rf .rf-caret { opacity: 0.55; margin-left: 0.125rem; }
+/* ---------- Verlaufs-Auswahl in den Einstellungen (v1.74.0) ----------
+   Ein Preset waehlt man nicht am Namen, sondern am Aussehen -- deshalb zeigt
+   jede Kachel den Verlauf selbst. Die Farbwerte kommen dabei aus denselben
+   Tokens, die spaeter auch die Knoepfe faerben; hier steht keine zweite
+   Definition. */
+.grad-slot { padding: var(--space-4) 0; border-top: 1px solid var(--line); }
+.grad-slot:first-child { padding-top: 0; border-top: none; }
+.grad-slot-head { font-size: 0.9375rem; font-weight: 650; color: var(--text-1); }
+.grad-slot-hint { font-size: 0.8125rem; color: var(--text-3); line-height: 1.5;
+    margin: 0.2rem 0 var(--space-3); max-width: 62ch; }
+.grad-opts { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.grad-opt {
+    width: auto; margin: 0; padding: 0.375rem 0.375rem 0.4375rem;
+    display: flex; flex-direction: column; gap: 0.3rem; align-items: stretch;
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 10px; cursor: pointer;
+    font-size: 0.6875rem; font-weight: 600; color: var(--text-3);
+    min-width: 6.5rem;
+}
+.grad-opt:hover { border-color: var(--line-strong); color: var(--text-1); opacity: 1; }
+.grad-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.grad-opt.is-active { border-color: var(--accent); color: var(--accent); }
+.grad-opt i { display: block; height: 22px; border-radius: 6px; background: var(--line); }
+/* Die Vorschau eines Hintergrund-Presets ist fast unsichtbar (die Lichter sind
+   sehr leise). Auf dunklem Grund bleibt sie erkennbar, wenn sie den
+   Seitenhintergrund als Unterlage bekommt. */
+.grad-opt.is-backdrop i { background-color: var(--bg); }
+.grad-opt[data-grad="sonnenaufgang"] i { background-image: var(--g-sonnenaufgang); }
+.grad-opt[data-grad="nordlicht"] i     { background-image: var(--g-nordlicht); }
+.grad-opt[data-grad="waldlauf"] i      { background-image: var(--g-waldlauf); }
+.grad-opt[data-grad="abendrot"] i      { background-image: var(--g-abendrot); }
+.grad-opt[data-grad="amethyst"] i      { background-image: var(--g-amethyst); }
+.grad-opt[data-grad="schlicht"] i      { background-image: var(--g-schlicht); }
+.grad-opt.is-backdrop[data-grad="standard"] i  { background-image: var(--bd-standard); }
+.grad-opt.is-backdrop[data-grad="nordlicht"] i { background-image: var(--bd-nordlicht); }
+.grad-opt.is-backdrop[data-grad="warm"] i      { background-image: var(--bd-warm); }
+.grad-opt.is-backdrop[data-grad="aus"] i       { background-image: none; }
+
 .rf-presets { display: flex; flex-direction: column; gap: 2px; }
 .rf-opt {
     display: flex; align-items: center; justify-content: space-between;

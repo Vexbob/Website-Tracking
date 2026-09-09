@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.74.0', date: '2026-09-09', title: 'Farbverläufe selbst wählen', notes: [
+        'In den Einstellungen gibt es jetzt für drei Stellen je ein Verlaufs-Preset: primäre Aktion, Fortschrittsbalken und die Hintergrundlichter.',
+        'Sechs Verläufe stehen zur Wahl, dazu „Schlicht“ ganz ohne Verlauf; der Hintergrund kennt zusätzlich „Aus“.',
+        'Jede Kachel zeigt den Verlauf selbst, und die Seite färbt sich beim Klicken sofort um — die Einstellung hängt am Konto und gilt auf jedem Gerät.',
+        'Die vierte Verlaufsstelle, die Diagrammfüllungen, bleibt fest: sie bekommt ihre Farbe vom Modul und ist damit Identität, keine Vorliebe.',
+        'Die Auswahl ist bewusst eine feste Liste — jedes Preset ist hell genug, damit die dunkle Beschriftung darauf lesbar bleibt.',
+    ]},
     { v: 'v1.73.0', date: '2026-09-09', title: 'Sparziel: das Dashboard zieht nach', notes: [
         'Das Dashboard steht jetzt auf demselben Stand wie „Ideen & Ziele“: Kennzahlen als Kacheln statt als Kleingedrucktes, Abschnitte mit Zähler und einem Satz dazu, und der Verlauf hat endlich eine Überschrift.',
         'Der Check-in ist als die eine Aktion der Karte erkennbar; ein erledigtes Wochenziel wird ruhig statt grellgrün.',

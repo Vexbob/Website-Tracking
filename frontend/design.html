@@ -33,7 +33,7 @@
 .sg-motion-demo {
     width: 100%; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden;
 }
-.sg-motion-demo i { display: block; height: 100%; width: 35%; background: var(--grad-accent); }
+.sg-motion-demo i { display: block; height: 100%; width: 35%; background: var(--grad-progress); }
 .sg-do-dont { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 @media (max-width: 600px) { .sg-do-dont { grid-template-columns: 1fr; } }
 .sg-chart { height: 200px; }
@@ -165,6 +165,25 @@
             <span class="empty-mark">⚠️</span>
             <p class="empty-text">Die Ausgaben konnten nicht geladen werden.</p>
             <button class="v-btn v-btn--sm">Erneut versuchen</button>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Verlaufs-Presets</h2>
+        <p class="sg-note">Verläufe gibt es an vier Stellen; drei davon wählt der Nutzer in den
+        Einstellungen. Die Werte stehen als Tokens (<code>--g-…</code>, <code>--bd-…</code>) nur
+        in <code>style.css</code> — das Frontend setzt lediglich ein Attribut am
+        <code>&lt;html&gt;</code>, wie beim Theme. <strong>Ein neuer Fortschrittsbalken nimmt
+        <code>--grad-progress</code>, nicht <code>--grad-accent</code></strong>, sonst folgt er
+        der Einstellung für die Aktionen. Die Liste ist geschlossen: jedes Preset muss hell genug
+        sein, um <code>--accent-ink</code> zu tragen.</p>
+        <div class="grad-opts">
+            <button type="button" class="grad-opt is-active" data-grad="sonnenaufgang"><i aria-hidden="true"></i><span>Sonnenaufgang</span></button>
+            <button type="button" class="grad-opt" data-grad="nordlicht"><i aria-hidden="true"></i><span>Nordlicht</span></button>
+            <button type="button" class="grad-opt" data-grad="waldlauf"><i aria-hidden="true"></i><span>Waldlauf</span></button>
+            <button type="button" class="grad-opt" data-grad="abendrot"><i aria-hidden="true"></i><span>Abendrot</span></button>
+            <button type="button" class="grad-opt" data-grad="amethyst"><i aria-hidden="true"></i><span>Amethyst</span></button>
+            <button type="button" class="grad-opt" data-grad="schlicht"><i aria-hidden="true"></i><span>Schlicht</span></button>
         </div>
     </section>
 

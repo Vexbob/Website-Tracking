@@ -86,7 +86,7 @@
 .prod-reparse-btn:hover{border-color:var(--line-strong)}
 .reparse-progress{display:flex;flex-direction:column;gap:0.5rem}
 .reparse-bar-wrap{background:var(--surface-2);border-radius:8px;overflow:hidden;height:14px;border:1px solid var(--line)}
-.reparse-bar{background:var(--grad-accent);height:100%;width:0;transition:width var(--dur-2) var(--ease);border-radius:8px}
+.reparse-bar{background:var(--grad-progress);height:100%;width:0;transition:width var(--dur-2) var(--ease);border-radius:8px}
 .reparse-log{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:0.5rem 0.75rem;
     max-height:180px;overflow:auto;font-family:ui-monospace,monospace;font-size:0.75rem;color:var(--text-muted);white-space:pre-line}
 .reparse-log .ok{color:var(--green-dark)}

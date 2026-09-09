@@ -99,6 +99,24 @@ Farbe ist Information, nicht Dekoration.
 die primäre Aktion, Fortschrittsbalken und Diagrammfüllungen. Alle vier tragen
 keinen Text. Hinter Zahlen liegt nie ein Verlauf.
 
+**Drei davon sind einstellbar** (v1.74.0). In den Einstellungen wählt man je
+ein Preset für die primäre Aktion (`--grad-accent`), die Fortschrittsbalken
+(`--grad-progress`) und die Hintergrundlichter (`--backdrop`). Die vierte
+Stelle — Diagrammfüllungen — bleibt fest: sie bekommt ihre Farbe vom Modulton,
+und der ist Identität, keine Vorliebe.
+
+- Die Presets stehen als Tokens (`--g-…`, `--bd-…`) **ausschließlich** in
+  `css/style.css`. Das Frontend setzt nur ein Attribut am `<html>`
+  (`data-grad-action` und Geschwister), genau wie beim Theme — dadurch bleibt
+  „keine Hex-Werte in JS" heil und ein Preset ist an einer Stelle definiert.
+- Die Auswahl ist eine **geschlossene Liste**, kein Farbwähler. Jedes Preset
+  ist hell genug, um `--accent-ink` zu tragen; bei frei gewählten Farben ließe
+  sich der Kontrast der Beschriftung nicht mehr zusichern, und genau das ist
+  die Regel, die über allem steht.
+- Ein neuer Fortschrittsbalken nimmt `--grad-progress`, nicht `--grad-accent`.
+  Sonst folgt er der Einstellung für die Aktionen und wandert bei der nächsten
+  Umstellung mit der falschen Gruppe.
+
 ## 4. Zustände
 
 Jede interaktive Fläche kennt sieben Zustände. Fehlt einer, ist die Komponente
