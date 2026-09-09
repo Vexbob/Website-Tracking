@@ -630,10 +630,14 @@ input[type="checkbox"] { display: inline; width: auto; }
     display: inline-flex; align-items: center; gap: 0.35rem;
 }
 .tab-btn:hover  { color: var(--text); }
+/* Der ausgewählte Reiter liegt IN der Leiste (--surface-2) und muss deshalb
+   eine Stufe HÖHER liegen, nicht tiefer. `--surface` ist ein Alt-Name für
+   --surface-1 und war damit dunkler als sein eigener Behälter: der aktive
+   Reiter trat zurück, statt hervorzutreten. */
 .tab-btn.active {
-    color: var(--text);
-    background: var(--surface);
-    box-shadow: var(--shadow-sm), 0 0 0 1px var(--border);
+    color: var(--text-1);
+    background: var(--surface-3);
+    box-shadow: var(--shadow-sm), 0 0 0 1px var(--line-strong);
 }
 .tab-btn:active { transform: scale(0.97); }
 /* Falls .tabs als volle Zeile gewünscht: .tabs.full { display: flex; } */

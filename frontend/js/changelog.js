@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.73.0', date: '2026-09-09', title: 'Sparziel: das Dashboard zieht nach', notes: [
+        'Das Dashboard steht jetzt auf demselben Stand wie „Ideen & Ziele“: Kennzahlen als Kacheln statt als Kleingedrucktes, Abschnitte mit Zähler und einem Satz dazu, und der Verlauf hat endlich eine Überschrift.',
+        'Der Check-in ist als die eine Aktion der Karte erkennbar; ein erledigtes Wochenziel wird ruhig statt grellgrün.',
+        'Das satte Gold der Trophäen und Abschluss-Knöpfe ist getönt statt Vollfläche — dieselbe Bedeutung, ohne die Seite zu übertönen.',
+        'Der Fortschrittsbalken trug das Blau der Notizen; er trägt jetzt den Sparziel-Ton.',
+        'Der ausgewählte Reiter lag eine Ebene tiefer als seine eigene Leiste und trat dadurch zurück statt hervor — das galt in allen Modulen.',
+    ]},
     { v: 'v1.72.0', date: '2026-09-09', title: 'Sparziel: Fenster statt Aufklappen, lesbare Knöpfe', notes: [
         'Die fünf Anlege-Formulare öffnen sich als Fenster, statt sich zwischen Überschrift und Liste aufzuklappen und alles darunter wegzuschieben.',
         'Weiße Schrift auf hellen Flächen ist raus: „Check-in“, „Nochmal“, die Streak-Pille und zehn weitere Stellen standen mit 1,6:1 bis 2,4:1 praktisch unlesbar da.',

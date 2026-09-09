@@ -220,6 +220,15 @@ function closeForm(){
     setTimeout(() => f.overlay.remove(), 180);
 }
 
+// Der Zaehler neben einer Abschnittsueberschrift. Bei null verschwindet er --
+// eine "0" neben "Achievements" ist keine Information, nur ein Fleck.
+function setCount(id, n){
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.textContent = n;
+    el.hidden = !n;
+}
+
 function toggleForm(id){
     if(openForm && openForm.id === id){ closeForm(); return; }
     if(openForm) closeForm();
@@ -420,6 +429,7 @@ async function loadAchievements(){
 }
 function renderAchievements(){
     const g=document.getElementById('achGrid');
+    setCount('achCount', achData.length);
     if(loadErrors.ach){g.innerHTML='<div class="retry-empty">Laden fehlgeschlagen.<br><button onclick="loadAchievements()">Nochmal versuchen</button></div>';return;}
     if(!achData.length){g.innerHTML='<div class="retry-empty">Noch keine Achievements.</div>';return;}
     g.innerHTML=achData.map((a,i)=>{
@@ -635,6 +645,7 @@ async function loadProgressGoals(){
 }
 function renderProgressGoals(){
     const l=document.getElementById('pgList');
+    setCount('pgCount', pgData.length);
     if(loadErrors.pg){l.innerHTML='<div class="retry-empty">Laden fehlgeschlagen.<br><button onclick="loadProgressGoals()">Nochmal versuchen</button></div>';return;}
     if(!pgData.length){l.innerHTML='<div class="retry-empty">Noch keine Wochenziele.</div>';return;}
     l.innerHTML=pgData.map(g=>{

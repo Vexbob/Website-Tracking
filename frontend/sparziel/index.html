@@ -78,14 +78,18 @@
                     <button class="save" onclick="saveSparziel()">Speichern</button>
                 </div>
                 <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--line);text-align:right">
-                    <button onclick="openCompleteModal()" style="width:auto;padding:0.4375rem 0.875rem;font-size:0.8125rem;background:linear-gradient(135deg,#fde047,#eab308);color:#78350f;font-weight:700;border:none;border-radius:8px;margin:0">🏆 Ziel abschließen</button>
+                    <button class="sz-finish" onclick="openCompleteModal()">🏆 Ziel abschließen</button>
                 </div>
             </div>
+            <div class="hero-chart-head">Verlauf des Sparstands</div>
             <div class="hero-chart"><canvas id="chartSavings"></canvas></div>
         </div>
 
         <div class="sh">
-            <h2>Wochenziele <span class="period-lbl" id="pgPeriodLbl"></span></h2>
+            <div class="sh-head">
+                <h2>Wochenziele <span class="sh-count" id="pgCount">0</span><span class="period-lbl" id="pgPeriodLbl"></span></h2>
+                <p class="sh-sub">Wiederkehrende Vorhaben mit fester Belohnung. Jeder Check-in zahlt auf das aktive Sparziel ein; eine Serie bringt zusätzlich den Streak-Bonus.</p>
+            </div>
             <button class="sh-add" onclick="toggleForm('pgForm')">+ Neu</button>
         </div>
         <div id="pgForm" class="iform">
@@ -102,7 +106,13 @@
         </div>
         <div id="pgList" class="pg-list"></div>
 
-        <div class="sh"><h2>Achievements</h2><button class="sh-add" onclick="toggleForm('achForm')">+ Neu</button></div>
+        <div class="sh">
+            <div class="sh-head">
+                <h2>Achievements <span class="sh-count" id="achCount">0</span></h2>
+                <p class="sh-sub">Einmalige Meilensteine auf dem Weg zu einer Zahl — jede erreichte Stufe zahlt ihre Belohnung aus.</p>
+            </div>
+            <button class="sh-add" onclick="toggleForm('achForm')">+ Neu</button>
+        </div>
         <div id="achForm" class="iform">
             <label style="display:block;margin-bottom:6px">Preset</label>
             <div class="presets">
