@@ -152,6 +152,10 @@ td, .num, .amount, [data-num] { font-variant-numeric: tabular-nums; }
     transition: color 0.15s, background 0.15s;
     display: inline-flex; align-items: center; gap: 4px;
     font-weight: 500;
+    /* Ohne das bricht "👤 Etienne" auf schmalen Bildschirmen in zwei Zeilen,
+       die Leiste wird dadurch hoeher als auf jeder anderen Seite und die
+       uebrigen Knoepfe stehen nicht mehr auf einer Linie. */
+    white-space: nowrap; flex: none;
 }
 .nav-btn:hover { color: var(--text); background: var(--surface-2); }
 
@@ -422,6 +426,17 @@ input[type="checkbox"] { display: inline; width: auto; }
     padding: 0.4375rem 1rem; font-size: 0.8125rem;
     background: var(--text); color: var(--surface);
     border: none; border-radius: 6px; font-weight: 600; cursor: pointer;
+}
+
+@media (max-width: 560px) {
+    /* Die Leiste soll auf dem Handy dieselbe Hoehe und Ruhe haben wie ueberall
+       sonst. Der eigene Benutzername beantwortet dort keine Frage -- wer
+       eingeloggt ist, weiss man; nachschlagen laesst er sich in den
+       Einstellungen. Weg damit, statt drei Knoepfe zu quetschen. */
+    .navbar #userLabel { display: none; }
+    .navbar { gap: 0.5rem; }
+    .nav-right { gap: 0.25rem; }
+    .nav-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 }
 
 @media (max-width: 500px) {
@@ -1283,7 +1298,7 @@ button.rank-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 }
 .filter-popover{
     position:absolute;top:calc(100% + 6px);right:0;
-    min-width:280px;max-width:min(340px,calc(100vw - 1.5rem));
+    min-width:min(280px,calc(100vw - 1.5rem));max-width:min(340px,calc(100vw - 1.5rem));
     background:var(--surface-3);border:1px solid var(--line-strong);
     border-radius:var(--radius-lg);box-shadow:var(--shadow-float);
     padding:0.875rem;z-index:80;
@@ -1292,11 +1307,20 @@ button.rank-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 }
 @keyframes fpIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
 .filter-popover[hidden]{display:none}
-.fp-row{display:flex;flex-direction:column;gap:0.25rem}
-.fp-row.fp-two{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
-.fp-row.fp-two>div{display:flex;flex-direction:column;gap:0.25rem}
+/* Schmale Bildschirme: nie mehr Breite verlangen, als das Display hat.
+   min-width gewinnt in CSS gegen max-width -- die feste Untergrenze von
+   280px hat das Feld auf schmalen Geraeten aus dem Rahmen gedrueckt. */
+.fp-row{display:flex;flex-direction:column;gap:0.25rem;min-width:0}
+/* `1fr` heisst `minmax(auto, 1fr)`, und dieses `auto` ist die MIN-CONTENT-
+   Breite des Inhalts: ein Datumsfeld laesst sich damit nicht schmaler machen
+   als seine native Darstellung. In Safari auf dem iPhone ist die deutlich
+   breiter als in Chrome -- deshalb liefen genau dort die beiden Von/Bis-Felder
+   aus dem Popover heraus, und nur dort. `minmax(0, 1fr)` erlaubt das
+   Schrumpfen. */
+.fp-row.fp-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0.5rem}
+.fp-row.fp-two>div{display:flex;flex-direction:column;gap:0.25rem;min-width:0}
 .fp-label{font-size:0.6875rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-faint);margin:0}
-.fp-row select,.fp-row input{padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px}
+.fp-row select,.fp-row input{padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;width:100%;min-width:0;max-width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px}
 .fp-actions{display:flex;gap:0.5rem;margin-top:0.25rem;padding-top:0.625rem;border-top:1px solid var(--border)}
 .fp-btn{flex:1;padding:0.5rem 0.75rem;font-size:0.8125rem;font-weight:600;border-radius:8px;cursor:pointer;width:auto;margin:0;border:1px solid transparent}
 .fp-btn-ghost{background:var(--surface-2);color:var(--text-muted);border-color:var(--border)}

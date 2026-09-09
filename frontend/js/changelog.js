@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.69.0', date: '2026-09-09', title: 'Handy: Filterfelder und Navigationsleiste', notes: [
+        'In den Filter-Feldern liefen „Von“ und „Bis“ auf dem iPhone aus dem Rahmen — die beiden Spalten konnten nicht schmaler werden als die native Darstellung eines Datumsfeldes.',
+        'Ein Filter-Feld verlangt jetzt nie mehr Breite, als das Display hergibt.',
+        'Die Navigationsleiste bleibt auf dem Handy einzeilig: der eigene Benutzername brach in zwei Zeilen um und machte die Leiste höher als auf jeder anderen Seite.',
+        'Auf schmalen Bildschirmen steht der Name gar nicht mehr in der Leiste — wer eingeloggt ist, weiß man, und der Platz fehlte den übrigen Knöpfen.',
+    ]},
     { v: 'v1.68.0', date: '2026-09-08', title: 'Export mit Höchstgröße', notes: [
         'Der Gesamt-Export kennt jetzt eine Höchstgröße: Größe wählen, und er stellt die Aggregation selbst so ein, dass die Datei darunter bleibt.',
         'Gröber wird dabei nur die Zeit — Sektionen und Spalten bleiben, wie du sie gewählt hast.',
