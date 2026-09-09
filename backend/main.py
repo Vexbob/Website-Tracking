@@ -1640,14 +1640,56 @@ async def st_sp(db=Depends(get_db), user=Depends(get_current_user)):
     if sg_id is None:
         return []
     rows = await db.fetch(
-        "SELECT created_at, amount FROM savings_transactions "
-        "WHERE user_id=$1 AND savings_goal_id=$2 ORDER BY created_at",
+        "SELECT created_at::date AS tag, SUM(amount) AS betrag "
+        "  FROM savings_transactions "
+        " WHERE user_id=$1 AND savings_goal_id=$2 AND created_at IS NOT NULL "
+        " GROUP BY 1 ORDER BY 1",
         user["id"], sg_id)
-    c = 0; out = []
-    for r in rows:
-        c += float(r["amount"])
-        out.append({"date": r["created_at"].isoformat() if r["created_at"] else None, "cumulative": c})
-    return out
+    goal = await db.fetchrow(
+        "SELECT id, name, target_amount FROM savings_goals WHERE id=$1", sg_id)
+    meta = {"goal": ser(goal) if goal else None, "from": None, "to": None,
+            "step": "tag", "points": []}
+    if not rows:
+        return meta
+
+    # v1.76.0: Tag fuer Tag statt ein Punkt je Buchung.
+    #
+    # Vorher war die x-Achse ausgeblendet, und das aus gutem Grund: die Punkte
+    # lagen in den Abstaenden der Buchungen, nicht in denen der Zeit. Eine
+    # Woche ohne Einzahlung sah damit genauso breit aus wie ein Tag mit drei.
+    # Jetzt traegt jeder Kalendertag seinen Punkt, der Stand wird
+    # fortgeschrieben, und ``added`` sagt, an welchen Tagen etwas dazukam --
+    # daraus zeichnet die Oberflaeche die Marken.
+    #
+    # Die Reihe beginnt am ersten Eintrag DIESES Ziels. Buchungen haengen an
+    # ihrem Ziel; ein zwischenzeitlich aktiviertes anderes Ziel laesst diese
+    # Kurve deshalb unberuehrt, statt eine Luecke zu hinterlassen.
+    first = rows[0]["tag"]
+    last = max(rows[-1]["tag"], date.today())
+    span = (last - first).days + 1
+
+    # Eine Notbremse fuer sehr alte Ziele: ueber vier Jahre taeglich waeren
+    # ~1500 Punkte, die kein Diagramm mehr aufloest. Dann wochenweise, und
+    # die Antwort sagt es, damit die Beschriftung nicht luegt.
+    step_days = 1
+    if span > 1500:
+        step_days, meta["step"] = 7, "woche"
+
+    per_day = {r["tag"]: float(r["betrag"] or 0) for r in rows}
+    points = []
+    total = 0.0
+    day = first
+    while day <= last:
+        added = 0.0
+        for k in range(step_days):
+            added += per_day.get(day + timedelta(days=k), 0.0)
+        total += added
+        points.append({"date": day.isoformat(), "cumulative": round(total, 2),
+                       "added": round(added, 2)})
+        day += timedelta(days=step_days)
+
+    meta.update({"from": first.isoformat(), "to": last.isoformat(), "points": points})
+    return meta
 
 @app.get("/api/trophies")
 async def list_trophies(db=Depends(get_db), user=Depends(get_current_user)):

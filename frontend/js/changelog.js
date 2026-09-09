@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.76.0', date: '2026-09-09', title: 'Sparziel-Verlauf mit echter Zeitachse', notes: [
+        'Der Verlauf zeigt jetzt jeden Kalendertag ab dem ersten Eintrag des Ziels — vorher lag ein Punkt je Buchung auf der Kurve und die Achse war deshalb ausgeblendet.',
+        'Eine Woche ohne Einzahlung sah dadurch genauso breit aus wie ein Tag mit drei Buchungen; jetzt stimmen die Abstände.',
+        'Tage mit Zugang tragen einen Punkt, und der Tooltip nennt neben dem Stand auch, wie viel an dem Tag dazukam.',
+        'Buchungen hängen weiterhin an ihrem Ziel — ein zwischenzeitlich aktiviertes anderes Sparziel lässt die Kurve unberührt.',
+    ]},
     { v: 'v1.75.0', date: '2026-09-09', title: 'Konto-Menü mit Themen, ruhigere Navigationsleiste', notes: [
         'Ein Klick auf den eigenen Namen öffnet ein Menü: Thema wechseln, Einstellungen, Logout — vorher standen die drei Dinge nebeneinander in der Leiste.',
         'Ein Thema setzt alle drei Verlaufs-Stellen auf einmal; eigene Zusammenstellungen lassen sich unter einem Namen sichern und stehen dann überall zur Wahl.',

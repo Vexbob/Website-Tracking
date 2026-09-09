@@ -1,4 +1,4 @@
-let chartSavings=null, chartData=[], glGoalId=null, glTarget=0, glTotal=0;
+let chartSavings=null, chartData={}, glGoalId=null, glTarget=0, glTotal=0;
 let achData=[], pgData=[], logRaw=[], logFilter='all', logView='weekly';
 let trophyData=[];
 let bufferInfo=null;            // v1.43.0: Puffer-Konto {id,name,saved_amount}
@@ -310,7 +310,7 @@ async function loadSparziel(){
             glGoalId=null; glTarget=0; glTotal=0;
             prevGlTotal=null; prevGlPct=null; prevWasComplete=false;
             document.getElementById('heroEdit').classList.remove('open');
-            chartData=await apiCall('/api/stats/savings-progress')||[];
+            chartData=await apiCall('/api/stats/savings-progress')||{};
             renderSparzielChart();
             return;
         }
@@ -362,7 +362,7 @@ async function loadSparziel(){
         }
         prevWasComplete = isComplete;
 
-        chartData=await apiCall('/api/stats/savings-progress')||[];
+        chartData=await apiCall('/api/stats/savings-progress')||{};
         renderSparzielChart();
     }catch(e){showToast('Sparziel laden fehlgeschlagen',true);console.error(e);}
 }
@@ -378,20 +378,51 @@ async function saveSparziel(){
         await loadSparziel();
     }catch(e){showToast('Fehler',true);haptic('error');}
 }
+/* v1.76.0: Der Verlauf hat eine echte Zeitachse.
+ *
+ * Vorher lag ein Punkt je BUCHUNG auf der Kurve und die x-Achse war
+ * ausgeblendet -- zwangslaeufig, denn die Punkte standen in den Abstaenden
+ * der Einzahlungen, nicht in denen der Zeit: eine Woche ohne Geld sah so
+ * breit aus wie ein Tag mit drei Buchungen. Jetzt liefert der Server jeden
+ * Kalendertag ab dem ersten Eintrag DIESES Ziels, und die Achse zeigt Daten.
+ *
+ * Tage mit Zugang bekommen einen Punkt, alle anderen keinen -- damit sieht
+ * man auf einen Blick, WANN etwas dazukam, ohne dass die Linie in Punkten
+ * ertrinkt.
+ */
 function renderSparzielChart(){
     try{
         const ctx=document.getElementById('chartSavings').getContext('2d');
         if(chartSavings)chartSavings.destroy();
         const cssVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
         const tick=cssVar('--chart-axis');
+        const pts=chartData.points||[];
+        const full=pts.map(x=>VexCharts.fullDay(x.date));
+        const marks=pts.map(x=>Number(x.added||0)>0);
         chartSavings=new Chart(ctx,{
             type:'line',
-            data:{labels:chartData.map(x=>fmtShortDate(x.date)),datasets:[{data:chartData.map(x=>Number(x.cumulative||0)),borderColor:cssVar('--m-sparziel'),backgroundColor:cssVar('--ok-soft'),fill:true,tension:0.35,pointRadius:0,pointHoverRadius:4,borderWidth:2}]},
+            data:{labels:pts.map(x=>fmtShortDate(x.date)),datasets:[{
+                data:pts.map(x=>Number(x.cumulative||0)),
+                borderColor:cssVar('--m-sparziel'),backgroundColor:cssVar('--ok-soft'),
+                fill:true,tension:0.2,borderWidth:2,
+                pointRadius:pts.map((x,i)=>marks[i]?3:0),
+                pointBackgroundColor:cssVar('--m-sparziel'),
+                pointBorderColor:cssVar('--surface-1'),pointBorderWidth:1.5,
+                pointHoverRadius:5}]},
             options:{responsive:true,maintainAspectRatio:false,
                 plugins:{legend:{display:false},tooltip:{callbacks:{
-                    title:VexCharts.titleFrom(chartData.map(x=>VexCharts.fullDay(x.date))),
-                    label:c=>' '+fmtEur(c.parsed.y)}}},
-                scales:{x:{display:false},y:{beginAtZero:true,ticks:{color:tick,font:{size:11},callback:v=>fmtEur(v)},grid:{color:cssVar('--chart-grid')},border:{display:false}}}
+                    title:VexCharts.titleFrom(full),
+                    label:c=>{
+                        const p=pts[c.dataIndex]||{};
+                        const zu=Number(p.added||0);
+                        return zu>0?[' '+fmtEur(c.parsed.y),' davon heute +'+fmtEur(zu)]
+                                   :' '+fmtEur(c.parsed.y);
+                    }}}},
+                scales:{
+                    x:{display:true,ticks:{color:tick,font:{size:11},maxRotation:0,
+                        autoSkip:true,autoSkipPadding:16},
+                       grid:{display:false},border:{display:false}},
+                    y:{beginAtZero:true,ticks:{color:tick,font:{size:11},callback:v=>fmtEur(v)},grid:{color:cssVar('--chart-grid')},border:{display:false}}}
             }
         });
     }catch(e){console.error(e);}
