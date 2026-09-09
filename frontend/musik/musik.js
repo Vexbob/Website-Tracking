@@ -46,6 +46,40 @@ const STEPS = [
 ];
 const STEP_LABEL = Object.fromEntries(STEPS.map(s => [s.key, s.label]));
 
+/* ---------------------------------------------------------- Musik ≠ Podcast
+ *
+ * Der Spotify-Export legt bei Podcasts die SHOW ins Feld „Interpret" und die
+ * EPISODE in „Titel", bei Hörbüchern das Buch und das Kapitel. Dieselbe
+ * Spalte bedeutet also je nach Art etwas anderes — „610 Titel" über beides
+ * gerechnet vermischt zwei Dinge, und „Interpret: Lage der Nation" ist
+ * schlicht falsch.
+ *
+ * Deshalb wechselt mit der Art das ganze Vokabular: Überschriften, Kennzahlen
+ * und Spaltenköpfe. Der Ton ebenso — Musik trägt den Modulton (Spotify-Grün),
+ * Podcast und Hörbuch je eine eigene Diagrammfarbe, damit sie im gestapelten
+ * Verlauf auseinanderzuhalten sind.
+ */
+const VOCAB = {
+    'Musik':   { who: 'Interpret', what: 'Titel',   whos: 'Interpreten', whats: 'Titel',
+                 plays: 'Wiedergaben', unit: 'Wiedergaben',
+                 tone: '--m-musik', mark: '🎵', whoMark: '🎤' },
+    'Podcast': { who: 'Show',      what: 'Episode', whos: 'Shows',       whats: 'Episoden',
+                 plays: 'Gehörte Folgen', unit: 'Folgen',
+                 tone: '--chart-2', mark: '🎙️', whoMark: '🎙️' },
+    'Hörbuch': { who: 'Buch',      what: 'Kapitel', whos: 'Bücher',      whats: 'Kapitel',
+                 plays: 'Gehörte Kapitel', unit: 'Kapitel',
+                 tone: '--chart-5', mark: '📖', whoMark: '📚' },
+};
+// Ohne Spalte „Art" in der CSV lässt sich nichts unterscheiden — dann gilt
+// die neutrale Fassung, und die Oberfläche behauptet keine Trennung, die die
+// Daten nicht hergeben.
+const VOCAB_ANY = {
+    who: 'Interpret', what: 'Titel', whos: 'Interpreten', whats: 'Titel',
+    plays: 'Wiedergaben', unit: 'Wiedergaben',
+    tone: '--m-musik', mark: '🎵', whoMark: '🎤',
+};
+const vocab = (kind) => VOCAB[kind] || VOCAB_ANY;
+
 /* Der gesamte Filterzustand an einer Stelle. Alles, was lädt, liest hier. */
 const state = {
     tab: 'ueberblick',
@@ -201,45 +235,85 @@ function chartBase(fullLabels) {
     }, fullLabels);
 }
 
+/* Der Verlauf. Sind mehrere Arten im Spiel und keine davon ausgewählt, wird
+   gestapelt — sonst sähe ein Podcast-Monat aus wie ein Musik-Monat. Bei einer
+   einzelnen Art trägt die Reihe deren Ton. */
 function drawSeries(data) {
     const canvas = document.getElementById('mChartSeries');
     if (state.charts.series) state.charts.series.destroy();
     const points = fillGaps(data.points || [], data.grain);
     const labels = points.map(p => shortPeriod(p.period, data.grain));
     const full = points.map(p => fullPeriod(p.period, data.grain));
+    const byKind = (data.series || []).filter(s => s.plays > 0);
+    const stacked = !state.kind && byKind.length > 1;
+
+    // Die aufgeteilten Reihen sind an denselben Perioden ausgerichtet wie
+    // `points` — nach dem Lückenfüllen muss die Ausrichtung mitwandern.
+    const at = new Map((data.points || []).map((p, i) => [p.period, i]));
+    const valuesOf = (s) => points.map(p => {
+        const i = at.get(p.period);
+        return i == null ? 0 : (s.values[i] || 0);
+    });
+
+    const datasets = stacked
+        ? byKind.map(s => ({
+            label: s.kind,
+            data: valuesOf(s),
+            backgroundColor: cssVar(vocab(s.kind).tone),
+            borderRadius: 6,
+            borderSkipped: false,
+            order: VexCharts.ORDER.VALUE,
+        }))
+        : [{
+            label: state.kind || 'Wiedergaben',
+            data: points.map(p => p.plays),
+            // Die erste Reihe trägt den Modulton, nicht den Akzent
+            // (DESIGN.md 7) — hier ist das Spotify-Grün.
+            backgroundColor: cssVar(vocab(state.kind).tone),
+            borderRadius: 6,
+            borderSkipped: false,
+            order: VexCharts.ORDER.VALUE,
+        }];
+
+    const opts = chartBase(full);
+    opts.plugins.tooltip.callbacks = {
+        title: VexCharts.titleFrom(full),
+        label: (item) => {
+            if (stacked) {
+                const v = vocab(item.dataset.label);
+                return item.dataset.label + ': ' + fmtInt(item.parsed.y) + ' ' + v.unit;
+            }
+            const p = points[item.dataIndex];
+            const v = vocab(state.kind);
+            const parts = [fmtInt(p.plays) + ' ' + v.unit];
+            if (p.titles) parts.push(fmtInt(p.titles) + ' ' + v.whats);
+            const dur = fmtDuration(p.ms_played);
+            if (dur) parts.push(dur);
+            return parts;
+        },
+    };
+    if (stacked) {
+        opts.scales.x.stacked = true;
+        opts.scales.y.stacked = true;
+        // Direkt beschriftet wird über die eigene Legende unter der
+        // Überschrift — Chart.js' eigene passt nicht zur Designsprache.
+        opts.plugins.tooltip.mode = 'index';
+        opts.plugins.tooltip.intersect = false;
+    }
 
     state.charts.series = new Chart(canvas, {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                data: points.map(p => p.plays),
-                // Die erste Reihe trägt den Modulton, nicht den Akzent
-                // (DESIGN.md 7) — hier ist das Spotify-Grün.
-                backgroundColor: cssVar('--m-musik'),
-                borderRadius: 6,
-                borderSkipped: false,
-                order: VexCharts.ORDER.VALUE,
-            }],
-        },
-        options: Object.assign(chartBase(full), {
-            plugins: Object.assign(chartBase(full).plugins, {
-                tooltip: Object.assign(chartBase(full).plugins.tooltip, {
-                    callbacks: {
-                        title: VexCharts.titleFrom(full),
-                        label: (item) => {
-                            const p = points[item.dataIndex];
-                            const parts = [fmtInt(p.plays) + ' Wiedergaben'];
-                            if (p.titles) parts.push(fmtInt(p.titles) + ' Titel');
-                            const dur = fmtDuration(p.ms_played);
-                            if (dur) parts.push(dur);
-                            return parts;
-                        },
-                    },
-                }),
-            }),
-        }),
+        type: 'bar', data: { labels, datasets }, options: opts,
     });
+    renderSeriesLegend(stacked ? byKind : []);
+}
+
+function renderSeriesLegend(kinds) {
+    const box = document.getElementById('mSeriesLegend');
+    if (!box) return;
+    box.innerHTML = kinds.map(s =>
+        '<span class="m-legend-item">' +
+            '<i style="background:var(' + vocab(s.kind).tone + ')"></i>' +
+            esc(s.kind) + '</span>').join('');
 }
 
 /* ------------------------------------------------------------ Überblick */
@@ -255,13 +329,20 @@ function kpiCard(label, value, sub, icon) {
 
 function renderKpis(sum) {
     const box = document.getElementById('mKpis');
+    const v = vocab(state.kind);
     const span = (sum.from && sum.to)
         ? fmtDay(sum.from) + ' – ' + fmtDay(sum.to) : 'noch nichts importiert';
     const dur = fmtDuration(sum.ms_played);
+    // Steht keine Art im Filter, aber mehrere im Register, sagt die Kachel
+    // gleich die Aufteilung — sonst ist "4.320" eine Zahl über zwei Dinge.
+    const kinds = (sum.by_kind || []).filter(k => k.plays > 0);
+    const splitSub = (!state.kind && kinds.length > 1)
+        ? kinds.map(k => k.kind + ' ' + fmtInt(k.plays)).join(' · ')
+        : span;
     box.innerHTML =
-        kpiCard('Wiedergaben', fmtInt(sum.plays), span, '🎧') +
-        kpiCard('Titel', fmtInt(sum.titles), fmtInt(sum.rows) + ' Registerzeilen', '🎵') +
-        kpiCard('Interpreten', fmtInt(sum.artists), null, '🎤') +
+        kpiCard(v.plays, fmtInt(sum.plays), splitSub, '🎧') +
+        kpiCard(v.whats, fmtInt(sum.titles), fmtInt(sum.rows) + ' Registerzeilen', v.mark) +
+        kpiCard(v.whos, fmtInt(sum.artists), null, v.whoMark) +
         (dur
             ? kpiCard('Hörzeit', dur, null, '⏱️')
             : kpiCard('Hörzeit', '—', 'die CSV enthielt keine Minuten', '⏱️'));
@@ -269,16 +350,19 @@ function renderKpis(sum) {
 
 function rankList(items, opts) {
     if (!items.length) {
-        return '<div class="empty"><span class="empty-mark" aria-hidden="true">🎵</span>' +
-            '<p class="empty-text">Für diesen Filter steht nichts im Register. ' +
+        return '<div class="empty"><span class="empty-mark" aria-hidden="true">' +
+            vocab(state.kind).mark + '</span>' +
+            '<p class="empty-text">Für diesen Filter stehen keine ' +
+            esc(opts.empty || 'Einträge') + ' im Register. ' +
             'Ein weiterer Zeitraum oder eine leerere Suche bringt vermutlich etwas.</p></div>';
     }
     const max = Math.max(1, ...items.map(i => i.plays));
+    const tone = vocab(state.kind).tone;
     return '<div class="rank-list">' + items.map((i, n) => {
         const tag = opts.clickable ? 'button' : 'div';
         const attrs = opts.clickable
             ? ' type="button" data-artist="' + esc(i.label) + '"' : '';
-        return '<' + tag + ' class="rank-row"' + attrs + ' style="--tone:var(--m-musik)">' +
+        return '<' + tag + ' class="rank-row"' + attrs + ' style="--tone:var(' + tone + ')">' +
             '<span class="rank-mark">' + (n + 1) + '</span>' +
             '<span class="rank-name">' + esc(i.label || '(ohne Namen)') + '</span>' +
             '<span class="rank-val">' + fmtInt(i.plays) + '</span>' +
@@ -294,11 +378,15 @@ async function loadOverview() {
     try {
         const [sum, ser, artists, titles] = await Promise.all([
             API.summary(qs()),
-            API.series(qs({ step: state.step })),
+            API.series(qs({ step: state.step, split: 'kind' })),
             API.top(qs({ by: 'interpret', limit: 12 })),
             API.top(qs({ by: 'titel', limit: 12 })),
         ]);
         renderKpis(sum);
+        // Die Karten heißen, wie das heißt, was in ihnen steht.
+        const v = vocab(state.kind);
+        document.getElementById('mTopArtistsHead').textContent = v.whoMark + ' ' + v.whos;
+        document.getElementById('mTopTitlesHead').textContent = v.mark + ' ' + v.whats;
         document.getElementById('mSeriesLbl').textContent =
             '· ' + (ser.grain_label || '');
         drawSeries(ser);
@@ -311,9 +399,9 @@ async function loadOverview() {
             : '';
 
         document.getElementById('mTopArtists').innerHTML =
-            rankList(artists.items || [], { clickable: true });
+            rankList(artists.items || [], { clickable: true, empty: v.whos });
         document.getElementById('mTopTitles').innerHTML =
-            rankList(titles.items || [], {});
+            rankList(titles.items || [], { empty: v.whats });
     } catch (e) {
         box.kpis.innerHTML = '<div class="empty is-error" style="grid-column:1/-1">' +
             '<span class="empty-mark" aria-hidden="true">⚠️</span>' +
@@ -323,18 +411,24 @@ async function loadOverview() {
 
 /* -------------------------------------------------------------- Register */
 
-const COLUMNS = [
-    { key: 'period', label: 'Periode', sort: 'period' },
-    { key: 'kind',   label: 'Art' },
-    { key: 'artist', label: 'Interpret', sort: 'artist' },
-    { key: 'title',  label: 'Titel', sort: 'title' },
-    { key: 'album',  label: 'Album', sort: 'album' },
-    { key: 'plays',  label: 'Wiedergaben', sort: 'plays', num: true },
-    { key: 'ms',     label: 'Hörzeit', sort: 'ms', num: true },
-];
+/* Die Spalten heißen, was in ihnen steht — bei Podcasts also „Show" und
+   „Episode". Ist eine Art gewählt, fällt die Art-Spalte weg: sie stünde in
+   jeder Zeile gleich und kostete nur Breite. */
+function columns() {
+    const v = vocab(state.kind);
+    const cols = [{ key: 'period', label: 'Periode', sort: 'period' }];
+    if (!state.kind) cols.push({ key: 'kind', label: 'Art' });
+    cols.push(
+        { key: 'artist', label: v.who,  sort: 'artist' },
+        { key: 'title',  label: v.what, sort: 'title' },
+        { key: 'album',  label: 'Album', sort: 'album' },
+        { key: 'plays',  label: v.unit, sort: 'plays', num: true },
+        { key: 'ms',     label: 'Hörzeit', sort: 'ms', num: true });
+    return cols;
+}
 
 function renderHead() {
-    document.getElementById('mRegHead').innerHTML = '<tr>' + COLUMNS.map(c => {
+    document.getElementById('mRegHead').innerHTML = '<tr>' + columns().map(c => {
         if (!c.sort) return '<th' + (c.num ? ' class="num"' : '') + '>' + esc(c.label) + '</th>';
         const active = state.sort === c.sort;
         return '<th class="sort' + (c.num ? ' num' : '') + (active ? ' is-sorted' : '') + '">' +
@@ -348,18 +442,23 @@ function renderHead() {
 
 function renderRows(data) {
     const body = document.getElementById('mRegBody');
+    const cols = columns();
     if (!data.items.length) {
-        body.innerHTML = '<tr><td colspan="' + COLUMNS.length + '">' +
+        body.innerHTML = '<tr><td colspan="' + cols.length + '">' +
             '<div class="stat-empty">Für diesen Filter steht nichts im Register. ' +
             'Entweder war in dem Zeitraum nichts zu hören, oder er wurde noch nicht ' +
             'importiert.</div></td></tr>';
         return;
     }
+    const kindCell = (kind) => kind
+        ? '<span class="m-kind" style="--tone:var(' + vocab(kind).tone + ')">' +
+          vocab(kind).mark + ' ' + esc(kind) + '</span>'
+        : '<span class="m-grain-tag">ohne Angabe</span>';
     body.innerHTML = data.items.map(r =>
         '<tr>' +
             '<td>' + esc(r.period_key) +
                 ' <span class="m-grain-tag">' + esc(STEP_LABEL[r.grain] || r.grain) + '</span></td>' +
-            '<td>' + esc(r.kind || '—') + '</td>' +
+            (state.kind ? '' : '<td>' + kindCell(r.kind) + '</td>') +
             '<td>' + esc(r.artist || '—') + '</td>' +
             '<td>' + esc(r.title || '—') + '</td>' +
             '<td>' + esc(r.album || '—') + '</td>' +
@@ -385,7 +484,7 @@ function renderPager(data) {
 async function loadRegister() {
     renderHead();
     const body = document.getElementById('mRegBody');
-    body.innerHTML = '<tr><td colspan="' + COLUMNS.length + '">' +
+    body.innerHTML = '<tr><td colspan="' + columns().length + '">' +
         '<span class="skel skel-block"></span></td></tr>';
     try {
         const data = await API.entries(qs({
@@ -397,7 +496,7 @@ async function loadRegister() {
         renderRows(data);
         renderPager(data);
     } catch (e) {
-        body.innerHTML = '<tr><td colspan="' + COLUMNS.length + '">' +
+        body.innerHTML = '<tr><td colspan="' + columns().length + '">' +
             '<div class="stat-empty">' + esc(e.message || e) + '</div></td></tr>';
     }
 }
@@ -608,6 +707,15 @@ function mountMoreFilter(host) {
 
 let moreFilter = null;
 
+function paintVocab() {
+    const v = vocab(state.kind);
+    const input = document.getElementById('mSearch');
+    if (input) {
+        input.placeholder = v.who + ', ' + v.what + ' oder Album';
+        input.setAttribute('aria-label', 'Im Hörregister suchen');
+    }
+}
+
 function renderKindChips() {
     const box = document.getElementById('mKindChips');
     const kinds = (state.facets && state.facets.kinds) || [];
@@ -634,6 +742,7 @@ function renderActiveFilters() {
 /* ----------------------------------------------------------------- Laden */
 
 function reload() {
+    paintVocab();
     renderActiveFilters();
     if (state.tab === 'ueberblick') return loadOverview();
     if (state.tab === 'register') return loadRegister();

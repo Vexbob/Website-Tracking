@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.70.0', date: '2026-09-09', title: 'Musik und Podcast sind nicht dasselbe', notes: [
+        'Der Spotify-Export legt bei Podcasts die Show ins Feld „Interpret“ und die Episode in „Titel“ — das Musik-Modul benennt sie jetzt auch so.',
+        'Mit der gewählten Art wechselt das ganze Vokabular: aus „Interpreten“ und „Titel“ werden „Shows“ und „Episoden“, aus Wiedergaben gehörte Folgen.',
+        'Ohne Filter zeigt der Verlauf beide Arten gestapelt — Musik im Spotify-Grün, Podcast in Blau — und die Kachel oben nennt die Aufteilung.',
+        'Im Register trägt jede Zeile ihre Art; ist eine ausgewählt, fällt die Spalte weg, weil sie überall gleich stünde.',
+        'Ohne die Spalte „Art“ in der CSV bleibt alles bei der neutralen Fassung — die Oberfläche behauptet keine Trennung, die die Daten nicht hergeben.',
+    ]},
     { v: 'v1.69.0', date: '2026-09-09', title: 'Handy: Filterfelder und Navigationsleiste', notes: [
         'In den Filter-Feldern liefen „Von“ und „Bis“ auf dem iPhone aus dem Rahmen — die beiden Spalten konnten nicht schmaler werden als die native Darstellung eines Datumsfeldes.',
         'Ein Filter-Feld verlangt jetzt nie mehr Breite, als das Display hergibt.',

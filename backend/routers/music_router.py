@@ -288,7 +288,20 @@ async def summary(f: dict = Depends(_common), db=Depends(get_db),
     grains = await db.fetch(
         f"SELECT grain, COUNT(*) AS rows, MIN(period_start) AS von, MAX(period_end) AS bis "
         f"  FROM music_entries WHERE {flt.where} GROUP BY grain", *flt.params)
+    # Je Art dieselben Kennzahlen. Musik und Podcast sind nicht dasselbe: bei
+    # Podcasts steht im Feld "Interpret" die Show und in "Titel" die Episode,
+    # eine gemeinsame Zahl "610 Titel" vermischt also zwei Dinge.
+    kinds = await db.fetch(
+        f"SELECT kind, COALESCE(SUM(plays),0) AS plays, SUM(ms_played) AS ms, "
+        f"       COUNT(DISTINCT NULLIF(title,'')) AS titles, "
+        f"       COUNT(DISTINCT NULLIF(artist,'')) AS artists, COUNT(*) AS rows "
+        f"  FROM music_entries WHERE {flt.where} AND kind <> '' "
+        f" GROUP BY kind ORDER BY plays DESC", *flt.params)
     return {
+        "by_kind": [{"kind": k["kind"], "plays": int(k["plays"] or 0),
+                     "ms_played": int(k["ms"]) if k["ms"] is not None else None,
+                     "titles": int(k["titles"] or 0), "artists": int(k["artists"] or 0),
+                     "rows": int(k["rows"] or 0)} for k in kinds],
         "plays": int(row["plays"] or 0),
         "rows": int(row["rows"] or 0),
         "ms_played": int(row["ms"]) if row["ms"] is not None else None,
@@ -308,6 +321,7 @@ async def summary(f: dict = Depends(_common), db=Depends(get_db),
 
 @router.get("/api/music/series")
 async def series(step: str = Query("auto", description="auto | tag | woche | monat | jahr"),
+                 split: Optional[str] = Query(None, description="kind = zusätzlich je Art aufgeschlüsselt"),
                  f: dict = Depends(_common), db=Depends(get_db),
                  user=Depends(get_current_user)):
     """Der Verlauf, auf die gewünschte Stufe zusammengefasst.
@@ -335,17 +349,46 @@ async def series(step: str = Query("auto", description="auto | tag | woche | mon
         f"  FROM music_entries WHERE {flt.where} "
         f" GROUP BY 1 ORDER BY 2",
         *flt.params, coarser)
-    return {
+    points = [{"period": r["period"], "start": r["start"].isoformat(),
+               "plays": int(r["plays"] or 0),
+               "ms_played": int(r["ms"]) if r["ms"] is not None else None,
+               "titles": int(r["titles"] or 0),
+               "artists": int(r["artists"] or 0),
+               "coarser": int(r["coarse"] or 0)} for r in rows]
+    out = {
         "grain": target,
         "grain_label": GRAIN_LABEL[target],
         "auto": step not in GRAIN_BUCKET,
-        "points": [{"period": r["period"], "start": r["start"].isoformat(),
-                    "plays": int(r["plays"] or 0),
-                    "ms_played": int(r["ms"]) if r["ms"] is not None else None,
-                    "titles": int(r["titles"] or 0),
-                    "artists": int(r["artists"] or 0),
-                    "coarser": int(r["coarse"] or 0)} for r in rows],
+        "points": points,
     }
+
+    if split == "kind":
+        # Je Art eine Reihe, ausgerichtet an denselben Perioden wie ``points``.
+        # Ausgerichtet statt als eigene Punktliste, damit die Oberflaeche die
+        # Balken ohne zweites Zusammenfuehren stapeln kann -- und damit eine
+        # Art, die in einer Periode nicht vorkommt, dort eine 0 hat und nicht
+        # die Achse verschiebt.
+        per = await db.fetch(
+            f"SELECT {bucket} AS period, kind, SUM(plays) AS plays, SUM(ms_played) AS ms "
+            f"  FROM music_entries WHERE {flt.where} "
+            f" GROUP BY 1, 2", *flt.params)
+        index = {p["period"]: i for i, p in enumerate(points)}
+        buckets: dict[str, list] = {}
+        for r in per:
+            # Ohne Spalte "Art" in der CSV steht hier ein leerer Wert. Er
+            # bekommt einen Namen, statt als namenlose Reihe zu erscheinen.
+            key = (r["kind"] or "").strip() or "Ohne Angabe"
+            i = index.get(r["period"])
+            if i is None:
+                continue
+            values = buckets.setdefault(key, [0] * len(points))
+            values[i] += int(r["plays"] or 0)
+        out["split"] = "kind"
+        out["series"] = [
+            {"kind": k, "plays": sum(v), "values": v}
+            for k, v in sorted(buckets.items(), key=lambda kv: -sum(kv[1]))
+        ]
+    return out
 
 
 TOP_FIELDS = {"interpret": "artist", "titel": "title", "album": "album", "art": "kind"}

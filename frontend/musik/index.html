@@ -62,6 +62,7 @@
         <div class="stat-card">
             <div class="stat-card-head">
                 <h3>🎧 Verlauf <span class="stat-range-lbl" id="mSeriesLbl"></span></h3>
+                <div class="m-legend" id="mSeriesLegend"></div>
                 <div class="stat-mini-toggle" id="mStepToggle">
                     <button class="active" data-step="auto">Auto</button>
                     <button data-step="jahr">Jahr</button>
@@ -77,14 +78,14 @@
         <div class="split-2">
             <div class="stat-card">
                 <div class="stat-card-head">
-                    <h3>🎤 Interpreten</h3>
+                    <h3 id="mTopArtistsHead">🎤 Interpreten</h3>
                     <span class="stat-range-lbl">Klick filtert</span>
                 </div>
                 <div id="mTopArtists"><span class="skel skel-block"></span></div>
             </div>
             <div class="stat-card">
                 <div class="stat-card-head">
-                    <h3>🎵 Titel</h3>
+                    <h3 id="mTopTitlesHead">🎵 Titel</h3>
                     <span class="stat-range-lbl">nach Wiedergaben</span>
                 </div>
                 <div id="mTopTitles"><span class="skel skel-block"></span></div>
