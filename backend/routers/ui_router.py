@@ -213,6 +213,45 @@ def _one_of(allowed: List[str]):
     return check
 
 
+THEMES_PREF = "ui_themes"
+THEMES_MAX = 12
+
+
+def _check_themes(value: Any) -> List[dict]:
+    """Eigene Themen: benannte Kombinationen der drei Verlaufs-Plaetze.
+
+    Bewusst keine freien Farbwerte, sondern nur Preset-Schluessel -- damit
+    bleibt zugesichert, dass jede Verlaufsflaeche dunkle Schrift tragen kann.
+    Ein Thema ist deshalb auch kein eigener Speicher fuer Farben, sondern nur
+    eine Abkuerzung fuer drei Einstellungen.
+    """
+    if not isinstance(value, list):
+        raise ValueError("erwartet eine Liste von Themen")
+    if len(value) > THEMES_MAX:
+        raise ValueError(f"hoechstens {THEMES_MAX} eigene Themen")
+    out: List[dict] = []
+    seen = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("jedes Thema ist ein Objekt")
+        name = str(item.get("name", "")).strip()[:40]
+        if not name:
+            raise ValueError("jedes Thema braucht einen Namen")
+        if name in seen:
+            raise ValueError(f"Name doppelt vergeben: {name}")
+        seen.add(name)
+        action = str(item.get("action", ""))
+        progress = str(item.get("progress", ""))
+        backdrop = str(item.get("backdrop", ""))
+        for key, allowed in ((action, ALLOWED_GRADIENTS), (progress, ALLOWED_GRADIENTS),
+                             (backdrop, ALLOWED_BACKDROPS)):
+            if key not in allowed:
+                raise ValueError(f"unbekanntes Preset: {key}")
+        out.append({"name": name, "action": action, "progress": progress,
+                    "backdrop": backdrop})
+    return out
+
+
 UI_PREFS = {
     DESKTOP_NAV_PREF: _check_nav_desktop,
     NAV_HIDDEN_PREF: _check_nav_hidden,
@@ -220,6 +259,7 @@ UI_PREFS = {
     GRAD_ACTION_PREF: _one_of(ALLOWED_GRADIENTS),
     GRAD_PROGRESS_PREF: _one_of(ALLOWED_GRADIENTS),
     GRAD_BACKDROP_PREF: _one_of(ALLOWED_BACKDROPS),
+    THEMES_PREF: _check_themes,
 }
 
 

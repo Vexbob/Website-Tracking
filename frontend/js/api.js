@@ -150,6 +150,89 @@ const BACKDROP_PRESETS = [
     { key: 'aus',       label: 'Aus' },
 ];
 
+/* Themes — v1.75.0
+ *
+ * Ein Thema ist nichts als eine benannte Kombination der drei Plätze oben.
+ * Es gibt also keinen zweiten Speicher und keine zweite Wahrheit: wer ein
+ * Thema wählt, setzt damit die drei Einstellungen, und wer eine davon
+ * einzeln ändert, ist auf „Eigen" — ohne dass irgendwo etwas nachgeführt
+ * werden müsste.
+ *
+ * Eigene Themen bestehen aus denselben Presets; frei gewählte Farben gibt es
+ * bewusst nicht, sonst ließe sich der Kontrast der Beschriftung nicht mehr
+ * zusichern.
+ */
+const THEMES = [
+    { key: 'sonnenaufgang', label: 'Sonnenaufgang',
+      slots: { ui_grad_action: 'sonnenaufgang', ui_grad_progress: 'sonnenaufgang', ui_grad_backdrop: 'standard' } },
+    { key: 'nordlicht', label: 'Nordlicht',
+      slots: { ui_grad_action: 'nordlicht', ui_grad_progress: 'nordlicht', ui_grad_backdrop: 'nordlicht' } },
+    { key: 'waldlauf', label: 'Waldlauf',
+      slots: { ui_grad_action: 'waldlauf', ui_grad_progress: 'waldlauf', ui_grad_backdrop: 'nordlicht' } },
+    { key: 'abendrot', label: 'Abendrot',
+      slots: { ui_grad_action: 'abendrot', ui_grad_progress: 'abendrot', ui_grad_backdrop: 'warm' } },
+    { key: 'amethyst', label: 'Amethyst',
+      slots: { ui_grad_action: 'amethyst', ui_grad_progress: 'amethyst', ui_grad_backdrop: 'standard' } },
+    { key: 'schlicht', label: 'Schlicht',
+      slots: { ui_grad_action: 'schlicht', ui_grad_progress: 'schlicht', ui_grad_backdrop: 'aus' } },
+];
+const THEMES_PREF = 'ui_themes';
+const THEMES_MAX = 12;
+
+const VexTheme = {
+    // Eingebaute zuerst, danach die eigenen. `own` unterscheidet sie, damit
+    // die Oberflaeche nur die eigenen zum Loeschen anbietet.
+    list() {
+        const own = VexPrefs.get(THEMES_PREF, []) || [];
+        return THEMES.map(t => Object.assign({ own: false }, t))
+            .concat(own.map((t, i) => ({
+                key: 'eigen-' + i, label: t.name, own: true,
+                slots: { ui_grad_action: t.action, ui_grad_progress: t.progress,
+                         ui_grad_backdrop: t.backdrop },
+            })));
+    },
+    // Welches Thema gerade gilt -- oder null, wenn die drei Einstellungen zu
+    // keinem passen. Das ist der Zustand "Eigen", und er braucht keinen
+    // eigenen Speicher.
+    current() {
+        const found = VexTheme.list().find(t =>
+            GRADIENT_SLOTS.every(s => VexPrefs.get(s.pref, s.fallback) === t.slots[s.pref]));
+        return found ? found.key : null;
+    },
+    async apply(key) {
+        const t = VexTheme.list().find(x => x.key === key);
+        if (!t) return;
+        await VexPrefs.setMany(t.slots);
+    },
+    // Der aktuelle Stand als eigenes Thema. Namen sind die Identitaet --
+    // derselbe Name ersetzt, statt ein zweites gleichnamiges anzulegen.
+    async saveOwn(name) {
+        const clean = String(name || '').trim().slice(0, 40);
+        if (!clean) throw new Error('Das Thema braucht einen Namen');
+        const own = (VexPrefs.get(THEMES_PREF, []) || []).slice();
+        const entry = {
+            name: clean,
+            action: VexPrefs.get('ui_grad_action', 'sonnenaufgang'),
+            progress: VexPrefs.get('ui_grad_progress', 'sonnenaufgang'),
+            backdrop: VexPrefs.get('ui_grad_backdrop', 'standard'),
+        };
+        const at = own.findIndex(t => t.name === clean);
+        if (at >= 0) own[at] = entry;
+        else {
+            if (own.length >= THEMES_MAX) throw new Error('Mehr als ' + THEMES_MAX + ' eigene Themen gehen nicht');
+            own.push(entry);
+        }
+        await VexPrefs.set(THEMES_PREF, own);
+    },
+    async removeOwn(key) {
+        const idx = parseInt(String(key).replace('eigen-', ''), 10);
+        const own = (VexPrefs.get(THEMES_PREF, []) || []).slice();
+        if (!(idx >= 0 && idx < own.length)) return;
+        own.splice(idx, 1);
+        await VexPrefs.set(THEMES_PREF, own);
+    },
+};
+
 function applyGradients(prefs) {
     const root = document.documentElement;
     GRADIENT_SLOTS.forEach(slot => {
@@ -208,6 +291,15 @@ const VexPrefs = {
         await apiCall('/api/ui/prefs', { method: 'PUT', body: { prefs: { [key]: value } } });
         const o = VexPrefs.all();
         o[key] = value;
+        VexPrefs._write(o);
+    },
+    // Mehrere auf einmal -- der Endpoint nimmt ohnehin ein Objekt. Ein Thema
+    // waere sonst drei Anfragen, von denen die zweite scheitern koennte und
+    // einen halb gesetzten Zustand hinterliesse.
+    async setMany(obj) {
+        await apiCall('/api/ui/prefs', { method: 'PUT', body: { prefs: obj } });
+        const o = VexPrefs.all();
+        Object.keys(obj).forEach(k => { o[k] = obj[k]; });
         VexPrefs._write(o);
     },
     async reset(key) {

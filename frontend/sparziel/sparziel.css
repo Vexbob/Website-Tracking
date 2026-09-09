@@ -23,7 +23,9 @@ body{visibility:hidden}body.ready{visibility:visible}
     letter-spacing:0.09em;font-weight:700;display:block;margin-bottom:3px}
 .hero-stat strong{font-size:1.125rem;font-weight:700;color:var(--text-1);
     letter-spacing:-0.02em;font-variant-numeric:tabular-nums;display:block;
-    overflow:hidden;text-overflow:ellipsis}
+    /* NICHT abschneiden: ein halber Betrag ist schlimmer als ein enger.
+       Bei wenig Platz darf die Zahl umbrechen statt zu verschwinden. */
+    overflow-wrap:anywhere}
 /* --green-dark ist eine Fuellfarbe fuer weisse Schrift, kein Textton auf
    dunklem Grund (3,1:1). Der Sparstand nimmt den Modulton. */
 .hero-stat strong.pos{color:var(--m-sparziel)}
@@ -471,7 +473,11 @@ body{visibility:hidden}body.ready{visibility:visible}
     .hero-top{gap:1rem}
     .hero-radial{width:110px;height:110px}
     .hero-radial-pct{font-size:1.375rem}
-    .hero-stats{grid-template-columns:1fr 1fr 1fr;gap:0.5rem 0.75rem}
+    .hero-stats{grid-template-columns:1fr;gap:0.375rem}
+    .hero-stat{display:flex;align-items:baseline;justify-content:space-between;
+        gap:0.75rem;padding:0.5rem 0.75rem}
+    .hero-stat .lbl{margin:0;flex:none}
+    .hero-stat strong{font-size:1rem;text-align:right;overflow:visible}
     .ach-edit-form .grid2{grid-template-columns:1fr}
     .if-grid{grid-template-columns:1fr}
     .sg-grid,.wish-grid{grid-template-columns:1fr}

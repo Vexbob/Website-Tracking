@@ -128,6 +128,9 @@
         // schickt in api.js jeden Besucher zum Login.
         if (loggedIn) {
             await buildModuleRow(navbar, visible);
+            // Zuerst das Konto-Menue: es nimmt Zahnrad und Logout auf, und
+            // buildSettingsLink haelt sich danach heraus.
+            buildAccountMenu(navbar);
             buildSettingsLink(navbar);
         }
 
@@ -283,9 +286,12 @@
 
     // Der Zahnrad-Knopf steht links vom Konto -- auf jeder Seite an derselben
     // Stelle, damit man ihn nicht suchen muss.
+    // v1.75.0: Das Zahnrad steht jetzt im Konto-Menue. Diese Funktion bleibt
+    // fuer Seiten OHNE Konto-Knopf (der oeffentliche Blog hat keinen).
     function buildSettingsLink(navbar) {
         const right = navbar.querySelector('.nav-right');
         if (!right || right.querySelector('.nav-settings')) return;
+        if (right.querySelector('.nav-acct')) return;
         if (isActive('/einstellungen/')) return;
         const a = document.createElement('a');
         a.className = 'nav-btn nav-settings';
@@ -299,6 +305,114 @@
             'M6.05 6.05l1.45 1.45M16.5 16.5l1.45 1.45' +
             'M17.95 6.05L16.5 7.5M7.5 16.5l-1.45 1.45"/></svg>';
         right.insertBefore(a, right.firstChild);
+    }
+
+    /* ---------- Konto-Menue (v1.75.0) ----------
+     *
+     * Vorher standen in der Leiste drei Dinge nebeneinander: Name, Zahnrad,
+     * Logout. Auf dem Handy war das ein Drittel der Breite fuer etwas, das
+     * man selten braucht. Jetzt ist der Name ein Knopf, und alles Weitere
+     * liegt in seinem Menue -- samt Themenwahl, damit man die Optik
+     * umstellen kann, ohne die Seite zu verlassen.
+     *
+     * Wichtig: Name und Logout-Knopf werden UMGEHAENGT, nicht nachgebaut.
+     * Jede Modulseite setzt selbst `userLabel.textContent` und bindet
+     * `logoutBtn.onclick` -- bliebe es nicht derselbe Knoten, waeren beide
+     * still kaputt.
+     */
+    function buildAccountMenu(navbar) {
+        const right = navbar.querySelector('.nav-right');
+        if (!right || right.querySelector('.nav-acct')) return;
+        const label = right.querySelector('#userLabel');
+        if (!label) return;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'nav-acct';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nav-btn nav-acct-btn';
+        btn.setAttribute('aria-haspopup', 'menu');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.title = 'Konto und Darstellung';
+
+        const menu = document.createElement('div');
+        menu.className = 'nav-acct-menu';
+        menu.setAttribute('role', 'menu');
+        menu.hidden = true;
+
+        right.insertBefore(wrap, label);
+        wrap.appendChild(btn);
+        wrap.appendChild(menu);
+        // Der Name wandert IN den Knopf.
+        btn.appendChild(label);
+        label.style.cursor = '';
+
+        const themeBox = document.createElement('div');
+        themeBox.className = 'nav-acct-themes';
+
+        const actions = document.createElement('div');
+        actions.className = 'nav-acct-actions';
+        const settings = document.createElement('a');
+        settings.className = 'nav-acct-item';
+        settings.href = '/einstellungen/';
+        settings.textContent = '⚙️ Einstellungen';
+        actions.appendChild(settings);
+        // Der vorhandene Logout-Knopf zieht mit um -- mit seinem Handler.
+        const logout = right.querySelector('#logoutBtn');
+        if (logout) {
+            logout.classList.add('nav-acct-item', 'nav-acct-logout');
+            logout.classList.remove('nav-btn');
+            actions.appendChild(logout);
+        }
+
+        menu.innerHTML = '<div class="nav-acct-head">Darstellung</div>';
+        menu.appendChild(themeBox);
+        menu.appendChild(actions);
+
+        function paintThemes() {
+            const cur = VexTheme.current();
+            themeBox.innerHTML = VexTheme.list().map(t =>
+                '<button type="button" class="nav-acct-theme' +
+                    (t.key === cur ? ' is-active' : '') + '" data-theme="' + t.key + '"' +
+                    ' data-grad-preview="' + t.slots.ui_grad_action + '">' +
+                    '<i aria-hidden="true"></i><span></span>' +
+                    '<span class="nav-acct-check" aria-hidden="true">✓</span>' +
+                '</button>').join('') +
+                (cur ? '' : '<p class="nav-acct-note">Eigene Zusammenstellung — ' +
+                            'in den Einstellungen sicherbar.</p>');
+            // Beschriftungen als Text setzen: Themennamen kommen vom Nutzer.
+            const names = VexTheme.list();
+            themeBox.querySelectorAll('.nav-acct-theme span:first-of-type')
+                .forEach((el, i) => { if (names[i]) el.textContent = names[i].label; });
+        }
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = menu.hidden;
+            if (open) paintThemes();
+            menu.hidden = !open;
+            btn.setAttribute('aria-expanded', String(open));
+        });
+        document.addEventListener('click', (e) => {
+            if (!wrap.contains(e.target)) {
+                menu.hidden = true;
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+        });
+        themeBox.addEventListener('click', async (e) => {
+            const b = e.target.closest('[data-theme]');
+            if (!b) return;
+            try {
+                await VexTheme.apply(b.dataset.theme);
+                paintThemes();
+            } catch (err) {
+                if (window.Toast) Toast.error(err.message || String(err));
+            }
+        });
     }
 
     // v1.36.0 — Navbar bekommt beim Scrollen eine dezente Schatten-Kante,

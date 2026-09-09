@@ -150,10 +150,68 @@ function renderGradients() {
     }).join('');
 }
 
+function renderThemes() {
+    const box = document.getElementById('themeList');
+    if (!box) return;
+    const cur = VexTheme.current();
+    const list = VexTheme.list();
+    box.innerHTML = list.map(t =>
+        '<button type="button" class="grad-opt' + (t.key === cur ? ' is-active' : '') +
+            '" data-theme="' + escHtml(t.key) + '"' +
+            ' data-grad="' + escHtml(t.slots.ui_grad_action) + '">' +
+            '<i aria-hidden="true"></i><span></span>' +
+            (t.own ? '<em class="grad-own" title="Eigenes Thema entfernen" ' +
+                     'data-drop="' + escHtml(t.key) + '">✕</em>' : '') +
+        '</button>').join('') +
+        (cur ? '' : '<span class="grad-eigen">Eigen</span>');
+    // Namen als Text, nicht als Markup -- eigene Themen benennt der Nutzer.
+    box.querySelectorAll('.grad-opt span').forEach((el, i) => {
+        if (list[i]) el.textContent = list[i].label;
+    });
+}
+
+async function applyTheme(key) {
+    try {
+        await VexTheme.apply(key);
+        renderThemes();
+        renderGradients();
+    } catch (e) {
+        if (window.Toast) Toast.error(e.message || String(e));
+    }
+}
+
+async function saveOwnTheme() {
+    const input = document.getElementById('themeName');
+    try {
+        await VexTheme.saveOwn(input.value);
+        input.value = '';
+        renderThemes();
+        if (window.Toast) Toast.success('Thema gesichert');
+    } catch (e) {
+        if (window.Toast) Toast.error(e.message || String(e));
+    }
+}
+
+async function dropOwnTheme(key) {
+    const ok = await askConfirm({
+        title: 'Thema entfernen?',
+        text: 'Die Einstellung selbst bleibt, nur der gespeicherte Name verschwindet.',
+        ok: 'Entfernen', danger: true,
+    });
+    if (!ok) return;
+    try {
+        await VexTheme.removeOwn(key);
+        renderThemes();
+    } catch (e) {
+        if (window.Toast) Toast.error(e.message || String(e));
+    }
+}
+
 async function saveGradient(pref, value) {
     try {
         await VexPrefs.set(pref, value);
         renderGradients();
+        renderThemes();
         if (window.Toast) Toast.success('Gespeichert');
     } catch (e) {
         // Fehlgeschlagen heisst: der Server hat es nicht. Die Anzeige muss
@@ -206,10 +264,18 @@ async function saveRange(preset) {
         if (b) saveRange(b.dataset.preset);
     });
     renderGradients();
+    renderThemes();
     document.getElementById('gradList').addEventListener('click', (e) => {
         const b = e.target.closest('.grad-opt');
         if (b) saveGradient(b.dataset.slot, b.dataset.grad);
     });
+    document.getElementById('themeList').addEventListener('click', (e) => {
+        const drop = e.target.closest('[data-drop]');
+        if (drop) { e.stopPropagation(); return dropOwnTheme(drop.dataset.drop); }
+        const b = e.target.closest('.grad-opt');
+        if (b) applyTheme(b.dataset.theme);
+    });
+    document.getElementById('themeSave').onclick = () => saveOwnTheme();
     document.getElementById('tabCfg').onclick = () => VexNav.openTabBarSettings();
     document.getElementById('expBtn').onclick = () => exportAll();
 })();

@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.75.0', date: '2026-09-09', title: 'Konto-Menü mit Themen, ruhigere Navigationsleiste', notes: [
+        'Ein Klick auf den eigenen Namen öffnet ein Menü: Thema wechseln, Einstellungen, Logout — vorher standen die drei Dinge nebeneinander in der Leiste.',
+        'Ein Thema setzt alle drei Verlaufs-Stellen auf einmal; eigene Zusammenstellungen lassen sich unter einem Namen sichern und stehen dann überall zur Wahl.',
+        'Der „← Zurück“-Pfeil ist weg, wo er nur aufs Dashboard führte — dafür gibt es das Dashboard-Symbol. Innerhalb der Ausgaben bleibt er, dort ist er echte Navigation.',
+        'Nachgezogen: Im Sparziel wurden die Beträge auf dem Handy abgeschnitten — drei Kacheln nebeneinander ließen jedem Betrag 66 statt der nötigen 84 Pixel.',
+    ]},
     { v: 'v1.74.0', date: '2026-09-09', title: 'Farbverläufe selbst wählen', notes: [
         'In den Einstellungen gibt es jetzt für drei Stellen je ein Verlaufs-Preset: primäre Aktion, Fortschrittsbalken und die Hintergrundlichter.',
         'Sechs Verläufe stehen zur Wahl, dazu „Schlicht“ ganz ohne Verlauf; der Hintergrund kennt zusätzlich „Aus“.',

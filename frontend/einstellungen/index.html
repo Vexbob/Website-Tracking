@@ -34,7 +34,7 @@
 </head>
 <body style="visibility:hidden">
 <nav class="navbar">
-    <a href="/" class="nav-title">← Einstellungen</a>
+    <span class="nav-title">Einstellungen</span>
     <div class="nav-right">
         <span class="nav-btn" id="userLabel" style="cursor:default"></span>
         <button class="nav-btn" id="logoutBtn">Logout</button>
@@ -97,6 +97,17 @@
             nicht frei wählbar sind. Die Auswahl ist bewusst eine feste Liste und kein
             Farbwähler: jedes Preset ist hell genug, um die dunkle Beschriftung darauf
             lesbar zu halten.</p>
+        <div class="grad-slot">
+            <div class="grad-slot-head">Thema</div>
+            <p class="grad-slot-hint">Ein Thema setzt alle drei Stellen auf einmal. Stellst du
+                danach eine einzeln um, steht hier „Eigen“ — und lässt sich unter einem Namen
+                sichern.</p>
+            <div class="grad-opts" id="themeList"></div>
+            <div class="set-actions" id="themeSaveRow">
+                <input type="text" id="themeName" maxlength="40" placeholder="Name für dein Thema">
+                <button type="button" class="v-btn" id="themeSave">Sichern</button>
+            </div>
+        </div>
         <div id="gradList"></div>
     </div>
 
