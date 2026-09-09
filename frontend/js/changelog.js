@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.72.0', date: '2026-09-09', title: 'Sparziel: Fenster statt Aufklappen, lesbare Knöpfe', notes: [
+        'Die fünf Anlege-Formulare öffnen sich als Fenster, statt sich zwischen Überschrift und Liste aufzuklappen und alles darunter wegzuschieben.',
+        'Weiße Schrift auf hellen Flächen ist raus: „Check-in“, „Nochmal“, die Streak-Pille und zehn weitere Stellen standen mit 1,6:1 bis 2,4:1 praktisch unlesbar da.',
+        'Sie tragen jetzt dunkle Schrift auf hellem Grund — dieselbe Regel, die seit v1.59.0 für jede Akzentfläche gilt.',
+        'Die Formulare selbst und ihre Handler sind unangetastet geblieben; das Formular wird nur vorübergehend ins Fenster umgehängt.',
+    ]},
     { v: 'v1.71.0', date: '2026-09-09', title: 'Schlafrhythmus: typischer Bereich statt ±', notes: [
         'Zubettgeh- und Aufstehzeit stehen jetzt als Median mit typischem Bereich da („23:25 · meist 23:11–23:39“) statt als Mittelwert mit ± Standardabweichung.',
         'Das „±“ hat eine symmetrische Streuung versprochen, die es bei Zubettgehzeiten nicht gibt: eine einzige durchgemachte Nacht verschob den Wert sichtbar.',

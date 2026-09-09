@@ -179,19 +179,102 @@ function activateTab(t){
     if(t==='trophies') loadTrophies();
     if(t==='ideen'){loadSavingsGoals();loadPotentialGoals();loadFutureIdeas();}
 }
+/* v1.72.0: Die fünf Anlege-Formulare öffnen sich als Fenster statt in der
+ * Seite.
+ *
+ * Vorher klappte ein „+ Neu" das Formular zwischen Überschrift und Liste auf
+ * und schob alles darunter nach unten — auf dem Handy war die Liste danach
+ * ausserhalb des Bildschirms, und beim Zuklappen sprang die Seite zurück.
+ * Dasselbe Muster wurde auf der Kategorie-Seite schon durch einen Dialog
+ * ersetzt; hier stand es noch fünfmal.
+ *
+ * Der Umbau fasst bewusst WEDER die Formulare NOCH ihre Submit-Handler an: das
+ * Formular bleibt derselbe Knoten und wird nur vorübergehend in ein Fenster
+ * umgehängt. Deshalb funktionieren `document.getElementById('pgTitle')` und
+ * das Schliessen per `classList.remove('open')` unverändert weiter — die
+ * Handler merken nichts davon. Ein Beobachter auf der Klasse fängt genau
+ * dieses Schliessen ab und räumt das Fenster ab.
+ */
+const FORM_TITLES = {
+    pgForm:   'Neues Wochenziel',
+    achForm:  'Neues Achievement',
+    sgForm:   'Neues Sparziel',
+    potForm:  'Neuer Wunsch',
+    ideaForm: 'Neue Idee',
+};
+
+let openForm = null;
+
+function closeForm(){
+    if(!openForm) return;
+    const f = openForm;
+    openForm = null;                 // zuerst, damit der Beobachter nicht zurückruft
+    f.observer.disconnect();
+    document.removeEventListener('keydown', f.onKey);
+    f.node.classList.remove('open');
+    // Das Formular zurück an seinen Platz in der Seite, damit der nächste
+    // Aufruf es wiederfindet.
+    if(f.home && f.home.parentNode) f.home.parentNode.insertBefore(f.node, f.home);
+    if(f.home && f.home.parentNode) f.home.parentNode.removeChild(f.home);
+    f.overlay.classList.remove('show');
+    setTimeout(() => f.overlay.remove(), 180);
+}
+
 function toggleForm(id){
+    if(openForm && openForm.id === id){ closeForm(); return; }
+    if(openForm) closeForm();
     const el = document.getElementById(id);
-    el.classList.toggle('open');
+    if(!el) return;
+
     // v1.18.2: Reward-Goal-Dropdowns beim Öffnen befüllen
-    if (el.classList.contains('open')) {
-        if (id === 'achForm') {
-            const sel = document.getElementById('achRewardGoal');
-            if (sel) sel.innerHTML = rewardGoalOptionsHTML(null);
-        } else if (id === 'pgForm') {
-            const sel = document.getElementById('pgRewardGoal');
-            if (sel) sel.innerHTML = rewardGoalOptionsHTML(null);
-        }
+    if (id === 'achForm') {
+        const sel = document.getElementById('achRewardGoal');
+        if (sel) sel.innerHTML = rewardGoalOptionsHTML(null);
+    } else if (id === 'pgForm') {
+        const sel = document.getElementById('pgRewardGoal');
+        if (sel) sel.innerHTML = rewardGoalOptionsHTML(null);
     }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML =
+        '<div class="modal-box sz-form-box">' +
+            '<div class="modal-head"><h3></h3>' +
+                '<button class="modal-close" type="button" data-act="close" ' +
+                        'aria-label="Schließen">✕</button></div>' +
+            '<div class="modal-body"></div>' +
+        '</div>';
+    overlay.querySelector('.modal-head h3').textContent = FORM_TITLES[id] || 'Neu';
+
+    // Ein Kommentar merkt sich die Stelle in der Seite, an der das Formular
+    // steht -- eine ID oder ein Index waere beim naechsten Neuzeichnen der
+    // Liste womoeglich woanders.
+    const home = document.createComment('formular:' + id);
+    el.parentNode.insertBefore(home, el);
+    overlay.querySelector('.modal-body').appendChild(el);
+    el.classList.add('open');
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('show'));
+
+    const onKey = (e) => { if(e.key === 'Escape') closeForm(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', (e) => {
+        if(e.target === overlay || e.target.closest('[data-act="close"]')) closeForm();
+    });
+
+    // Die Submit-Handler schliessen ihr Formular mit
+    // classList.remove('open'). Das hier faengt es ab, ohne dass einer von
+    // ihnen etwas vom Fenster wissen muss.
+    const observer = new MutationObserver(() => {
+        if(openForm && openForm.id === id && !el.classList.contains('open')) closeForm();
+    });
+    observer.observe(el, { attributes: true, attributeFilter: ['class'] });
+
+    openForm = { id, node: el, home, overlay, observer, onKey };
+    const focusable = el.querySelector('input, select, textarea');
+    if(focusable) focusable.focus();
 }
 function toggleHeroEdit(){
     const e=document.getElementById('heroEdit');e.classList.toggle('open');
