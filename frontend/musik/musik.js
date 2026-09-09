@@ -59,15 +59,29 @@ const STEP_LABEL = Object.fromEntries(STEPS.map(s => [s.key, s.label]));
  * Podcast und Hörbuch je eine eigene Diagrammfarbe, damit sie im gestapelten
  * Verlauf auseinanderzuhalten sind.
  */
+/* `whoMetric` / `whatMetric` sind der eigentliche Unterschied, nicht die
+   Beschriftung: bei Musik zählt, wie OFT man etwas gehört hat, bei einem
+   Podcast, WIE VIELE Folgen — eine Episode hört man einmal, „Top-Episode
+   nach Wiedergaben“ wäre dort eine Liste von Einsen. Deshalb ranken Shows
+   nach Folgenzahl, und die zweite Karte zeigt das zuletzt Gehörte. */
 const VOCAB = {
     'Musik':   { who: 'Interpret', what: 'Titel',   whos: 'Interpreten', whats: 'Titel',
                  plays: 'Wiedergaben', unit: 'Wiedergaben',
+                 whoMetric: 'plays', whatMetric: 'plays',
+                 whoNote: 'nach Wiedergaben', whatNote: 'nach Wiedergaben',
+                 countUnit: '',
                  tone: '--m-musik', mark: '🎵', whoMark: '🎤' },
     'Podcast': { who: 'Show',      what: 'Episode', whos: 'Shows',       whats: 'Episoden',
                  plays: 'Gehörte Folgen', unit: 'Folgen',
+                 whoMetric: 'titles', whatMetric: 'last',
+                 whoNote: 'nach Folgen', whatNote: 'zuletzt gehört',
+                 countUnit: 'Folgen',
                  tone: '--chart-2', mark: '🎙️', whoMark: '🎙️' },
     'Hörbuch': { who: 'Buch',      what: 'Kapitel', whos: 'Bücher',      whats: 'Kapitel',
                  plays: 'Gehörte Kapitel', unit: 'Kapitel',
+                 whoMetric: 'titles', whatMetric: 'last',
+                 whoNote: 'nach Kapiteln', whatNote: 'zuletzt gehört',
+                 countUnit: 'Kapitel',
                  tone: '--chart-5', mark: '📖', whoMark: '📚' },
 };
 // Ohne Spalte „Art" in der CSV lässt sich nichts unterscheiden — dann gilt
@@ -76,6 +90,9 @@ const VOCAB = {
 const VOCAB_ANY = {
     who: 'Interpret', what: 'Titel', whos: 'Interpreten', whats: 'Titel',
     plays: 'Wiedergaben', unit: 'Wiedergaben',
+    whoMetric: 'plays', whatMetric: 'plays',
+    whoNote: 'nach Wiedergaben', whatNote: 'nach Wiedergaben',
+    countUnit: '',
     tone: '--m-musik', mark: '🎵', whoMark: '🎤',
 };
 const vocab = (kind) => VOCAB[kind] || VOCAB_ANY;
@@ -356,18 +373,30 @@ function rankList(items, opts) {
             esc(opts.empty || 'Einträge') + ' im Register. ' +
             'Ein weiterer Zeitraum oder eine leerere Suche bringt vermutlich etwas.</p></div>';
     }
-    const max = Math.max(1, ...items.map(i => i.plays));
+    // Angezeigt wird die Zahl, nach der sortiert wurde -- eine Rangliste,
+    // deren Balken zu einer anderen Größe gehören als ihre Reihenfolge,
+    // ist eine Falle.
+    const metric = opts.metric || 'plays';
+    const valueOf = (i) => metric === 'titles' ? (i.titles || 0) : (i.plays || 0);
+    const max = Math.max(1, ...items.map(valueOf));
     const tone = vocab(state.kind).tone;
     return '<div class="rank-list">' + items.map((i, n) => {
         const tag = opts.clickable ? 'button' : 'div';
         const attrs = opts.clickable
             ? ' type="button" data-artist="' + esc(i.label) + '"' : '';
+        // Bei „zuletzt gehört“ ist die Reihenfolge die Aussage; ein Balken
+        // nach Wiedergaben daneben würde eine zweite behaupten.
+        const bar = metric === 'last' ? '' :
+            '<span class="rank-bar"><i style="width:' +
+                Math.round(valueOf(i) / max * 100) + '%"></i></span>';
+        const val = metric === 'last'
+            ? (i.to ? fmtDay(i.to) : '—')
+            : fmtInt(valueOf(i)) + (opts.unit ? ' ' + opts.unit : '');
         return '<' + tag + ' class="rank-row"' + attrs + ' style="--tone:var(' + tone + ')">' +
             '<span class="rank-mark">' + (n + 1) + '</span>' +
             '<span class="rank-name">' + esc(i.label || '(ohne Namen)') + '</span>' +
-            '<span class="rank-val">' + fmtInt(i.plays) + '</span>' +
-            '<span class="rank-bar"><i style="width:' +
-                Math.round(i.plays / max * 100) + '%"></i></span>' +
+            '<span class="rank-val">' + esc(val) + '</span>' +
+            bar +
             (i.sub ? '<span class="rank-sub">' + esc(i.sub) + '</span>' : '') +
         '</' + tag + '>';
     }).join('') + '</div>';
@@ -379,14 +408,20 @@ async function loadOverview() {
         const [sum, ser, artists, titles] = await Promise.all([
             API.summary(qs()),
             API.series(qs({ step: state.step, split: 'kind' })),
-            API.top(qs({ by: 'interpret', limit: 12 })),
-            API.top(qs({ by: 'titel', limit: 12 })),
+            API.top(qs({ by: 'interpret', limit: 12, metric: vocab(state.kind).whoMetric })),
+            API.top(qs({ by: 'titel', limit: 12, metric: vocab(state.kind).whatMetric })),
         ]);
         renderKpis(sum);
         // Die Karten heißen, wie das heißt, was in ihnen steht.
         const v = vocab(state.kind);
         document.getElementById('mTopArtistsHead').textContent = v.whoMark + ' ' + v.whos;
         document.getElementById('mTopTitlesHead').textContent = v.mark + ' ' + v.whats;
+        // Die Unterzeile sagt, WONACH sortiert ist -- sonst liest man eine
+        // Show-Rangliste als Wiedergabezahl.
+        const noteA = document.getElementById('mTopArtistsNote');
+        const noteT = document.getElementById('mTopTitlesNote');
+        if (noteA) noteA.textContent = v.whoNote + ' · Klick filtert';
+        if (noteT) noteT.textContent = v.whatNote;
         document.getElementById('mSeriesLbl').textContent =
             '· ' + (ser.grain_label || '');
         drawSeries(ser);
@@ -399,9 +434,10 @@ async function loadOverview() {
             : '';
 
         document.getElementById('mTopArtists').innerHTML =
-            rankList(artists.items || [], { clickable: true, empty: v.whos });
+            rankList(artists.items || [], { clickable: true, empty: v.whos,
+                                            metric: v.whoMetric, unit: v.countUnit });
         document.getElementById('mTopTitles').innerHTML =
-            rankList(titles.items || [], { empty: v.whats });
+            rankList(titles.items || [], { empty: v.whats, metric: v.whatMetric });
     } catch (e) {
         box.kpis.innerHTML = '<div class="empty is-error" style="grid-column:1/-1">' +
             '<span class="empty-mark" aria-hidden="true">⚠️</span>' +

@@ -394,35 +394,56 @@ async def series(step: str = Query("auto", description="auto | tag | woche | mon
 TOP_FIELDS = {"interpret": "artist", "titel": "title", "album": "album", "art": "kind"}
 
 
+# Wonach eine Rangliste sortiert. Musik und Podcast fragen verschiedene
+# Dinge: bei Musik zaehlt, wie OFT man etwas gehoert hat, bei einem Podcast
+# WIE VIELE Folgen -- eine Episode hoert man einmal, "Top-Episode nach
+# Wiedergaben" waere dort eine Liste von Einsen.
+TOP_METRICS = {
+    "plays": "SUM(plays) DESC NULLS LAST",
+    "titles": "COUNT(DISTINCT NULLIF(title,'')) DESC",
+    "last": "MAX(period_start) DESC",
+}
+
+
 @router.get("/api/music/top")
 async def top(by: str = Query("interpret", description="interpret | titel | album | art"),
+              metric: str = Query("plays", description="plays | titles | last"),
               limit: int = 20,
               f: dict = Depends(_common), db=Depends(get_db),
               user=Depends(get_current_user)):
     """Rangliste. Bei ``titel`` steht der Interpret mit im Schlüssel — zwei
-    verschiedene Lieder dürfen denselben Namen tragen."""
+    verschiedene Lieder dürfen denselben Namen tragen.
+
+    ``metric`` entscheidet die Sortierung, nicht den Inhalt: jede Zeile bringt
+    Wiedergaben, verschiedene Titel und den letzten Zeitpunkt ohnehin mit,
+    damit die Oberfläche beschriften kann, ohne ein zweites Mal zu fragen.
+    """
     if by not in TOP_FIELDS:
         raise HTTPException(400, "Unbekannte Rangliste")
+    if metric not in TOP_METRICS:
+        raise HTTPException(400, "Unbekannte Sortierung")
     field = TOP_FIELDS[by]
     lim = max(1, min(int(limit or 20), 200))
     flt = _filters(user["id"], **f)
     group_cols = "artist, title" if by == "titel" else field
     rows = await db.fetch(
         f"SELECT {group_cols}, SUM(plays) AS plays, SUM(ms_played) AS ms, "
+        f"       COUNT(DISTINCT NULLIF(title,'')) AS titles, "
         f"       MIN(period_start) AS von, MAX(period_end) AS bis "
         f"  FROM music_entries WHERE {flt.where} AND {field} <> '' "
-        f" GROUP BY {group_cols} ORDER BY plays DESC NULLS LAST LIMIT ${flt.next_index()}",
+        f" GROUP BY {group_cols} ORDER BY {TOP_METRICS[metric]} LIMIT ${flt.next_index()}",
         *flt.params, lim)
     out = []
     for r in rows:
         item = {"plays": int(r["plays"] or 0),
+                "titles": int(r["titles"] or 0),
                 "ms_played": int(r["ms"]) if r["ms"] is not None else None,
                 "from": r["von"].isoformat() if r["von"] else None,
                 "to": r["bis"].isoformat() if r["bis"] else None}
         item["label"] = r["title"] if by == "titel" else r[field]
         item["sub"] = r["artist"] if by == "titel" else None
         out.append(item)
-    return {"by": by, "items": out}
+    return {"by": by, "metric": metric, "items": out}
 
 
 SORT_COLUMNS = {

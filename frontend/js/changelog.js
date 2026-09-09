@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.77.0', date: '2026-09-09', title: 'Podcasts werden anders gezählt als Musik', notes: [
+        'Shows stehen jetzt nach Anzahl der Folgen im Rang, nicht nach Wiedergaben — eine Episode hört man einmal, „Top-Episode nach Wiedergaben“ wäre eine Liste von Einsen.',
+        'Die zweite Karte zeigt bei Podcasts das zuletzt Gehörte mit Datum statt einer Rangliste, die keine ist.',
+        'Bei Musik bleibt alles nach Wiedergaben sortiert; dort ist Wiederholung die eigentliche Aussage.',
+        'Jede Rangliste schreibt jetzt dazu, wonach sie sortiert ist.',
+    ]},
     { v: 'v1.76.0', date: '2026-09-09', title: 'Sparziel-Verlauf mit echter Zeitachse', notes: [
         'Der Verlauf zeigt jetzt jeden Kalendertag ab dem ersten Eintrag des Ziels — vorher lag ein Punkt je Buchung auf der Kurve und die Achse war deshalb ausgeblendet.',
         'Eine Woche ohne Einzahlung sah dadurch genauso breit aus wie ein Tag mit drei Buchungen; jetzt stimmen die Abstände.',
