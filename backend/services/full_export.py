@@ -213,6 +213,8 @@ EXPORT_SECTIONS: list[dict] = [
      "label": "Protokoll (Check-ins, Meilensteine, Auszahlungen)"},
     {"key": "ausgaben", "group": "ausgaben", "aggregatable": True, "dated": True,
      "label": "Bons und ihre Positionen"},
+    {"key": "expense_imports", "group": "ausgaben", "aggregatable": False, "dated": False,
+     "label": "Protokoll der Kontoauszug-Uploads"},
     {"key": "health_summary", "group": "health", "aggregatable": False, "dated": False,
      "label": "Zusammenfassung"},
     {"key": "health_vitals", "group": "health", "aggregatable": True, "dated": True,
@@ -239,6 +241,14 @@ EXPORT_GROUPS: list[dict] = [
 ]
 
 ALL_SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS]
+
+# Wie eine Buchung entstanden ist. Steht als Klartext in der Datei -- ein
+# Schluessel wie 'import' waere in fuenf Jahren eine Ratearbeit.
+HERKUNFT = {
+    "receipt": "Bon gescannt",
+    "manual": "von Hand erfasst",
+    "import": "CSV-Import (Kontoauszug)",
+}
 
 
 def clean_sections(raw) -> list[str]:
@@ -392,13 +402,59 @@ async def build_full_export_csv(
     cols = clean_column_map(column_map)
     built = await _build_sections(db, user, picked, date_from, date_to, agg_map)
 
-    lines = _export_header(user, picked, date_from, date_to, agg_map)
+    backlog = await _backlog_facts(db, user["id"]) if "ausgaben" in picked else None
+    lines = _export_header(user, picked, date_from, date_to, agg_map, backlog)
     for key, section_lines in built:
         lines.extend(_filter_columns(section_lines, cols.get(key)))
     return _compact_timestamps("\n".join(lines) + "\n")
 
 
-def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict) -> list[str]:
+async def _sec_expense_imports(db, user_id: int) -> list[str]:
+    """Protokoll der Kontoauszug-Uploads. Beantwortet ein Jahr spaeter die
+    Frage, welche Datei welchen Zeitraum in den Bestand gebracht hat."""
+    rows = await db.fetch(
+        """SELECT id, filename, uploaded_at, date_from, date_to, rows_read,
+                  rows_written, rows_skipped, rows_replaced, stores_created
+             FROM expense_imports WHERE user_id=$1
+            ORDER BY uploaded_at""", user_id)
+    out = ["# SEKTION: Ausgaben - Protokoll der CSV-Uploads (Kontoauszuege)",
+           "import_id;Hochgeladen;Datei;Zeitraum von;Zeitraum bis;Zeilen gelesen;"
+           "uebernommen;uebersprungen;ersetzt;Laeden angelegt"]
+    for r in rows:
+        up = r["uploaded_at"].isoformat() if r["uploaded_at"] else ""
+        out.append(
+            f'{r["id"]};{up};{_f(r["filename"] or "")};'
+            f'{r["date_from"].isoformat() if r["date_from"] else ""};'
+            f'{r["date_to"].isoformat() if r["date_to"] else ""};'
+            f'{r["rows_read"]};{r["rows_written"]};{r["rows_skipped"]};'
+            f'{r["rows_replaced"]};{r["stores_created"]}')
+    out.append("")
+    return out
+
+
+async def _backlog_facts(db, user_id: int) -> Optional[dict]:
+    """Wie viel des Ausgaben-Bestands aus einem Kontoauszug stammt.
+
+    Abgeleitet wird das aus ``source``, nicht aus einem festen Datum: wer
+    spaeter noch einen aelteren Auszug nachreicht, bekommt trotzdem einen
+    richtigen Hinweis. Gibt es keinen Import, entfaellt der Absatz ganz --
+    eine Erklaerung fuer etwas, das es nicht gibt, ist Rauschen.
+    """
+    r = await db.fetchrow(
+        """SELECT COUNT(*) AS n, MIN(purchase_date) AS von, MAX(purchase_date) AS bis,
+                  COALESCE(SUM(total_amount), 0) AS summe
+             FROM expenses WHERE user_id=$1 AND source='import'""", user_id)
+    if not r or not r["n"]:
+        return None
+    eigen = await db.fetchval(
+        "SELECT COUNT(*) FROM expenses WHERE user_id=$1 AND COALESCE(source,'receipt')<>'import'",
+        user_id) or 0
+    return {"n": r["n"], "von": r["von"], "bis": r["bis"],
+            "summe": r["summe"], "eigen": eigen}
+
+
+def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
+                   backlog: Optional[dict] = None) -> list[str]:
     """Der Vorspann dokumentiert die Zusammenstellung in der Datei selbst --
     ein halber Export ohne diese Zeilen sieht ein Jahr spaeter aus wie
     fehlende Daten."""
@@ -425,6 +481,31 @@ def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict) -
         "# Konventionen: Zeitstempel sind UTC im Format YYYY-MM-DDTHH:MM:SSZ "
         "(keine Mikrosekunden). Gesundheitswerte nutzen Punkt-Dezimal, "
         "Euro-Betraege in der Ausgaben-Sektion nutzen Komma-Dezimal.")
+    if backlog:
+        # Ohne diesen Absatz sieht der Rueckblick aus wie schlecht erfasste
+        # Bons: hunderte Eintraege ohne eine einzige Position.
+        von = backlog["von"].isoformat() if backlog["von"] else "?"
+        bis = backlog["bis"].isoformat() if backlog["bis"] else "?"
+        lines.append(
+            f"# NACHTRAG (Backlog): {backlog['n']} der Buchungen stammen NICHT aus "
+            f"Vexbob, sondern aus dem CSV-Export der Banking-App (C24) und decken "
+            f"{von} bis {bis} ab. Sie tragen in der Spalte 'Herkunft' den Wert "
+            f"'{HERKUNFT['import']}'.")
+        lines.append(
+            "# Diese Buchungen haben KEINE Einzelpositionen - der Kontoauszug "
+            "kennt nur den Gesamtbetrag. In der Positions-Sektion steht je "
+            "Buchung genau eine Sammelzeile ueber den vollen Betrag; sie ist "
+            "als nicht preisvergleichbar markiert und taucht deshalb in "
+            "Artikel- und Preisauswertungen bewusst nicht auf. Fehlende "
+            "Positionen sind hier also die Datenlage, kein Erfassungsfehler.")
+        lines.append(
+            "# Ihre Spalten 'Kategorie (Bank)' und 'Unterkategorie (Bank)' sind "
+            "die Vorgaben der Banking-App, NICHT die Kategorien dieser Website. "
+            "Die eigene Kategorie ist bei diesen Buchungen zunaechst leer und "
+            "wird in einem gesonderten Schritt zugeordnet.")
+        lines.append(
+            f"# Selbst erfasst (Bon gescannt oder von Hand): {backlog['eigen']} "
+            f"Buchungen. Nur diese haben echte Einzelpositionen.")
     lines.append("")
     return lines
 
@@ -465,6 +546,9 @@ async def _build_sections(db, user, picked: list[str], date_from, date_to,
         out.append(("ausgaben", await _expenses_sections(
             db, uid, date_from=date_from, date_to=date_to,
             aggregate=agg_map.get("ausgaben", "none"))))
+
+    if "expense_imports" in want:
+        out.append(("expense_imports", await _sec_expense_imports(db, uid)))
 
     health_keys = [k for k in ("health_summary", "health_vitals", "health_bp",
                                "health_glucose", "health_sleep", "health_workouts")
@@ -763,7 +847,9 @@ async def _expenses_sections(
 
     rows = await db.fetch(
         f"""SELECT e.id, e.purchase_date, e.total_amount, e.payment_method,
-                   e.expense_type, e.note, s.name AS store_name
+                   e.expense_type, e.note, s.name AS store_name,
+                   COALESCE(e.source, 'receipt') AS source, e.src_payee,
+                   e.src_category, e.src_subcategory
             FROM expenses e LEFT JOIN stores s ON s.id=e.store_id
             {exp_where} ORDER BY e.purchase_date, e.id""",
         *exp_params)
@@ -798,14 +884,18 @@ async def _expenses_sections(
     out.append(
         "# SEKTION: Ausgaben - Bons (ein Eintrag pro Beleg; Positionen in "
         "naechster Sektion, verknuepft ueber expense_id)")
-    out.append("expense_id;Datum;Laden;Typ;Gesamt (EUR);Zahlungsart;Notiz")
+    out.append("expense_id;Datum;Laden;Typ;Gesamt (EUR);Zahlungsart;Notiz;"
+               "Herkunft;Empfaenger (Bank);Kategorie (Bank);Unterkategorie (Bank)")
     for r in rows:
         note = _f((r["note"] or "").replace("\n", " ").replace("\r", " ")) if r["note"] else ""
         out.append(
             f'{r["id"]};'
             f'{r["purchase_date"].isoformat() if r["purchase_date"] else ""};'
             f'{_f(r["store_name"] or "")};{_f(r["expense_type"] or "")};'
-            f'{_euro_de(r["total_amount"])};{_f(r["payment_method"] or "")};{note}'
+            f'{_euro_de(r["total_amount"])};{_f(r["payment_method"] or "")};{note};'
+            f'{HERKUNFT.get(r["source"], r["source"] or "")};'
+            f'{_f(r["src_payee"] or "")};{_f(r["src_category"] or "")};'
+            f'{_f(r["src_subcategory"] or "")}'
         )
     out.append("")
 

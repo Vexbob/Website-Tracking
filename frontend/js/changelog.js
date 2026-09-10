@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.80.0', date: '2026-09-10', title: 'Kontoauszug als CSV übernehmen', notes: [
+        'Ausgaben aus der Zeit vor August 2026 lassen sich als CSV aus der Banking-App einlesen — unter Ausgaben › Import.',
+        'Die Vorschau zeigt vorher, welche Zahlungsempfänger auf vorhandene Läden treffen und welche neu entstünden; „AMAZON.DE“ und „Amazon EU S.a.r.l.“ landen beim selben Laden.',
+        'Gutschriften bleiben draußen: Gehalt und Erstattungen würden die Monatssummen eines Ausgaben-Trackers verfälschen. Die Vorschau nennt die Zahl.',
+        'Importierte Buchungen bleiben dauerhaft als Nachtrag erkennbar — der Export erklärt jetzt, warum sie keine Einzelpositionen haben, und nennt die Herkunft je Zeile.',
+        'Ein Upload lässt sich als Ganzes zurücknehmen, und derselbe Upload zweimal hintereinander ist folgenlos.',
+    ]},
     { v: 'v1.79.0', date: '2026-09-10', title: 'Die älteren Seiten holen auf', notes: [
         'Notizen, Blog, Blog-Verwaltung und die Account-Verwaltung folgen jetzt dem eingestellten Farbverlauf — sie hatten als einzige noch ein fest eingebautes Blau.',
         'Weiße Schrift auf hellen Statusfarben ist raus, zuletzt beim Löschen-Knopf in jedem Bestätigungsfenster.',

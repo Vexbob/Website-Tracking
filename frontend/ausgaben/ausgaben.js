@@ -341,11 +341,15 @@ function renderSubnav() {
         { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
         { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },
         { key: 'duplikate',    href: '/ausgaben/duplikate.html',     label: '♻️ Duplikate' },
+        // v1.80.0: Der Nachtrag aus der Banking-App. Steht bewusst neben dem
+        // CSV-Export -- Import und Export sind dieselbe Frage in beide
+        // Richtungen, und wer den einen sucht, denkt auch an den anderen.
+        { key: 'import',       href: '/ausgaben/import.html',        label: '⬆️ Import' },
     ];
     el.className = 'subnav';
     el.innerHTML = links.map(l =>
         `<a href="${l.href}"${l.key === active ? ' class="primary"' : ''}>${l.label}</a>`
-    ).join('') + '<a href="#" id="exportCsvLink">⬇ CSV</a>';
+    ).join('') + '<a href="#" id="exportCsvLink">⬇ Export</a>';
     const csv = document.getElementById('exportCsvLink');
     if (csv) csv.onclick = (e) => { e.preventDefault(); downloadFile(AUSGABEN_API.exportCsv(), 'ausgaben_' + todayISO() + '.csv'); };
 }

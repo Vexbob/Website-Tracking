@@ -26,6 +26,9 @@ TABLES_ORDERED = [
     "expense_categories",
     "category_rules",
     "receipt_images",
+    # Das Upload-Protokoll steht VOR den Buchungen: expenses.import_id zeigt
+    # darauf, beim Zurueckspielen muss die Zeile also schon existieren.
+    "expense_imports",
     "expenses",
     "expense_items",
     # Health-Modul (v1.22.0)

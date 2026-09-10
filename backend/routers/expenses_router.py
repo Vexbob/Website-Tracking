@@ -29,6 +29,8 @@ from services.expenses import suggest_category, learn_rule, process_image
 from services.ocr import get_ocr_provider
 from services.receipt_parser import parse_receipt
 from services.ai_receipt_parser import ai_parse_receipt, normalize_expense_type
+from services import expense_import
+import json as _json
 
 
 router = APIRouter(tags=["expenses"])
@@ -2016,3 +2018,103 @@ async def ocr_status(user=Depends(get_current_user)):
     p = get_ocr_provider()
     return {"provider": p.name, "available": p.available}
 
+
+
+# ==========================================================================
+# CSV-Import (v1.80.0) — der Rueckblick aus der Banking-App
+# ==========================================================================
+# Vor August 2026 wurden Ausgaben nicht in Vexbob erfasst. Der Backlog kommt
+# als CSV aus der C24-App und hat keine Positionen, nur Gesamtbetraege. Was
+# daraus folgt, steht ausfuehrlich in services/expense_import.py.
+
+MAX_EXPENSE_IMPORT_BYTES = 10 * 1024 * 1024
+
+
+@router.post("/api/expenses/import")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def import_expenses_csv(request: Request,
+                              file: UploadFile = File(...),
+                              dry_run: bool = Query(False, description="Nur zeigen, was passieren würde"),
+                              db=Depends(get_db),
+                              user=Depends(get_current_user)):
+    """Kontoauszug als CSV übernehmen.
+
+    Mit ``dry_run=1`` wird nichts geschrieben — die Antwort sagt, welcher
+    Zeitraum ersetzt würde, welche Empfänger auf vorhandene Läden treffen,
+    welche neu angelegt würden und wie viele Zeilen als Gutschrift wegfallen.
+    Ein Import, der Läden anlegt und einen Zeitraum leerräumt, darf keine
+    Überraschung sein.
+    """
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "Die Datei ist leer.")
+    if len(raw) > MAX_EXPENSE_IMPORT_BYTES:
+        raise HTTPException(413, "Die Datei ist größer als 10 MB.")
+
+    name = (file.filename or "").rsplit("/", 1)[-1][:200]
+    try:
+        if dry_run:
+            return await expense_import.preview(db, user["id"], raw, name)
+        result = await expense_import.apply(db, user["id"], raw, name)
+    except expense_import.ExpenseImportError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        logger.exception("expense import failed")
+        raise HTTPException(500, f"Import fehlgeschlagen: {e}")
+
+    logger.info("expense import user=%s rows=%s replaced=%s stores=%s",
+                user["id"], result["rows_written"], result["rows_replaced"],
+                result["stores_created"])
+    return result
+
+
+@router.get("/api/expenses/imports")
+async def list_expense_imports(limit: Optional[int] = 50, db=Depends(get_db),
+                               user=Depends(get_current_user)):
+    """Protokoll der Uploads — woher welche Buchungen stammen."""
+    n = max(1, min(int(limit or 50), 200))
+    rows = await db.fetch(
+        """SELECT id, filename, size_bytes, uploaded_at, date_from, date_to,
+                  rows_read, rows_written, rows_skipped, rows_replaced,
+                  stores_created, notes
+             FROM expense_imports
+            WHERE user_id=$1
+            ORDER BY uploaded_at DESC
+            LIMIT $2""", user["id"], n)
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["uploaded_at"] = r["uploaded_at"].isoformat() if r["uploaded_at"] else None
+        d["date_from"] = r["date_from"].isoformat() if r["date_from"] else None
+        d["date_to"] = r["date_to"].isoformat() if r["date_to"] else None
+        d["notes"] = _json_or_empty(r["notes"])
+        out.append(d)
+    return out
+
+
+@router.delete("/api/expenses/imports/{import_id}")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def undo_expense_import(request: Request, import_id: int,
+                              db=Depends(get_db),
+                              user=Depends(get_current_user)):
+    """Einen Import als Ganzes zurücknehmen.
+
+    Angelegte Läden bleiben stehen — sie könnten inzwischen an selbst
+    erfassten Bons hängen.
+    """
+    try:
+        return await expense_import.undo(db, user["id"], import_id)
+    except expense_import.ExpenseImportError as e:
+        raise HTTPException(404, str(e))
+
+
+def _json_or_empty(v):
+    """asyncpg gibt JSONB je nach Codec als str oder als dict zurück."""
+    if isinstance(v, dict):
+        return v
+    if not v:
+        return {}
+    try:
+        return _json.loads(v)
+    except (ValueError, TypeError):
+        return {}

@@ -1,0 +1,77 @@
+/* import.css — v1.80.0
+ *
+ * Nur das, was es noch nicht gibt. Flächen, Zeilen, Knöpfe, Marken und die
+ * Ablegefläche kommen aus style.css; hier stehen die drei Dinge, die diese
+ * Seite eigen hat: die Kennzahlen der Vorschau, die Listen der zugeordneten
+ * Läden und der Hinweis, was ersetzt wird.
+ */
+
+.imp-hint { font-size: 0.8125rem; line-height: 1.55; color: var(--text-2);
+    margin: 0 0 var(--space-4); }
+.imp-hint strong { color: var(--text-1); font-weight: 600; }
+
+.imp-plan { margin-top: var(--space-4); }
+.imp-plan:empty { display: none; }
+
+.imp-plan-head { display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.imp-plan-title { font-size: 0.9375rem; font-weight: 650; color: var(--text-1); }
+.imp-plan-sub { font-size: 0.8125rem; color: var(--text-3);
+    font-variant-numeric: tabular-nums; }
+
+/* Die vier Zahlen, die vor dem Übernehmen zählen. Kein Verlauf, keine
+   Icon-Kachel: sie stehen unter einer Überschrift, die sie schon einordnet. */
+.imp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: var(--space-2); margin-bottom: var(--space-4); }
+.imp-kpi { background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 0.625rem 0.75rem; min-width: 0; }
+.imp-kpi-val { font-size: 1.125rem; font-weight: 700; color: var(--text-1);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.imp-kpi-lbl { font-size: 0.6875rem; color: var(--text-3); margin-top: 2px; }
+/* Ein Zeitraum ist laenger als eine Zahl und braucht deshalb weniger Grad. */
+.imp-kpi-val.is-span { font-size: 0.9375rem; }
+
+.imp-sec { margin-top: var(--space-4); }
+.imp-sec-head { display: flex; align-items: baseline; gap: 0.5rem;
+    margin-bottom: var(--space-2); flex-wrap: wrap; }
+.imp-sec-head h3 { font-size: 0.875rem; font-weight: 650; color: var(--text-1); margin: 0; }
+.imp-sec-note { font-size: 0.75rem; color: var(--text-3); }
+
+/* Läden und Kategorien als flache Liste. Sie kann lang werden — ein Jahr
+   Kontoauszug bringt schnell 40 Empfänger mit —, deshalb scrollt sie in sich
+   statt die Seite zu strecken. */
+.imp-list { display: flex; flex-direction: column; gap: 0.25rem;
+    max-height: 18rem; overflow-y: auto; }
+.imp-row { display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.4375rem 0.625rem; background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: var(--radius); font-size: 0.8125rem; }
+.imp-row-name { flex: 1; min-width: 0; font-weight: 600; color: var(--text-1);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-row-sub { font-size: 0.6875rem; color: var(--text-3); font-weight: 500;
+    white-space: nowrap; }
+.imp-row-val { font-variant-numeric: tabular-nums; color: var(--text-2);
+    white-space: nowrap; }
+/* Die Schreibweisen, die zu einem Laden zusammengefasst wurden. Sie sind der
+   Beleg dafür, dass die Zusammenfassung stimmt — ohne sie müsste man raten. */
+.imp-row-raw { font-size: 0.6875rem; color: var(--text-3); font-style: italic;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+
+.imp-note { font-size: 0.8125rem; line-height: 1.55; color: var(--text-3);
+    margin: var(--space-3) 0 0; }
+.imp-note:empty { display: none; }
+/* Was ersetzt oder übersprungen wird, ist die Zahl mit Folgen — sie trägt die
+   Warnfarbe als Text, nicht als Fläche. */
+.imp-note strong.imp-warn { color: var(--warn); font-weight: 600; }
+
+.imp-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: var(--space-4); }
+
+.imp-log-row { display: flex; align-items: flex-start; gap: var(--space-3); }
+.imp-log-row > div:first-child { flex: 1; min-width: 0; }
+.imp-log-name { font-weight: 600; font-size: 0.875rem; color: var(--text-1);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-log-meta { font-size: 0.75rem; color: var(--text-3); margin-top: 0.2rem;
+    font-variant-numeric: tabular-nums; }
+
+@media (max-width: 560px) {
+    .imp-row-raw { display: none; }
+}
