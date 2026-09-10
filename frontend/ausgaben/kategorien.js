@@ -10,6 +10,17 @@
  * Suche, Sortierung, ein Aufräum-Hinweis für nie benutzte Kategorien. Bearbeitet
  * wird im Modal — dort liegen auch Zusammenführen und Löschen.
  */
+const SKEL_CARDS = Array.from({ length: 6 }, () =>
+    '<article class="entity-card"><span class="skel skel-line" style="width:2rem;height:2rem;border-radius:10px"></span>' +
+    '<div class="entity-main"><span class="skel skel-line long"></span>' +
+    '<span class="skel skel-line short"></span></div></article>').join('');
+
+function emptyBox(mark, text, error) {
+    return '<div class="empty' + (error ? ' is-error' : '') + '">' +
+        '<span class="empty-mark" aria-hidden="true">' + mark + '</span>' +
+        '<p class="empty-text">' + text + '</p></div>';
+}
+
 let categories = [];
 let usage = {};          // category_id -> { count, total }
 let maxSpent = 0;
@@ -34,7 +45,7 @@ function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
  * Zahlen statt ganz leer. */
 async function loadCategories() {
     const list = document.getElementById('list');
-    list.innerHTML = '<div class="empty-note">Lade …</div>';
+    list.innerHTML = SKEL_CARDS;
     try {
         const [cats, stats] = await Promise.all([
             AUSGABEN_API.categories(),
@@ -51,7 +62,8 @@ async function loadCategories() {
         });
         render();
     } catch (e) {
-        list.innerHTML = `<div class="empty-note">Fehler: ${escHtml(e.message)}</div>`;
+        list.innerHTML = emptyBox('\u26A0\uFE0F',
+            'Die Kategorien konnten nicht geladen werden: ' + escHtml(e.message), true);
     }
 }
 
@@ -78,11 +90,13 @@ function render() {
     renderCleanup(unused);
 
     if (!categories.length) {
-        list.innerHTML = '<div class="empty-note">Noch keine Kategorien. Beim ersten gescannten Bon legt der Parser sie selbst an.</div>';
+        list.innerHTML = emptyBox('\uD83C\uDFF7\uFE0F',
+            'Noch keine Kategorien. Beim ersten gescannten Bon legt der Parser sie selbst an.');
         return;
     }
     if (!rows.length) {
-        list.innerHTML = '<div class="empty-note">Keine Kategorie gefunden.</div>';
+        list.innerHTML = emptyBox('\uD83D\uDD0D',
+            'Keine Kategorie passt zu dieser Suche. Ein k\u00fcrzerer Begriff findet mehr.');
         return;
     }
 
@@ -250,12 +264,14 @@ function openEditModal(c) {
 async function loadRules() {
     const wrap = document.getElementById('rules');
     const countEl = document.getElementById('rulesCount');
-    wrap.innerHTML = '<div class="empty-note">Lade …</div>';
+    wrap.innerHTML = '<span class="skel skel-line long"></span>' +
+        '<span class="skel skel-line"></span><span class="skel skel-line short"></span>';
     try {
         const rules = await AUSGABEN_API.rules();
         countEl.textContent = rules.length ? `${rules.length} gelernt` : '';
         if (!rules.length) {
-            wrap.innerHTML = '<div class="empty-note">Noch keine Regeln gelernt.</div>';
+            wrap.innerHTML = emptyBox('\uD83E\uDDE0',
+                'Noch keine Regeln. Vexbob lernt eine, sobald du einem Artikel von Hand eine Kategorie gibst.');
             return;
         }
         // loadRules() laeuft parallel zu loadCategories() -- beim ersten Aufruf
@@ -279,7 +295,8 @@ async function loadRules() {
             };
         });
     } catch (e) {
-        wrap.innerHTML = `<div class="empty-note">Fehler: ${escHtml(e.message)}</div>`;
+        wrap.innerHTML = emptyBox('\u26A0\uFE0F',
+            'Die Regeln konnten nicht geladen werden: ' + escHtml(e.message), true);
     }
 }
 

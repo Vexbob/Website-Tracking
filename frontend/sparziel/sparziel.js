@@ -744,7 +744,7 @@ function renderProgressGoals(){
                     <button class="danger" onclick="deleteProgress(${g.id})">Löschen</button>
                     <button class="cancel" onclick="togglePgExpand(${g.id})">Schließen</button>
                 </div>
-                <div class="pg-history" id="pgHist_${g.id}"><h4>Vergangene Perioden</h4><div class="muted" style="font-size:0.75rem;padding:0.375rem 0">Lade…</div></div>
+                <div class="pg-history" id="pgHist_${g.id}"><h4>Vergangene Perioden</h4><span class="skel skel-line long"></span><span class="skel skel-line short"></span></div>
             </div>
         </div>`;
     }).join('');

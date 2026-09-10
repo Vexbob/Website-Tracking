@@ -480,7 +480,7 @@ button:active { transform: scale(0.98); }
 .btn-success { background: var(--green-dark); color: #fff; border-color: var(--green-dark); }
 .btn-success:hover { opacity: 0.9; background: var(--green-dark); border-color: var(--green-dark); }
 .btn-danger { background: var(--red-bg); color: var(--red); border-color: transparent; }
-.btn-danger:hover { background: var(--red); color: #fff; border-color: var(--red); }
+.btn-danger:hover { background: var(--danger); color: var(--accent-ink); border-color: var(--danger); }
 .btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
 .btn-sm { padding: 0.35rem 0.65rem; font-size: 0.75rem; }
@@ -749,7 +749,25 @@ input[type="checkbox"] { display: inline; width: auto; }
     pointer-events: none;
 }
 .toast.show { opacity: 1; pointer-events: auto; }
-.toast.err  { background: var(--red); color: #fff; }
+/* --red ist der helle Ton fuer Text auf dunklem Grund. Als Flaeche traegt er
+   dunkle Schrift -- weisse war hier hell auf hell (DESIGN.md, v1.59.0). */
+.toast.err  { background: var(--danger); color: var(--accent-ink); }
+
+/* Ausweich-Toast des Ausgaben-Moduls: nav-switcher.js laedt ui.js nach, in
+   dem Moment davor gibt es window.Toast noch nicht. Stand bis v1.79.0
+   fuenfmal wortgleich im <style>-Kopf je einer Ausgaben-Seite. */
+.ausg-toast {
+    position: fixed; bottom: 1.5rem; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--text-1); color: var(--surface-1);
+    padding: 0.75rem 1.25rem; border-radius: 10px;
+    font-size: 0.875rem; font-weight: 500; z-index: 1000;
+    opacity: 0; transition: transform .25s, opacity .25s;
+    box-shadow: var(--shadow-float); pointer-events: none;
+}
+.ausg-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.ausg-toast-success { background: var(--ok); color: var(--accent-ink); }
+.ausg-toast-error   { background: var(--danger); color: var(--accent-ink); }
 
 /* ==========================================================================
    A11y & Motion (P0-Fixes, v1.25.2)
@@ -924,8 +942,8 @@ input[type="checkbox"] { display: inline; width: auto; }
 .ui-confirm-btn:active { transform: scale(0.97); }
 .ui-confirm-btn.ui-confirm-ok { background: var(--text); color: var(--surface); border-color: var(--text); }
 .ui-confirm-btn.ui-confirm-ok:hover { opacity: 0.9; background: var(--text); }
-.ui-confirm-btn.ui-confirm-ok.danger { background: var(--red); border-color: var(--red); color: #fff; }
-.ui-confirm-btn.ui-confirm-ok.danger:hover { background: var(--red-dark); border-color: var(--red-dark); }
+.ui-confirm-btn.ui-confirm-ok.danger { background: var(--danger); border-color: var(--danger); color: var(--accent-ink); }
+.ui-confirm-btn.ui-confirm-ok.danger:hover { filter: brightness(1.06); background: var(--danger); border-color: var(--danger); }
 @media (max-width: 480px) {
     .ui-confirm-actions { flex-direction: column-reverse; }
     .ui-confirm-btn { width: 100%; }
@@ -1583,13 +1601,14 @@ button.rank-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
    Die gestrichelte Kante ist dieselbe Sprache wie beim leeren Zustand: hier
    ist noch nichts, hier koennte etwas hin. Sie war bis v1.66 nur im
    Gesundheits-Modul definiert (.h-dropzone); mit dem Musik-Import gab es sie
-   ein zweites Mal, also steht sie jetzt hier -- und .h-dropzone erbt.
+   ein zweites Mal, also steht sie jetzt hier -- .h-dropzone und die
+   Bon-Aufnahme (.upload-drop) erben.
 
    Drei Zustaende, die man auseinanderhalten muss: bereit, Datei schwebt
    darueber (drag), Datei liegt drin (has-files). Der letzte wechselt auf
    eine durchgezogene Kante -- gestrichelt heisst "leer", und das stimmt dann
    nicht mehr. */
-.dropzone, .h-dropzone {
+.dropzone, .h-dropzone, .upload-drop {
     border: 2px dashed var(--line-strong);
     border-radius: var(--radius);
     padding: var(--space-5) var(--space-4);
@@ -1598,10 +1617,10 @@ button.rank-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     transition: border-color var(--dur-1) var(--ease),
                 background var(--dur-1) var(--ease);
 }
-.dropzone:hover, .h-dropzone:hover { border-color: var(--accent); background: var(--surface-1); }
-.dropzone.drag,  .h-dropzone.drag  { border-color: var(--accent); background: var(--accent-soft); }
-.dropzone:focus-visible, .h-dropzone:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.dropzone.has-files, .h-dropzone.has-files {
+.dropzone:hover, .h-dropzone:hover, .upload-drop:hover { border-color: var(--accent); background: var(--surface-1); }
+.dropzone.drag,  .h-dropzone.drag,  .upload-drop.drag { border-color: var(--accent); background: var(--accent-soft); }
+.dropzone:focus-visible, .h-dropzone:focus-visible, .upload-drop:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.dropzone.has-files, .h-dropzone.has-files, .upload-drop.has-files {
     border-style: solid;
     border-color: color-mix(in srgb, var(--ok) 55%, transparent);
     background: var(--ok-soft);

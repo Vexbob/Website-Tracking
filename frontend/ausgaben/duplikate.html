@@ -24,17 +24,13 @@ body{visibility:hidden}body.ready{visibility:visible}
 .dup-row.dup-keep{font-weight:600}
 .dup-group .btn-merge{margin-top:0.5rem;background:var(--grad-accent);color:var(--accent-ink);border:none;border-radius:10px;padding:0.5rem 0.875rem;font-size:0.8125rem;font-weight:600;cursor:pointer}
 .dup-group .btn-merge:disabled{opacity:0.6;cursor:default}
-.dup-dismiss{position:absolute;top:0.5rem;right:0.5rem;width:auto;margin:0;padding:0.25rem 0.4rem;font-size:0.9rem;line-height:1;background:transparent;border:none;color:var(--text-faint);cursor:pointer}
+.dup-dismiss{position:absolute;top:0.5rem;right:0.5rem;width:auto;margin:0;padding:0.25rem 0.4rem;font-size:0.9rem;line-height:1;background:transparent;border:none;color:var(--text-3);cursor:pointer}
 .dup-dismiss:hover{color:var(--danger)}
-.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
-.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-.ausg-toast-success{background:var(--green-dark)}
-.ausg-toast-error{background:var(--red-dark)}
 </style>
 </head>
 <body>
 <nav class="navbar">
-    <a href="/ausgaben/" class="nav-title">← Duplikate</a>
+    <span class="nav-title">Duplikate</span>
     <div class="nav-right">
         <span class="nav-btn" id="userLabel" style="cursor:default"></span>
         <button class="nav-btn" id="logoutBtn">Logout</button>
@@ -42,9 +38,15 @@ body{visibility:hidden}body.ready{visibility:visible}
 </nav>
 <main>
 <div id="subnav" data-active="duplikate"></div>
+
+    <header class="page-head">
+        <h1>Duplikate</h1>
+        <p class="page-sub">Bons mit gleichem Laden, gleichem Datum und ähnlichem Betrag.
+        „Zusammenführen“ behält den vollständigsten Bon und löscht die anderen,
+        „✕“ blendet einen Vorschlag dauerhaft aus, ohne etwas zu löschen.</p>
+    </header>
+
     <div class="card">
-        <h3>♻️ Mögliche Duplikate</h3>
-        <p class="muted" style="font-size:0.8125rem;margin-bottom:0.75rem">Bons mit gleichem Laden, gleichem Datum und ähnlichem Betrag. „Zusammenführen" behält den vollständigsten Bon und löscht die anderen, „✕" blendet einen Vorschlag dauerhaft aus, ohne etwas zu löschen.</p>
         <div id="duplicatesList"></div>
     </div>
 </main>

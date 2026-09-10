@@ -45,19 +45,12 @@ details[open] .rules-chevron{transform:rotate(90deg)}
 .rule-hits{font-size:0.6875rem;color:var(--text-faint);white-space:nowrap}
 .rule-row button{width:auto;padding:2px 6px;font-size:0.75rem;background:transparent;color:var(--red);border:none;margin:0;cursor:pointer}
 
-/* .empty-note ist der alte Name; die Optik kommt aus .empty in style.css. */
-.empty-note{padding:1.5rem 1rem;text-align:center;color:var(--text-3);font-size:0.875rem;
-    background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:var(--radius-lg)}
 
-.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
-.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-.ausg-toast-success{background:var(--green-dark)}
-.ausg-toast-error{background:var(--red-dark)}
 </style>
 </head>
 <body>
 <nav class="navbar">
-    <a href="/ausgaben/" class="nav-title">← Kategorien</a>
+    <span class="nav-title">Kategorien</span>
     <div class="nav-right">
         <span class="nav-btn" id="userLabel" style="cursor:default"></span>
         <button class="nav-btn" id="logoutBtn">Logout</button>

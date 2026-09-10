@@ -27,6 +27,9 @@ function escHtml(s){if(s==null)return'';return String(s).replace(/[&<>"']/g,c=>(
  * Regeln dazu in docs/DESIGN.md: kein senkrechtes Gitter, keine Rahmen, erste
  * Reihe im Modulton, Achsen in der sekundaeren Textrolle. */
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/* Wie beim Sparziel: ohne Einstellung ist --figure nicht definiert, dann
+   greift der Modulton. So bleibt Tuerkis der Standard fuer Ausgaben. */
+const figureColor = () => cssVar('--figure') || cssVar('--m-ausgaben');
 const gridColor = () => cssVar('--chart-grid');
 const textColor = () => cssVar('--chart-axis');
 
@@ -292,7 +295,7 @@ function renderWeekday(data){
         data: {
             labels: days,
             datasets: [{ label: 'Ausgaben (€)', data: totals,
-                backgroundColor: cssVar('--chart-1'), hoverBackgroundColor: cssVar('--chart-2'),
+                backgroundColor: figureColor(), hoverBackgroundColor: cssVar('--chart-2'),
                 borderRadius: 6, borderSkipped: false, barPercentage: 0.72 }],
         },
         options: (() => {
@@ -480,7 +483,7 @@ function renderSeriesChart(points, prevPoints, gran){
     // viel? Ungleiche Laengen (Monate) werden hinten abgeschnitten.
     const datasets = [
         { type: 'bar', label: 'Ausgaben', data: values,
-          backgroundColor: cssVar('--chart-1'),
+          backgroundColor: figureColor(),
           borderRadius: 4, borderSkipped: false, order: VexCharts.ORDER.VALUE },
     ];
     if(prevPoints && prevPoints.length){

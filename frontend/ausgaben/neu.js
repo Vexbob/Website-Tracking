@@ -143,10 +143,10 @@ function setupOcrUpload() {
     inputGal.onchange = () => { if (inputGal.files.length) handleFile(inputGal.files[0]); inputGal.value = ''; };
 
     // Drag & Drop bleibt auf der Drop-Zone
-    drop.ondragover = e => { e.preventDefault(); drop.classList.add('dragover'); };
-    drop.ondragleave = () => drop.classList.remove('dragover');
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add('drag'); };
+    drop.ondragleave = () => drop.classList.remove('drag');
     drop.ondrop = e => {
-        e.preventDefault(); drop.classList.remove('dragover');
+        e.preventDefault(); drop.classList.remove('drag');
         if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
     };
 }
@@ -252,7 +252,7 @@ function resetUploadDrop() {
             <button type="button" class="upload-btn" id="btnGallery">🖼️ Galerie</button>
             <button type="button" class="upload-btn" id="btnPaste">📋 Einfügen</button>
         </div>
-        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem">oder Datei hierher ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> · JPG/PNG · max 8 MB</div>
+        <div style="font-size:0.75rem;color:var(--text-3);margin-top:0.75rem">oder Datei hierher ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> · JPG/PNG · max 8 MB</div>
         <input type="file" id="fileInputCamera" accept="image/*" capture="environment" style="display:none">
         <input type="file" id="fileInputGallery" accept="image/*" style="display:none">
     `;

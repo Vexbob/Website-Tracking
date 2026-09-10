@@ -4,6 +4,17 @@
  * Formularzeilen jetzt Karten mit Nutzungszahlen (Einkäufe + Summe aus
  * stats/by-store), Suche und Sortierung. Bearbeitet wird im Modal.
  */
+const SKEL_CARDS = Array.from({ length: 6 }, () =>
+    '<article class="entity-card"><span class="skel skel-line" style="width:2rem;height:2rem;border-radius:10px"></span>' +
+    '<div class="entity-main"><span class="skel skel-line long"></span>' +
+    '<span class="skel skel-line short"></span></div></article>').join('');
+
+function emptyBox(mark, text, error) {
+    return '<div class="empty' + (error ? ' is-error' : '') + '">' +
+        '<span class="empty-mark" aria-hidden="true">' + mark + '</span>' +
+        '<p class="empty-text">' + text + '</p></div>';
+}
+
 let stores = [];
 let usage = {};          // store_id -> { count, total }
 let maxSpent = 0;
@@ -24,7 +35,7 @@ function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
 
 async function loadStores() {
     const list = document.getElementById('list');
-    list.innerHTML = '<div class="empty-note">Lade …</div>';
+    list.innerHTML = SKEL_CARDS;
     try {
         const [rows, stats] = await Promise.all([
             AUSGABEN_API.stores(),
@@ -41,7 +52,8 @@ async function loadStores() {
         });
         render();
     } catch (e) {
-        list.innerHTML = `<div class="empty-note">Fehler: ${escHtml(e.message)}</div>`;
+        list.innerHTML = emptyBox('\u26A0\uFE0F',
+            'Die L\u00e4den konnten nicht geladen werden: ' + escHtml(e.message), true);
     }
 }
 
@@ -68,11 +80,13 @@ function render() {
     renderCleanup(unused);
 
     if (!stores.length) {
-        list.innerHTML = '<div class="empty-note">Noch keine Läden. Beim Scannen eines Bons legt Vexbob den erkannten Laden selbst an.</div>';
+        list.innerHTML = emptyBox('\uD83C\uDFEA',
+            'Noch keine L\u00e4den. Beim Scannen eines Bons legt Vexbob den erkannten Laden selbst an.');
         return;
     }
     if (!rows.length) {
-        list.innerHTML = '<div class="empty-note">Kein Laden gefunden.</div>';
+        list.innerHTML = emptyBox('\uD83D\uDD0D',
+            'Kein Laden passt zu dieser Suche. Ein k\u00fcrzerer Begriff findet mehr.');
         return;
     }
 

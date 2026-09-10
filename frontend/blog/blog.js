@@ -82,6 +82,10 @@ function route() {
 // ==========================================================
 let activeTag = null;
 
+const BLOG_SKEL = Array.from({ length: 3 }, () =>
+    '<div class="blog-post-card"><span class="skel skel-line long"></span>' +
+    '<span class="skel skel-line"></span><span class="skel skel-line short"></span></div>').join('');
+
 async function renderList() {
     document.title = 'Vexbob Blog';
     const view = document.getElementById('blogView');
@@ -102,7 +106,7 @@ async function renderList() {
         <div class="blog-search-wrap">
             <input type="text" id="blogSearch" class="blog-search" placeholder="Beiträge durchsuchen …">
         </div>
-        <div id="blogList"><div class="blog-loading">Lade …</div></div>`;
+        <div id="blogList">${BLOG_SKEL}</div>`;
     try {
         const tags = await BLOG_API.tags();
         const tagsEl = document.getElementById('blogTags');
@@ -119,7 +123,9 @@ async function renderList() {
         const posts = await BLOG_API.list(params);
         const list = document.getElementById('blogList');
         if (!posts.length) {
-            list.innerHTML = '<div class="blog-empty">Noch keine Beiträge veröffentlicht.</div>';
+            list.innerHTML = '<div class="empty"><span class="empty-mark" aria-hidden="true">\uD83D\uDCF0</span>' +
+                '<p class="empty-text">Noch kein Beitrag veröffentlicht. Was hier steht, entsteht ' +
+                'im Blog-Bereich und wird bewusst freigegeben.</p></div>';
             return;
         }
         // Client-seitige Suche
@@ -132,7 +138,8 @@ async function renderList() {
                 (p.tags || []).some(t => t.toLowerCase().includes(q))
             ) : posts;
             if (!filtered.length) {
-                list.innerHTML = '<div class="blog-empty">Keine Beiträge gefunden.</div>';
+                list.innerHTML = '<div class="empty"><span class="empty-mark" aria-hidden="true">\uD83D\uDD0D</span>' +
+                    '<p class="empty-text">Kein Beitrag passt zu dieser Suche. Ein kürzerer Begriff findet mehr.</p></div>';
                 return;
             }
             list.innerHTML = filtered.map(p => `
@@ -154,7 +161,9 @@ async function renderList() {
             searchInput.addEventListener('input', (e) => renderFiltered(e.target.value));
         }
     } catch (e) {
-        document.getElementById('blogList').innerHTML = '<div class="blog-empty">Fehler beim Laden.</div>';
+        document.getElementById('blogList').innerHTML =
+            '<div class="empty is-error"><span class="empty-mark" aria-hidden="true">\u26A0\uFE0F</span>' +
+            '<p class="empty-text">Die Beiträge konnten nicht geladen werden.</p></div>';
     }
 }
 
@@ -168,7 +177,11 @@ async function renderDetail(slug) {
     const view = document.getElementById('blogView');
     view.innerHTML = `
         <a class="blog-back" href="#">← Alle Beiträge</a>
-        <article class="blog-post"><div class="blog-loading">Lade …</div></article>`;
+        <article class="blog-post">
+            <span class="skel skel-line long" style="height:1.75rem"></span>
+            <span class="skel skel-line short"></span>
+            <span class="skel skel-block" style="margin-top:1.25rem"></span>
+        </article>`;
     try {
         const p = await BLOG_API.detail(slug);
         document.title = `${p.title} — Vexbob Blog`;
@@ -188,7 +201,9 @@ async function renderDetail(slug) {
             ${p.tags && p.tags.length ? `<div class="tags-inline">${p.tags.map(t => `<span class="t">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
         `;
     } catch (e) {
-        view.querySelector('.blog-post').innerHTML = '<div class="blog-empty">Beitrag nicht gefunden.</div>';
+        view.querySelector('.blog-post').innerHTML =
+            '<div class="empty"><span class="empty-mark" aria-hidden="true">\uD83D\uDD17</span>' +
+            '<p class="empty-text">Diesen Beitrag gibt es nicht mehr — vielleicht wurde er zurückgezogen.</p></div>';
     }
 }
 

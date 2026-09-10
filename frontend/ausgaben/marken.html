@@ -21,7 +21,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .brand-toolbar{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.75rem}
 .brand-toolbar input,.brand-toolbar select{margin:0;padding:0.5rem 0.625rem;font-size:0.875rem}
 .brand-toolbar input.search{flex:1;min-width:180px}
-.brand-toolbar .filter-chip{padding:0.375rem 0.75rem;font-size:0.75rem;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);color:var(--text-muted);cursor:pointer;width:auto;font-weight:600;margin:0}
+.brand-toolbar .filter-chip{padding:0.375rem 0.75rem;font-size:0.75rem;border:1px solid var(--line);border-radius:16px;background:var(--surface-2);color:var(--text-2);cursor:pointer;width:auto;font-weight:600;margin:0}
 .brand-toolbar .filter-chip.active{background:var(--accent-strong);color:var(--accent-ink);border-color:var(--accent-strong)}
 .add-form{display:grid;grid-template-columns:1fr 1fr auto;gap:0.5rem;align-items:center;margin-top:0.75rem}
 @media(max-width:600px){.add-form{grid-template-columns:1fr}}
@@ -30,24 +30,22 @@ body{visibility:hidden}body.ready{visibility:visible}
 .brand-list{display:flex;flex-direction:column;gap:0.375rem;margin-top:0.75rem;max-height:70vh;overflow:auto;border:1px solid var(--line);border-radius:var(--radius);padding:0.5rem}
 .brand-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:0.5rem;align-items:center;padding:0.5rem 0.625rem;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius)}
 .brand-name{font-weight:600;font-size:0.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.brand-meta{font-size:0.6875rem;color:var(--text-faint);margin-top:1px;display:flex;gap:0.375rem;align-items:center;flex-wrap:wrap}
+.brand-meta{font-size:0.6875rem;color:var(--text-3);margin-top:1px;display:flex;gap:0.375rem;align-items:center;flex-wrap:wrap}
 .brand-badge{padding:1px 6px;border-radius:6px;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
 .brand-badge.private{background:var(--info-soft);color:var(--info)}
-.brand-badge.parent{background:rgba(244,114,182,0.14);color:var(--m-health)}
-.brand-row select.store{padding:0.25rem 0.375rem;font-size:0.75rem;margin:0;max-width:140px;background:var(--surface);border:1px solid var(--border);border-radius:6px}
-.brand-row button.del{background:transparent;border:none;color:var(--danger);cursor:pointer;padding:0.25rem 0.375rem;width:auto;margin:0;font-size:0.9375rem}
+.brand-badge.parent{background:var(--surface-3);color:var(--text-2)}
+.brand-row select.store{padding:0.3rem 0.5rem;font-size:0.75rem;margin:0;min-width:0;max-width:min(15rem,40vw);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;color:var(--text-1)}
+.brand-row button.del{background:transparent;border:1px solid transparent;border-radius:6px;color:var(--text-3);cursor:pointer;padding:0.25rem 0.4rem;width:auto;margin:0;font-size:0.9375rem}
+.brand-row button.del:hover{color:var(--danger);background:var(--danger-soft)}
 .brand-row.system{opacity:0.85}
-.brand-count{color:var(--text-muted);font-size:0.8125rem;font-weight:500;margin-bottom:0.5rem}
+.brand-count{color:var(--text-3);font-size:0.75rem;font-weight:500;margin-bottom:0.5rem}
 .brand-purchases{padding:1px 6px;border-radius:999px;font-size:0.6875rem;font-weight:700;background:var(--surface-3);color:var(--text-2)}
-.brand-purchases.muted{background:var(--surface);color:var(--text-faint);border:1px solid var(--border)}
-.ausg-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text);color:var(--surface);padding:0.75rem 1.25rem;border-radius:10px;font-size:0.875rem;font-weight:500;z-index:1000;opacity:0;transition:transform .25s,opacity .25s;box-shadow:var(--shadow-lg);pointer-events:none}
-.ausg-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-.ausg-toast-success{background:var(--green-dark)}.ausg-toast-error{background:var(--red-dark)}
+.brand-purchases.muted{background:var(--surface-2);color:var(--text-3);border:1px solid var(--line)}
 </style>
 </head>
 <body>
 <nav class="navbar">
-    <a href="/ausgaben/" class="nav-title">← Marken</a>
+    <span class="nav-title">Marken</span>
     <div class="nav-right">
         <span class="nav-btn" id="userLabel" style="cursor:default"></span>
         <button class="nav-btn" id="logoutBtn">Logout</button>
@@ -55,6 +53,14 @@ body{visibility:hidden}body.ready{visibility:visible}
 </nav>
 <main>
 <div id="subnav" data-active="marken"></div>
+
+    <header class="page-head">
+        <h1>Marken</h1>
+        <p class="page-sub">Wer den Artikel herstellt. Eine Marke, die an einem Laden hängt,
+        ist dessen <strong>Eigenmarke</strong> — daran erkennst du später, wie viel vom
+        Einkauf aus der günstigen Hausmarke bestand.</p>
+    </header>
+
     <div class="card">
         <h3 style="margin-bottom:0.5rem">Neue Marke hinzufügen</h3>
         <div class="add-form">

@@ -25,7 +25,11 @@
     </div>
 </nav>
 <main>
-    <h1 style="margin-bottom:1.5rem">User-Verwaltung</h1>
+    <header class="page-head">
+        <h1>Accounts</h1>
+        <p class="page-sub">Wer sich anmelden darf. Ein neuer Account bekommt einen
+        einmaligen Einladungs-Link und legt sein Passwort selbst fest — du siehst es nie.</p>
+    </header>
 
     <div class="card">
         <h3>Neuen Account einladen</h3>
@@ -41,7 +45,11 @@
 
     <div class="card">
         <h3>Bestehende Accounts</h3>
-        <div id="userList"><div class="muted">Lade…</div></div>
+        <div id="userList">
+            <span class="skel skel-line long"></span>
+            <span class="skel skel-line"></span>
+            <span class="skel skel-line short"></span>
+        </div>
     </div>
 </main>
 

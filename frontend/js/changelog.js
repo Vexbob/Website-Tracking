@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.79.0', date: '2026-09-10', title: 'Die älteren Seiten holen auf', notes: [
+        'Notizen, Blog, Blog-Verwaltung und die Account-Verwaltung folgen jetzt dem eingestellten Farbverlauf — sie hatten als einzige noch ein fest eingebautes Blau.',
+        'Weiße Schrift auf hellen Statusfarben ist raus, zuletzt beim Löschen-Knopf in jedem Bestätigungsfenster.',
+        'Marken, Duplikate und die Account-Verwaltung haben endlich einen Seitenkopf, der sagt, wofür die Seite da ist.',
+        'Der Zurück-Pfeil in der Leiste ist auch auf den sieben Ausgaben-Seiten weg; der Weg zurück steht dort ohnehin zweimal.',
+        'Kategorien, Läden und der Blog laden mit Skeletons statt „Lade …“, und ihre leeren Zustände sagen jetzt, warum nichts da ist.',
+    ]},
     { v: 'v1.78.0', date: '2026-09-09', title: 'Themen reichen weiter, Musik-Übersicht getrennt', notes: [
         'Ein Thema färbt jetzt auch Zahlen und Diagramme: den Füllkreis am Sparziel, die Verlaufskurve samt Fläche und den gesparten Betrag.',
         'Der Standard heißt „Modulton“ und lässt jedem Modul seine eigene Farbe — erst wer ausdrücklich umstellt, überschreibt sie.',

@@ -97,7 +97,8 @@ function currentFilters() {
 
 async function loadProducts() {
     const body = document.getElementById('prodBody');
-    body.innerHTML = '<tr><td colspan="7" class="stat-empty">Lade …</td></tr>';
+    body.innerHTML = Array.from({ length: 6 }, () =>
+        '<tr><td colspan="7"><span class="skel skel-line long"></span></td></tr>').join('');
     try {
         // min_count=1: auch einmal gekaufte Produkte anzeigen — die Seite
         // beantwortet "was habe ich wie oft gekauft", da gehören Einmalkäufe dazu.
@@ -333,7 +334,7 @@ async function openMergeEditor(product) {
     const title = product.title || product.key;
     const modal = openModal(`🔗 „${escHtml(title)}" bearbeiten`, `
         <p class="me-hint">Angehakt bleibt in der Gruppe. Was du abwählst, steht danach wieder als eigenes Produkt in der Liste.</p>
-        <div id="mePicks" class="me-list"><div class="pv-empty">Lade …</div></div>
+        <div id="mePicks" class="me-list"><span class="skel skel-line long"></span><span class="skel skel-line"></span></div>
         <label class="me-name-lbl">Name der Gruppe
             <input id="meName" class="merge-name" value="${escHtml(title)}">
         </label>
@@ -659,7 +660,7 @@ function renderChart(items) {
     const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const tick = cssVar('--chart-axis');
     // Flaeche unter der Linie: Verlauf von 18 % auf 0 derselben Farbe.
-    const line = cssVar('--chart-1');
+    const line = cssVar('--figure') || cssVar('--m-ausgaben');
     const g = ctx.getContext('2d').createLinearGradient(0, 0, 0, 220);
     g.addColorStop(0, line + '2e');   // 18 % derselben Farbe, wie in DESIGN.md
     g.addColorStop(1, line + '00');
