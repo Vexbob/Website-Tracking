@@ -27,6 +27,22 @@ body{visibility:hidden}body.ready{visibility:visible}
 .cat-card.is-unused .entity-title{color:var(--text-muted);font-weight:500}
 .cat-bar{height:3px;border-radius:2px;background:var(--border);margin-top:6px;overflow:hidden}
 .cat-bar span{display:block;height:100%;background:var(--cat-color,var(--m-ausgaben));opacity:0.75}
+
+/* Vorschlaege zum Zusammenfuehren. Dieselbe ruhige Flaeche wie .cleanup-bar,
+   aber mehrzeilig: die Namen sind die eigentliche Aussage. */
+.mrg-box:empty{display:none}
+.mrg-box{display:flex;flex-direction:column;gap:0.375rem;margin-bottom:0.875rem}
+.mrg-row{display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;
+    padding:0.625rem 0.875rem;background:var(--surface-2);
+    border:1px solid var(--line);border-radius:var(--radius)}
+.mrg-names{display:flex;align-items:center;gap:0.375rem;flex-wrap:wrap;flex:1;min-width:0}
+.mrg-name{display:inline-flex;align-items:center;gap:0.3rem;font-size:0.8125rem;
+    font-weight:600;color:var(--text-2)}
+.mrg-name.is-keep{color:var(--text-1)}
+.mrg-name i{font-style:normal;font-size:0.6875rem;color:var(--text-3);
+    font-variant-numeric:tabular-nums}
+.mrg-plus{color:var(--text-3);font-size:0.75rem}
+.mrg-act{display:flex;gap:0.375rem;flex-wrap:wrap;margin-left:auto}
 </style>
 </head>
 <body>
@@ -56,6 +72,7 @@ body{visibility:hidden}body.ready{visibility:visible}
         <button id="addBtn" class="btn btn-accent">+ Neuer Laden</button>
     </div>
 
+    <div id="merges" class="mrg-box"></div>
     <div id="cleanup"></div>
     <p class="toolbar-count" id="count"></p>
     <div id="list" class="entity-grid"></div>

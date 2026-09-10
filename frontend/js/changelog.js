@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.81.0', date: '2026-09-10', title: 'Laden-Dubletten und Einordnen per Knopf', notes: [
+        'Die Läden-Seite schlägt vor, was dasselbe Geschäft ist — „Lidl“ neben „LIDL PLUS“, „Rewe“ neben „REWE Markt“ — und führt es auf Knopfdruck zusammen; die Buchungen hängen mit um.',
+        'Verglichen wird mit derselben Funktion, die auch der CSV-Import benutzt: zwei verschiedene Vergleiche würden sich gegenseitig widersprechen.',
+        'Neu unter Ausgaben › Import: ein Knopf ordnet importierte Buchungen ein und vergibt Beleg-Typ (Kassenbon, Abo, Restaurant, Online) und Kategorie.',
+        'Gefragt wird je Kombination aus Empfänger und Bank-Kategorie, nicht je Buchung — „Lidl / Lebensmittel“ kommt hundertmal vor und ist hundertmal dieselbe Antwort.',
+        'Der Vorschlag steht vollständig auf dem Bildschirm, bevor etwas geschrieben wird; von Hand bearbeitete Positionen bleiben unangetastet.',
+    ]},
     { v: 'v1.80.1', date: '2026-09-10', title: 'Kontoauszug als CSV übernehmen', notes: [
         'Ausgaben aus der Zeit vor August 2026 lassen sich als CSV aus der Banking-App einlesen — unter Ausgaben › Import.',
         'Die Vorschau zeigt vorher, welche Zahlungsempfänger auf vorhandene Läden treffen und welche neu entstünden; Gutschriften bleiben draußen, weil Gehalt und Erstattungen die Monatssummen verfälschen würden.',

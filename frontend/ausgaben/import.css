@@ -72,6 +72,12 @@
 .imp-log-meta { font-size: 0.75rem; color: var(--text-3); margin-top: 0.2rem;
     font-variant-numeric: tabular-nums; }
 
+/* Die vorgeschlagene Kategorie ist Information, kein Beleg -- sie bleibt
+   auch auf dem Handy stehen, anders als die Rohschreibweisen. */
+.imp-row-kat { font-size: 0.75rem; font-weight: 600; color: var(--accent);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+
 @media (max-width: 560px) {
     .imp-row-raw { display: none; }
+    .imp-row-kat { max-width: 45%; }
 }

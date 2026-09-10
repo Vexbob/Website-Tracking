@@ -69,15 +69,28 @@
 
     <div class="v-card">
         <div class="v-card-head">
-            <h2>🏷️ Kategorien der Bank</h2>
+            <h2>🏷️ Einordnen lassen</h2>
+            <span class="v-card-sub">Beleg-Typ und Kategorie</span>
         </div>
         <p class="imp-hint">
             „Weitere Ausgaben“ und „Digitale Produkte &amp; Dienste“ sind die Vorgaben der
             Banking-App, nicht deine. Der Import speichert sie unverändert mit, ordnet aber
-            <strong>keine</strong> Kategorie dieser Website zu — importierte Buchungen stehen
-            zunächst unter „Unkategorisiert“. Die Zuordnung ist ein eigener Schritt und kommt
-            später; bis dahin bleibt das Original erhalten, damit sie überhaupt möglich ist.
+            selbst nichts zu. Dieser Knopf holt das nach: er bestimmt je Buchung den
+            <strong>Beleg-Typ</strong> (Kassenbon, Abo, Restaurant, Online-Bestellung) und
+            eine <strong>Kategorie aus deiner Liste</strong>.
         </p>
+        <p class="imp-hint">
+            Gefragt wird nicht je Buchung, sondern je Kombination aus Empfänger und
+            Bank-Kategorie — „Lidl / Lebensmittel“ kommt hundertmal vor und ist hundertmal
+            dieselbe Antwort. Du siehst den Vorschlag vollständig, bevor etwas geschrieben
+            wird. Von Hand bearbeitete Positionen bleiben unangetastet.
+        </p>
+        <div class="imp-actions">
+            <button type="button" class="v-btn v-btn--primary" id="impClassify">
+                Vorschlag erstellen
+            </button>
+        </div>
+        <div id="impClass" class="imp-plan"></div>
     </div>
 </main>
 <div class="version-tag"></div>

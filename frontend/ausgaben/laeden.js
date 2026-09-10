@@ -26,6 +26,7 @@ async function init() {
     document.getElementById('q').oninput = render;
     document.getElementById('sort').onchange = render;
     await loadStores();
+    loadMergeSuggestions();      // laeuft nebenher, die Liste wartet nicht darauf
     document.body.classList.add('ready');
     document.body.style.visibility = 'visible';
 }
@@ -138,6 +139,74 @@ function renderCleanup(unused) {
         showToast(`${done} Läden gelöscht`, 'success');
         await loadStores();
     };
+}
+
+/* ---------------------------------------------------------- Dubletten ----
+ * Der CSV-Import legt Laeden aus Zahlungsempfaengern an und fasst dabei
+ * zusammen, was er erkennt. Uebrig bleibt, was vorher schon doppelt im
+ * Bestand lag: "Lidl" von Hand erfasst, "Lidl PLUS" aus dem Kontoauszug.
+ * Zusammenfuehren laesst sich nicht rueckgaengig machen -- deshalb ein
+ * Vorschlag mit Knopf, keine Automatik.
+ */
+async function loadMergeSuggestions() {
+    const box = document.getElementById('merges');
+    if (!box) return;
+    let groups = [];
+    try {
+        const r = await AUSGABEN_API.storeMergeSuggestions();
+        groups = (r && r.groups) || [];
+    } catch (e) { box.innerHTML = ''; return; }
+    if (!groups.length) { box.innerHTML = ''; return; }
+
+    box.innerHTML = groups.map((g, i) => {
+        const namen = g.stores.map(st =>
+            `<span class="mrg-name${st.id === g.keep_id ? ' is-keep' : ''}">` +
+            `${escHtml(st.icon || '')} ${escHtml(st.name)}` +
+            `<i>${st.uses}\u00d7</i></span>`).join('<span class="mrg-plus">+</span>');
+        const ziel = g.stores.find(st => st.id === g.keep_id) || g.stores[0];
+        return `<div class="mrg-row" data-i="${i}">
+            <div class="mrg-names">${namen}</div>
+            <div class="mrg-act">
+                <button class="v-btn v-btn--sm v-btn--primary" data-merge="${i}">Zu „${escHtml(ziel.name)}“ zusammenführen</button>
+                <button class="v-btn v-btn--sm v-btn--ghost" data-skip="${i}">Sind verschieden</button>
+            </div>
+        </div>`;
+    }).join('');
+
+    box.querySelectorAll('[data-merge]').forEach(btn => {
+        btn.onclick = () => doMerge(groups[+btn.dataset.merge]);
+    });
+    box.querySelectorAll('[data-skip]').forEach(btn => {
+        btn.onclick = async () => {
+            const g = groups[+btn.dataset.skip];
+            try {
+                await AUSGABEN_API.dismissStoreMerge({ ids: g.stores.map(s => s.id) });
+                btn.closest('.mrg-row').remove();
+            } catch (e) { showToast('Fehler: ' + e.message, 'error'); }
+        };
+    });
+}
+
+async function doMerge(g) {
+    const ziel = g.stores.find(s => s.id === g.keep_id) || g.stores[0];
+    const andere = g.stores.filter(s => s.id !== ziel.id);
+    const name = await askPrompt({
+        title: 'Läden zusammenführen',
+        text: `${andere.map(s => '„' + s.name + '“').join(', ')} ` +
+              `${andere.length === 1 ? 'wird' : 'werden'} in „${ziel.name}“ überführt. ` +
+              `${g.uses} Buchungen hängen um. Unter welchem Namen?`,
+        value: ziel.name,
+        ok: 'Zusammenführen',
+    });
+    if (name === null) return;
+    try {
+        const r = await AUSGABEN_API.mergeStores({
+            ids: g.stores.map(s => s.id), keep_id: ziel.id, name: (name || '').trim() || ziel.name,
+        });
+        showToast(`${r.moved} Buchungen umgehängt`, 'success');
+        await loadStores();
+        loadMergeSuggestions();
+    } catch (e) { showToast('Fehler: ' + e.message, 'error'); }
 }
 
 function storeFormHtml(s) {

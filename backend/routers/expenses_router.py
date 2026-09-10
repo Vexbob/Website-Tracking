@@ -29,7 +29,7 @@ from services.expenses import suggest_category, learn_rule, process_image
 from services.ocr import get_ocr_provider
 from services.receipt_parser import parse_receipt
 from services.ai_receipt_parser import ai_parse_receipt, normalize_expense_type
-from services import expense_import
+from services import expense_import, expense_classifier
 import json as _json
 
 
@@ -2020,6 +2020,174 @@ async def ocr_status(user=Depends(get_current_user)):
 
 
 
+
+# ==========================================================================
+# Laden-Dubletten (v1.81.0)
+# ==========================================================================
+# Der Import legt Laeden aus Zahlungsempfaengern an und fasst dabei zusammen,
+# was er erkennt. Uebrig bleiben Dubletten, die vorher schon im Bestand lagen
+# ("Lidl" von Hand, "Lidl PLUS" aus dem Auszug). Verglichen wird mit derselben
+# Funktion wie beim Import -- zwei verschiedene Vergleiche wuerden sich
+# gegenseitig widersprechen.
+
+class StoreMerge(BaseModel):
+    ids: list[int]
+    keep_id: Optional[int] = None
+    name: Optional[str] = None
+
+
+def _store_variant_of(a: str, b: str) -> bool:
+    """TRUE, wenn zwei Ladennamen dasselbe Geschaeft sein koennten.
+
+    Erste Stufe ist der Import-Schluessel (gleiche Normalform). Zweite Stufe
+    ist Praefix: "Rewe" und "Rewe City". Lieber ein Vorschlag zu wenig als
+    zwei falsch verschmolzene Laeden -- rueckgaengig macht das niemand.
+    """
+    ka, kb = expense_import.norm_payee(a), expense_import.norm_payee(b)
+    if not ka or not kb:
+        return False
+    if ka == kb:
+        return True
+    kurz, lang = (ka, kb) if len(ka) <= len(kb) else (kb, ka)
+    return len(kurz) >= 4 and lang.startswith(kurz)
+
+
+@router.get("/api/stores/merge-suggestions")
+async def store_merge_suggestions(db=Depends(get_db), user=Depends(get_current_user)):
+    """Laeden, die vermutlich Schreibweisen desselben Geschaefts sind.
+
+    Je Gruppe steht vorn, was am haeufigsten benutzt wird -- das ist der
+    Vorschlag zum Behalten. Bereits abgelehnte Gruppen (gleiche ID-Menge)
+    tauchen nicht wieder auf.
+    """
+    rows = await db.fetch(
+        """SELECT s.id, s.name, s.icon, s.color,
+                  COUNT(e.id) AS uses,
+                  COALESCE(SUM(e.total_amount), 0) AS total
+             FROM stores s
+             LEFT JOIN expenses e ON e.store_id = s.id AND e.user_id = s.user_id
+            WHERE s.user_id = $1
+            GROUP BY s.id, s.name, s.icon, s.color
+            ORDER BY LOWER(s.name)""", user["id"])
+    if len(rows) < 2:
+        return {"groups": []}
+
+    # Union-Find ueber die Paare, damit "Lidl"/"Lidl PLUS"/"LIDL" EINE Gruppe
+    # ergeben und nicht drei Paare.
+    parent = {r["id"]: r["id"] for r in rows}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    lst = list(rows)
+    for i in range(len(lst)):
+        for j in range(i + 1, len(lst)):
+            if _store_variant_of(lst[i]["name"] or "", lst[j]["name"] or ""):
+                union(lst[i]["id"], lst[j]["id"])
+
+    from collections import defaultdict
+    clusters = defaultdict(list)
+    for r in lst:
+        clusters[find(r["id"])].append(r)
+
+    dismissed = {r["store_ids"] for r in await db.fetch(
+        "SELECT store_ids FROM dismissed_store_merges WHERE user_id=$1", user["id"])}
+
+    out = []
+    for members in clusters.values():
+        if len(members) < 2:
+            continue
+        fingerprint = "|".join(str(m["id"]) for m in sorted(members, key=lambda m: m["id"]))
+        if fingerprint in dismissed:
+            continue
+        # Der meistbenutzte Laden ist der Vorschlag zum Behalten; bei
+        # Gleichstand der mit dem kuerzeren Namen ("Lidl" vor "Lidl PLUS").
+        ranked = sorted(members, key=lambda m: (-m["uses"], len(m["name"] or ""), m["name"] or ""))
+        out.append({
+            "keep_id": ranked[0]["id"],
+            "stores": [{"id": m["id"], "name": m["name"], "icon": m["icon"],
+                        "color": m["color"], "uses": m["uses"],
+                        "total": float(m["total"] or 0)} for m in ranked],
+            "uses": sum(m["uses"] for m in members),
+        })
+    out.sort(key=lambda g: -g["uses"])
+    return {"groups": out}
+
+
+@router.post("/api/stores/merge")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def merge_stores(request: Request, b: StoreMerge,
+                       db=Depends(get_db), user=Depends(get_current_user)):
+    """Fuehrt mehrere Laeden zu einem zusammen.
+
+    Die Buchungen der aufgegebenen Laeden haengen um, danach verschwinden
+    diese Laeden. Der Ziel-Laden darf umbenannt werden -- oft ist keiner der
+    vorhandenen Namen der richtige ("LIDL PLUS" und "Lidl" werden "Lidl").
+    """
+    ids = sorted({int(x) for x in (b.ids or [])})
+    if len(ids) < 2:
+        raise HTTPException(400, "Mindestens zwei Läden nötig")
+
+    owned = await db.fetch(
+        "SELECT id, name FROM stores WHERE user_id=$1 AND id = ANY($2::int[])",
+        user["id"], ids)
+    if len(owned) != len(ids):
+        raise HTTPException(404, "Mindestens ein Laden gehört nicht zu diesem Konto")
+
+    keep_id = int(b.keep_id) if b.keep_id else ids[0]
+    if keep_id not in ids:
+        raise HTTPException(400, "Der zu behaltende Laden muss in der Auswahl sein")
+    drop = [i for i in ids if i != keep_id]
+
+    async with db.transaction():
+        moved = await db.fetchval(
+            """WITH um AS (
+                   UPDATE expenses SET store_id=$1
+                    WHERE user_id=$2 AND store_id = ANY($3::int[])
+                 RETURNING 1)
+               SELECT COUNT(*) FROM um""", keep_id, user["id"], drop) or 0
+        # Marken zeigen ebenfalls auf Laeden (Eigenmarken).
+        await db.execute(
+            "UPDATE brands SET store_id=$1 WHERE user_id=$2 AND store_id = ANY($3::int[])",
+            keep_id, user["id"], drop)
+        neuer_name = (b.name or "").strip()
+        if neuer_name:
+            await db.execute(
+                "UPDATE stores SET name=$1 WHERE id=$2 AND user_id=$3",
+                neuer_name[:100], keep_id, user["id"])
+        await db.execute(
+            "DELETE FROM stores WHERE user_id=$1 AND id = ANY($2::int[])",
+            user["id"], drop)
+
+    logger.info("User %s merged stores %s into %s (%s Buchungen)",
+                user["id"], drop, keep_id, moved)
+    return {"status": "merged", "keep_id": keep_id, "removed_ids": drop,
+            "moved": moved}
+
+
+@router.post("/api/stores/merge-dismiss")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def dismiss_store_merge(request: Request, b: StoreMerge,
+                              db=Depends(get_db), user=Depends(get_current_user)):
+    """Blendet einen Vorschlag dauerhaft aus, ohne etwas zu ändern."""
+    ids = sorted({int(x) for x in (b.ids or [])})
+    if len(ids) < 2:
+        raise HTTPException(400, "Mindestens zwei Läden nötig")
+    await db.execute(
+        """INSERT INTO dismissed_store_merges (user_id, store_ids)
+           VALUES ($1, $2) ON CONFLICT (user_id, store_ids) DO NOTHING""",
+        user["id"], "|".join(str(i) for i in ids))
+    return {"status": "dismissed"}
+
+
 # ==========================================================================
 # CSV-Import (v1.80.0) — der Rueckblick aus der Banking-App
 # ==========================================================================
@@ -2106,6 +2274,74 @@ async def undo_expense_import(request: Request, import_id: int,
         return await expense_import.undo(db, user["id"], import_id)
     except expense_import.ExpenseImportError as e:
         raise HTTPException(404, str(e))
+
+
+@router.get("/api/expenses/reclassify/preview")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def reclassify_preview(request: Request, db=Depends(get_db),
+                             user=Depends(get_current_user)):
+    """Was die KI aus den importierten Buchungen machen würde.
+
+    Kostet einen echten Modell-Aufruf — deshalb kein stiller Automatismus,
+    sondern ein Knopf. Die Antwort zeigt je Kombination aus Empfänger und
+    Bank-Kategorie den vorgeschlagenen Beleg-Typ und die Kategorie, damit man
+    vor dem Übernehmen sieht, ob die Einordnung stimmt.
+    """
+    kombis = await expense_classifier.collect(db, user["id"])
+    if not kombis:
+        raise HTTPException(400, "Es gibt keine importierten Buchungen, die "
+                                 "eingeordnet werden könnten.")
+    kategorien = await expense_classifier._kategorien(db, user["id"])
+    try:
+        ergebnis = await expense_classifier.classify(kombis, kategorien)
+    except expense_classifier.ClassifyError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        logger.exception("reclassify preview failed")
+        raise HTTPException(502, f"Der KI-Dienst hat nicht geantwortet: {e}")
+    return {
+        "vorschlaege": ergebnis,
+        "vorhandene_kategorien": kategorien,
+        "zusammenfassung": expense_classifier.zusammenfassung(ergebnis, kategorien),
+    }
+
+
+class ReclassifyApply(BaseModel):
+    vorschlaege: list[dict]
+
+
+@router.post("/api/expenses/reclassify")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def reclassify_apply(request: Request, b: ReclassifyApply,
+                           db=Depends(get_db), user=Depends(get_current_user)):
+    """Übernimmt die Einordnung, die die Vorschau gezeigt hat.
+
+    Geschickt wird die Liste aus der Vorschau zurück — so gilt genau das, was
+    der Nutzer gesehen (und ggf. korrigiert) hat, und es wird kein zweiter
+    Modell-Aufruf fällig, dessen Ergebnis leicht abweichen könnte.
+    """
+    if not b.vorschlaege:
+        raise HTTPException(400, "Keine Zuordnung übergeben.")
+    sauber = []
+    for v in b.vorschlaege:
+        if not isinstance(v, dict) or not v.get("beantwortet"):
+            continue
+        typ = str(v.get("typ") or "other")
+        sauber.append({
+            "payee": str(v.get("payee") or ""),
+            "bank_kat": str(v.get("bank_kat") or ""),
+            "bank_unterkat": str(v.get("bank_unterkat") or ""),
+            "buchungen": int(v.get("buchungen") or 0),
+            "typ": typ if typ in expense_classifier.TYP_KEYS else "other",
+            "kategorie": (str(v.get("kategorie")).strip()[:60]
+                          if v.get("kategorie") else None),
+            "beantwortet": True,
+        })
+    if not sauber:
+        raise HTTPException(400, "In der Zuordnung stand nichts Übernehmbares.")
+    result = await expense_classifier.apply(db, user["id"], sauber)
+    return {"status": "ok", **result}
+
 
 
 def _json_or_empty(v):

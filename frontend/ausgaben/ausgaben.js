@@ -5,6 +5,9 @@ const AUSGABEN_API = {
     createStore: (b) => apiCall('/api/stores', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     updateStore: (id, b) => apiCall(`/api/stores/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     deleteStore: (id) => apiCall(`/api/stores/${id}`, { method: 'DELETE' }),
+    storeMergeSuggestions: () => apiCall('/api/stores/merge-suggestions'),
+    mergeStores: (b) => apiCall('/api/stores/merge', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
+    dismissStoreMerge: (b) => apiCall('/api/stores/merge-dismiss', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
 
     expenseTypes:    () => apiCall('/api/expense-types'),
 

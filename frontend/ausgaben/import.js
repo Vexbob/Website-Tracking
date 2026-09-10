@@ -22,6 +22,21 @@ const IMPORT_API = {
     },
     imports: () => apiCall('/api/expenses/imports'),
     undo: (id) => apiCall('/api/expenses/imports/' + id, { method: 'DELETE' }),
+    classifyPreview: () => apiCall('/api/expenses/reclassify/preview'),
+    classifyApply: (v) => apiCall('/api/expenses/reclassify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vorschlaege: v }),
+    }),
+};
+
+/* Die fünf Beleg-Typen in Klartext. Der Schlüssel steht in der Datenbank,
+   lesen soll ihn niemand. */
+const TYP_LABEL = {
+    receipt: 'Kassenbon',
+    online_order: 'Online-Bestellung',
+    restaurant: 'Restaurant',
+    subscription: 'Abo',
+    other: 'Sonstiges',
 };
 
 const state = { file: null, plan: null };
@@ -51,6 +66,7 @@ async function init() {
     const me = await ensureLoggedIn(); if (!me) return;
     renderSubnav();
     setupDropzone();
+    document.getElementById('impClassify').onclick = classifyPreview;
     await loadLog();
 }
 
@@ -309,3 +325,105 @@ async function undo(id) {
 }
 
 init();
+
+
+/* ------------------------------------------------------------- Einordnen */
+/* Die Vorschau ist hier kein Zwischenschritt, sondern der Kern: eine KI, die
+   800 Buchungen still umsortiert, ist nicht überprüfbar. Gezeigt wird jede
+   Kombination mit ihrem Gewicht, und übernommen wird genau die Liste, die
+   auf dem Bildschirm stand. */
+
+let classState = null;
+
+function classSummary(z) {
+    const cells = [
+        [fmtInt(z.buchungen), 'Buchungen'],
+        [fmtInt(z.kombinationen), 'Kombinationen'],
+        [fmtInt((z.neue_kategorien || []).length), 'neue Kategorien'],
+    ];
+    return '<div class="imp-kpis">' + cells.map(([v, l]) =>
+        '<div class="imp-kpi"><div class="imp-kpi-val">' + esc(v) + '</div>' +
+        '<div class="imp-kpi-lbl">' + esc(l) + '</div></div>').join('') + '</div>';
+}
+
+function classRows(items) {
+    return '<div class="imp-list">' + items.map(v =>
+        '<div class="imp-row">' +
+            '<span class="imp-row-name">' + esc(v.payee || '(ohne Empfänger)') +
+                (v.bank_kat ? ' <span class="imp-row-sub">› ' + esc(v.bank_kat) + '</span>' : '') +
+            '</span>' +
+            '<span class="imp-row-sub">' + esc(TYP_LABEL[v.typ] || v.typ) + '</span>' +
+            '<span class="imp-row-kat">' + esc(v.kategorie || '—') + '</span>' +
+            '<span class="imp-row-val">' + fmtInt(v.buchungen) + '×</span>' +
+        '</div>').join('') + '</div>';
+}
+
+function classHtml(data) {
+    const z = data.zusammenfassung || {};
+    const items = (data.vorschlaege || []).filter(v => v.beantwortet);
+
+    let neu = '';
+    if ((z.neue_kategorien || []).length) {
+        neu = '<p class="imp-note">Neu angelegt würden: <strong class="imp-warn">' +
+            esc(z.neue_kategorien.map(([name, n]) => name + ' (' + n + ')').join(', ')) +
+            '</strong>. Wenn davon etwas schon unter anderem Namen existiert, ' +
+            'lohnt es sich, die Kategorien vorher zusammenzuführen.</p>';
+    }
+    let offen = '';
+    if (z.ohne_antwort) {
+        offen = '<p class="imp-note">' + fmtInt(z.ohne_antwort) +
+            ' Buchungen hat das Modell nicht beantwortet — sie bleiben, wie sie sind.</p>';
+    }
+
+    return '<div class="imp-plan-head">' +
+            '<span class="imp-plan-title">Das würde passieren</span>' +
+            '<span class="imp-plan-sub">Empfänger · Typ · Kategorie</span>' +
+        '</div>' +
+        classSummary(z) + classRows(items) + neu + offen +
+        '<div class="imp-actions">' +
+            '<button type="button" class="v-btn v-btn--primary" id="impClassOk">Übernehmen</button>' +
+            '<button type="button" class="v-btn v-btn--ghost" id="impClassNo">Verwerfen</button>' +
+        '</div>';
+}
+
+async function classifyPreview() {
+    const btn = document.getElementById('impClassify');
+    const box = document.getElementById('impClass');
+    btn.disabled = true; btn.classList.add('is-loading');
+    box.innerHTML = '<span class="skel skel-block"></span>';
+    try {
+        classState = await IMPORT_API.classifyPreview();
+        box.innerHTML = classHtml(classState);
+        document.getElementById('impClassOk').onclick = classifyApply;
+        document.getElementById('impClassNo').onclick = () => {
+            classState = null; box.innerHTML = '';
+        };
+    } catch (e) {
+        classState = null;
+        box.innerHTML = '<div class="empty is-error">' +
+            '<span class="empty-mark" aria-hidden="true">⚠️</span>' +
+            '<p class="empty-text">' + esc(e.message || e) + '</p></div>';
+    } finally {
+        btn.disabled = false; btn.classList.remove('is-loading');
+    }
+}
+
+async function classifyApply() {
+    const btn = document.getElementById('impClassOk');
+    if (!classState) return;
+    btn.disabled = true; btn.classList.add('is-loading');
+    try {
+        const r = await IMPORT_API.classifyApply(classState.vorschlaege);
+        document.getElementById('impClass').innerHTML =
+            '<p class="imp-note"><strong>' + fmtInt(r.buchungen_typ) + '</strong> Buchungen ' +
+            'haben einen Beleg-Typ bekommen, <strong>' + fmtInt(r.positionen_kategorie) +
+            '</strong> eine Kategorie' +
+            (r.kategorien_angelegt ? ' (' + fmtInt(r.kategorien_angelegt) +
+                ' Kategorien neu angelegt)' : '') + '.</p>';
+        classState = null;
+        showToast('Einordnung übernommen', 'success');
+    } catch (e) {
+        btn.disabled = false; btn.classList.remove('is-loading');
+        showToast('Fehlgeschlagen: ' + (e.message || e), 'error');
+    }
+}
