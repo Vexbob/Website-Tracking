@@ -100,8 +100,18 @@ class MusicImportError(Exception):
 # ---------------------------------------------------------------------------
 
 def decode(raw: bytes) -> str:
-    """UTF-8 mit oder ohne BOM, sonst Windows-1252. Excel schreibt beim
-    Zwischenspeichern gern das eine, das Export-Programm das andere."""
+    """UTF-8 mit oder ohne BOM, UTF-16, sonst Windows-1252.
+
+    Excel schreibt beim Zwischenspeichern gern das eine, das Export-Programm
+    das andere. UTF-16 kommt aus "Unicode Text"-Ausleitungen; ohne diesen
+    Zweig laese cp1252 sie als Text mit einem NUL-Byte zwischen jedem
+    Zeichen -- die Datei sieht dann gelesen aus und ist doch unbrauchbar.
+    """
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        try:
+            return raw.decode("utf-16")
+        except UnicodeDecodeError:
+            pass
     for enc in ("utf-8-sig", "utf-8", "cp1252"):
         try:
             return raw.decode(enc)

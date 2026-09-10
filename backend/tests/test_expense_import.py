@@ -344,3 +344,147 @@ def test_sektionsnamen_sind_unterscheidbar():
     """Musik und Ausgaben haben beide ein Upload-Protokoll."""
     labels = [x["label"] for x in fx.EXPORT_SECTIONS]
     assert len(labels) == len(set(labels))
+
+
+# ==========================================================================
+# Was die erste echte Datei aufgedeckt hat (v1.80.1)
+# ==========================================================================
+# Sie liess sich nicht importieren, und die Meldung behauptete, es seien nur
+# Gutschriften. Tatsaechlich war KEIN einziger Betrag lesbar: das
+# Euro-Zeichen hatte die Kodierung nicht ueberlebt und stand als "?" da.
+
+def test_betrag_mit_kaputtem_waehrungszeichen():
+    """Der Ausloeser. Ein unbekanntes Zeichen neben der Zahl darf den
+    gesamten Import nicht scheitern lassen."""
+    assert ei.parse_amount("-9,99 ?") == -9.99
+    assert ei.parse_amount("-148,64 \ufffd") == -148.64
+
+
+def test_betrag_mit_unicode_minus():
+    """Manche Ausleitungen nehmen kein ASCII-Minus."""
+    assert ei.parse_amount("\u22129,99 \u20ac") == -9.99
+    assert ei.parse_amount("\u20139,99 \u20ac") == -9.99
+
+
+def test_betrag_in_anfuehrungszeichen():
+    assert ei.parse_amount('"-9,99 \u20ac"') == -9.99
+
+
+def test_betrag_mit_nul_bytes():
+    """Eine UTF-16-Datei, mit einer Ein-Byte-Kodierung gelesen, bringt
+    zwischen jedem Zeichen ein NUL mit."""
+    assert ei.parse_amount("-\x009\x00,\x009\x009\x00") == -9.99
+    assert ei.parse_date("0\x001\x00.\x000\x008\x00.\x002\x000\x002\x006\x00") == date(2026, 8, 1)
+
+
+def test_betrag_mit_fremder_waehrung_bleibt_lesbar():
+    assert ei.parse_amount("-12,50 CHF") == -12.5
+
+
+def test_kopfzeile_ohne_umlaut_wird_erkannt():
+    """Dieselbe Datei hatte "Zahlungsempfnger" statt "Zahlungsempfaenger" --
+    ohne Rueckfall waeren alle Buchungen ohne Laden geblieben."""
+    raw = ("Buchungsdatum;Betrag;Zahlungsempfnger;Kategorie;Unterkategorie\n"
+           "01.08.2026;-9,99 ?;Amazon;Shopping;Online-Shopping\n")
+    _h, rows = ei.read_table(raw.encode("utf-8"))
+    assert rows[0]["payee"] == "Amazon"
+    e = ei.build_rows(rows)["entries"][0]
+    assert e["amount"] == 9.99 and e["name"] == "Amazon"
+
+
+def test_utf16_datei_wird_gelesen():
+    """Excel schreibt "Unicode Text" als UTF-16."""
+    txt = ("Buchungsdatum;Betrag;Zahlungsemp\u00e4nger\n"
+           "01.08.2026;-9,99 \u20ac;Amazon\n")
+    _h, rows = ei.read_table(txt.encode("utf-16"))
+    assert len(rows) == 1
+    assert ei.build_rows(rows)["entries"][0]["amount"] == 9.99
+
+
+# ------------------------------------------------- Die Meldung selbst
+
+def test_meldung_nennt_den_wirklichen_grund():
+    """Sie riet frueher "nur Gutschriften" -- ausgerechnet der Grund, der
+    nicht zutraf."""
+    raw = (HEAD + "01.08.2026;1.500,00 \u20ac;Arbeitgeber;Einkommen;Gehalt\n"
+                  "02.08.2026;900,00 \u20ac;Arbeitgeber;Einkommen;Gehalt\n")
+    _h, rows = ei.read_table(raw.encode("utf-8"))
+    built = ei.build_rows(rows)
+    txt = ei._warum_leer(rows, built)
+    assert "2 Gutschriften" in txt
+    assert "Arbeitgeber" in txt          # Beispiel aus der Datei
+
+
+def test_meldung_bei_unlesbaren_betraegen():
+    raw = (HEAD + "01.08.2026;k.A.;Amazon;Shopping;Online-Shopping\n")
+    _h, rows = ei.read_table(raw.encode("utf-8"))
+    built = ei.build_rows(rows)
+    txt = ei._warum_leer(rows, built)
+    assert "ohne lesbaren Betrag" in txt
+    assert "Gutschrift" not in txt       # nicht raten
+
+
+def test_meldung_bei_datei_ohne_datenzeilen():
+    _h, rows = ei.read_table(HEAD.encode("utf-8"))
+    txt = ei._warum_leer(rows, ei.build_rows(rows))
+    assert "keine Datenzeilen" in txt
+
+
+# ------------------------------------------- Dubletten aus der echten Datei
+
+def test_transaktionsnummer_im_namen_macht_keinen_zweiten_laden():
+    """"TGTG 7ekrgkyekkxa0" kam sechsmal im Jahr vor, jedesmal mit anderer
+    Nummer -- das waeren sechs Laeden gewesen."""
+    a = ei.norm_payee("TGTG 7ekrgkyekkxa0")
+    b = ei.norm_payee("TGTG 8pgxap1brgkj0")
+    assert a == b == "tgtg"
+    assert ei.pretty_payee("TGTG 7ekrgkyekkxa0") == "TGTG"
+
+
+def test_angehaengter_ort_macht_keinen_zweiten_laden():
+    assert (ei.norm_payee("HEM Tankstelle - Altmittweida, DEU")
+            == ei.norm_payee("HEM Tankstelle"))
+    assert ei.pretty_payee("HEM Tankstelle - Altmittweida, DEU") == "HEM Tankstelle"
+
+
+def test_filialnummer_im_namen_faellt_weg():
+    assert (ei.norm_payee("ALBERT HEIJN 2205")
+            == ei.norm_payee("Albert Heijn 1567"))
+    assert ei.pretty_payee("ALBERT HEIJN 2205") == "Albert Heijn"
+
+
+def test_lidl_plus_ist_derselbe_laden_wie_lidl():
+    """"Lidl PLUS" ist das Bezahlsystem, nicht ein zweiter Laden."""
+    assert ei.norm_payee("LIDL PLUS") == ei.norm_payee("Lidl")
+
+
+def test_unterstrich_praefix_wird_abgetrennt():
+    assert ei.pretty_payee("Zettle_*Riva Group Gmb - Chemnitz, DEU") == "Riva Group Gmb"
+
+
+def test_name_besteht_nur_aus_kennung():
+    """Faellt alles weg, ist die Kennung besser als gar nichts -- sonst
+    landeten alle solchen Buchungen gemeinsam im Topf "ohne Laden"."""
+    assert ei.norm_payee("7ekrgkyekkxa0") != ""
+
+
+def test_doppeltes_leerzeichen_stoert_nicht():
+    assert ei.norm_payee("STAR  Chemnitz") == ei.norm_payee("STAR Chemnitz")
+
+
+def test_echte_datei_laeuft_vollstaendig_durch():
+    """Querschnitt der gemeldeten Datei: jede Zeile muss ankommen."""
+    raw = (
+        "Buchungsdatum;Betrag;Zahlungsempfnger;Kategorie;Unterkategorie\n"
+        "01.08.2026;-9,99 ?;Amazon;Shopping;Online-Shopping\n"
+        "29.07.2026;-129,95 ?;Mol*PassaSports.de;Weitere Ausgaben;Weitere Ausgaben\n"
+        "24.07.2026;-16,53 ?;OPENROUTER, INC;Bildung & Beruf;Sonstiges\n"
+        "17.07.2026;-8,50 ?;SumUp  *Kino Metropol;Freizeit & Unterhaltung;Kunst\n"
+        "12.02.2026;-3,50 ?;TGTG 7ekrgkyekkxa0;Weitere Ausgaben;Weitere Ausgaben\n"
+        "18.03.2025;-2,04 ?;Aral;Mobilitt;Tanken\n"
+    ).encode("utf-8")
+    _h, rows = ei.read_table(raw)
+    built = ei.build_rows(rows)
+    assert len(built["entries"]) == 6
+    assert built["skipped"] == {}
+    assert sum(e["amount"] for e in built["entries"]) > 0

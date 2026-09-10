@@ -82,6 +82,17 @@ def _norm_header(h: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (h or "").strip().lower().translate(_UML))
 
 
+def _skeleton(h: str) -> str:
+    """Rueckfall-Fassung eines Kopfes ohne aufgeloeste Umlaute.
+
+    Eine echte Datei kam mit "Zahlungsempfnger" an -- das ae hatte die
+    Kodierung nicht ueberlebt. Wer "ae/oe/ue" auch aus dem Alias entfernt,
+    bekommt fuer beide Schreibweisen dasselbe Wort und damit einen Treffer.
+    Nur als Rueckfall: fuer sich genommen ist die Fassung zu grob.
+    """
+    return re.sub(r"(ae|oe|ue)", "", _norm_header(h))
+
+
 HEADER_ALIASES = {
     # Datum. C24 nennt es "Buchungsdatum"; andere Ausleitungen "Datum" oder
     # "Wertstellung". Buchungsdatum gewinnt, wenn beides da ist (siehe unten).
@@ -116,6 +127,22 @@ HEADER_ALIASES = {
 }
 
 
+# Dieselbe Zuordnung noch einmal ueber die Rueckfall-Fassung. Wird einmal
+# gebaut, nicht je Kopfzeile.
+_ALIAS_SKELETON = {}
+for _k, _v in HEADER_ALIASES.items():
+    _ALIAS_SKELETON.setdefault(re.sub(r"(ae|oe|ue)", "", _k), _v)
+
+
+def _field_of(header: str) -> str:
+    """Welches Feld diese Spalte traegt. Erst exakt, dann ueber die
+    Rueckfall-Fassung ohne Umlaut-Aufloesung."""
+    exact = HEADER_ALIASES.get(_norm_header(header))
+    if exact:
+        return exact
+    return _ALIAS_SKELETON.get(_skeleton(header), "")
+
+
 def read_table(raw: bytes) -> tuple[list[str], list[dict]]:
     """Kopfzeile und Zeilen als Feld-Woerterbuecher.
 
@@ -135,7 +162,7 @@ def read_table(raw: bytes) -> tuple[list[str], list[dict]]:
             continue
         if not header:
             header = [p.strip() for p in parts]
-            fields = [HEADER_ALIASES.get(_norm_header(h), "") for h in header]
+            fields = [_field_of(h) for h in header]
             if "date" not in fields and "value_date" not in fields:
                 raise ExpenseImportError(
                     "In der Kopfzeile steht keine Datumsspalte. Erwartet wird "
@@ -151,7 +178,7 @@ def read_table(raw: bytes) -> tuple[list[str], list[dict]]:
         for i, value in enumerate(parts):
             key = fields[i] if i < len(fields) else ""
             if key and key not in row:
-                row[key] = (value or "").strip()
+                row[key] = _clean_cell(value)
         rows.append(row)
         if len(rows) > MAX_ROWS:
             raise ExpenseImportError(
@@ -166,13 +193,28 @@ def read_table(raw: bytes) -> tuple[list[str], list[dict]]:
 # Werte
 # ---------------------------------------------------------------------------
 
+# Steuerzeichen inkl. NUL. Sie entstehen, wenn eine UTF-16-Datei mit einer
+# Ein-Byte-Kodierung gelesen wird, und machen jede Deutung unmoeglich.
+_CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ufeff]")
+
+
+def _clean_cell(v) -> str:
+    return _CTRL.sub("", str(v or "")).strip().strip('"').strip()
+
+
+# Minus in allen Varianten, die in Ausleitungen vorkommen: ASCII-Bindestrich,
+# echtes Minuszeichen, Gedankenstriche.
+_STRICHE = "-\u2212\u2013\u2014\u2010\u2011"
+_MINUS_VORN = re.compile(r"^\s*[" + _STRICHE + r"]")
+_MINUS_HINTEN = re.compile(r"[" + _STRICHE + r"]\s*$")
+
 _DATE_FORMATS = ("%d.%m.%Y", "%Y-%m-%d", "%d.%m.%y", "%d/%m/%Y", "%m/%d/%Y")
 
 
 def parse_date(v) -> Optional[date]:
     """``01.08.2026`` und ``2026-08-01``. Zweistellige Jahre bekommen 20xx --
     ein Kontoauszug aus dem letzten Jahrhundert ist keine reale Sorge."""
-    s = str(v or "").strip()
+    s = _clean_cell(v)
     if not s:
         return None
     # Manche Ausleitungen haengen eine Uhrzeit an.
@@ -190,21 +232,28 @@ def parse_date(v) -> Optional[date]:
 def parse_amount(v) -> Optional[float]:
     """``-9,99 €`` → ``-9.99``.
 
-    Deutsche Schreibweise ist der Normalfall, englische kommt vor, wenn die
-    App auf Englisch stand. Unterschieden wird am **letzten** Trennzeichen:
-    steht dahinter genau eine Gruppe aus ein bis zwei Ziffern, ist es das
-    Dezimaltrennzeichen. ``1.234,56`` und ``1,234.56`` landen so beide richtig.
+    Herausgezogen wird die Zahl, nicht das Stoerende entfernt. Eine feste
+    Liste zu entfernender Zeichen war der Fehler der ersten Fassung: eine
+    echte Datei brachte "-9,99 ?" mit, weil das Euro-Zeichen die Kodierung
+    nicht ueberlebt hatte, und der ganze Import scheiterte daran. Jetzt ist
+    egal, was um die Zahl herum steht -- ?, EUR, $, geschuetzte Leerzeichen.
+
+    Das Vorzeichen wird vorher gelesen, in allen Strichvarianten (ASCII,
+    U+2212, Gedankenstriche) und auch nachgestellt ("9,99-"), wie es in
+    Bank-Ausleitungen wirklich vorkommt.
+
+    Deutsche und englische Schreibweise unterscheiden sich am **letzten**
+    Trennzeichen: steht dahinter genau eine Gruppe aus ein bis zwei Ziffern,
+    ist es das Dezimaltrennzeichen. ``1.234,56`` und ``1,234.56`` landen so
+    beide richtig.
     """
-    s = str(v or "").strip()
+    s = _clean_cell(v)
     if not s:
         return None
-    # Waehrung, geschuetzte Leerzeichen, Tausender-Apostroph
-    s = (s.replace(" ", "").replace(" ", "").replace(" ", "")
-          .replace("€", "").replace("EUR", "").replace("'", ""))
-    # Ein nachgestelltes Minus ("9,99-") gibt es in Bank-Ausleitungen wirklich.
-    neg = s.startswith("-") or s.endswith("-")
-    s = s.strip("+-")
-    if not s:
+    neg = bool(_MINUS_VORN.match(s)) or bool(_MINUS_HINTEN.search(s))
+    # Alles ausser Ziffern und Trennern faellt weg.
+    s = re.sub(r"[^0-9.,]", "", s)
+    if not s.strip(".,"):
         return None
     last_sep = max(s.rfind(","), s.rfind("."))
     if last_sep >= 0:
@@ -213,8 +262,6 @@ def parse_amount(v) -> Optional[float]:
             s = re.sub(r"[.,]", "", s[:last_sep]) + "." + decimals
         else:
             s = re.sub(r"[.,]", "", s)
-    if not re.fullmatch(r"\d*\.?\d*", s) or not s.strip("."):
-        return None
     try:
         val = float(s)
     except ValueError:
@@ -236,7 +283,19 @@ def parse_amount(v) -> Optional[float]:
 
 # Praefixe von Zahlungsdienstleistern. Was VOR dem Stern steht, ist der
 # Dienstleister, was dahinter steht, der eigentliche Haendler.
-_STAR_SPLIT = re.compile(r"^[a-z0-9.\-/ ]{1,12}\*+\s*")
+_STAR_SPLIT = re.compile(r"^[a-z0-9._\-/ ]{1,12}\*+\s*")
+
+# Ort und Laendercode, die manche Terminals anhaengen:
+#   "HEM Tankstelle - Altmittweida, DEU"  "OPENAI *CHATGPT - SAN FRANCISCO, USA"
+# Ohne das waere jede Filiale ein eigener Laden.
+_ORT_LAND = re.compile(r"\s[-\u2013]\s[^,]{1,40},\s*[a-z]{2,3}\s*$", re.I)
+
+# Transaktionsnummern im Namen: "TGTG 7ekrgkyekkxa0" ist sechsmal im Jahr
+# derselbe Anbieter mit jedesmal anderer Nummer. Ein Wort aus Buchstaben UND
+# Ziffern ab acht Zeichen ist keine Bezeichnung, sondern eine Kennung.
+def _ist_kennung(w: str) -> bool:
+    return (len(w) >= 8 and any(c.isdigit() for c in w)
+            and any(c.isalpha() for c in w))
 
 # Rechtsformen -- als eigenstaendiges Wort, damit "Agentur" nicht zu "entur"
 # wird, weil "ag" darin vorkommt.
@@ -250,6 +309,7 @@ _LEGAL_FORMS = {
 _NOISE_WORDS = {
     "sagt", "danke", "fil", "filiale", "markt", "gmbhcokg",
     "de", "deu", "deutschland", "germany", "ger", "eu",
+    "plus",
     "kartenzahlung", "lastschrift", "dauerauftrag", "ueberweisung",
     "onlinekauf", "einkauf", "zahlung", "pos",
 }
@@ -266,6 +326,7 @@ def norm_payee(s: str) -> str:
     t = (s or "").strip().lower().translate(_UML)
     if not t:
         return ""
+    t = _ORT_LAND.sub("", t)            # " - altmittweida, deu" -> ""
     t = _STAR_SPLIT.sub("", t)          # "mol*passasports.de" -> "passasports.de"
     t = t.replace("www.", " ")
     t = _TLD.sub(" ", t)
@@ -273,7 +334,13 @@ def norm_payee(s: str) -> str:
     words = [w for w in t.split() if w]
     # Reine Zahlenblöcke (Filial- und Terminalnummern) und Rauschwoerter raus.
     words = [w for w in words
-             if not w.isdigit() and w not in _LEGAL_FORMS and w not in _NOISE_WORDS]
+             if not w.isdigit() and not _ist_kennung(w)
+             and w not in _LEGAL_FORMS and w not in _NOISE_WORDS]
+    # Faellt dabei alles weg (der Name BESTAND aus einer Kennung), bleibt die
+    # Kennung besser als gar nichts -- sonst landen alle solchen Buchungen
+    # gemeinsam im Topf "ohne Laden".
+    if not words:
+        words = [w for w in re.sub(r"[^a-z0-9]+", " ", t).split() if w][:1]
     # Einzelbuchstaben am Rand sind Initialen und zerlegte Rechtsformen:
     # "S. Payment Solutions" vorne, "Amazon EU S.a.r.l." hinten. In der Mitte
     # koennen sie zum Namen gehoeren, deshalb wird nur an den Raendern gekuerzt
@@ -288,14 +355,20 @@ def norm_payee(s: str) -> str:
 def pretty_payee(s: str) -> str:
     """Ein Name, den man einem Laden geben kann.
 
-    ``Mol*PassaSports.de`` → ``PassaSports``. Grossschreibung bleibt erhalten,
-    wo sie im Original stand (``dm``, ``REWE``); durchgehend geschriebene
-    Namen bekommen normale Schreibung, sonst schreit die Laden-Liste.
+    ``Mol*PassaSports.de`` → ``PassaSports``. Was der Vergleichsschluessel
+    wegwirft, gehoert auch nicht in den Namen: sonst hiess der Laden, unter
+    dem vier "Too Good To Go"-Buchungen zusammenkamen, nach der ersten
+    Transaktionsnummer.
+
+    Grossschreibung bleibt erhalten, wo sie im Original stand (``dm``,
+    ``ARAL``); durchgehend geschriebene Namen bekommen normale Schreibung,
+    sonst schreit die Laden-Liste.
     """
     t = (s or "").strip()
     if not t:
         return ""
-    t = re.sub(r"^[A-Za-z0-9.\-/ ]{1,12}\*+\s*", "", t)   # Dienstleister-Praefix
+    t = _ORT_LAND.sub("", t)                              # " - Chemnitz, DEU"
+    t = re.sub(r"^[A-Za-z0-9._\-/ ]{1,12}\*+\s*", "", t)  # Dienstleister-Praefix
     t = re.sub(r"(?i)\bwww\.", "", t)
     t = re.sub(r"(?i)\.(de|com|net|org|eu|at|ch|io|shop)\b", "", t)
     t = re.sub(r"(?i)\b(sagt danke|fil(?:iale)?\.?\s*\d+|kartenzahlung)\b", " ", t)
@@ -304,12 +377,20 @@ def pretty_payee(s: str) -> str:
     # stehen, dort kann sie zum Namen gehoeren.
     t = re.sub(r"(?i)[\s,]*\b(gmbh(\s*&?\s*co\.?\s*kg)?|mbh|ag|kgaa|kg|ohg|ug|"
                r"e\.?\s?k\.?|se|ltd\.?|limited|inc\.?|llc|b\.?v\.?|n\.?v\.?|"
-               r"s\.?\s?a\.?\s?r\.?\s?l\.?|s\.?a\.?|plc)\s*$", "", t)
-    t = re.sub(r"\s{2,}", " ", t).strip(" .,-/&")
+               r"et\s+cie|s\.?\s?c\.?\s?a\.?|s\.?\s?a\.?\s?r\.?\s?l\.?|"
+               r"s\.?a\.?|plc)\s*$", "", t)
+    # Kennungen und Filialnummern raus -- aber nur, solange ein Wort bleibt.
+    woerter = t.split()
+    behalten = [w for w in woerter
+                if not _ist_kennung(re.sub(r"[^A-Za-z0-9]", "", w).lower())
+                and not re.fullmatch(r"[0-9]{2,}", w)]
+    if behalten:
+        t = " ".join(behalten)
+    t = re.sub(r"\s{2,}", " ", t).strip(" .,-/&_")
     if not t:
         return (s or "").strip()[:60]
     # ALLES GROSS ist Terminal-Schreibweise, kein Markenauftritt. Kurze
-    # Kuerzel (dm, ARAL) duerfen so bleiben.
+    # Kuerzel (dm, ARAL, TGTG) duerfen so bleiben.
     if t.isupper() and len(t) > 4:
         t = t.title()
     return t[:60]
@@ -366,6 +447,42 @@ def build_rows(rows: list[dict]) -> dict:
 
     skipped = {k: v for k, v in skipped.items() if v}
     return {"entries": out, "skipped": skipped, "examples": examples}
+
+
+# Warum eine Zeile wegfiel, in Worten. Eine Zahl allein ("14 uebersprungen")
+# wirft genau die Frage auf, die sie beantworten soll.
+SKIP_TEXT = {
+    "gutschrift": "Gutschriften (positiver Betrag)",
+    "ohne_datum": "ohne lesbares Datum",
+    "ohne_betrag": "ohne lesbaren Betrag",
+    "null": "Betrag 0,00",
+}
+
+
+def _warum_leer(rows: list[dict], built: dict) -> str:
+    """Sagt, woran es lag, statt zu raten.
+
+    Die erste Fassung dieser Meldung vermutete "nur Gutschriften" -- und lag
+    bei der ersten echten Datei daneben: dort war das Euro-Zeichen an der
+    Kodierung gescheitert, kein einziger Betrag war lesbar. Wer die Datei
+    nicht selbst deutet, kann das aus einer Vermutung nicht erschliessen.
+    """
+    if not rows:
+        return ("Die Datei hat eine Kopfzeile, aber keine Datenzeilen darunter.")
+    skipped = built.get("skipped") or {}
+    examples = built.get("examples") or {}
+    teile = []
+    for grund, anzahl in sorted(skipped.items(), key=lambda kv: -kv[1]):
+        text = "%d %s" % (anzahl, SKIP_TEXT.get(grund, grund))
+        beispiel = (examples.get(grund) or [None])[0]
+        if beispiel:
+            text += " (z. B. „%s“)" % beispiel
+        teile.append(text)
+    kopf = ("Keine der %d Zeilen liess sich als Ausgabe lesen. "
+            % len(rows))
+    if not teile:
+        return kopf + "Die Spalten Datum und Betrag konnten nicht gedeutet werden."
+    return kopf + "Aufgeschlüsselt: " + "; ".join(teile) + "."
 
 
 def item_description(entry: dict) -> str:
@@ -458,9 +575,7 @@ async def preview(db, user_id: int, raw: bytes, filename: str) -> dict:
     built = build_rows(rows)
     entries = built["entries"]
     if not entries:
-        raise ExpenseImportError(
-            "Aus der Datei liess sich keine einzige Ausgabe lesen. Enthält sie "
-            "nur Gutschriften, oder stimmt das Datums- bzw. Betragsformat nicht?")
+        raise ExpenseImportError(_warum_leer(rows, built))
 
     d_from, d_to = _span(entries)
     stores = await _stores_of(db, user_id)
@@ -526,9 +641,7 @@ async def apply(db, user_id: int, raw: bytes, filename: str) -> dict:
     built = build_rows(rows)
     entries = built["entries"]
     if not entries:
-        raise ExpenseImportError(
-            "Aus der Datei liess sich keine einzige Ausgabe lesen. Enthält sie "
-            "nur Gutschriften, oder stimmt das Datums- bzw. Betragsformat nicht?")
+        raise ExpenseImportError(_warum_leer(rows, built))
     d_from, d_to = _span(entries)
 
     async with db.transaction():
