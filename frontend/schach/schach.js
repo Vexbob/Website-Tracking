@@ -66,6 +66,23 @@ function datum(iso, mitZeit) {
     return mitZeit ? t + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : t;
 }
 
+/* Die Entwicklung der letzten 30 Tage. Sie steht erst da, wenn es einen
+   zweiten Tag zum Vergleichen gibt -- ein Pfeil mit 0 daneben saehe aus wie
+   "unveraendert", waehrend in Wahrheit noch nichts zu vergleichen ist. Ist
+   der Verlauf juenger als 30 Tage, sagt der Hinweis, wie alt er wirklich
+   ist, statt 30 zu behaupten. */
+function trendMarke(r) {
+    if (r.trend == null) return '';
+    const richtung = r.trend > 0 ? 'hoch' : (r.trend < 0 ? 'runter' : 'gleich');
+    const pfeil = r.trend > 0 ? '▲' : (r.trend < 0 ? '▼' : '•');
+    const tage = r.trend_days;
+    const titel = tage >= 28
+        ? 'Entwicklung der letzten 30 Tage'
+        : `Entwicklung seit ${tage} ${tage === 1 ? 'Tag' : 'Tagen'} — so weit reicht der Verlauf bisher`;
+    return `<span class="sch-trend is-${richtung}" title="${titel}">
+        ${pfeil} ${r.trend > 0 ? '+' : ''}${r.trend}</span>`;
+}
+
 /* ------------------------------------------------------------- Überblick */
 
 function zeichneWertungen() {
@@ -117,6 +134,7 @@ function zeichneWertungen() {
         if (!r) return '<div class="sch-vz is-leer">–</div>';
         return `<div class="sch-vz">
             <span class="sch-vz-num">${r.rating}</span>
+            ${trendMarke(r)}
             <span class="sch-vz-sub">${r.is_best ? 'Bestwert'
                 : (r.games ? r.games.toLocaleString('de-DE') + ' Partien' : 'aktuell')}</span>
         </div>`;
@@ -134,7 +152,15 @@ function zeichneWertungen() {
                 <div class="sch-vl">${esc(d.label)}</div>
                 ${vorhanden.map(sp => zelle(nachPlattform[sp.key], d.perf)).join('')}
             `).join('')}
-        </div>`;
+        </div>
+        <p class="sch-vhinweis">${hatTrend(vorhanden, nachPlattform)
+            ? 'Der Pfeil zeigt die Entwicklung der letzten 30 Tage.'
+            : 'Eine Entwicklung steht hier, sobald der Verlauf zwei Tage umfasst — er beginnt mit dem ersten Abruf.'}</p>`;
+}
+
+function hatTrend(spalten, nachPlattform) {
+    return spalten.some(sp => (nachPlattform[sp.key].ratings || [])
+        .some(r => r.trend != null));
 }
 
 function zeichneBilanz() {

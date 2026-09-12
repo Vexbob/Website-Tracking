@@ -1860,6 +1860,12 @@ from routers.chess_router import router as chess_router
 app.include_router(chess_router)
 
 # ==========================================================================
+# Ernaehrungs-Modul (v1.85.0) — Lebensmittel aus Open Food Facts
+# --------------------------------------------------------------------------
+from routers.food_router import router as food_router
+app.include_router(food_router)
+
+# ==========================================================================
 # Gesamt-Export (v1.23.0) — alle Module in einer CSV
 # --------------------------------------------------------------------------
 from routers.export_router import router as export_router

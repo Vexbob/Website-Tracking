@@ -98,6 +98,19 @@ async def _konten_mit_wertung(db, user_id: int) -> list:
         "  FROM chess_ratings r JOIN chess_accounts a ON a.id = r.account_id "
         " WHERE a.user_id=$1 "
         " ORDER BY r.account_id, r.perf, r.taken_on DESC", user_id)
+    # Der aelteste Stand innerhalb der letzten 30 Tage ist die Messlatte fuer
+    # die Entwicklung. Bewusst der aelteste INNERHALB des Fensters und nicht
+    # "vor genau 30 Tagen": der Verlauf beginnt erst mit dem ersten Abruf, und
+    # eine Angabe "seit 9 Tagen: +24" ist ehrlicher als gar keine.
+    basis = await db.fetch(
+        "SELECT DISTINCT ON (r.account_id, r.perf) "
+        "       r.account_id, r.perf, r.rating, r.taken_on "
+        "  FROM chess_ratings r JOIN chess_accounts a ON a.id = r.account_id "
+        " WHERE a.user_id=$1 AND r.taken_on >= CURRENT_DATE - 30 "
+        "   AND NOT r.is_best "
+        " ORDER BY r.account_id, r.perf, r.taken_on ASC", user_id)
+    je_basis = {(b["account_id"], b["perf"]): b for b in basis}
+
     partien = await db.fetch(
         "SELECT account_id, COUNT(*) AS anzahl, MIN(played_at) AS von, "
         "       MAX(played_at) AS bis "
@@ -120,20 +133,41 @@ async def _konten_mit_wertung(db, user_id: int) -> list:
             "ratings_at": k["ratings_at"],
             "games_at": k["games_at"],
             "games_through": k["games_through"],
-            "ratings": [{
-                "perf": w["perf"],
-                "label": plattform.PERF_LABEL.get(w["perf"], w["perf"]),
-                "rating": w["rating"],
-                "rd": w["rd"],
-                "games": w["games"],
-                "is_best": w["is_best"],
-                "taken_on": w["taken_on"],
-            } for w in eigene],
+            "ratings": [_mit_trend(w, je_basis.get((w["account_id"], w["perf"])))
+                        for w in eigene],
             "games_count": zahl["anzahl"] if zahl else 0,
             "games_from": zahl["von"] if zahl else None,
             "games_to": zahl["bis"] if zahl else None,
         })
     return raus
+
+
+def _mit_trend(wertung, basis) -> dict:
+    """Die Wertung samt Entwicklung gegenueber dem aeltesten Stand im Fenster.
+
+    ``trend`` bleibt None, solange es keinen zweiten Tag gibt -- ein Pfeil
+    mit 0 daneben saehe aus wie "unveraendert", waehrend in Wahrheit noch gar
+    nichts zu vergleichen ist. Bestwerte (Chess.com, Raetsel) bekommen gar
+    keinen Trend: sie koennen nur steigen, eine Entwicklung ist das nicht.
+    """
+    d = {
+        "perf": wertung["perf"],
+        "label": plattform.PERF_LABEL.get(wertung["perf"], wertung["perf"]),
+        "rating": wertung["rating"],
+        "rd": wertung["rd"],
+        "games": wertung["games"],
+        "is_best": wertung["is_best"],
+        "taken_on": wertung["taken_on"],
+        "trend": None,
+        "trend_since": None,
+        "trend_days": None,
+    }
+    if wertung["is_best"] or not basis or basis["taken_on"] == wertung["taken_on"]:
+        return d
+    d["trend"] = wertung["rating"] - basis["rating"]
+    d["trend_since"] = basis["taken_on"]
+    d["trend_days"] = (wertung["taken_on"] - basis["taken_on"]).days
+    return d
 
 
 @router.get("/api/chess/accounts")

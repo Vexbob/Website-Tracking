@@ -81,6 +81,26 @@
 }
 .sch-vz.is-leer { color: var(--text-4); }
 
+/* Die Entwicklung steht als kleine Marke neben der Zahl -- gruen hoch,
+   rot runter. Statusfarben als Text auf dunklem Grund, keine Flaeche. */
+.sch-trend {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-left: 0.25rem;
+    color: var(--text-3);
+    cursor: help;
+}
+.sch-trend.is-hoch   { color: var(--ok); }
+.sch-trend.is-runter { color: var(--danger); }
+
+.sch-vhinweis {
+    margin: var(--space-2) 0 0;
+    font-size: 0.75rem;
+    color: var(--text-4);
+}
+
 /* ---------- Filterleiste ---------- */
 .sch-filterbar {
     display: flex;

@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.85.0', date: '2026-09-12', title: 'Ernährung: Lebensmittel per Strichcode', notes: [
+        'Der Strichcode holt Nährwerte aus Open Food Facts — offene Datenbank, ohne Anmeldung und ohne Kosten; wer keinen Code hat, sucht nach dem Namen.',
+        'Was übernommen wird, landet im eigenen Bestand und bleibt dort: eigene Korrekturen werden bei einem erneuten Scan nicht überschrieben.',
+        'Fehlende Angaben bleiben leer statt still auf null zu fallen — gerade Ballaststoffe fehlen dort oft, und eine 0 liefe in jeder Tagessumme mit, ohne zu stimmen.',
+        'Schach zeigt neben jeder Wertungszahl die Entwicklung der letzten 30 Tage; solange der Verlauf kürzer ist, sagt der Hinweis, wie weit er wirklich reicht.',
+    ]},
     { v: 'v1.84.0', date: '2026-09-12', title: 'Schach läuft von selbst', notes: [
         'Neue Partien holt der Server jetzt einmal täglich von allein — ohne dass eine Seite offen sein muss; Stunde und An/Aus stehen im neuen Reiter „Automatik".',
         'Die Wertungszahlen frischen sich bei offener Seite alle 15 Minuten nach (einstellbar bis stündlich oder aus) — häufiger ergibt nichts, die Zahl bewegt sich nur nach einer Partie.',

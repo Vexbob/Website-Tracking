@@ -31,8 +31,9 @@
         <p class="page-sub">
             Ein Tracker, der <strong>locker</strong> bleibt: Mengen gibt es nur als
             <em>normal</em> oder <em>übermäßig</em>, keine Waage, keine Gramm. Was zählt, ist die
-            grobe Richtung über den Tag — Kalorien, Eiweiß, Ballaststoffe. Das Modul ist angelegt,
-            die Erfassung folgt.
+            grobe Richtung über den Tag — Kalorien, Eiweiß, Ballaststoffe. Der
+            Lebensmittel-Bestand steht schon und füllt sich über den Strichcode; Gerichte und
+            Tagebuch folgen.
         </p>
     </header>
 
@@ -94,13 +95,6 @@
                         <div class="wip-sub">„Zwei Eier und ein Brot“ am Küchentisch gesprochen — der schnellste Weg, solange die Hände beschäftigt sind.</div>
                     </div>
                 </div>
-                <div class="v-row wip-row">
-                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">📷</span>
-                    <div class="wip-text">
-                        <div class="wip-title">Barcode scannen</div>
-                        <div class="wip-sub">Der Strichcode holt die Nährwerte aus einer Lebensmitteldatenbank, damit sie nicht von der Packung abgeschrieben werden müssen.</div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -127,18 +121,45 @@
     <div id="tab-scanner" hidden>
         <div class="v-card">
             <div class="v-card-head">
-                <h3>Barcode</h3>
-                <span class="v-card-sub">Nährwerte aus der Datenbank</span>
+                <h3>Strichcode nachschlagen</h3>
+                <span class="v-card-sub">Quelle: Open Food Facts</span>
             </div>
-            <div class="empty">
-                <span class="empty-mark">📷</span>
-                <p class="empty-text">
-                    Der Scanner braucht zwei Dinge, die beide noch offen sind: die Kamera im
-                    Browser und eine Lebensmitteldatenbank, die zu einem Strichcode Nährwerte
-                    herausgibt. Welche es wird — FDDB oder Open Food Facts — entscheidet sich an
-                    den Nutzungsbedingungen, nicht am Bauchgefühl.
-                </p>
+            <form class="ern-form" id="ernScanForm">
+                <label class="ern-feld">
+                    <span>Strichcode (EAN)</span>
+                    <input type="text" id="ernBarcode" inputmode="numeric"
+                           autocomplete="off" placeholder="z. B. 3017620422003">
+                </label>
+                <button type="submit" class="v-btn v-btn--primary">Nachschlagen</button>
+            </form>
+            <p class="ern-hinweis">
+                Open Food Facts ist eine offene Datenbank, die von Freiwilligen gepflegt wird:
+                frei nutzbar, ohne Anmeldung — dafür nicht lückenlos. Was von dort kommt, ist ein
+                <strong>Vorschlag zum Nachbessern</strong>, keine Wahrheit; fehlende Angaben
+                bleiben leer statt still auf null gesetzt zu werden.
+            </p>
+            <div id="ernTreffer"></div>
+        </div>
+
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Suche ohne Strichcode</h3>
+                <span class="v-card-sub">für Obst, Brot, Loses</span>
             </div>
+            <label class="ern-suche">
+                <span class="ern-suche-ico" aria-hidden="true">🔎</span>
+                <input type="search" id="ernSuche" placeholder="Name des Lebensmittels"
+                       aria-label="Lebensmittel suchen" autocomplete="off">
+            </label>
+            <div id="ernSuchTreffer"></div>
+        </div>
+
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Eigener Bestand</h3>
+                <span class="v-card-sub" id="ernBestandZahl"></span>
+            </div>
+            <div id="ernBestand"><span class="skel skel-block"></span></div>
         </div>
     </div>
 

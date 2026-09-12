@@ -13,6 +13,116 @@
 body { visibility: hidden; }
 body.ready { visibility: visible; }
 
+/* ---------- Lebensmittel ---------- */
+.ern-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    margin-bottom: var(--space-3);
+}
+.ern-feld {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1 1 220px;
+    min-width: 0;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+.ern-feld input {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.55rem 0.7rem;
+    color: var(--text-1);
+    font-size: 0.9375rem;
+}
+.ern-feld input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+.ern-suche {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.4rem 0.7rem;
+    margin-bottom: var(--space-3);
+}
+.ern-suche-ico { opacity: 0.7; }
+.ern-suche input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
+    color: var(--text-1);
+    font-size: 0.9375rem;
+}
+.ern-suche input:focus { outline: none; }
+.ern-suche:focus-within { box-shadow: var(--focus-ring); }
+
+.ern-treffer + .ern-treffer { margin-top: var(--space-2); }
+.ern-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+.ern-marke { color: var(--text-3); font-size: 0.8125rem; }
+.ern-herkunft {
+    margin-left: auto;
+    font-size: 0.6875rem;
+    color: var(--text-4);
+}
+
+.ern-werte {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+}
+.ern-wert-lbl { font-size: 0.6875rem; color: var(--text-3); }
+.ern-wert-num {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--figure, var(--m-ernaehrung));
+}
+/* "Keine Angabe" ist ein eigener Zustand und darf nicht wie eine Zahl
+   aussehen -- sonst liest man 0, wo nichts steht. */
+.ern-fehlt {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-4);
+}
+
+.ern-klein {
+    margin: 0.5rem 0 0;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+.ern-tasten { margin-top: var(--space-3); }
+
+.ern-zeile {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.ern-zeile + .ern-zeile { margin-top: var(--space-2); }
+.ern-zeile-text { flex: 1; min-width: 0; }
+
+.ern-hinweis {
+    color: var(--text-3);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    margin: 0 0 var(--space-3);
+}
+
 .wip-stack {
     display: flex;
     flex-direction: column;
