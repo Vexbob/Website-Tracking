@@ -37,12 +37,15 @@ from services import openfoodfacts as off
 router = APIRouter(tags=["food"])
 
 SPALTEN = ("kcal", "protein_g", "carbs_g", "sugar_g", "fat_g", "sat_fat_g",
-           "fiber_g", "salt_g", "portion_g")
+           "fiber_g", "salt_g", "portion_g", "package_g")
 
 
 class Zutat(BaseModel):
     item_id: int
-    grams: float
+    # Wie es eingegeben wurde. ``grams`` rechnet der Server daraus aus --
+    # das Frontend soll keine Umrechnung kennen muessen.
+    amount: float
+    unit: str = "g"
 
 
 class GerichtEingabe(BaseModel):
@@ -75,12 +78,20 @@ class LebensmittelEingabe(BaseModel):
     fiber_g: Optional[float] = None
     salt_g: Optional[float] = None
     portion_g: Optional[float] = None
+    package_g: Optional[float] = None
+    # Worauf sich die Naehrwerte beziehen: je 100 g oder je 100 ml.
+    base_unit: str = "g"
+    # Wie die eigene Einheit heisst: Stueck, Scheibe, Becher, Glas …
+    portion_label: Optional[str] = None
     # Von Hand nachgebessert: ein erneuter Abruf laesst die Zeile dann in Ruhe.
     user_edited: bool = False
+    # Gesetzt beim Bearbeiten eines vorhandenen Eintrags.
+    id: Optional[int] = None
 
 
 def _ser(row) -> dict:
     d = dict(row)
+    d["units"] = calc.einheiten_fuer(dict(row))
     # NUMERIC kommt als Decimal zurueck -- als JSON waere das eine
     # Zeichenkette, und im Frontend stuende "6.30" statt 6,3.
     for spalte in SPALTEN:
@@ -162,17 +173,40 @@ async def aufnehmen(request: Request, daten: LebensmittelEingabe,
         raise HTTPException(400, "Ohne Namen geht es nicht.")
     if daten.source not in ("off", "eigen"):
         raise HTTPException(400, "Unbekannte Herkunft.")
+    if daten.base_unit not in ("g", "ml"):
+        raise HTTPException(400, "Nährwerte beziehen sich auf 100 g oder 100 ml.")
     ziffern = "".join(z for z in (daten.barcode or "") if z.isdigit()) or None
+
+    # Bearbeiten: ein vorhandener Eintrag wird geradeheraus ueberschrieben.
+    # Der Weg darunter (ON CONFLICT ueber den Strichcode) trifft nur zu, wenn
+    # es einen Strichcode gibt -- von Hand angelegte Lebensmittel haben keinen.
+    if daten.id:
+        zeile = await db.fetchrow(
+            "UPDATE food_items SET name=$3, brand=$4, barcode=$5, kcal=$6, "
+            "   protein_g=$7, carbs_g=$8, sugar_g=$9, fat_g=$10, sat_fat_g=$11, "
+            "   fiber_g=$12, salt_g=$13, portion_g=$14, package_g=$15, "
+            "   base_unit=$16, portion_label=$17, user_edited=TRUE, "
+            "   updated_at=now() "
+            " WHERE id=$1 AND user_id=$2 RETURNING *",
+            daten.id, user["id"], name, daten.brand, ziffern, daten.kcal,
+            daten.protein_g, daten.carbs_g, daten.sugar_g, daten.fat_g,
+            daten.sat_fat_g, daten.fiber_g, daten.salt_g, daten.portion_g,
+            daten.package_g, daten.base_unit,
+            (daten.portion_label or "").strip() or None)
+        if not zeile:
+            raise HTTPException(404, "Dieses Lebensmittel gibt es nicht.")
+        return {"ok": True, "item": _ser(zeile)}
 
     werte = [user["id"], daten.source, ziffern, name, daten.brand,
              daten.kcal, daten.protein_g, daten.carbs_g, daten.sugar_g,
              daten.fat_g, daten.sat_fat_g, daten.fiber_g, daten.salt_g,
-             daten.portion_g, daten.user_edited]
+             daten.portion_g, daten.user_edited, daten.package_g,
+             daten.base_unit, (daten.portion_label or "").strip() or None]
     zeile = await db.fetchrow(
         "INSERT INTO food_items (user_id, source, barcode, name, brand, kcal, "
         "   protein_g, carbs_g, sugar_g, fat_g, sat_fat_g, fiber_g, salt_g, "
-        "   portion_g, user_edited) "
-        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) "
+        "   portion_g, user_edited, package_g, base_unit, portion_label) "
+        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) "
         "ON CONFLICT (user_id, barcode) DO UPDATE SET "
         "   name = CASE WHEN food_items.user_edited THEN food_items.name "
         "               ELSE EXCLUDED.name END, "
@@ -195,6 +229,8 @@ async def aufnehmen(request: Request, daten: LebensmittelEingabe,
         "   salt_g = CASE WHEN food_items.user_edited THEN food_items.salt_g "
         "                 ELSE EXCLUDED.salt_g END, "
         "   portion_g = COALESCE(EXCLUDED.portion_g, food_items.portion_g), "
+        "   package_g = COALESCE(EXCLUDED.package_g, food_items.package_g), "
+        "   portion_label = COALESCE(food_items.portion_label, EXCLUDED.portion_label), "
         "   user_edited = food_items.user_edited OR EXCLUDED.user_edited, "
         "   updated_at = now() "
         "RETURNING *", *werte)
@@ -233,7 +269,9 @@ async def _gerichte(db, user_id: int, dish_id: Optional[int] = None) -> list:
     # Lebensmittels getragen.
     zutaten = await db.fetch(
         "SELECT z.dish_id, z.id AS link_id, z.grams, z.position, "
-        "       i.id AS item_id, i.name, i.brand, "
+        "       z.amount, z.unit, "
+        "       i.id AS item_id, i.name, i.brand, i.base_unit, "
+        "       i.portion_g, i.package_g, i.portion_label, "
         "       i.kcal, i.protein_g, i.fiber_g, i.carbs_g, i.fat_g "
         "  FROM food_dish_items z JOIN food_items i ON i.id = z.item_id "
         "  JOIN food_dishes d ON d.id = z.dish_id "
@@ -249,7 +287,10 @@ async def _gerichte(db, user_id: int, dish_id: Optional[int] = None) -> list:
             "created_at": g["created_at"],
             "items": [{"id": z["link_id"], "item_id": z["item_id"],
                        "grams": float(z["grams"]), "name": z["name"],
-                       "brand": z["brand"]} for z in eigene],
+                       "brand": z["brand"],
+                       "amount": float(z["amount"]) if z["amount"] else float(z["grams"]),
+                       "unit": z["unit"] or (z["base_unit"] or "g"),
+                       "units": calc.einheiten_fuer(dict(z))} for z in eigene],
             "portion": summe,
         })
     return raus
@@ -292,18 +333,27 @@ async def gericht_speichern(request: Request, daten: GerichtEingabe,
                 "RETURNING id", user["id"], name, daten.note)
 
         for platz, zutat in enumerate(daten.items):
-            if zutat.grams <= 0:
+            if zutat.amount <= 0:
                 raise HTTPException(400, "Eine Zutat ohne Menge ergibt keine Portion.")
+            if zutat.unit not in calc.EINHEITEN:
+                raise HTTPException(400, "Unbekannte Einheit.")
             # Das Lebensmittel muss dem Konto gehoeren -- sonst liesse sich
             # ueber eine fremde ID ein fremder Bestand auslesen.
-            gehoert = await db.fetchval(
-                "SELECT 1 FROM food_items WHERE id=$1 AND user_id=$2",
-                zutat.item_id, user["id"])
-            if not gehoert:
+            lebensmittel = await db.fetchrow(
+                "SELECT id, base_unit, portion_g, package_g FROM food_items "
+                " WHERE id=$1 AND user_id=$2", zutat.item_id, user["id"])
+            if not lebensmittel:
                 raise HTTPException(400, "Unbekanntes Lebensmittel in der Zutatenliste.")
+            # Einmal beim Speichern umrechnen, nicht bei jeder Anzeige: sonst
+            # aendert sich ein altes Rezept, sobald jemand eine
+            # Portionsgroesse korrigiert.
+            gramm, _hinweis = calc.in_basis(zutat.amount, zutat.unit,
+                                            dict(lebensmittel))
             await db.execute(
-                "INSERT INTO food_dish_items (dish_id, item_id, grams, position) "
-                "VALUES ($1,$2,$3,$4)", zeile["id"], zutat.item_id, zutat.grams, platz)
+                "INSERT INTO food_dish_items (dish_id, item_id, grams, position, "
+                "   amount, unit) VALUES ($1,$2,$3,$4,$5,$6)",
+                zeile["id"], zutat.item_id, round(gramm, 2), platz,
+                zutat.amount, zutat.unit)
 
     return {"ok": True, "dishes": await _gerichte(db, user["id"])}
 

@@ -172,6 +172,64 @@
 
         <div class="v-card">
             <div class="v-card-head">
+                <h3 id="ernFormTitel">Von Hand anlegen</h3>
+                <span class="v-card-sub">für alles ohne Strichcode</span>
+            </div>
+            <div class="ern-gitter">
+                <label class="ern-feld ern-feld--breit">
+                    <span>Name</span>
+                    <input type="text" id="fName" autocomplete="off" placeholder="z. B. Omas Gulasch">
+                </label>
+                <label class="ern-feld">
+                    <span>Marke oder Quelle</span>
+                    <input type="text" id="fBrand" autocomplete="off" placeholder="optional">
+                </label>
+                <label class="ern-feld">
+                    <span>Angaben beziehen sich auf</span>
+                    <select class="v-select" id="fBase">
+                        <option value="g">100 g (fest)</option>
+                        <option value="ml">100 ml (flüssig)</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="ern-gitter">
+                <label class="ern-feld"><span>Kalorien</span>
+                    <input type="number" id="fKcal" min="0" step="1" inputmode="decimal"></label>
+                <label class="ern-feld"><span>Eiweiß (g)</span>
+                    <input type="number" id="fProtein" min="0" step="0.1" inputmode="decimal"></label>
+                <label class="ern-feld"><span>Ballaststoffe (g)</span>
+                    <input type="number" id="fFiber" min="0" step="0.1" inputmode="decimal"></label>
+                <label class="ern-feld"><span>Kohlenhydrate (g)</span>
+                    <input type="number" id="fCarbs" min="0" step="0.1" inputmode="decimal"></label>
+                <label class="ern-feld"><span>Fett (g)</span>
+                    <input type="number" id="fFat" min="0" step="0.1" inputmode="decimal"></label>
+            </div>
+            <p class="ern-klein">Leer lassen, was du nicht weißt — leer heißt „keine Angabe“
+                und wird später als Lücke ausgewiesen, nicht als Null verrechnet.</p>
+
+            <div class="ern-gitter">
+                <label class="ern-feld"><span>Einheit heißt</span>
+                    <input type="text" id="fPortionLabel" autocomplete="off"
+                           placeholder="Stück, Scheibe, Glas …"></label>
+                <label class="ern-feld"><span>Eine Einheit wiegt</span>
+                    <input type="number" id="fPortion" min="0" step="1" inputmode="decimal"
+                           placeholder="z. B. 62"></label>
+                <label class="ern-feld"><span>Ganze Packung</span>
+                    <input type="number" id="fPackage" min="0" step="1" inputmode="decimal"
+                           placeholder="optional"></label>
+            </div>
+            <p class="ern-klein">Was hier steht, kannst du danach beim Eintragen auswählen —
+                „2 Stück“ statt „124 g“.</p>
+
+            <div class="ern-tasten">
+                <button type="button" class="v-btn v-btn--primary" id="fSpeichern">Aufnehmen</button>
+                <button type="button" class="v-btn" id="fAbbrechen" hidden>Abbrechen</button>
+            </div>
+        </div>
+
+        <div class="v-card">
+            <div class="v-card-head">
                 <h3>Eigener Bestand</h3>
                 <span class="v-card-sub" id="ernBestandZahl"></span>
             </div>

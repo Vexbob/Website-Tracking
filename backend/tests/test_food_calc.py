@@ -72,3 +72,36 @@ def test_leerer_tag_ist_null_und_nicht_unvollstaendig():
     tag = calc.tages_summe([])
     assert tag["kcal"]["min"] == 0 and tag["kcal"]["max"] == 0
     assert tag["kcal"]["incomplete"] is False
+
+
+# --------------------------------------------------------------------------
+# Einheiten (v1.88.0)
+# --------------------------------------------------------------------------
+WRAP = {"base_unit": "g", "portion_g": 62, "portion_label": "Stück",
+        "package_g": 370}
+SAFT = {"base_unit": "ml", "portion_g": 200, "portion_label": "Glas"}
+LOSES = {"base_unit": "g"}
+
+
+def test_einheiten_nur_was_hinterlegt_ist():
+    keys = [e["key"] for e in calc.einheiten_fuer(WRAP)]
+    assert keys == ["g", "portion", "packung"]
+    # Die eigene Beschriftung schlaegt das allgemeine Wort.
+    assert calc.einheiten_fuer(WRAP)[1]["label"] == "Stück"
+    # Ein Getraenk rechnet in Millilitern.
+    assert calc.einheiten_fuer(SAFT)[0]["key"] == "ml"
+    # Ohne hinterlegte Groessen wird nichts angeboten, was geraten waere.
+    assert [e["key"] for e in calc.einheiten_fuer(LOSES)] == ["g"]
+
+
+def test_umrechnung_in_die_basis():
+    assert calc.in_basis(2, "portion", WRAP) == (124.0, None)
+    assert calc.in_basis(1, "packung", WRAP) == (370.0, None)
+    assert calc.in_basis(150, "g", WRAP) == (150.0, None)
+    assert calc.in_basis(1, "portion", SAFT) == (200.0, None)
+
+
+def test_fehlende_groesse_wird_gesagt_nicht_verschwiegen():
+    wert, hinweis = calc.in_basis(1, "packung", LOSES)
+    assert wert == calc.PORTION_FALLBACK
+    assert hinweis and "Packungsgröße" in hinweis

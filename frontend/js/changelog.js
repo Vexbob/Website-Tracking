@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.88.0', date: '2026-09-12', title: 'Ernährung: eigene Einträge und Einheiten', notes: [
+        'Lebensmittel lassen sich von Hand anlegen — für alles ohne Strichcode, von Omas Gulasch bis zum losen Obst.',
+        'Jeder Eintrag im Bestand ist änderbar: Nährwerte, Marke, und ob sich die Angaben auf 100 g oder 100 ml beziehen.',
+        'Jedes Lebensmittel bekommt eine eigene Einheit mit Namen und Gewicht — „Stück", „Scheibe", „Glas" — dazu optional die ganze Packung.',
+        'In Rezepten wird damit gerechnet: „2 Stück" statt „124 g"; umgerechnet wird beim Speichern, damit ein altes Rezept sich nicht ändert, wenn du später eine Portionsgröße korrigierst.',
+        'Angeboten wird nur, was hinterlegt ist — eine Auswahl „Packung", die dann doch 100 g rechnet, wäre geraten.',
+    ]},
     { v: 'v1.87.0', date: '2026-09-12', title: 'Ernährung: Gerichte und der Tag', notes: [
         'Aus dem Bestand lassen sich Gerichte zusammenstellen — Gramm stehen nur dort, im Rezept, einmal geschrieben und hundertmal benutzt.',
         'Eingetragen wird danach mit einem Tipp: „Wraps, normal" oder „Wraps, übermäßig". Mehr fragt der Tag nicht.',

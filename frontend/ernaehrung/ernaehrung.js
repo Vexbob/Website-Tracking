@@ -304,16 +304,23 @@ function zeichneEntwurf() {
             <div class="v-row ern-zutat">
                 <div class="ern-zeile-text"><strong>${esc(z.name)}</strong></div>
                 <label class="ern-gramm">
-                    <input type="number" min="1" step="1" value="${z.grams}" data-gramm="${i}"
-                           aria-label="Gramm für ${esc(z.name)}">
-                    <span>g</span>
+                    <input type="number" min="0.25" step="0.25" value="${z.amount}" data-menge="${i}"
+                           aria-label="Menge für ${esc(z.name)}">
+                    <select class="v-select v-select--sm" data-einheit="${i}"
+                            aria-label="Einheit für ${esc(z.name)}">
+                        ${(z.units || [{ key: 'g', label: 'g' }]).map(u =>
+                            `<option value="${u.key}"${u.key === z.unit ? ' selected' : ''}>${esc(u.label)}</option>`).join('')}
+                    </select>
                 </label>
                 <button type="button" class="v-btn v-btn--icon" data-zutat-weg="${i}"
                         aria-label="Zutat entfernen" title="Entfernen">🗑️</button>
             </div>`).join('');
-    document.querySelectorAll('[data-gramm]').forEach(f => f.addEventListener('change', () => {
-        const wert = Number(f.value);
-        if (wert > 0) state.entwurf.items[Number(f.dataset.gramm)].grams = wert;
+    document.querySelectorAll('[data-menge]').forEach(f => f.addEventListener('change', () => {
+        const wert = Number(String(f.value).replace(',', '.'));
+        if (wert > 0) state.entwurf.items[Number(f.dataset.menge)].amount = wert;
+    }));
+    document.querySelectorAll('[data-einheit]').forEach(f => f.addEventListener('change', () => {
+        state.entwurf.items[Number(f.dataset.einheit)].unit = f.value;
     }));
     document.querySelectorAll('[data-zutat-weg]').forEach(b => b.addEventListener('click', () => {
         state.entwurf.items.splice(Number(b.dataset.zutatWeg), 1);
@@ -337,9 +344,15 @@ function zutatSuchen(text) {
     ziel.querySelectorAll('[data-zutat]').forEach(b => b.addEventListener('click', () => {
         const p = state.bestand.find(x => x.id === Number(b.dataset.zutat));
         if (!p) return;
-        // Die uebliche Portion als Vorschlag: meistens stimmt sie, und wenn
-        // nicht, ist es eine Zahl statt eines leeren Feldes.
-        state.entwurf.items.push({ item_id: p.id, name: p.name, grams: p.portion_g || 100 });
+        // Die eigene Einheit als Vorschlag, wenn es eine gibt: "1 Stueck"
+        // trifft haeufiger als "62 g" und ist schneller zu pruefen.
+        const eigene = (p.units || []).find(u => u.key === 'portion');
+        state.entwurf.items.push({
+            item_id: p.id, name: p.name,
+            amount: eigene ? 1 : 100,
+            unit: eigene ? 'portion' : (p.base_unit || 'g'),
+            units: p.units || [{ key: p.base_unit || 'g', label: p.base_unit || 'g', grams: 1 }],
+        });
         document.getElementById('ernZutatSuche').value = '';
         ziel.innerHTML = '';
         zeichneEntwurf();
@@ -355,7 +368,8 @@ async function gerichtSpeichern() {
     try {
         const res = await API.gericht({
             id: state.entwurf.id, name,
-            items: state.entwurf.items.map(z => ({ item_id: z.item_id, grams: z.grams })),
+            items: state.entwurf.items.map(z => ({
+                item_id: z.item_id, amount: z.amount, unit: z.unit })),
         });
         state.gerichte = res.dishes;
         entwurfLeeren();
@@ -382,7 +396,9 @@ function gerichtBearbeiten(id) {
     if (!g) return;
     state.entwurf = {
         id: g.id, name: g.name,
-        items: g.items.map(z => ({ item_id: z.item_id, name: z.name, grams: z.grams })),
+        items: g.items.map(z => ({
+            item_id: z.item_id, name: z.name,
+            amount: z.amount, unit: z.unit, units: z.units })),
     };
     document.getElementById('ernGerichtName').value = g.name;
     zeichneEntwurf();
@@ -418,7 +434,10 @@ function zeichneGerichte() {
             <div class="v-row ern-gericht">
                 <div class="ern-zeile-text">
                     <strong>${esc(g.name)}</strong>
-                    <div class="ern-klein">${g.items.map(z => esc(z.name) + ' ' + z.grams + ' g').join(' · ')}</div>
+                    <div class="ern-klein">${g.items.map(z => {
+                        const e = (z.units || []).find(u => u.key === z.unit);
+                        return esc(z.name) + ' ' + z.amount + ' ' + esc(e ? e.label : z.unit);
+                    }).join(' · ')}</div>
                     <div class="ern-klein">${g.portion.kcal != null
                         ? `${zahlKurz(g.portion.kcal)} kcal je Portion (${g.portion.grams} g)`
                         : 'Nährwerte unvollständig'}${g.portion.incomplete.length
@@ -638,6 +657,77 @@ async function uebernehmen(produkt) {
     }
 }
 
+/* ------------------------------------------------- Anlegen und Aendern
+ *
+ * Dasselbe Formular fuer beides. Ein zweites Formular zum Bearbeiten waere
+ * dieselbe Maske zweimal -- und zwei Stellen, an denen ein Feld fehlen kann.
+ * Leere Felder bleiben leer: null heisst "keine Angabe" und ist etwas
+ * anderes als 0.
+ */
+
+const FORM = {
+    fName: 'name', fBrand: 'brand', fBase: 'base_unit',
+    fKcal: 'kcal', fProtein: 'protein_g', fFiber: 'fiber_g',
+    fCarbs: 'carbs_g', fFat: 'fat_g',
+    fPortionLabel: 'portion_label', fPortion: 'portion_g', fPackage: 'package_g',
+};
+const ZAHLENFELDER = ['fKcal', 'fProtein', 'fFiber', 'fCarbs', 'fFat',
+                      'fPortion', 'fPackage'];
+
+let bearbeitet = null;   // id des Lebensmittels, das gerade geaendert wird
+
+function formLeeren() {
+    bearbeitet = null;
+    Object.keys(FORM).forEach(id => {
+        const feld = document.getElementById(id);
+        if (feld) feld.value = id === 'fBase' ? 'g' : '';
+    });
+    document.getElementById('ernFormTitel').textContent = 'Von Hand anlegen';
+    document.getElementById('fSpeichern').textContent = 'Aufnehmen';
+    document.getElementById('fAbbrechen').hidden = true;
+}
+
+function formFuellen(p) {
+    bearbeitet = p.id;
+    Object.entries(FORM).forEach(([id, feld]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = p[feld] == null ? '' : p[feld];
+    });
+    document.getElementById('fBase').value = p.base_unit || 'g';
+    document.getElementById('ernFormTitel').textContent = 'Lebensmittel ändern';
+    document.getElementById('fSpeichern').textContent = 'Änderung speichern';
+    document.getElementById('fAbbrechen').hidden = false;
+    activateTab('scanner');
+    document.getElementById('ernFormTitel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function formSpeichern() {
+    const wert = (id) => {
+        const roh = document.getElementById(id).value.trim();
+        if (!roh) return null;
+        return ZAHLENFELDER.includes(id) ? Number(roh.replace(',', '.')) : roh;
+    };
+    const daten = { source: 'eigen', user_edited: true };
+    Object.entries(FORM).forEach(([id, feld]) => { daten[feld] = wert(id); });
+    daten.base_unit = document.getElementById('fBase').value || 'g';
+    if (!daten.name) { melde('Ohne Namen geht es nicht.', 'error'); return; }
+    if (bearbeitet) daten.id = bearbeitet;
+
+    const knopf = document.getElementById('fSpeichern');
+    knopf.classList.add('is-loading');
+    try {
+        await API.aufnehmen(daten);
+        formLeeren();
+        await ladeBestand();
+        await ladeGerichte();
+        melde('Gespeichert.', 'success');
+    } catch (err) {
+        melde(err.message || 'Das ging nicht.', 'error');
+    } finally {
+        knopf.classList.remove('is-loading');
+    }
+}
+
 async function ladeBestand() {
     const ziel = document.getElementById('ernBestand');
     try {
@@ -662,13 +752,23 @@ async function ladeBestand() {
                 <strong>${esc(p.name)}</strong>
                 ${p.brand ? `<span class="ern-marke">${esc(p.brand)}</span>` : ''}
                 <div class="ern-klein">${zahl(p.kcal, '')} kcal · ${zahl(p.protein_g, ' g')} Eiweiß
-                    · ${zahl(p.fiber_g, ' g')} Ballaststoffe · je 100 g</div>
+                    · ${zahl(p.fiber_g, ' g')} Ballaststoffe · je 100 ${esc(p.base_unit || 'g')}</div>
+                <div class="ern-klein">${(p.units || []).map(e =>
+                    e.grams === 1 ? esc(e.label) : `${esc(e.label)} = ${e.grams} ${esc(p.base_unit || 'g')}`
+                ).join(' · ')}${p.user_edited ? ' · von Hand gepflegt' : ''}</div>
             </div>
-            <button type="button" class="v-btn v-btn--icon" data-weg="${p.id}"
-                    aria-label="Entfernen" title="Entfernen">🗑️</button>
+            <div class="ern-schnell-tasten">
+                <button type="button" class="v-btn v-btn--sm" data-aendern="${p.id}">Ändern</button>
+                <button type="button" class="v-btn v-btn--icon" data-weg="${p.id}"
+                        aria-label="Entfernen" title="Entfernen">🗑️</button>
+            </div>
         </div>`).join('');
     ziel.querySelectorAll('[data-weg]').forEach(b =>
         b.addEventListener('click', () => entfernen(Number(b.dataset.weg))));
+    ziel.querySelectorAll('[data-aendern]').forEach(b => b.addEventListener('click', () => {
+        const p = state.bestand.find(x => x.id === Number(b.dataset.aendern));
+        if (p) formFuellen(p);
+    }));
 }
 
 async function entfernen(id) {
@@ -738,7 +838,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('ernZutatSuche').addEventListener('input',
         (e) => zutatSuchen(e.target.value));
 
+    document.getElementById('fSpeichern').addEventListener('click', formSpeichern);
+    document.getElementById('fAbbrechen').addEventListener('click', formLeeren);
+
     zeichneEntwurf();
+    formLeeren();
     await ladeBestand();
     await ladeGerichte();
     await ladeTag(heute());

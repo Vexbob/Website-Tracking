@@ -179,6 +179,22 @@ body.ready { visibility: visible; }
     box-shadow: var(--focus-ring);
 }
 
+/* Eingabegitter: passt sich der Breite an, statt auf dem Telefon eine
+   Spalte mit abgeschnittenen Feldern zu erzwingen. */
+.ern-gitter {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+.ern-feld--breit { grid-column: 1 / -1; }
+.ern-feld input[type="number"] { font-variant-numeric: tabular-nums; }
+
+.v-select--sm {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8125rem;
+}
+
 .ern-zutat-suche { margin-bottom: var(--space-2); }
 .ern-zutat-treffer { margin: 0 0.35rem 0.35rem 0; }
 

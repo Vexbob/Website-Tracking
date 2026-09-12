@@ -64,6 +64,67 @@ def _zahl(wert):
     return None if wert is None else float(wert)
 
 
+# ---------------------------------------------------------------------------
+# Einheiten
+# ---------------------------------------------------------------------------
+# Naehrwerte stehen je 100 g bzw. je 100 ml. Alles andere -- Stueck, Portion,
+# Packung -- ist eine BENANNTE Menge, deren Groesse am Lebensmittel steht.
+# Umgerechnet wird beim Speichern, nicht bei jeder Anzeige: sonst aendert
+# sich ein altes Rezept, sobald jemand die Portionsgroesse korrigiert.
+EINHEITEN = ("g", "ml", "portion", "packung")
+EINHEIT_LABEL = {"g": "g", "ml": "ml", "portion": "Portion", "packung": "Packung"}
+
+
+def einheiten_fuer(lebensmittel: dict) -> list:
+    """Welche Einheiten dieses Lebensmittel anbietet — mit Beschriftung.
+
+    Eine Einheit ohne hinterlegte Groesse wird gar nicht erst angeboten: ein
+    Auswahlfeld mit "Packung", das dann 100 g rechnet, waere geraten.
+    """
+    basis = lebensmittel.get("base_unit") or "g"
+    raus = [{"key": basis, "label": EINHEIT_LABEL[basis], "grams": 1.0}]
+    portion = _zahl(lebensmittel.get("portion_g"))
+    if portion:
+        raus.append({
+            "key": "portion",
+            "label": (lebensmittel.get("portion_label") or "Portion"),
+            "grams": portion,
+        })
+    packung = _zahl(lebensmittel.get("package_g"))
+    if packung:
+        raus.append({"key": "packung", "label": "Packung", "grams": packung})
+    return raus
+
+
+def in_basis(menge, einheit: str, lebensmittel: dict):
+    """Rechnet eine Eingabe in Gramm bzw. Milliliter um.
+
+    Rueckgabe: (wert, hinweis) -- der Hinweis ist gesetzt, wenn geraten
+    werden musste (Einheit ohne hinterlegte Groesse).
+    """
+    menge = float(menge or 0)
+    if menge <= 0:
+        return 0.0, "Eine Menge von null ergibt keine Portion."
+    basis = lebensmittel.get("base_unit") or "g"
+    if einheit in ("g", "ml"):
+        return menge, None
+    if einheit == "portion":
+        gramm = _zahl(lebensmittel.get("portion_g"))
+        if not gramm:
+            return menge * PORTION_FALLBACK, (
+                "Für dieses Lebensmittel ist keine Portionsgröße hinterlegt — "
+                f"gerechnet wird mit {PORTION_FALLBACK:.0f} {basis}.")
+        return menge * gramm, None
+    if einheit == "packung":
+        gramm = _zahl(lebensmittel.get("package_g"))
+        if not gramm:
+            return menge * PORTION_FALLBACK, (
+                "Für dieses Lebensmittel ist keine Packungsgröße hinterlegt — "
+                f"gerechnet wird mit {PORTION_FALLBACK:.0f} {basis}.")
+        return menge * gramm, None
+    return menge, None
+
+
 def zutaten_summe(zutaten) -> dict:
     """Naehrwerte eines Gerichts aus seinen Zutaten (eine normale Portion).
 
