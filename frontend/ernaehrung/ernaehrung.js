@@ -92,6 +92,134 @@ function zeichneTreffer(ziel, produkt, bekannt, notiz) {
     if (knopf) knopf.addEventListener('click', () => uebernehmen(produkt));
 }
 
+/* ---------------------------------------------------------------- Kamera
+ *
+ * Zwei Wege, weil kein Browser beide hat:
+ *
+ *   1. ``BarcodeDetector`` steckt in Chrome und im Android-Browser fest
+ *      eingebaut -- nichts nachzuladen, und es erkennt schneller.
+ *   2. Safari kennt es nicht (Stand heute). Dort wird ZXing nachgeladen --
+ *      erst dann, wenn es gebraucht wird: 300 KB beim Seitenaufruf fuer
+ *      einen Knopf, den man selten drueckt, waeren verschenkt.
+ *
+ * Beide brauchen HTTPS. Auf einer Seite ueber http gibt der Browser die
+ * Kamera gar nicht erst frei -- das sagt der Hinweis, statt es an einem
+ * stummen Fehler scheitern zu lassen.
+ */
+
+const ZXING_CDN = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+const FORMATE = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+
+const kamera = { stream: null, leser: null, laeuft: false };
+
+function kameraHinweis(text) {
+    const el = document.getElementById('ernKameraHinweis');
+    if (el) el.textContent = text;
+}
+
+async function kameraStarten() {
+    if (kamera.laeuft) { kameraStoppen(); return; }
+    if (!window.isSecureContext) {
+        melde('Die Kamera gibt der Browser nur über HTTPS frei.', 'error');
+        return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        melde('Dieser Browser gibt keine Kamera frei.', 'error');
+        return;
+    }
+    document.getElementById('ernKameraBereich').hidden = false;
+    document.getElementById('ernKamera').textContent = '📷 Kamera schließen';
+    kamera.laeuft = true;
+    kameraHinweis('Kamera wird geöffnet …');
+    try {
+        if ('BarcodeDetector' in window) await mitBarcodeDetector();
+        else await mitZXing();
+    } catch (err) {
+        kameraStoppen();
+        // Der Browser sagt selbst, woran es lag (Erlaubnis verweigert, keine
+        // Kamera da) -- das ist die bessere Meldung als eine eigene.
+        melde(err && err.name === 'NotAllowedError'
+            ? 'Der Zugriff auf die Kamera wurde abgelehnt.'
+            : (err && err.message) || 'Die Kamera ließ sich nicht öffnen.', 'error');
+    }
+}
+
+async function mitBarcodeDetector() {
+    const video = document.getElementById('ernVideo');
+    kamera.stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }, audio: false });
+    video.srcObject = kamera.stream;
+    await video.play();
+    const detektor = new window.BarcodeDetector({ formats: FORMATE });
+    kameraHinweis('Strichcode ins Bild halten');
+    const takt = async () => {
+        if (!kamera.laeuft) return;
+        try {
+            const treffer = await detektor.detect(video);
+            if (treffer && treffer.length) return codeGefunden(treffer[0].rawValue);
+        } catch (e) { /* einzelne Bilder duerfen misslingen */ }
+        // Viermal je Sekunde reicht fuer einen Strichcode und laesst dem
+        // Geraet Luft; jedes Bild zu pruefen heizt nur das Telefon.
+        setTimeout(takt, 250);
+    };
+    takt();
+}
+
+function ladeZXing() {
+    if (window.ZXing) return Promise.resolve(window.ZXing);
+    return new Promise((fertig, fehler) => {
+        const skript = document.createElement('script');
+        skript.src = ZXING_CDN;
+        skript.onload = () => fertig(window.ZXing);
+        skript.onerror = () => fehler(new Error('Die Scanner-Bibliothek ließ sich nicht laden.'));
+        document.head.appendChild(skript);
+    });
+}
+
+async function mitZXing() {
+    kameraHinweis('Scanner wird geladen …');
+    const Z = await ladeZXing();
+    if (!Z || !Z.BrowserMultiFormatReader) {
+        throw new Error('Die Scanner-Bibliothek ließ sich nicht laden.');
+    }
+    const hinweise = new Map();
+    hinweise.set(Z.DecodeHintType.POSSIBLE_FORMATS, [
+        Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8,
+        Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]);
+    kamera.leser = new Z.BrowserMultiFormatReader(hinweise, 300);
+    kameraHinweis('Strichcode ins Bild halten');
+    await kamera.leser.decodeFromVideoDevice(
+        null, 'ernVideo', (ergebnis) => {
+            if (ergebnis && kamera.laeuft) codeGefunden(ergebnis.getText());
+        });
+}
+
+function codeGefunden(code) {
+    const ziffern = String(code || '').replace(/\D/g, '');
+    if (!ziffern) return;
+    kameraStoppen();
+    document.getElementById('ernBarcode').value = ziffern;
+    // Direkt nachschlagen: wer gerade eine Packung vor die Kamera gehalten
+    // hat, will das Ergebnis, nicht noch einen Knopf.
+    nachschlagen();
+}
+
+function kameraStoppen() {
+    kamera.laeuft = false;
+    if (kamera.leser) {
+        try { kamera.leser.reset(); } catch (e) {}
+        kamera.leser = null;
+    }
+    if (kamera.stream) {
+        kamera.stream.getTracks().forEach(spur => spur.stop());
+        kamera.stream = null;
+    }
+    const video = document.getElementById('ernVideo');
+    if (video) video.srcObject = null;
+    document.getElementById('ernKameraBereich').hidden = true;
+    document.getElementById('ernKamera').textContent = '📷 Kamera';
+}
+
 async function nachschlagen(e) {
     if (e) e.preventDefault();
     const code = document.getElementById('ernBarcode').value.trim();
@@ -234,6 +362,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         b.addEventListener('click', () => activateTab(b.dataset.tab)));
 
     document.getElementById('ernScanForm').addEventListener('submit', nachschlagen);
+    document.getElementById('ernKamera').addEventListener('click', kameraStarten);
+    document.getElementById('ernKameraStop').addEventListener('click', kameraStoppen);
+    // Beim Verlassen der Seite die Kamera freigeben -- sonst bleibt das
+    // Lichtlein an, bis der Tab geschlossen wird.
+    window.addEventListener('pagehide', kameraStoppen);
     let tippen = null;
     document.getElementById('ernSuche').addEventListener('input', (e) => {
         clearTimeout(tippen);

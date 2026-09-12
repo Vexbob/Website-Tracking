@@ -131,7 +131,18 @@
                            autocomplete="off" placeholder="z. B. 3017620422003">
                 </label>
                 <button type="submit" class="v-btn v-btn--primary">Nachschlagen</button>
+                <button type="button" class="v-btn" id="ernKamera">📷 Kamera</button>
             </form>
+
+            <div class="ern-kamera" id="ernKameraBereich" hidden>
+                <!-- playsinline: ohne das Attribut spielt iOS das Bild im
+                     Vollbild ab, und der Rest der Seite ist weg. -->
+                <video id="ernVideo" playsinline muted autoplay></video>
+                <div class="ern-kamera-leiste">
+                    <span class="ern-klein" id="ernKameraHinweis">Kamera wird geöffnet …</span>
+                    <button type="button" class="v-btn v-btn--sm" id="ernKameraStop">Schließen</button>
+                </div>
+            </div>
             <p class="ern-hinweis">
                 Open Food Facts ist eine offene Datenbank, die von Freiwilligen gepflegt wird:
                 frei nutzbar, ohne Anmeldung — dafür nicht lückenlos. Was von dort kommt, ist ein

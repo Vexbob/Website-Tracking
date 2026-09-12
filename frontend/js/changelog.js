@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.86.0', date: '2026-09-12', title: 'Strichcode mit der Kamera', notes: [
+        'Der Scanner öffnet jetzt die Kamera: Packung ins Bild halten, der Code wird erkannt und sofort nachgeschlagen.',
+        'Chrome und Android nutzen den eingebauten Erkenner; Safari lädt einen Scanner nach — erst beim Druck auf den Knopf, nicht beim Seitenaufruf.',
+        'Nachgezogen: die Textsuche lief über den alten Suchweg von Open Food Facts, der unter Last mit 503 antwortet. Sie läuft jetzt über deren eigenen Suchdienst, der alte Weg bleibt nur noch Rückfall.',
+        'Überlastung sagt das jetzt auch so — samt Hinweis, dass der Strichcode meist trotzdem funktioniert.',
+    ]},
     { v: 'v1.85.0', date: '2026-09-12', title: 'Ernährung: Lebensmittel per Strichcode', notes: [
         'Der Strichcode holt Nährwerte aus Open Food Facts — offene Datenbank, ohne Anmeldung und ohne Kosten; wer keinen Code hat, sucht nach dem Namen.',
         'Was übernommen wird, landet im eigenen Bestand und bleibt dort: eigene Korrekturen werden bei einem erneuten Scan nicht überschrieben.',

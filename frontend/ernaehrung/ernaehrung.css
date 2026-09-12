@@ -66,6 +66,32 @@ body.ready { visibility: visible; }
 .ern-suche input:focus { outline: none; }
 .ern-suche:focus-within { box-shadow: var(--focus-ring); }
 
+/* Das Kamerabild ist eine textfreie Flaeche und darf deshalb randlos
+   stehen; die Hoehe ist gedeckelt, damit auf dem Telefon der Knopf darunter
+   noch sichtbar bleibt. */
+.ern-kamera {
+    margin-bottom: var(--space-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #000;
+}
+.ern-kamera video {
+    display: block;
+    width: 100%;
+    max-height: 52vh;
+    object-fit: cover;
+}
+.ern-kamera-leiste {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0.7rem;
+    background: var(--surface-2);
+}
+.ern-kamera-leiste .ern-klein { margin: 0; }
+
 .ern-treffer + .ern-treffer { margin-top: var(--space-2); }
 .ern-kopf {
     display: flex;

@@ -25,6 +25,12 @@ import urllib.request
 
 USER_AGENT = "Vexbob/1.0 (persoenlicher Ernaehrungstracker, Einzelnutzer)"
 BASIS = "https://world.openfoodfacts.org"
+# Die Textsuche laeuft ueber den eigenen Suchdienst von Open Food Facts.
+# Der alte Weg (``/cgi/search.pl``) ist dieselbe Maschine, die auch die
+# Webseite ausliefert, und antwortet unter Last regelmaessig mit 503 -- als
+# einziger Weg ist er zu wacklig. Er bleibt als Rueckfall stehen, weil er
+# manchmal Treffer hat, die der Suchdienst nicht kennt.
+SUCHDIENST = "https://search.openfoodfacts.org"
 ZEITLIMIT = 20
 
 # Nur die Felder holen, die gebraucht werden. Ein volles Produkt sind einige
@@ -59,6 +65,14 @@ def _hole(url: str) -> dict:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             raise QuellenFehler("Zu diesem Strichcode gibt es dort keinen Eintrag.")
+        if e.code in (429, 502, 503, 504):
+            # Kein Fehler an unserer Seite: die Datenbank wird ehrenamtlich
+            # betrieben und ist zeitweise ueberlastet. Der Satz sagt das --
+            # und dass der Strichcode meist trotzdem geht.
+            raise QuellenFehler(
+                "Open Food Facts ist gerade überlastet und antwortet nicht "
+                "(Fehler %d). Der Strichcode funktioniert meist trotzdem; "
+                "sonst in ein paar Minuten noch einmal." % e.code)
         raise QuellenFehler(f"Open Food Facts antwortete mit Fehler {e.code}.")
     except urllib.error.URLError as e:
         raise QuellenFehler(f"Open Food Facts war nicht erreichbar: {e.reason}")
@@ -98,6 +112,26 @@ def _portion(produkt: dict):
     return _zahl(zahl)
 
 
+def _text(wert) -> str:
+    """Aus dem, was dort steht, einen Text machen.
+
+    Dieselbe Angabe kommt je nach Weg anders an: der Suchdienst liefert
+    ``brands`` als Liste, die Produktabfrage als Text mit Komma, und ein
+    Name kann als Sprach-Woerterbuch kommen. Wer das nicht abfaengt, bekommt
+    im Frontend "['Crownfield']" zu lesen.
+    """
+    if wert is None:
+        return ""
+    if isinstance(wert, list):
+        return str(wert[0]).strip() if wert else ""
+    if isinstance(wert, dict):
+        for schluessel in ("de", "en", "main"):
+            if wert.get(schluessel):
+                return str(wert[schluessel]).strip()
+        return next((str(v).strip() for v in wert.values() if v), "")
+    return str(wert).strip()
+
+
 def _umbauen(produkt: dict) -> dict:
     """Ein OFF-Produkt in die Form, die dieses Projekt speichert."""
     n = produkt.get("nutriments") or {}
@@ -105,10 +139,9 @@ def _umbauen(produkt: dict) -> dict:
         "barcode": str(produkt.get("code") or "").strip() or None,
         # Der deutsche Name zuerst: das Modul ist auf Deutsch, und viele
         # Produkte tragen beides.
-        "name": (produkt.get("product_name_de")
-                 or produkt.get("product_name") or "").strip(),
-        "brand": (produkt.get("brands") or "").split(",")[0].strip() or None,
-        "quantity": (produkt.get("quantity") or "").strip() or None,
+        "name": _text(produkt.get("product_name_de")) or _text(produkt.get("product_name")),
+        "brand": _text(produkt.get("brands")).split(",")[0].strip() or None,
+        "quantity": _text(produkt.get("quantity")) or None,
         "portion_g": _portion(produkt),
         "source": "off",
     }
@@ -136,18 +169,38 @@ def hole_produkt(barcode: str) -> dict:
     return _umbauen(antwort["product"])
 
 
-def suche(text: str, hoechstens: int = 12) -> list:
-    """Textsuche — fuer alles ohne Strichcode (Obst, Selbstgekochtes)."""
-    begriff = (text or "").strip()
-    if len(begriff) < 2:
-        return []
-    url = (f"{BASIS}/cgi/search.pl?search_terms="
-           f"{urllib.parse.quote(begriff)}&search_simple=1&action=process"
-           f"&json=1&page_size={int(hoechstens)}&fields={FELDER}")
-    antwort = _hole(url)
+def _brauchbare(produkte: list) -> list:
     treffer = []
-    for produkt in (antwort.get("products") or []):
+    for produkt in produkte:
         daten = _umbauen(produkt)
         if daten["usable"]:
             treffer.append(daten)
     return treffer
+
+
+def suche(text: str, hoechstens: int = 12) -> list:
+    """Textsuche — fuer alles ohne Strichcode (Obst, Selbstgekochtes).
+
+    Zwei Wege, in dieser Reihenfolge: der Suchdienst von Open Food Facts und,
+    wenn der nicht antwortet, die alte Suche der Webseite. Sie hat unter Last
+    regelmaessig 503 geliefert -- deshalb ist sie nur noch der Rueckfall und
+    nicht mehr der einzige Weg.
+    """
+    begriff = (text or "").strip()
+    if len(begriff) < 2:
+        return []
+
+    try:
+        antwort = _hole(f"{SUCHDIENST}/search?q={urllib.parse.quote(begriff)}"
+                        f"&page_size={int(hoechstens)}&fields={FELDER}")
+        treffer = _brauchbare(antwort.get("hits") or [])
+        if treffer:
+            return treffer
+    except QuellenFehler:
+        treffer = []
+
+    antwort = _hole(f"{BASIS}/cgi/search.pl?search_terms="
+                    f"{urllib.parse.quote(begriff)}&search_simple=1"
+                    f"&action=process&json=1&page_size={int(hoechstens)}"
+                    f"&fields={FELDER}")
+    return _brauchbare(antwort.get("products") or [])
