@@ -153,7 +153,7 @@ Ohne diesen Schritt funktioniert das Modul vollständig — es fragt dann bei je
 Der fertige Katalog liegt als **`backend/data/off-katalog-dach.csv.gz`** im Repo (rund 10 MB) und ist damit nach `git pull` und einem Image-Neubau auch im Container. Einspielen:
 
 ```bash
-docker exec -it <container> python scripts/off_katalog.py     data/off-katalog-dach.csv.gz --einspielen
+docker exec -it <container> python scripts/off_katalog.py \n    data/off-katalog-dach.csv.gz --einspielen
 ```
 
 Ohne Docker, dort wo `DATABASE_URL` gesetzt ist:
@@ -178,7 +178,7 @@ Eingespielt wird immer **ersetzend** — ein neuer Abzug ist ein neuer Stand, zw
 
 ```bash
 curl -O https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz
-python backend/scripts/off_katalog.py en.openfoodfacts.org.products.csv.gz     -z backend/data/off-katalog-dach.csv.gz
+python backend/scripts/off_katalog.py en.openfoodfacts.org.products.csv.gz \n    -z backend/data/off-katalog-dach.csv.gz
 ```
 
 Gelesen wird strömend — die ~12 GB Text landen nie auf der Platte, gepackt wie ungepackt. `--nur-zaehlen` sagt vorher, was übrig bliebe, ohne etwas zu schreiben; `--laender` stellt ein, welche Märkte behalten werden (Voreinstellung: Deutschland, Österreich, Schweiz). Wie alt der Katalog ist, steht im Modul auf der Scanner-Karte.
