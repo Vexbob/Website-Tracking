@@ -82,6 +82,12 @@ def _oeffnen(pfad: str, modus: str = "rt"):
     zwoelf Gigabyte Text da. Gelesen wird so oder so zeilenweise, gepackt
     ist nur die sparsamere Variante.
     """
+    if "b" in modus:
+        # Binaer, wo der Inhalt unveraendert weitergereicht wird (COPY):
+        # asyncpg schiebt die gelesenen Bloecke roh an den Server, und im
+        # Textmodus kaemen dort Zeichenketten statt Bytes an.
+        return (gzip.open(pfad, modus) if pfad.lower().endswith(".gz")
+                else open(pfad, modus))
     if pfad.lower().endswith(".gz"):
         return gzip.open(pfad, modus, encoding="utf-8",
                          errors="replace" if "r" in modus else None, newline="")
@@ -224,11 +230,20 @@ async def einspielen(datei: str) -> None:
     url = os.getenv("DATABASE_URL")
     if not url:
         sys.exit("DATABASE_URL ist nicht gesetzt — ohne die weiß ich nicht, wohin.")
+    print("Verbinde …", flush=True)
     conn = await asyncpg.connect(url)
     try:
+        # Ohne die Tabelle waere die Fehlermeldung von Postgres ("relation
+        # does not exist") richtig, aber nicht hilfreich -- sie sagt nicht,
+        # dass zuerst das Backend mit der Migration laufen muss.
+        if not await conn.fetchval(
+                "SELECT to_regclass('public.food_catalog') IS NOT NULL"):
+            sys.exit("Die Tabelle food_catalog gibt es noch nicht — erst muss "
+                     "das Backend einmal mit Migration 043 gestartet sein.")
+        print("Lade %s …" % os.path.basename(datei), flush=True)
         async with conn.transaction():
             await conn.execute("TRUNCATE food_catalog")
-            with _oeffnen(datei) as f:
+            with _oeffnen(datei, "rb") as f:
                 ergebnis = await conn.copy_to_table(
                     "food_catalog", source=f, columns=list(AUSGABE),
                     format="csv", delimiter="\t", null="")
