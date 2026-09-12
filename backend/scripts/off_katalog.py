@@ -229,10 +229,18 @@ def filtern(quelle: str, ziel: str, laender, grenze=None) -> dict:
 
 
 def _ziel(url: str):
-    """Wirt und Port aus der Adresse — ohne das Passwort."""
+    """Wirt und Port aus der Adresse — ohne das Passwort.
+
+    Beides kann fehlen: Railway setzt in DATABASE_PUBLIC_URL Platzhalter
+    ein, und solange der TCP-Proxy aus ist, bleiben die leer. Dann steht
+    dort woertlich "@:/railway" -- mit Passwort, aber ohne Ziel.
+    """
     import urllib.parse
-    teile = urllib.parse.urlsplit(url)
-    return (teile.hostname or "?"), (teile.port or 5432)
+    try:
+        teile = urllib.parse.urlsplit(url)
+        return (teile.hostname or ""), teile.port
+    except ValueError:
+        return "", None
 
 
 def _adresse(vorgabe=None) -> str:
@@ -256,6 +264,17 @@ def _adresse(vorgabe=None) -> str:
         sys.exit("Das sieht nicht nach einer Postgres-Adresse aus — sie fängt "
                  "mit postgresql:// an.")
     wirt, port = _ziel(url)
+    if not wirt or not port:
+        sys.exit(
+            "In der Adresse fehlt %s.\n"
+            "Das passiert bei Railway genau dann, wenn der öffentliche "
+            "Zugang zur Datenbank noch aus ist: DATABASE_PUBLIC_URL setzt "
+            "dort Platzhalter ein, die leer bleiben.\n\n"
+            "Einschalten: Postgres-Dienst → Settings → Networking → TCP "
+            "Proxy (Port 5432 angeben). Danach steht unter Variables ein "
+            "Wirt auf .proxy.rlwy.net mit fünfstelligem Port drin."
+            % ("der Rechnername und der Port" if not wirt and not port
+               else "der Rechnername" if not wirt else "der Port"))
     if wirt.endswith(".railway.internal"):
         sys.exit(
             "Das ist die INTERNE Adresse (%s) — die gilt nur zwischen den "
@@ -296,11 +315,14 @@ async def einspielen(datei: str, url=None) -> None:
                  "kopieren.")
     except (OSError, asyncio.TimeoutError) as e:
         wirt, port = _ziel(url)
+        import asyncio as _a
         grund = ("Dort nimmt niemand Verbindungen an"
                  if isinstance(e, ConnectionRefusedError) else
                  "Diesen Rechner gibt es nicht"
                  if e.__class__.__name__ == "gaierror" else
-                 "Keine Antwort in 20 Sekunden")
+                 "Keine Antwort in 20 Sekunden"
+                 if isinstance(e, _a.TimeoutError) else
+                 "Die Verbindung kam nicht zustande")
         sys.exit(
             "Versucht wurde: %s Port %s\n"
             "%s (%s).\n\n"
