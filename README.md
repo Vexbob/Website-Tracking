@@ -162,6 +162,16 @@ Ohne Docker, dort wo `DATABASE_URL` gesetzt ist:
 python backend/scripts/off_katalog.py backend/data/off-katalog-dach.csv.gz --einspielen
 ```
 
+**Auf Railway** geht es vom eigenen Rechner aus — die Datenbank ist über den TCP-Proxy erreichbar. Im Dashboard beim Postgres-Dienst unter *Variables* die **`DATABASE_PUBLIC_URL`** kopieren (nicht `DATABASE_URL`: die zeigt auf `postgres.railway.internal` und gilt nur innerhalb von Railway), dann:
+
+```powershell
+$env:DATABASE_URL = "postgresql://postgres:…@…proxy.rlwy.net:PORT/railway"
+python backend\scripts\off_katalog.py backend\data\off-katalog-dach.csv.gz --einspielen
+$env:DATABASE_URL = $null
+```
+
+Wer die Daten nicht über die öffentliche Leitung schicken will, nimmt stattdessen `railway ssh` und ruft das Skript im Container auf — dort liegt die Datei nach dem Deploy ohnehin, und `DATABASE_URL` ist gesetzt.
+
 Eingespielt wird immer **ersetzend** — ein neuer Abzug ist ein neuer Stand, zwei Stände nebeneinander wären nicht zu trennen. Läuft in einer Transaktion: schlägt es fehl, steht der alte Katalog unverändert da.
 
 **Neu bauen**, wenn der Katalog altern soll (der Abzug erscheint täglich, ein paar Mal im Jahr reicht):
