@@ -33,7 +33,24 @@
         { href: '/blog/',       label: '📰 Blog',           public: true, hideForAdmin: true, icon: 'news', short: 'Blog' },
         { href: '/blog/admin/', label: '📰 Blog',           public: false, admin: true, icon: 'news', short: 'Blog' },
         { href: '/admin/',      label: '👥 User-Verwaltung', public: false, admin: true, icon: 'users', short: 'User' },
+
+        // v1.82.0 -- Module im Bau. ``status: 'neu'`` ist das einzige, was sie
+        // von den fertigen unterscheidet: das Menue stellt sie unter eine
+        // eigene Ueberschrift, die Leiste am Rechner laesst sie weg (dort
+        // konkurrieren sie sonst um Platz mit dem, was laeuft), und das
+        // Dashboard baut daraus seinen Abschnitt "In Arbeit". Ein drittes
+        // Modul im Bau braucht deshalb genau diese eine Zeile.
+        // ``tone`` und ``sub`` stehen hier, damit die Kachel auf dem
+        // Dashboard keine zweite Liste braucht.
+        { href: '/schach/',     label: '♟️ Schach',          public: false, icon: 'chess', short: 'Schach',
+          status: 'neu', tone: '--m-schach',
+          sub: 'Rating und Partien von Lichess und Chess.com' },
+        { href: '/ernaehrung/', label: '🥗 Ernährung',       public: false, icon: 'meal',  short: 'Essen',
+          status: 'neu', tone: '--m-ernaehrung',
+          sub: 'Gerichte, Makros und Barcode-Scanner' },
     ];
+
+    const istNeu = (m) => m.status === 'neu';
 
     // Von build() gefuellt: die Module, die dieses Konto ueberhaupt sehen
     // darf. Tab-Leiste und Einstell-Dialog richten sich danach.
@@ -101,18 +118,26 @@
         const menu = document.createElement('div');
         menu.className = 'nav-switcher-menu';
         menu.setAttribute('role', 'menu');
-        menu.innerHTML = `<div class="nav-switcher-head">Module</div>` + visible.map(m => {
-            const cls = isActive(m.href) ? 'active' : '';
-            // Label ist "<Emoji> Text" -- wir splitten in Icon + Text
-            const parts = m.label.split(' ');
-            const icon = parts.shift() || '';
-            const text = parts.join(' ');
-            return `<a href="${m.href}" class="nav-switcher-item ${cls}" role="menuitem">
-                <span class="nsi-icon">${icon}</span>
-                <span class="nsi-text">${text}</span>
-                ${cls ? '<span class="nsi-dot" aria-hidden="true"></span>' : ''}
-            </a>`;
-        }).join('') + `<button type="button" class="nav-switcher-item nav-switcher-cfg" role="menuitem">
+        // v1.82.0: zwei Gruppen statt einer Liste. Was im Bau ist, steht
+        // unter einer eigenen Ueberschrift -- sonst sieht ein halbfertiges
+        // Modul aus wie ein fertiges, und der erste Klick darauf enttaeuscht.
+        const gruppe = (titel, liste) => !liste.length ? '' :
+            `<div class="nav-switcher-head">${titel}</div>` + liste.map(m => {
+                const cls = isActive(m.href) ? 'active' : '';
+                // Label ist "<Emoji> Text" -- wir splitten in Icon + Text
+                const parts = m.label.split(' ');
+                const icon = parts.shift() || '';
+                const text = parts.join(' ');
+                return `<a href="${m.href}" class="nav-switcher-item ${cls}" role="menuitem">
+                    <span class="nsi-icon">${icon}</span>
+                    <span class="nsi-text">${text}</span>
+                    ${cls ? '<span class="nsi-dot" aria-hidden="true"></span>' : ''}
+                </a>`;
+            }).join('');
+
+        menu.innerHTML = gruppe('Module', visible.filter(m => !istNeu(m)))
+            + gruppe('In Arbeit', visible.filter(istNeu))
+            + `<button type="button" class="nav-switcher-item nav-switcher-cfg" role="menuitem">
                 <span class="nsi-icon">⚙️</span>
                 <span class="nsi-text">Tab-Leiste anpassen</span>
             </button>`;
@@ -216,7 +241,12 @@
 
     function renderModuleRow(visible) {
         if (!moduleRow) return;
-        const items = desktopOrder(visible, readDesktopCache(), readHidden());
+        // Module im Bau bleiben aus der Leiste heraus: sie wuerden fertigen
+        // Modulen Platz wegnehmen. Erreichbar sind sie ueber den
+        // Punkte-Schalter -- der bleibt dadurch stehen (rowShowsEverything
+        // wird nie wahr, solange eines im Bau ist).
+        const fertige = visible.filter(m => !istNeu(m));
+        const items = desktopOrder(fertige, readDesktopCache(), readHidden());
         rowShowsEverything = items.length === visible.length;
         moduleRow.innerHTML = items.map(m => {
             const parts = m.label.split(' ');
@@ -455,6 +485,12 @@
         music:  '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
         news:   '<path d="M4 5h11a1 1 0 0 1 1 1v13H5a1 1 0 0 1-1-1V5Z"/><path d="M16 9h3a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 8.5h5M7 12h5M7 15.5h3"/>',
         users:  '<circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5M15.5 14.8A5.5 5.5 0 0 1 20.5 20"/>',
+        // Bauer statt Springer: die Pferdefigur verliert bei 22 Pixeln ihre
+        // Silhouette, der Bauer bleibt erkennbar.
+        chess:  '<circle cx="12" cy="6.2" r="2.7"/><path d="M9.4 10.6h5.2"/><path d="M10.2 10.6c.1 2.9-1.2 4.7-2.4 6.4h8.4c-1.2-1.7-2.5-3.5-2.4-6.4"/><path d="M7.8 17 6.6 20.4h10.8L16.2 17"/>',
+        // Apfel statt Messer und Gabel: eine geschlossene Form liest sich
+        // klein besser als drei duenne Striche nebeneinander.
+        meal:   '<path d="M12 8c-.9-.8-2-1.2-3.1-1.2C6.7 6.8 5.2 8.7 5.2 11.4c0 3.6 2.5 7.8 4.7 7.8.8 0 1.4-.5 2.1-.5s1.3.5 2.1.5c2.2 0 4.7-4.2 4.7-7.8 0-2.7-1.5-4.6-3.7-4.6-1.1 0-2.2.4-3.1 1.2Z"/><path d="M12 7.8V5.6c0-1.3 1-2.3 2.3-2.3"/>',
     };
 
     function moduleFor(href) {

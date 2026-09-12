@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.82.0', date: '2026-09-12', title: 'Schach und Ernährung sind angelegt', notes: [
+        'Zwei neue Module haben ihre eigene Seite: Schach (Wertungszahl und Partien von Lichess und Chess.com) und Ernährung (Gerichte, Makros je Tag, Barcode).',
+        'Beide stehen getrennt von den fertigen Modulen — im Modul-Menü unter „In Arbeit", auf dem Dashboard in einem eigenen Abschnitt.',
+        'Auf jeder der beiden Seiten steht, was dort entstehen soll; die leeren Zustände sagen, woran es noch fehlt, statt Felder zu zeigen, die nichts speichern.',
+        'Der Ernährungstracker legt sich auf zwei Mengenstufen fest — „normal" und „übermäßig" statt Gramm, weil geschätzte Gramm nur eine Grobstufe mit Nachkommastelle sind.',
+    ]},
     { v: 'v1.81.0', date: '2026-09-10', title: 'Laden-Dubletten und Einordnen per Knopf', notes: [
         'Die Läden-Seite schlägt vor, was dasselbe Geschäft ist — „Lidl“ neben „LIDL PLUS“, „Rewe“ neben „REWE Markt“ — und führt es auf Knopfdruck zusammen; die Buchungen hängen mit um.',
         'Verglichen wird mit derselben Funktion, die auch der CSV-Import benutzt: zwei verschiedene Vergleiche würden sich gegenseitig widersprechen.',

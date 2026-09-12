@@ -52,6 +52,17 @@
        bleiben: gruener, weniger Cyan. */
     --m-musik:    #1ed760;
     --m-musik-soft: rgba(30,215,96,0.16);
+    /* Schach traegt das warme Holzbrett-Orange. Es liegt im einzigen freien
+       Bereich zwischen dem Bernstein des Blogs (#ffcb45) und dem Akzent
+       (#ff5c7a) -- weit genug von beiden, damit die Modul-Icons in der Leiste
+       nebeneinander unterscheidbar bleiben (9,1:1 gegen --surface-1). */
+    --m-schach:   #ffa257;
+    --m-schach-soft: rgba(255,162,87,0.16);
+    /* Ernaehrung nimmt Blattgruen -- gelber als Sparziel (#5eea92) und Musik
+       (#1ed760), sonst stuenden drei gruene Icons nebeneinander, die man erst
+       beim Lesen auseinanderhaelt (12,0:1 gegen --surface-1). */
+    --m-ernaehrung: #a3e635;
+    --m-ernaehrung-soft: rgba(163,230,53,0.16);
 
     /* =====================================================================
        Verlaufs-Presets (v1.74.0)

@@ -78,7 +78,8 @@ Farbe ist Information, nicht Dekoration.
   gilt in der ganzen App dieselbe Regel wie bei den Statusfarben: helle
   Farbe, dunkle Schrift.
 - **Modultöne**: Ausgaben Türkis, Gesundheit Rosa, Sparziel Grün, Notizen Blau,
-  Blog Bernstein, Verwaltung Violett, Musik Spotify-Grün. Sie färben Modul-Icons,
+  Blog Bernstein, Verwaltung Violett, Musik Spotify-Grün, Schach Holzbrett-Orange,
+  Ernährung Blattgrün. Sie färben Modul-Icons,
   die aktive Diagrammreihe und kleine Identitätsmarken — nie ganze Flächen.
   Das Musik-Modul ist der Fall, an dem sich zeigt, wofür ein Modulton gut ist:
   seine Daten kommen aus dem Spotify-Datenexport, und `--m-musik` sagt das

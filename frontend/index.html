@@ -95,6 +95,16 @@
                 </a>
             </div>
         </section>
+        <!-- v1.82.0: Module im Bau stehen getrennt von dem, was laeuft.
+             Die Kacheln baut das Skript unten aus VexNav -- eine zweite
+             Modulliste hier waere die Liste, die als erste veraltet. -->
+        <section class="section" id="wipSection" hidden>
+            <div class="section-header">
+                <span class="eyebrow">Noch nicht fertig</span>
+                <h2>In Arbeit</h2>
+            </div>
+            <div class="tile-grid" id="wipGrid"></div>
+        </section>
         <section class="section">
             <div class="section-header">
                 <h2>Mehr</h2>
@@ -110,6 +120,29 @@
     <div class="version-tag"></div>
     <script src="/js/export-dialog.js"></script>
     <script>
+        // Die Kacheln fuer "In Arbeit" kommen aus derselben Liste wie die
+        // Navigation (MODULES in nav-switcher.js). Ein drittes Modul im Bau
+        // taucht hier dadurch von selbst auf -- und verschwindet wieder,
+        // sobald sein ``status`` faellt.
+        document.addEventListener('vexnav:ready', () => {
+            const wip = (window.VexNav ? VexNav.modules() : [])
+                .filter(m => m.status === 'neu');
+            const grid = document.getElementById('wipGrid');
+            const sec = document.getElementById('wipSection');
+            if (!grid || !sec || !wip.length) return;
+            grid.innerHTML = wip.map(m => {
+                const teile = m.label.split(' ');
+                const icon = teile.shift() || '';
+                const name = teile.join(' ');
+                const ton = m.tone ? ('--tone:var(' + m.tone + ')') : '';
+                return '<a href="' + m.href + '" class="tile">'
+                    + '<div class="tile-icon v-icon-tile" style="' + ton + '">' + icon + '</div>'
+                    + '<div class="tile-text"><div class="tile-title">' + name + '</div>'
+                    + '<div class="tile-sub">' + (m.sub || '') + '</div></div></a>';
+            }).join('');
+            sec.hidden = false;
+        });
+
         // Wenn der Start in 4s nicht durchläuft, zeige Fehler-UI. Die Marke
         // ist seit v1.67.1 ein eigenes Flag statt der Sichtbarkeit: die Seite
         // deckt sich jetzt schon vor dem Warten auf, dadurch wäre die alte

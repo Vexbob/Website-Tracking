@@ -1,0 +1,50 @@
+/* ernaehrung.css — v1.82.0
+ *
+ * Das Ernaehrungs-Modul im Bau. Die Seite benutzt ausschliesslich Bausteine
+ * aus css/style.css (.v-card, .v-row, .empty, .tabs); hier stehen nur die
+ * Layout-Regeln fuer die Liste "Was hier entsteht" -- sie verschwindet
+ * wieder, sobald das Modul angeschlossen ist.
+ */
+
+/* Die Seite bindet css/statistics.css nicht ein (kein Diagramm, keine
+   Statistik-Tabelle), braucht aber dieselbe Freigabe: sonst blitzt vor der
+   Weiterleitung zum Login kurz die fertige Oberflaeche auf. Umgelegt wird der
+   Schalter in ernaehrung.js direkt nach dem Login-Check. */
+body { visibility: hidden; }
+body.ready { visibility: visible; }
+
+.wip-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+/* Nur Anordnung, keine neue Flaeche: die Zeile ist die .v-row aus der
+   Designsprache, so wie in design.html unter "Flaechen und Zeilen". */
+.wip-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.wip-tile {
+    width: 34px;
+    height: 34px;
+    font-size: 1rem;
+    border-radius: 10px;
+    flex: none;
+}
+
+.wip-text { min-width: 0; }
+
+.wip-title {
+    font-weight: 600;
+    color: var(--text-1);
+}
+
+.wip-sub {
+    color: var(--text-3);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    margin-top: 0.125rem;
+}

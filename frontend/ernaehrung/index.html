@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0c10">
+<meta name="description" content="Ernährung: Gerichte, Makronährwerte je Tag und Barcode-Scanner — bewusst grob statt auf das Gramm.">
+<title>Ernährung — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/ernaehrung/ernaehrung.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav-switcher.js"></script>
+<script src="/js/sw-update.js"></script>
+</head>
+<body>
+<nav class="navbar">
+    <span class="nav-title">Ernährung</span>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main class="wide">
+
+    <header class="page-head">
+        <h1>🥗 Ernährung</h1>
+        <p class="page-sub">
+            Ein Tracker, der <strong>locker</strong> bleibt: Mengen gibt es nur als
+            <em>normal</em> oder <em>übermäßig</em>, keine Waage, keine Gramm. Was zählt, ist die
+            grobe Richtung über den Tag — Kalorien, Eiweiß, Ballaststoffe. Das Modul ist angelegt,
+            die Erfassung folgt.
+        </p>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="heute">🍽️ Heute</button>
+        <button class="tab-btn" data-tab="gerichte">📖 Gerichte</button>
+        <button class="tab-btn" data-tab="scanner">📷 Scanner</button>
+    </div>
+
+    <!-- ---------- Heute ---------- -->
+    <div id="tab-heute">
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Tagestabelle</h3>
+                <span class="v-card-sub">Kalorien und Makronährwerte</span>
+            </div>
+            <div class="empty">
+                <span class="empty-mark">🍽️</span>
+                <p class="empty-text">
+                    Für heute ist noch nichts erfasst — und erfassen lässt sich noch nichts,
+                    solange es keine Gerichte gibt. Sobald das erste Gericht angelegt ist, steht
+                    hier die Summe des Tages: Kalorien, Eiweiß, Ballaststoffe, Kohlenhydrate,
+                    Fett.
+                </p>
+            </div>
+        </div>
+
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Was hier entsteht</h3>
+                <span class="v-card-sub">geplanter Umfang</span>
+            </div>
+            <div class="wip-stack">
+                <div class="v-row wip-row">
+                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">📖</span>
+                    <div class="wip-text">
+                        <div class="wip-title">Gerichte anlegen</div>
+                        <div class="wip-sub">Einmal zusammenstellen, danach mit einem Tipp für den Tag übernehmen — die immer gleichen Mahlzeiten sind der Regelfall.</div>
+                    </div>
+                </div>
+                <div class="v-row wip-row">
+                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">💡</span>
+                    <div class="wip-text">
+                        <div class="wip-title">Vorschläge statt Suchen</div>
+                        <div class="wip-sub">Was an diesem Wochentag zu dieser Zeit meist gegessen wird, steht oben — getippt wird nur, was davon abweicht.</div>
+                    </div>
+                </div>
+                <div class="v-row wip-row">
+                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">⚖️</span>
+                    <div class="wip-text">
+                        <div class="wip-title">Zwei Mengen, mehr nicht</div>
+                        <div class="wip-sub">„Normal“ oder „übermäßig“. Gramm-Angaben wären genauer, aber nach einer Woche tippt sie niemand mehr — und geschätzte Gramm sind nicht genauer als eine ehrliche Grobstufe.</div>
+                    </div>
+                </div>
+                <div class="v-row wip-row">
+                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">🎙️</span>
+                    <div class="wip-text">
+                        <div class="wip-title">Einsprechen statt eintippen</div>
+                        <div class="wip-sub">„Zwei Eier und ein Brot“ am Küchentisch gesprochen — der schnellste Weg, solange die Hände beschäftigt sind.</div>
+                    </div>
+                </div>
+                <div class="v-row wip-row">
+                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">📷</span>
+                    <div class="wip-text">
+                        <div class="wip-title">Barcode scannen</div>
+                        <div class="wip-sub">Der Strichcode holt die Nährwerte aus einer Lebensmitteldatenbank, damit sie nicht von der Packung abgeschrieben werden müssen.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- Gerichte ---------- -->
+    <div id="tab-gerichte" hidden>
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Gerichte</h3>
+                <span class="v-card-sub">eigene Zusammenstellungen</span>
+            </div>
+            <div class="empty">
+                <span class="empty-mark">📖</span>
+                <p class="empty-text">
+                    Noch keine Gerichte. Ein Gericht ist eine Zusammenstellung, die einmal angelegt
+                    und danach immer wieder mit einem Tipp übernommen wird — das Anlegen kommt mit
+                    dem Anschluss ans Backend.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- Scanner ---------- -->
+    <div id="tab-scanner" hidden>
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Barcode</h3>
+                <span class="v-card-sub">Nährwerte aus der Datenbank</span>
+            </div>
+            <div class="empty">
+                <span class="empty-mark">📷</span>
+                <p class="empty-text">
+                    Der Scanner braucht zwei Dinge, die beide noch offen sind: die Kamera im
+                    Browser und eine Lebensmitteldatenbank, die zu einem Strichcode Nährwerte
+                    herausgibt. Welche es wird — FDDB oder Open Food Facts — entscheidet sich an
+                    den Nutzungsbedingungen, nicht am Bauchgefühl.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="version-tag"></div>
+</main>
+<script src="/ernaehrung/ernaehrung.js"></script>
+</body>
+</html>
