@@ -1848,6 +1848,12 @@ from routers.music_router import router as music_router
 app.include_router(music_router)
 
 # ==========================================================================
+# Schach-Modul (v1.83.0) — Wertungszahlen und Partien von Lichess/Chess.com
+# --------------------------------------------------------------------------
+from routers.chess_router import router as chess_router
+app.include_router(chess_router)
+
+# ==========================================================================
 # Gesamt-Export (v1.23.0) — alle Module in einer CSV
 # --------------------------------------------------------------------------
 from routers.export_router import router as export_router

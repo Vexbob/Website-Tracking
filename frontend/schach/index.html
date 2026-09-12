@@ -9,6 +9,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/statistics.css">
 <link rel="stylesheet" href="/schach/schach.css">
 <script src="/js/config.js"></script>
 <script src="/js/version.js"></script>
@@ -30,8 +31,8 @@
         <h1>♟️ Schach</h1>
         <p class="page-sub">
             Wertungszahl und Partien von <strong>Lichess</strong> und <strong>Chess.com</strong> an
-            einer Stelle — abgeholt statt abgetippt. Das Modul ist angelegt, die Verbindung zu den
-            beiden Plattformen folgt.
+            einer Stelle — abgeholt statt abgetippt. Beide Plattformen geben das öffentlich heraus;
+            hinterlegt wird nur der Benutzername, kein Passwort.
         </p>
     </header>
 
@@ -46,83 +47,68 @@
         <div class="v-card">
             <div class="v-card-head">
                 <h3>Wertungszahl</h3>
-                <span class="v-card-sub">je Zeitkontrolle</span>
+                <div class="sch-head-tools">
+                    <span class="v-card-sub" id="schStand"></span>
+                    <button type="button" class="v-btn v-btn--sm" id="schRefresh">Aktualisieren</button>
+                </div>
             </div>
-            <div class="empty">
-                <span class="empty-mark">📈</span>
-                <p class="empty-text">
-                    Noch keine Wertungszahl, weil noch kein Konto verbunden ist. Sobald ein
-                    Benutzername hinterlegt ist, steht hier der Verlauf für Bullet, Blitz, Rapid
-                    und Klassisch — je Plattform eine Kurve.
-                </p>
-            </div>
+            <div id="schRatings"><span class="skel skel-block"></span></div>
         </div>
 
-        <div class="v-card">
+        <div class="v-card" id="schBilanzCard" hidden>
             <div class="v-card-head">
-                <h3>Was hier entsteht</h3>
-                <span class="v-card-sub">geplanter Umfang</span>
+                <h3>Bilanz</h3>
+                <span class="v-card-sub">aus den gespeicherten Partien</span>
             </div>
-            <div class="wip-stack">
-                <div class="v-row wip-row">
-                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-schach)" aria-hidden="true">📈</span>
-                    <div class="wip-text">
-                        <div class="wip-title">Rating automatisch nachführen</div>
-                        <div class="wip-sub">Die Wertungszahl wird regelmäßig abgeholt und als Verlauf gespeichert, damit auch die Vergangenheit sichtbar bleibt.</div>
-                    </div>
-                </div>
-                <div class="v-row wip-row">
-                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-schach)" aria-hidden="true">♟️</span>
-                    <div class="wip-text">
-                        <div class="wip-title">Partien speichern</div>
-                        <div class="wip-sub">Jede gespielte Partie landet im eigenen Bestand — mit Gegner, Zeitkontrolle, Ergebnis und Zugfolge.</div>
-                    </div>
-                </div>
-                <div class="v-row wip-row">
-                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-schach)" aria-hidden="true">🔗</span>
-                    <div class="wip-text">
-                        <div class="wip-title">Lichess und Chess.com nebeneinander</div>
-                        <div class="wip-sub">Beide Plattformen im selben Verlauf, aber getrennt ausgewiesen: ihre Zahlen sind nicht dieselbe Skala.</div>
-                    </div>
-                </div>
-            </div>
+            <div id="schBilanz"></div>
         </div>
     </div>
 
     <!-- ---------- Partien ---------- -->
     <div id="tab-partien" hidden>
-        <div class="v-card">
-            <div class="v-card-head">
-                <h3>Partien</h3>
-                <span class="v-card-sub">gespeicherter Bestand</span>
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>♟️ Partien</h3>
+                <span class="stat-range-lbl" id="schPartienSumme"></span>
             </div>
-            <div class="empty">
-                <span class="empty-mark">♟️</span>
-                <p class="empty-text">
-                    Noch keine Partien im Bestand. Sie kommen nicht von Hand herein, sondern
-                    werden von der verbundenen Plattform abgeholt — sobald ein Konto hinterlegt
-                    ist, füllt sich diese Liste rückwirkend.
-                </p>
+            <div class="sch-table-scroll">
+                <table class="stat-table" id="schPartienTabelle" hidden>
+                    <thead>
+                        <tr>
+                            <th>Datum</th><th>Wo</th><th>Art</th><th>Farbe</th>
+                            <th>Gegner</th><th>Ergebnis</th><th class="num">±</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="schPartienBody"></tbody>
+                </table>
+            </div>
+            <div id="schPartienLeer"><span class="skel skel-block"></span></div>
+            <div class="sch-pager">
+                <button type="button" class="v-btn v-btn--sm" id="schMehr" hidden>Mehr laden</button>
             </div>
         </div>
     </div>
 
     <!-- ---------- Konten ---------- -->
     <div id="tab-konten" hidden>
+        <div id="schKonten"><span class="skel skel-block"></span></div>
+
         <div class="v-card">
             <div class="v-card-head">
-                <h3>Verbundene Konten</h3>
-                <span class="v-card-sub">Lichess, Chess.com</span>
+                <h3>Wie der Import arbeitet</h3>
+                <span class="v-card-sub">gut zu wissen</span>
             </div>
-            <div class="empty">
-                <span class="empty-mark">🔗</span>
-                <p class="empty-text">
-                    Hier wird je Plattform ein Benutzername hinterlegt — mehr braucht es nicht,
-                    beide geben Wertungszahl und Partien öffentlich heraus. Das Feld dafür kommt
-                    mit dem Anschluss ans Backend; ein Eingabefeld, das noch nichts speichern
-                    kann, wäre eine Behauptung.
-                </p>
-            </div>
+            <p class="sch-hinweis">
+                Partien werden <strong>stückweise</strong> geholt und der Stand am Konto vermerkt:
+                ein Abbruch mittendrin verliert nichts, der nächste Lauf setzt genau dort fort.
+                Beim ersten Mal kann das bei langer Historie ein paar Minuten dauern — danach holt
+                derselbe Knopf nur noch das Neue.
+            </p>
+            <p class="sch-hinweis">
+                Die Wertungszahl gibt es bei beiden nur als <strong>aktuellen Stand</strong>, nicht
+                als Verlauf. Vexbob hält deshalb bei jedem Abruf eine Tageszeile fest — der Verlauf
+                entsteht ab heute und wächst mit jedem Tag, an dem du hier vorbeischaust.
+            </p>
         </div>
     </div>
 

@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.83.0', date: '2026-09-12', title: 'Schach: Konten verbinden, Partien holen', notes: [
+        'Lichess und Chess.com lassen sich mit dem Benutzernamen verbinden — beide geben Wertung und Partien öffentlich heraus, ein Passwort braucht es nicht.',
+        'Die Wertungszahlen für Bullet, Blitz, Rapid, Klassisch, Fernschach und Rätsel stehen im Überblick und lassen sich mit einem Knopf nachholen.',
+        'Die ganze Partien-Historie kommt auf einen Knopfdruck herein — stückweise und fortsetzbar, ein Abbruch mittendrin verliert nichts.',
+        'Die Rätsel-Wertung von Chess.com steht als „Bestwert" da: anders als Lichess gibt die Plattform dort keinen aktuellen Stand heraus.',
+        'Weil beide nur den heutigen Stand liefern, hält Vexbob ab jetzt je Tag eine Zeile fest — daraus wächst der Verlauf, den es dort nicht zu holen gibt.',
+    ]},
     { v: 'v1.82.0', date: '2026-09-12', title: 'Schach und Ernährung sind angelegt', notes: [
         'Zwei neue Module haben ihre eigene Seite: Schach (Wertungszahl und Partien von Lichess und Chess.com) und Ernährung (Gerichte, Makros je Tag, Barcode).',
         'Beide stehen getrennt von den fertigen Modulen — im Modul-Menü unter „In Arbeit", auf dem Dashboard in einem eigenen Abschnitt.',

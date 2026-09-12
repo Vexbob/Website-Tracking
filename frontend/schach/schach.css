@@ -1,50 +1,197 @@
-/* schach.css — v1.82.0
+/* schach.css — v1.83.0
  *
- * Das Schach-Modul im Bau. Die Seite benutzt ausschliesslich Bausteine aus
- * css/style.css (.v-card, .v-row, .empty, .tabs); hier stehen nur die
- * Layout-Regeln fuer die Liste "Was hier entsteht" -- sie verschwindet
- * wieder, sobald das Modul angeschlossen ist.
+ * Das Schach-Modul. Flaechen, Knoepfe, Tabelle und leere Zustaende kommen aus
+ * css/style.css und css/statistics.css; hier steht nur, was es sonst nirgends
+ * gibt: die Wertungs-Kacheln, die Bilanzleiste und der Plattform-Punkt.
+ *
+ * Farbe: der Modulton --m-schach traegt die Identitaet (Icon-Kachel, Zahlen),
+ * die Statusfarben tragen Sieg/Remis/Niederlage. Beides sind Tokens -- keine
+ * Hex-Werte, auch nicht in der Bilanzleiste.
  */
 
-/* Die Seite bindet css/statistics.css nicht ein (kein Diagramm, keine
-   Statistik-Tabelle), braucht aber dieselbe Freigabe: sonst blitzt vor der
-   Weiterleitung zum Login kurz die fertige Oberflaeche auf. Umgelegt wird der
-   Schalter in schach.js direkt nach dem Login-Check. */
-body { visibility: hidden; }
-body.ready { visibility: visible; }
-
-.wip-stack {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+/* ---------- Plattform-Punkt ---------- */
+/* Zwei Plattformen, ein Punkt: Lichess und Chess.com stehen oft in derselben
+   Zeile, und ein Punkt liest sich schneller als der ausgeschriebene Name. */
+.sch-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+    background: var(--text-3);
 }
+.sch-dot[data-platform="lichess"]  { background: var(--text-1); }
+.sch-dot[data-platform="chesscom"] { background: var(--m-sparziel); }
 
-/* Nur Anordnung, keine neue Flaeche: die Zeile ist die .v-row aus der
-   Designsprache, so wie in design.html unter "Flaechen und Zeilen". */
-.wip-row {
+/* ---------- Wertungszahlen ---------- */
+.sch-head-tools {
     display: flex;
     align-items: center;
     gap: 0.75rem;
 }
 
-.wip-tile {
+.sch-block + .sch-block { margin-top: var(--space-4); }
+
+.sch-block-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--text-3);
+}
+.sch-block-head a { color: var(--text-2); }
+
+.sch-rating-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: var(--space-2);
+}
+
+.sch-rating {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: var(--space-3);
+}
+
+.sch-rating-lbl {
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+
+/* Die Zahl traegt den Modulton -- oder das, was der Nutzer als Figurenfarbe
+   eingestellt hat. Genau diese Fallback-Form ist Vorschrift (docs/DESIGN.md):
+   ohne eigene Einstellung bleibt die Modul-Identitaet stehen. */
+.sch-rating-num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    color: var(--figure, var(--m-schach));
+}
+
+.sch-rating-sub {
+    font-size: 0.6875rem;
+    color: var(--text-4);
+}
+
+/* ---------- Bilanz ---------- */
+.sch-bilanz + .sch-bilanz { margin-top: var(--space-2); }
+
+.sch-bilanz-kopf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.sch-bilanz-zeit {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+
+/* Textfreie Flaeche -- hier duerfen Farbflaechen stehen. */
+.sch-balken {
+    display: flex;
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--surface-3);
+}
+.sch-teil.is-sieg    { background: var(--ok); }
+.sch-teil.is-remis   { background: var(--text-4); }
+.sch-teil.is-verlust { background: var(--danger); }
+
+.sch-bilanz-zahlen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+.sch-bilanz-zahlen .is-sieg    { color: var(--ok); }
+.sch-bilanz-zahlen .is-remis   { color: var(--text-2); }
+.sch-bilanz-zahlen .is-verlust { color: var(--danger); }
+
+/* ---------- Konten ---------- */
+.sch-konto {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.sch-konto-tile {
     width: 34px;
     height: 34px;
     font-size: 1rem;
     border-radius: 10px;
     flex: none;
 }
-
-.wip-text { min-width: 0; }
-
-.wip-title {
-    font-weight: 600;
-    color: var(--text-1);
+.sch-konto-text { min-width: 0; }
+.sch-konto-text a { font-weight: 600; }
+.sch-konto-sub {
+    font-size: 0.75rem;
+    color: var(--text-3);
 }
 
-.wip-sub {
+.sch-konto-tasten {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: var(--space-3);
+}
+
+.sch-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+}
+.sch-feld {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1 1 220px;
+    min-width: 0;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+.sch-feld input {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.55rem 0.7rem;
+    color: var(--text-1);
+    font-size: 0.9375rem;
+}
+.sch-feld input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+.sch-hinweis {
     color: var(--text-3);
     font-size: 0.8125rem;
-    line-height: 1.45;
-    margin-top: 0.125rem;
+    line-height: 1.5;
+    margin: 0 0 0.5rem;
+}
+
+/* ---------- Partien ---------- */
+.sch-table-scroll { overflow-x: auto; }
+
+.sch-erg.is-sieg       { color: var(--ok); }
+.sch-erg.is-remis      { color: var(--text-2); }
+.sch-erg.is-niederlage { color: var(--danger); }
+
+.sch-klein {
+    color: var(--text-4);
+    font-size: 0.6875rem;
+}
+
+.sch-pager {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--space-3);
 }
