@@ -19,8 +19,8 @@ Produkten, die hier auch im Laden stehen.
     # 2. Nur nachsehen, was uebrig bliebe, ohne etwas zu schreiben
     python off_katalog.py en.openfoodfacts.org.products.csv.gz --nur-zaehlen
 
-    # 3. Einspielen (dort, wo die Datenbank erreichbar ist -- z. B. im
-    #    Backend-Container, der DATABASE_URL ohnehin kennt)
+    # 3. Einspielen. Fragt nach der Verbindungsadresse, wenn weder --db
+    #    noch DATABASE_URL gesetzt ist.
     python off_katalog.py katalog.csv.gz --einspielen
 
 Warum ueberhaupt ein eigener Katalog? Die Suche laeuft heute gegen
@@ -37,6 +37,17 @@ import gzip
 import os
 import sys
 import time
+
+# Die Windows-Konsole steht auf cp1252. Ein Pfeil oder ein Auslassungszeichen
+# in einer Meldung beendet das Skript dann mit einem UnicodeEncodeError --
+# ausgerechnet die Ausgabe bringt es um. Also einmal umstellen und notfalls
+# ersetzen lassen; eine Meldung mit einem Fragezeichen darin ist immer noch
+# besser als keine.
+for _strom in (sys.stdout, sys.stderr):
+    try:
+        _strom.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 # Die Spalten des Abzugs, die uebernommen werden. Links der Name in der
 # Quelle, rechts der in der eigenen Tabelle.
@@ -217,7 +228,30 @@ def filtern(quelle: str, ziel: str, laender, grenze=None) -> dict:
     return stand
 
 
-async def einspielen(datei: str) -> None:
+def _adresse(vorgabe=None) -> str:
+    """Die Verbindungsadresse — aus dem Aufruf, der Umgebung oder der Frage.
+
+    Gefragt wird, weil eine Umgebungsvariable zu setzen der Teil ist, an dem
+    es haengen bleibt: drei Zeilen, von denen zwei nichts mit der Sache zu
+    tun haben. Einfuegen und Enter ist derselbe Vorgang ohne das Drumherum.
+    """
+    url = (vorgabe or os.getenv("DATABASE_URL") or "").strip()
+    if not url:
+        print("Verbindungsadresse der Datenbank einfügen und Enter drücken.")
+        print("(Bei Railway: Postgres-Dienst → Variables → DATABASE_PUBLIC_URL)")
+        try:
+            url = input("> ").strip()
+        except EOFError:
+            url = ""
+    # Die Adresse steht oft in Anfuehrungszeichen in der Zwischenablage.
+    url = url.strip('"').strip("'")
+    if not url.startswith(("postgres://", "postgresql://")):
+        sys.exit("Das sieht nicht nach einer Postgres-Adresse aus — sie fängt "
+                 "mit postgresql:// an.")
+    return url
+
+
+async def einspielen(datei: str, url=None) -> None:
     """Spielt den gefilterten Katalog in die Datenbank — in einem Rutsch.
 
     Die Tabelle wird dabei ersetzt, nicht ergaenzt: ein neuer Abzug ist ein
@@ -225,13 +259,24 @@ async def einspielen(datei: str) -> None:
     Bis zum Ende laeuft alles in einer Transaktion -- schlaegt es fehl, steht
     der alte Katalog unveraendert da.
     """
+    import asyncio
+
     import asyncpg
 
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        sys.exit("DATABASE_URL ist nicht gesetzt — ohne die weiß ich nicht, wohin.")
     print("Verbinde …", flush=True)
-    conn = await asyncpg.connect(url)
+    try:
+        conn = await asyncpg.connect(url, timeout=20)
+    except asyncpg.InvalidPasswordError:
+        sys.exit("Benutzername oder Passwort stimmt nicht. Die Adresse aus "
+                 "Railway enthält beides — am besten noch einmal ganz "
+                 "kopieren.")
+    except (OSError, asyncio.TimeoutError) as e:
+        sys.exit("Kein Kontakt zum Server (%s). Bei Railway braucht es die "
+                 "DATABASE_PUBLIC_URL — die interne Adresse "
+                 "(postgres.railway.internal) ist von außen nicht "
+                 "erreichbar." % e.__class__.__name__)
+    except Exception as e:
+        sys.exit("Die Verbindung kam nicht zustande: %s" % e)
     try:
         # Ohne die Tabelle waere die Fehlermeldung von Postgres ("relation
         # does not exist") richtig, aber nicht hilfreich -- sie sagt nicht,
@@ -267,11 +312,14 @@ def main():
                    help="nur die ersten N Zeilen lesen (zum Ausprobieren)")
     p.add_argument("--einspielen", action="store_true",
                    help="einen fertigen Katalog in die Datenbank laden")
+    p.add_argument("--db", help="Verbindungsadresse der Datenbank; ohne diese "
+                                "wird DATABASE_URL genommen oder danach gefragt")
     a = p.parse_args()
 
     if a.einspielen:
         import asyncio
-        asyncio.run(einspielen(a.datei))
+        adresse = _adresse(a.db)
+        asyncio.run(einspielen(a.datei, adresse))
         return
 
     if not a.ziel and not a.nur_zaehlen:
