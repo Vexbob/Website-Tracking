@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.84.0', date: '2026-09-12', title: 'Schach läuft von selbst', notes: [
+        'Neue Partien holt der Server jetzt einmal täglich von allein — ohne dass eine Seite offen sein muss; Stunde und An/Aus stehen im neuen Reiter „Automatik".',
+        'Die Wertungszahlen frischen sich bei offener Seite alle 15 Minuten nach (einstellbar bis stündlich oder aus) — häufiger ergibt nichts, die Zahl bewegt sich nur nach einer Partie.',
+        'Der Überblick stellt die Disziplinen gegenüber: eine Zeile je Zeitkontrolle, links Chess.com, rechts Lichess.',
+        'Die Partienliste lässt sich nach Plattform, Ergebnis und Zeitkontrolle filtern, nach Gegner oder Eröffnung durchsuchen und nach Datum, Wertungsdifferenz oder Gegnerstärke sortieren.',
+    ]},
     { v: 'v1.83.0', date: '2026-09-12', title: 'Schach: Konten verbinden, Partien holen', notes: [
         'Lichess und Chess.com lassen sich mit dem Benutzernamen verbinden — beide geben Wertung und Partien öffentlich heraus, ein Passwort braucht es nicht.',
         'Die Wertungszahlen für Bullet, Blitz, Rapid, Klassisch, Fernschach und Rätsel stehen im Überblick und lassen sich mit einem Knopf nachholen.',

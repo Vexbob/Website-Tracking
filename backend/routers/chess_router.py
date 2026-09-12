@@ -9,6 +9,8 @@ Endpoints:
   GET    /api/chess/ratings           — Verlauf der Wertungszahlen
   GET    /api/chess/games             — gespeicherte Partien
   GET    /api/chess/summary           — Kopfzahlen (Bilanz, Zeitraum, Stand)
+  GET    /api/chess/settings          — Einstellungen der Automatik
+  PUT    /api/chess/settings          — Automatik einstellen
 
 Zwei Entscheidungen tragen das Ganze:
 
@@ -35,18 +37,39 @@ from auth import get_current_user
 from database import get_db
 from deps import logger, limiter, LIMIT_WRITE_RARE, LIMIT_WRITE_STANDARD
 from services import chess_platforms as plattform
+from services import chess_sync as sync
 
 router = APIRouter(tags=["chess"])
 
 # Ein Lauf holt hoechstens so viele Partien. 400 ist ein Kompromiss: bei
 # Lichess ist das eine einzige Abfrage, bei Chess.com selten mehr als drei
 # Monatsarchive -- beides bleibt deutlich unter jedem ueblichen Zeitablauf.
-HOECHSTENS_JE_LAUF = 400
+HOECHSTENS_JE_LAUF = sync.STUECK
+
+# Womit sich die Partienliste sortieren laesst. Feste Liste statt
+# durchgereichtem Spaltennamen -- sonst steht die Sortierung als Einfallstor
+# in der Abfrage.
+SORTIERBAR = {
+    "datum": "played_at",
+    "gegner": "opponent_rating",
+    "eigen": "own_rating",
+    "differenz": "rating_diff",
+}
 
 
 class KontoEingabe(BaseModel):
     platform: str
     username: str
+
+
+class Automatik(BaseModel):
+    # Taeglicher Lauf des Servers (neue Partien + eine Tageszeile Wertung).
+    auto_daily: bool = True
+    daily_hour: int = 4
+    # Takt bei offener Seite, in Minuten. 0 = aus. Die Liste ist geschlossen:
+    # ein freies Feld liesse "1" zu, und das waeren 1.400 Abfragen am Tag fuer
+    # eine Zahl, die sich meist nicht bewegt.
+    live_minutes: int = 15
 
 
 def _pruefe_plattform(name: str) -> str:
@@ -118,20 +141,10 @@ async def konten(db=Depends(get_db), user=Depends(get_current_user)):
     return {"accounts": await _konten_mit_wertung(db, user["id"])}
 
 
-async def _wertungen_schreiben(db, account_id: int, ratings: list) -> int:
-    """Schreibt die Tageszeile je Disziplin. Zweimal am Tag = derselbe Stand."""
-    for w in ratings:
-        await db.execute(
-            "INSERT INTO chess_ratings (account_id, perf, rating, rd, games, is_best) "
-            "VALUES ($1,$2,$3,$4,$5,$6) "
-            "ON CONFLICT (account_id, perf, taken_on) DO UPDATE "
-            "   SET rating=EXCLUDED.rating, rd=EXCLUDED.rd, "
-            "       games=EXCLUDED.games, is_best=EXCLUDED.is_best",
-            account_id, w["perf"], w["rating"], w.get("rd"), w.get("games"),
-            bool(w.get("is_best")))
-    await db.execute(
-        "UPDATE chess_accounts SET ratings_at=now() WHERE id=$1", account_id)
-    return len(ratings)
+async def _wertungen_schreiben(db, konto) -> int:
+    """Nur noch eine duenne Huelle -- geschrieben wird im Dienst, damit
+    Knopfdruck und Automatik dasselbe tun."""
+    return await sync.wertungen_holen(db, konto)
 
 
 @router.post("/api/chess/accounts")
@@ -154,8 +167,9 @@ async def konto_verbinden(request: Request, daten: KontoEingabe,
         "VALUES ($1,$2,$3,$4) "
         "ON CONFLICT (user_id, platform) DO UPDATE "
         "   SET username=EXCLUDED.username, profile_url=EXCLUDED.profile_url "
-        "RETURNING id", user["id"], art, profil["username"], profil["profile_url"])
-    await _wertungen_schreiben(db, zeile["id"], profil["ratings"])
+        "RETURNING id, platform, username, games_through",
+        user["id"], art, profil["username"], profil["profile_url"])
+    await _wertungen_schreiben(db, zeile)
     return {"ok": True, "accounts": await _konten_mit_wertung(db, user["id"])}
 
 
@@ -182,22 +196,19 @@ async def wertungen_aktualisieren(request: Request, db=Depends(get_db),
                                   user=Depends(get_current_user)):
     """Holt fuer jedes verbundene Konto den aktuellen Stand."""
     konten = await db.fetch(
-        "SELECT id, platform, username FROM chess_accounts WHERE user_id=$1",
-        user["id"])
+        "SELECT id, platform, username, games_through FROM chess_accounts "
+        " WHERE user_id=$1", user["id"])
     if not konten:
         raise HTTPException(400, "Es ist noch kein Konto verbunden.")
 
     geholt, probleme = 0, []
     for k in konten:
         try:
-            profil = await asyncio.to_thread(
-                plattform.hole_profil, k["platform"], k["username"])
+            geholt += await _wertungen_schreiben(db, k)
         except plattform.PlattformFehler as e:
             # Eine Plattform, die gerade nicht antwortet, darf die andere nicht
             # mitreissen -- gemeldet wird sie trotzdem.
             probleme.append(f"{plattform.PLATTFORM_LABEL[k['platform']]}: {e}")
-            continue
-        geholt += await _wertungen_schreiben(db, k["id"], profil["ratings"])
 
     return {"ok": not probleme, "updated": geholt, "problems": probleme,
             "accounts": await _konten_mit_wertung(db, user["id"])}
@@ -226,13 +237,9 @@ async def partien_holen(request: Request, account_id: int = Query(...),
         "INSERT INTO chess_imports (user_id, account_id) VALUES ($1,$2) RETURNING id",
         user["id"], konto["id"])
 
-    def _holen():
-        return list(plattform.hole_partien(
-            konto["platform"], konto["username"],
-            seit=konto["games_through"], hoechstens=HOECHSTENS_JE_LAUF))
-
     try:
-        partien = await asyncio.to_thread(_holen)
+        ergebnis = await sync.partien_stueck(db, user["id"], konto,
+                                             hoechstens=HOECHSTENS_JE_LAUF)
     except plattform.PlattformFehler as e:
         await db.execute(
             "UPDATE chess_imports SET finished_at=now(), ok=FALSE, note=$2 "
@@ -245,44 +252,18 @@ async def partien_holen(request: Request, account_id: int = Query(...),
             " WHERE id=$1", lauf["id"], repr(e)[:500])
         raise HTTPException(502, "Die Partien konnten nicht geholt werden.")
 
-    neu, juengste = 0, konto["games_through"]
-    for p in partien:
-        if not p.get("ext_id") or not p.get("played_at"):
-            continue
-        treffer = await db.fetchrow(
-            "INSERT INTO chess_games (user_id, account_id, platform, ext_id, "
-            "   played_at, perf, variant, rated, color, result, end_reason, "
-            "   own_rating, rating_diff, opponent, opponent_rating, opening, "
-            "   eco, moves, url, pgn) "
-            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,"
-            "        $17,$18,$19,$20) "
-            "ON CONFLICT (account_id, ext_id) DO NOTHING RETURNING id",
-            user["id"], konto["id"], konto["platform"], str(p["ext_id"]),
-            p["played_at"], p.get("perf"), p.get("variant"), p.get("rated"),
-            p.get("color"), p.get("result"), p.get("end_reason"),
-            p.get("own_rating"), p.get("rating_diff"), p.get("opponent"),
-            p.get("opponent_rating"), p.get("opening"), p.get("eco"),
-            p.get("moves"), p.get("url"), p.get("pgn"))
-        if treffer:
-            neu += 1
-        if juengste is None or p["played_at"] > juengste:
-            juengste = p["played_at"]
-
-    await db.execute(
-        "UPDATE chess_accounts SET games_at=now(), games_through=$2 WHERE id=$1",
-        konto["id"], juengste)
     await db.execute(
         "UPDATE chess_imports SET finished_at=now(), games_seen=$2, games_new=$3 "
-        " WHERE id=$1", lauf["id"], len(partien), neu)
+        " WHERE id=$1", lauf["id"], ergebnis["seen"], ergebnis["new"])
 
     # Volles Stueck heisst: da ist vermutlich noch mehr. Ein halb volles ist
     # das Ende der Historie -- ab dann holt derselbe Aufruf nur noch Neues.
     return {
         "ok": True,
-        "seen": len(partien),
-        "new": neu,
-        "more": len(partien) >= HOECHSTENS_JE_LAUF,
-        "through": juengste,
+        "seen": ergebnis["seen"],
+        "new": ergebnis["new"],
+        "more": ergebnis["more"],
+        "through": ergebnis["through"],
         "total": await db.fetchval(
             "SELECT COUNT(*) FROM chess_games WHERE account_id=$1", konto["id"]),
     }
@@ -314,23 +295,90 @@ async def wertungsverlauf(perf: Optional[str] = None, days: Optional[int] = None
 @router.get("/api/chess/games")
 async def partien(limit: int = Query(50, le=200), offset: int = 0,
                   platform: Optional[str] = None, perf: Optional[str] = None,
-                  result: Optional[str] = None,
+                  result: Optional[str] = None, rated: Optional[bool] = None,
+                  q: Optional[str] = None,
+                  sort: str = "datum", direction: str = "desc",
                   db=Depends(get_db), user=Depends(get_current_user)):
+    """Die gespeicherten Partien, gefiltert und sortiert.
+
+    Sortiert wird ueber eine feste Liste erlaubter Felder (``SORTIERBAR``):
+    ein durchgereichter Spaltenname stuende sonst ungeprueft in der Abfrage.
+    """
     bedingungen = ["user_id=$1"]
     werte = [user["id"]]
     for feld, wert in (("platform", platform), ("perf", perf), ("result", result)):
         if wert:
             werte.append(wert)
             bedingungen.append(f"{feld}=${len(werte)}")
+    if rated is not None:
+        werte.append(rated)
+        bedingungen.append(f"rated=${len(werte)}")
+    if q and q.strip():
+        # Suche nach Gegner oder Eroeffnung -- beides ist das, wonach man in
+        # einer Partienliste tatsaechlich sucht.
+        werte.append(f"%{q.strip()}%")
+        bedingungen.append(
+            f"(opponent ILIKE ${len(werte)} OR opening ILIKE ${len(werte)})")
+
     wo = " AND ".join(bedingungen)
+    spalte = SORTIERBAR.get(sort, "played_at")
+    richtung = "ASC" if str(direction).lower() == "asc" else "DESC"
+    # NULLS LAST: eine Partie ohne Wertungsdifferenz soll beim Sortieren nach
+    # Differenz nicht die erste Seite fuellen.
     gesamt = await db.fetchval(
         f"SELECT COUNT(*) FROM chess_games WHERE {wo}", *werte)
     rows = await db.fetch(
         "SELECT id, platform, played_at, perf, rated, color, result, end_reason, "
         "       own_rating, rating_diff, opponent, opponent_rating, opening, url "
         f"  FROM chess_games WHERE {wo} "
-        f" ORDER BY played_at DESC LIMIT {int(limit)} OFFSET {int(offset)}", *werte)
-    return {"total": gesamt, "games": [dict(r) for r in rows]}
+        f" ORDER BY {spalte} {richtung} NULLS LAST, played_at DESC "
+        f" LIMIT {int(limit)} OFFSET {int(offset)}", *werte)
+    return {"total": gesamt, "games": [dict(r) for r in rows],
+            "sort": sort, "direction": richtung.lower()}
+
+
+LIVE_TAKTE = (0, 5, 15, 30, 60)
+
+
+async def _einstellungen(db, user_id: int) -> dict:
+    row = await db.fetchrow(
+        "SELECT auto_daily, daily_hour, live_minutes, last_auto_at, last_auto_note "
+        "  FROM chess_settings WHERE user_id=$1", user_id)
+    if not row:
+        # Kein Eintrag heisst nicht "aus": die Voreinstellung gilt, bis jemand
+        # sie aendert. Sonst laeuft die Automatik bei niemandem, der die
+        # Einstellungen nie geoeffnet hat.
+        return {"auto_daily": True, "daily_hour": 4, "live_minutes": 15,
+                "last_auto_at": None, "last_auto_note": None,
+                "live_choices": list(LIVE_TAKTE), "timezone": str(sync.ORTSZEIT)}
+    d = dict(row)
+    d["live_choices"] = list(LIVE_TAKTE)
+    d["timezone"] = str(sync.ORTSZEIT)
+    return d
+
+
+@router.get("/api/chess/settings")
+async def automatik_lesen(db=Depends(get_db), user=Depends(get_current_user)):
+    return await _einstellungen(db, user["id"])
+
+
+@router.put("/api/chess/settings")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def automatik_setzen(request: Request, daten: Automatik,
+                           db=Depends(get_db), user=Depends(get_current_user)):
+    if not 0 <= daten.daily_hour <= 23:
+        raise HTTPException(400, "Die Stunde muss zwischen 0 und 23 liegen.")
+    if daten.live_minutes not in LIVE_TAKTE:
+        raise HTTPException(
+            400, "Erlaubt sind " + ", ".join(str(m) for m in LIVE_TAKTE) + " Minuten.")
+    await db.execute(
+        "INSERT INTO chess_settings (user_id, auto_daily, daily_hour, live_minutes) "
+        "VALUES ($1,$2,$3,$4) "
+        "ON CONFLICT (user_id) DO UPDATE "
+        "   SET auto_daily=EXCLUDED.auto_daily, daily_hour=EXCLUDED.daily_hour, "
+        "       live_minutes=EXCLUDED.live_minutes",
+        user["id"], daten.auto_daily, daten.daily_hour, daten.live_minutes)
+    return await _einstellungen(db, user["id"])
 
 
 @router.get("/api/chess/summary")
@@ -346,4 +394,5 @@ async def kennzahlen(db=Depends(get_db), user=Depends(get_current_user)):
     return {
         "per_platform": [dict(r) for r in rows],
         "accounts": await _konten_mit_wertung(db, user["id"]),
+        "settings": await _einstellungen(db, user["id"]),
     }

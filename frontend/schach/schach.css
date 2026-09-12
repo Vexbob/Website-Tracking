@@ -1,8 +1,8 @@
-/* schach.css — v1.83.0
+/* schach.css — v1.84.0
  *
  * Das Schach-Modul. Flaechen, Knoepfe, Tabelle und leere Zustaende kommen aus
  * css/style.css und css/statistics.css; hier steht nur, was es sonst nirgends
- * gibt: die Wertungs-Kacheln, die Bilanzleiste und der Plattform-Punkt.
+ * gibt: die Vergleichsansicht, die Bilanzleiste und den Plattform-Punkt.
  *
  * Farbe: der Modulton --m-schach traegt die Identitaet (Icon-Kachel, Zahlen),
  * die Statusfarben tragen Sieg/Remis/Niederlage. Beides sind Tokens -- keine
@@ -30,51 +30,107 @@
     gap: 0.75rem;
 }
 
-.sch-block + .sch-block { margin-top: var(--space-4); }
-
-.sch-block-head {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    font-size: 0.8125rem;
-    color: var(--text-3);
-}
-.sch-block-head a { color: var(--text-2); }
-
-.sch-rating-grid {
+/* ---------- Vergleich: eine Zeile je Disziplin ---------- */
+/* Blitz steht neben Blitz. Zwei Bloecke untereinander (erst die eine
+   Plattform, dann die andere) hiessen: zum Vergleichen scrollen und die
+   erste Zahl im Kopf behalten. */
+.sch-vergleich {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-    gap: var(--space-2);
-}
-
-.sch-rating {
-    background: var(--surface-2);
+    grid-template-columns: minmax(72px, 0.9fr) repeat(var(--spalten, 2), 1fr);
+    gap: 1px;
+    background: var(--line);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: var(--space-3);
+    overflow: hidden;
 }
 
-.sch-rating-lbl {
+.sch-vk, .sch-vl, .sch-vz {
+    background: var(--surface-1);
+    padding: 0.6rem 0.7rem;
+}
+
+.sch-vk {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     font-size: 0.75rem;
     color: var(--text-3);
+    background: var(--surface-2);
+}
+.sch-vk a { color: var(--text-2); }
+
+.sch-vl {
+    display: flex;
+    align-items: center;
+    font-size: 0.8125rem;
+    color: var(--text-2);
+    background: var(--surface-2);
 }
 
-/* Die Zahl traegt den Modulton -- oder das, was der Nutzer als Figurenfarbe
-   eingestellt hat. Genau diese Fallback-Form ist Vorschrift (docs/DESIGN.md):
-   ohne eigene Einstellung bleibt die Modul-Identitaet stehen. */
-.sch-rating-num {
-    font-size: 1.5rem;
+.sch-vz-num {
+    display: block;
+    font-size: 1.375rem;
     font-weight: 700;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
     color: var(--figure, var(--m-schach));
 }
-
-.sch-rating-sub {
+.sch-vz-sub {
     font-size: 0.6875rem;
     color: var(--text-4);
 }
+.sch-vz.is-leer { color: var(--text-4); }
+
+/* ---------- Filterleiste ---------- */
+.sch-filterbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sch-suche {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1 1 200px;
+    min-width: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.35rem 0.6rem;
+}
+.sch-suche-ico { opacity: 0.7; }
+.sch-suche input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
+    color: var(--text-1);
+    font-size: 0.875rem;
+}
+.sch-suche input:focus { outline: none; }
+.sch-suche:focus-within { box-shadow: var(--focus-ring); }
+
+/* ---------- Automatik ---------- */
+.sch-opt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+    margin: var(--space-3) 0;
+}
+
+.sch-schalter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9375rem;
+}
+
+.sch-feld--eng { flex: 0 1 260px; }
+
+.sch-hinweis--klein { font-size: 0.75rem; }
 
 /* ---------- Bilanz ---------- */
 .sch-bilanz + .sch-bilanz { margin-top: var(--space-2); }

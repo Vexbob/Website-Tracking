@@ -158,14 +158,20 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"Startup complete. CORS origins: {CORS_ORIGINS}")
     backup_task = asyncio.create_task(_auto_backup_loop())
+    # v1.84.0: holt einmal taeglich neue Schach-Partien und schreibt eine
+    # Tageszeile fuer die Wertung. Stuendlich nachsehen, wer dran ist -- die
+    # Stunde stellt jeder Nutzer selbst ein.
+    from services.chess_sync import taeglicher_lauf
+    chess_task = asyncio.create_task(taeglicher_lauf(get_pool))
     try:
         yield
     finally:
-        backup_task.cancel()
-        try:
-            await backup_task
-        except (asyncio.CancelledError, Exception):
-            pass
+        for aufgabe in (backup_task, chess_task):
+            aufgabe.cancel()
+            try:
+                await aufgabe
+            except (asyncio.CancelledError, Exception):
+                pass
         await close_pool()
         logger.info("Shutdown complete")
 

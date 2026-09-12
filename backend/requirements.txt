@@ -14,6 +14,11 @@ Pillow==10.2.0
 # oeffnen; services/expenses.py faengt das Fehlen ab, dann sind HEIC-
 # Uploads eben nicht moeglich.
 pillow-heif==0.15.0
+# Zeitzonen: python:3.11-slim bringt keine tzdata mit, und die Automatik im
+# Schach-Modul rechnet in Ortszeit (Europe/Vienna). Ohne das Paket faellt sie
+# auf UTC zurueck -- die eingestellte Stunde waere dann ein bis zwei Stunden
+# daneben.
+tzdata==2024.1
 google-cloud-vision==3.7.4
 google-genai>=1.0.0
 # v1.35.0: optional -- nur ziehen, wenn SENTRY_DSN gesetzt werden soll.

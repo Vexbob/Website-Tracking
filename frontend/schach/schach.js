@@ -27,6 +27,8 @@ const API = {
     holen:     (id)  => apiCall('/api/chess/import?account_id=' + id, { method: 'POST' }),
     partien:   (qs)  => apiCall('/api/chess/games' + qs),
     summary:   ()    => apiCall('/api/chess/summary'),
+    automatik: ()    => apiCall('/api/chess/settings'),
+    setzen:    (d)   => apiCall('/api/chess/settings', { method: 'PUT', body: d }),
 };
 
 const PLATTFORMEN = [
@@ -34,10 +36,21 @@ const PLATTFORMEN = [
     { key: 'chesscom', label: 'Chess.com', hinweis: 'Benutzername auf chess.com' },
 ];
 
-const TABS = ['ueberblick', 'partien', 'konten'];
+const TABS = ['ueberblick', 'partien', 'konten', 'automatik'];
 const SEITE = 50;
 
-const state = { konten: [], bilanz: [], offset: 0, gesamt: 0, laeuft: false };
+// Die Spalten der Vergleichsansicht: Chess.com links, Lichess rechts.
+const SPALTEN = [
+    { key: 'chesscom', label: 'Chess.com' },
+    { key: 'lichess',  label: 'Lichess' },
+];
+
+const state = {
+    konten: [], bilanz: [], einstellungen: null,
+    offset: 0, gesamt: 0, laeuft: false,
+    filter: { platform: '', result: '', perf: '', q: '', sort: 'datum', direction: 'desc' },
+    takt: null,
+};
 
 const esc = (v) => String(v == null ? '' : v)
     .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -83,23 +96,45 @@ function zeichneWertungen() {
         .map(k => k.ratings_at).filter(Boolean).sort().slice(-1)[0];
     stand.textContent = zuletzt ? 'Stand: ' + datum(zuletzt, true) : '';
 
-    ziel.innerHTML = mitWertung.map(k => `
-        <div class="sch-block">
-            <div class="sch-block-head">
-                <span class="sch-dot" data-platform="${esc(k.platform)}" aria-hidden="true"></span>
-                <a href="${esc(k.profile_url)}" target="_blank" rel="noopener">${esc(k.platform_label)} · ${esc(k.username)}</a>
-            </div>
-            <div class="sch-rating-grid">
-                ${k.ratings.map(r => `
-                    <div class="sch-rating">
-                        <div class="sch-rating-lbl">${esc(r.label)}</div>
-                        <div class="sch-rating-num">${r.rating}</div>
-                        <div class="sch-rating-sub">${r.is_best
-                            ? 'Bestwert'
-                            : (r.games ? r.games.toLocaleString('de-DE') + ' Partien' : 'aktuell')}</div>
-                    </div>`).join('')}
-            </div>
-        </div>`).join('');
+    // Eine Zeile je Disziplin, daneben die beiden Plattformen -- so steht
+    // Blitz neben Blitz. Zwei Bloecke untereinander (erst Chess.com, dann
+    // Lichess) hiessen: zum Vergleichen scrollen und im Kopf behalten.
+    const nachPlattform = {};
+    state.konten.forEach(k => { nachPlattform[k.platform] = k; });
+    const vorhanden = SPALTEN.filter(sp => nachPlattform[sp.key]);
+
+    // Nur Disziplinen zeigen, die mindestens eine Seite kennt -- und in der
+    // festen Reihenfolge des Servers, damit die Zeilen nicht springen.
+    const disziplinen = [];
+    vorhanden.forEach(sp => nachPlattform[sp.key].ratings.forEach(r => {
+        if (!disziplinen.some(d => d.perf === r.perf)) {
+            disziplinen.push({ perf: r.perf, label: r.label });
+        }
+    }));
+
+    const zelle = (konto, perf) => {
+        const r = konto && konto.ratings.find(x => x.perf === perf);
+        if (!r) return '<div class="sch-vz is-leer">–</div>';
+        return `<div class="sch-vz">
+            <span class="sch-vz-num">${r.rating}</span>
+            <span class="sch-vz-sub">${r.is_best ? 'Bestwert'
+                : (r.games ? r.games.toLocaleString('de-DE') + ' Partien' : 'aktuell')}</span>
+        </div>`;
+    };
+
+    ziel.innerHTML = `
+        <div class="sch-vergleich" style="--spalten:${vorhanden.length}">
+            <div class="sch-vk"></div>
+            ${vorhanden.map(sp => `<div class="sch-vk">
+                <span class="sch-dot" data-platform="${sp.key}" aria-hidden="true"></span>
+                <a href="${esc(nachPlattform[sp.key].profile_url)}" target="_blank"
+                   rel="noopener">${sp.label}</a>
+            </div>`).join('')}
+            ${disziplinen.map(d => `
+                <div class="sch-vl">${esc(d.label)}</div>
+                ${vorhanden.map(sp => zelle(nachPlattform[sp.key], d.perf)).join('')}
+            `).join('')}
+        </div>`;
 }
 
 function zeichneBilanz() {
@@ -275,9 +310,19 @@ async function ladePartien(vonVorn) {
     const leer = document.getElementById('schPartienLeer');
     const mehr = document.getElementById('schMehr');
 
+    const f = state.filter;
+    const abfrage = new URLSearchParams({
+        limit: SEITE, offset: state.offset,
+        sort: f.sort, direction: f.direction,
+    });
+    if (f.platform) abfrage.set('platform', f.platform);
+    if (f.result) abfrage.set('result', f.result);
+    if (f.perf) abfrage.set('perf', f.perf);
+    if (f.q) abfrage.set('q', f.q);
+
     let res;
     try {
-        res = await API.partien(`?limit=${SEITE}&offset=${state.offset}`);
+        res = await API.partien('?' + abfrage.toString());
     } catch (err) {
         leer.innerHTML = `<div class="empty is-error"><span class="empty-mark">⚠️</span>
             <p class="empty-text">Die Partien konnten nicht geladen werden.</p></div>`;
@@ -287,10 +332,20 @@ async function ladePartien(vonVorn) {
 
     if (!res.total) {
         tabelle.hidden = true; mehr.hidden = true;
-        leer.innerHTML = `<div class="empty">
-            <span class="empty-mark">♟️</span>
-            <p class="empty-text">Noch keine Partien im Bestand. Sie werden nicht von Hand
-            erfasst, sondern unter <strong>Konten</strong> von der Plattform geholt.</p></div>`;
+        const gefiltert = f.platform || f.result || f.perf || f.q;
+        // Zwei verschiedene Gruende, zwei verschiedene Saetze: "noch nichts
+        // geholt" und "der Filter trifft nichts" saehen sonst gleich aus.
+        leer.innerHTML = gefiltert
+            ? `<div class="empty"><span class="empty-mark">🔎</span>
+                 <p class="empty-text">Keine Partie passt zu diesem Filter.</p>
+                 <button type="button" class="v-btn v-btn--sm" id="schFilterWeg">Filter zurücksetzen</button>
+               </div>`
+            : `<div class="empty"><span class="empty-mark">♟️</span>
+                 <p class="empty-text">Noch keine Partien im Bestand. Sie werden nicht von Hand
+                 erfasst, sondern unter <strong>Konten</strong> von der Plattform geholt.</p>
+               </div>`;
+        const weg = document.getElementById('schFilterWeg');
+        if (weg) weg.addEventListener('click', filterZuruecksetzen);
         document.getElementById('schPartienSumme').textContent = '';
         return;
     }
@@ -327,6 +382,7 @@ async function ladeSummary() {
         const res = await API.summary();
         state.konten = res.accounts;
         state.bilanz = res.per_platform;
+        if (res.settings) state.einstellungen = res.settings;
     } catch (e) {
         state.konten = []; state.bilanz = [];
     }
@@ -347,6 +403,113 @@ async function aktualisieren() {
     } finally {
         knopf.classList.remove('is-loading');
     }
+}
+
+/* ---------------------------------------------------------------- Filter */
+
+const CHIPS_PLATTFORM = [
+    { wert: '', label: 'Beide' },
+    { wert: 'chesscom', label: 'Chess.com' },
+    { wert: 'lichess', label: 'Lichess' },
+];
+const CHIPS_ERGEBNIS = [
+    { wert: '', label: 'Alle' },
+    { wert: 'sieg', label: 'Siege' },
+    { wert: 'remis', label: 'Remis' },
+    { wert: 'niederlage', label: 'Niederlagen' },
+];
+
+function zeichneChips(id, liste, feld) {
+    const ziel = document.getElementById(id);
+    ziel.innerHTML = liste.map(c => `<button type="button" class="v-chip${
+        state.filter[feld] === c.wert ? ' is-active' : ''}" data-wert="${c.wert}">${c.label}</button>`).join('');
+    ziel.querySelectorAll('.v-chip').forEach(b => b.addEventListener('click', () => {
+        state.filter[feld] = b.dataset.wert;
+        zeichneChips(id, liste, feld);
+        ladePartien(true);
+    }));
+}
+
+function zeichneArtAuswahl() {
+    // Nur die Zeitkontrollen anbieten, die im eigenen Bestand vorkommen --
+    // eine Auswahl, die nichts trifft, ist eine Falle. Raetsel sind keine
+    // Partien und stehen deshalb nicht dabei.
+    const bekannt = state.konten.flatMap(k => k.ratings);
+    const arten = [...new Set(bekannt.map(r => r.perf))].filter(a => a !== 'puzzle');
+    const feld = document.getElementById('schArt');
+    feld.innerHTML = '<option value="">Alle Arten</option>'
+        + arten.map(a => {
+            const label = (bekannt.find(r => r.perf === a) || {}).label || a;
+            return `<option value="${a}">${label}</option>`;
+        }).join('');
+    feld.value = state.filter.perf;
+}
+
+function filterZuruecksetzen() {
+    state.filter = { platform: '', result: '', perf: '', q: '',
+                     sort: 'datum', direction: 'desc' };
+    document.getElementById('schSuche').value = '';
+    document.getElementById('schArt').value = '';
+    document.getElementById('schSort').value = 'datum:desc';
+    zeichneChips('schChipsPlattform', CHIPS_PLATTFORM, 'platform');
+    zeichneChips('schChipsErgebnis', CHIPS_ERGEBNIS, 'result');
+    ladePartien(true);
+}
+
+/* ------------------------------------------------------------- Automatik */
+
+function zeichneAutomatik() {
+    const e = state.einstellungen;
+    if (!e) return;
+    const stunde = document.getElementById('schAutoHour');
+    if (!stunde.options.length) {
+        stunde.innerHTML = Array.from({ length: 24 }, (_, i) =>
+            `<option value="${i}">${String(i).padStart(2, '0')}:00</option>`).join('');
+    }
+    document.getElementById('schAutoDaily').checked = !!e.auto_daily;
+    stunde.value = String(e.daily_hour);
+    document.getElementById('schLive').value = String(e.live_minutes);
+    document.getElementById('schTz').textContent = e.timezone || 'Ortszeit';
+    document.getElementById('schAutoStand').textContent = e.last_auto_at
+        ? 'Zuletzt: ' + datum(e.last_auto_at, true)
+            + (e.last_auto_note ? ' · ' + e.last_auto_note : '')
+        : 'Noch nicht gelaufen';
+}
+
+async function speichereAutomatik() {
+    const knopf = document.getElementById('schAutoSpeichern');
+    knopf.classList.add('is-loading');
+    try {
+        state.einstellungen = await API.setzen({
+            auto_daily: document.getElementById('schAutoDaily').checked,
+            daily_hour: Number(document.getElementById('schAutoHour').value),
+            live_minutes: Number(document.getElementById('schLive').value),
+        });
+        zeichneAutomatik();
+        starteTakt();
+        melde('Automatik gespeichert.', 'success');
+    } catch (err) {
+        melde(err.message || 'Die Einstellung konnte nicht gespeichert werden.', 'error');
+    } finally {
+        knopf.classList.remove('is-loading');
+    }
+}
+
+/* Der Takt bei offener Seite. Bewusst still: er meldet nichts, er haelt nur
+   die Zahlen aktuell. In einem Hintergrund-Tab pausiert er -- Abfragen fuer
+   eine Seite, die niemand ansieht, sind reine Last bei beiden Plattformen. */
+function starteTakt() {
+    if (state.takt) { clearInterval(state.takt); state.takt = null; }
+    const minuten = state.einstellungen ? state.einstellungen.live_minutes : 0;
+    if (!minuten || !state.konten.length) return;
+    state.takt = setInterval(async () => {
+        if (document.hidden || state.laeuft) return;
+        try {
+            const res = await API.aktualisieren();
+            state.konten = res.accounts;
+            zeichneWertungen();
+        } catch (e) { /* beim naechsten Takt wieder */ }
+    }, minuten * 60 * 1000);
 }
 
 function activateTab(tab) {
@@ -377,7 +540,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         b.addEventListener('click', () => activateTab(b.dataset.tab)));
     document.getElementById('schRefresh').addEventListener('click', aktualisieren);
     document.getElementById('schMehr').addEventListener('click', () => ladePartien(false));
+    document.getElementById('schAutoSpeichern').addEventListener('click', speichereAutomatik);
+
+    zeichneChips('schChipsPlattform', CHIPS_PLATTFORM, 'platform');
+    zeichneChips('schChipsErgebnis', CHIPS_ERGEBNIS, 'result');
+    document.getElementById('schArt').addEventListener('change', (e) => {
+        state.filter.perf = e.target.value;
+        ladePartien(true);
+    });
+    document.getElementById('schSort').addEventListener('change', (e) => {
+        const teile = e.target.value.split(':');
+        state.filter.sort = teile[0];
+        state.filter.direction = teile[1];
+        ladePartien(true);
+    });
+    let tippen = null;
+    document.getElementById('schSuche').addEventListener('input', (e) => {
+        clearTimeout(tippen);
+        const wert = e.target.value.trim();
+        tippen = setTimeout(() => { state.filter.q = wert; ladePartien(true); }, 300);
+    });
 
     await ladeSummary();
+    zeichneArtAuswahl();
+    zeichneAutomatik();
+    starteTakt();
     await ladePartien(true);
 });

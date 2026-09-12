@@ -40,6 +40,7 @@
         <button class="tab-btn active" data-tab="ueberblick">📈 Überblick</button>
         <button class="tab-btn" data-tab="partien">♟️ Partien</button>
         <button class="tab-btn" data-tab="konten">🔗 Konten</button>
+        <button class="tab-btn" data-tab="automatik">⚙️ Automatik</button>
     </div>
 
     <!-- ---------- Überblick ---------- -->
@@ -66,6 +67,25 @@
 
     <!-- ---------- Partien ---------- -->
     <div id="tab-partien" hidden>
+        <div class="stat-filterbar sch-filterbar">
+            <label class="sch-suche">
+                <span class="sch-suche-ico" aria-hidden="true">🔎</span>
+                <input type="search" id="schSuche" placeholder="Gegner oder Eröffnung"
+                       aria-label="In den Partien suchen" autocomplete="off">
+            </label>
+            <div class="stat-preset-chips" id="schChipsPlattform"></div>
+            <div class="stat-preset-chips" id="schChipsErgebnis"></div>
+            <select class="v-select" id="schArt" aria-label="Zeitkontrolle"></select>
+            <select class="v-select" id="schSort" aria-label="Sortierung">
+                <option value="datum:desc">Neueste zuerst</option>
+                <option value="datum:asc">Älteste zuerst</option>
+                <option value="differenz:desc">Größter Zugewinn</option>
+                <option value="differenz:asc">Größter Verlust</option>
+                <option value="gegner:desc">Stärkster Gegner</option>
+                <option value="eigen:desc">Eigene Wertung, hoch</option>
+            </select>
+        </div>
+
         <div class="stat-card">
             <div class="stat-card-head">
                 <h3>♟️ Partien</h3>
@@ -109,6 +129,56 @@
                 als Verlauf. Vexbob hält deshalb bei jedem Abruf eine Tageszeile fest — der Verlauf
                 entsteht ab heute und wächst mit jedem Tag, an dem du hier vorbeischaust.
             </p>
+        </div>
+    </div>
+
+    <!-- ---------- Automatik ---------- -->
+    <div id="tab-automatik" hidden>
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Automatik</h3>
+                <span class="v-card-sub" id="schAutoStand"></span>
+            </div>
+            <p class="sch-hinweis">
+                Zwei Takte, weil es zwei verschiedene Dinge sind: <strong>Partien</strong> holt der
+                Server einmal täglich von selbst — dafür muss keine Seite offen sein.
+                <strong>Wertungszahlen</strong> ändern sich nur, wenn gespielt wurde; sie werden
+                nachgeholt, solange diese Seite offen ist.
+            </p>
+
+            <div class="sch-opt">
+                <label class="sch-schalter">
+                    <input type="checkbox" id="schAutoDaily">
+                    <span>Täglich neue Partien holen</span>
+                </label>
+                <label class="sch-feld sch-feld--eng">
+                    <span>Uhrzeit (Ortszeit <span id="schTz">Europe/Vienna</span>)</span>
+                    <select class="v-select" id="schAutoHour"></select>
+                </label>
+            </div>
+
+            <div class="sch-opt">
+                <label class="sch-feld sch-feld--eng">
+                    <span>Wertungszahlen nachholen, solange die Seite offen ist</span>
+                    <select class="v-select" id="schLive">
+                        <option value="0">aus</option>
+                        <option value="5">alle 5 Minuten</option>
+                        <option value="15">alle 15 Minuten</option>
+                        <option value="30">alle 30 Minuten</option>
+                        <option value="60">jede Stunde</option>
+                    </select>
+                </label>
+            </div>
+
+            <p class="sch-hinweis sch-hinweis--klein">
+                Häufiger als alle fünf Minuten geht bewusst nicht: eine Wertungszahl bewegt sich
+                nur nach einer Partie, und beide Plattformen bremsen Abfragen, die im Minutentakt
+                kommen.
+            </p>
+
+            <div class="sch-konto-tasten">
+                <button type="button" class="v-btn v-btn--primary" id="schAutoSpeichern">Speichern</button>
+            </div>
         </div>
     </div>
 
