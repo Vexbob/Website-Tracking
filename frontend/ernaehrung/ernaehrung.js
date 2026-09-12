@@ -7,11 +7,12 @@
  *
  * Drei Entscheidungen, die das Modul tragen:
  *
- *   1. **Zwei Mengenstufen, nicht Gramm.** Erfasst wird spaeter "normal"
- *      oder "uebermaessig". Gramm waeren genauer, aber nur, wenn jemand
- *      wiegt -- geschaetzte Gramm sind eine Grobstufe mit falscher Stelle
- *      hinter dem Komma. ``portion_g`` am Lebensmittel ist die Bruecke von
- *      der Stufe zur Naehrwerttabelle.
+ *   1. **Stufen fuer Gerichte, Mengen fuer Lebensmittel.** Wie viel von
+ *      den eigenen Wraps auf dem Teller lag, weiss niemand in Gramm --
+ *      dort wird "normal" oder "uebermaessig" erfasst und daraus eine
+ *      Spanne. Was einzeln dasteht, weiss man dagegen genau genug: 100 g,
+ *      zwei Scheiben, eine Packung. Die Einheiten dafuer stehen als eigene
+ *      Groessen am Lebensmittel, beliebig viele.
  *   2. **Fremde Daten bleiben fremd.** Was von Open Food Facts kommt, ist
  *      ein Vorschlag: aenderbar, als Herkunft erkennbar, und fehlende
  *      Angaben bleiben leer. Eine 0 bei Ballaststoffen liefe in jeder
@@ -29,6 +30,7 @@ const API = {
     gerichte: ()   => apiCall('/api/food/dishes'),
     gericht:  (d)  => apiCall('/api/food/dishes', { method: 'POST', body: d }),
     gerichtWeg: (id) => apiCall('/api/food/dishes/' + id, { method: 'DELETE' }),
+    katalog:  ()   => apiCall('/api/food/catalog'),
     tag:      (d)  => apiCall('/api/food/day' + (d ? '?date=' + d : '')),
     eintragen:(d)  => apiCall('/api/food/log', { method: 'POST', body: d }),
     eintragWeg: (id) => apiCall('/api/food/log/' + id, { method: 'DELETE' }),
@@ -36,8 +38,15 @@ const API = {
 
 const TABS = ['heute', 'gerichte', 'scanner'];
 
+// Die beiden Einheiten, in denen die Naehrwerte stehen. Alles andere ist
+// eine eigene Groesse des Lebensmittels und traegt ihren Namen als
+// Schluessel -- "Scheibe", "Laib", "Becher".
+const BASIS = ['g', 'ml'];
+
 const state = {
-    bestand: [], vorschlag: null,
+    bestand: [], vorschlag: null, groessenVorschlaege: [],
+    // Die Groessen-Zeilen des Formulars: [{label, grams}]
+    formGroessen: [],
     tag: null, datum: null, gerichte: [], schnellSuche: '',
     // Das Gericht, das gerade gebaut wird: {id, name, items:[{item_id, name, grams}]}
     entwurf: { id: null, name: '', items: [] },
@@ -84,7 +93,31 @@ function naehrwertZeile(p) {
         <p class="ern-klein">je 100 g${p.portion_g ? ` · übliche Portion ${p.portion_g} g` : ''}</p>`;
 }
 
-function zeichneTreffer(ziel, produkt, bekannt, notiz) {
+const HERKUNFT = {
+    katalog: 'eigener Katalog',
+    off: 'Open Food Facts',
+};
+
+/* Wie alt der Katalog ist, gehoert auf den Bildschirm: ein Nachschlagewerk,
+   dessen Stand man nicht sieht, wird irgendwann geglaubt, obwohl es nicht
+   mehr stimmt. */
+async function katalogStand() {
+    const el = document.getElementById('ernKatalogStand');
+    let stand;
+    try { stand = await API.katalog(); } catch (e) { return; }
+    if (!stand.count) {
+        el.textContent = 'kein eigener Katalog — es wird direkt bei Open Food Facts gefragt';
+        return;
+    }
+    const alter = stand.newest
+        ? new Date(stand.newest * 1000).toLocaleDateString('de-DE',
+            { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : null;
+    el.textContent = `eigener Katalog: ${stand.count.toLocaleString('de-DE')} Produkte`
+        + (alter ? ` · Stand ${alter}` : '');
+}
+
+function zeichneTreffer(ziel, produkt, bekannt, notiz, herkunft) {
     state.vorschlag = produkt;
     const el = document.getElementById(ziel);
     if (!produkt && bekannt) {
@@ -101,7 +134,7 @@ function zeichneTreffer(ziel, produkt, bekannt, notiz) {
         <div class="ern-kopf">
             <strong>${esc(produkt.name)}</strong>
             ${produkt.brand ? `<span class="ern-marke">${esc(produkt.brand)}</span>` : ''}
-            <span class="ern-herkunft">Open Food Facts</span>
+            <span class="ern-herkunft">${esc(HERKUNFT[herkunft] || 'Open Food Facts')}</span>
         </div>
         ${naehrwertZeile(produkt)}
         ${bekannt ? '<p class="ern-klein">Dieses Lebensmittel ist bereits im Bestand — Übernehmen aktualisiert die Werte.</p>' : ''}
@@ -202,21 +235,33 @@ function zeichneBaender() {
         : '';
 }
 
+/* Eine genaue Menge ergibt eine Zahl, eine Stufe eine Spanne -- und das
+   soll man der Zeile ansehen. "320-320 kcal" waere ein Bindestrich, der
+   Unsicherheit behauptet, wo keine ist. */
+function kcalText(e) {
+    return e.kcal_min === e.kcal_max
+        ? `${zahlKurz(e.kcal_min)} kcal`
+        : `${zahlKurz(e.kcal_min)}–${zahlKurz(e.kcal_max)} kcal`;
+}
+
 function zeichneEintraege() {
     const t = state.tag;
     document.getElementById('ernEintraegeZahl').textContent =
         t.entries.length ? t.entries.length + ' an diesem Tag' : '';
     document.getElementById('ernEintraege').innerHTML = !t.entries.length
         ? `<div class="empty"><span class="empty-mark">🍽️</span>
-             <p class="empty-text">Noch nichts eingetragen. Ein Tipp auf ein Gericht oben genügt —
-             die Menge ist entweder normal oder übermäßig, mehr wird nicht gefragt.</p></div>`
+             <p class="empty-text">Noch nichts eingetragen. Ein Gericht oben antippen —
+             normal oder übermäßig, mehr wird nicht gefragt. Bei einem einzelnen
+             Lebensmittel sagst du, wie viel: 100 g, zwei Scheiben, eine Packung.</p></div>`
         : t.entries.map(e => `
             <div class="v-row ern-zeile">
                 <div class="ern-zeile-text">
                     <strong>${esc(e.name)}</strong>
-                    <span class="ern-stufe is-${e.level}">${esc(e.level_label)}</span>
+                    ${e.amount_label
+                        ? `<span class="ern-stufe is-menge">${esc(e.amount_label)}</span>`
+                        : `<span class="ern-stufe is-${e.level}">${esc(e.level_label || '')}</span>`}
                     <div class="ern-klein">${esc(e.sub || '')}${
-                        e.kcal_min != null ? ` · ${zahlKurz(e.kcal_min)}–${zahlKurz(e.kcal_max)} kcal` : ''}${
+                        e.kcal_min != null ? ` · ${kcalText(e)}` : ''}${
                         e.assumed_portion ? ' · Portion mit 100 g angenommen' : ''}</div>
                 </div>
                 <button type="button" class="v-btn v-btn--icon" data-eintrag="${e.id}"
@@ -249,59 +294,91 @@ function zeichneSchnell() {
         return;
     }
 
-    const zeile = (name, sub, art, id) => `
+    const rahmen = (name, sub, innen) => `
         <div class="v-row ern-schnell">
             <div class="ern-zeile-text">
                 <strong>${esc(name)}</strong>
                 <div class="ern-klein">${esc(sub)}</div>
             </div>
-            <div class="ern-schnell-tasten">
-                <button type="button" class="v-btn v-btn--sm" data-art="${art}" data-id="${id}" data-stufe="normal">normal</button>
-                <button type="button" class="v-btn v-btn--sm" data-art="${art}" data-id="${id}" data-stufe="viel">übermäßig</button>
-            </div>
+            ${innen}
         </div>`;
 
-    const gerichte = state.gerichte.filter(g => passt(g.name, ''));
-    // Lebensmittel mit eigener Einheit zuerst: bei ihnen steht die Portion
-    // fest, bei den anderen wird mit 100 g gerechnet -- und das steht dann
-    // auch dran.
-    const lebensmittel = state.bestand
-        .filter(p => passt(p.name, p.brand))
-        .sort((a, b) => (b.portion_g ? 1 : 0) - (a.portion_g ? 1 : 0));
-
-    const zeilen = gerichte.map(g => zeile(
-        g.name,
+    // Ein Gericht: zwei Knoepfe, ein Tipp. Die Stufe ist hier die ehrliche
+    // Angabe -- wie viel vom eigenen Rezept auf dem Teller lag, weiss
+    // niemand in Gramm.
+    const gerichtZeile = (g) => rahmen(g.name,
         g.portion.kcal != null
             ? `${zahlKurz(g.portion.kcal)} kcal je Portion`
             : 'Nährwerte unvollständig',
-        'dish', g.id))
-        .concat(lebensmittel.map(p => {
-            const eigene = (p.units || []).find(u => u.key === 'portion');
-            const einheit = p.base_unit || 'g';
-            return zeile(p.name, eigene
-                ? `1 ${eigene.label} = ${eigene.grams} ${einheit}`
-                : `ohne Portionsgröße — gerechnet mit 100 ${einheit}`,
-                'item', p.id);
-        }));
+        `<div class="ern-schnell-tasten">
+            <button type="button" class="v-btn v-btn--sm" data-dish="${g.id}" data-stufe="normal">normal</button>
+            <button type="button" class="v-btn v-btn--sm" data-dish="${g.id}" data-stufe="viel">übermäßig</button>
+        </div>`);
+
+    // Ein einzelnes Lebensmittel: die Menge, wie sie dasteht. Vorbelegt ist
+    // die erste eigene Groesse (meist die, die man nimmt), sonst 100 g.
+    const itemZeile = (p) => {
+        const einheiten = p.units || [{ key: p.base_unit || 'g', label: p.base_unit || 'g' }];
+        const eigene = einheiten.filter(e => !BASIS.includes(e.key));
+        const start = eigene.length ? eigene[0] : einheiten[0];
+        const menge = eigene.length ? 1 : 100;
+        return rahmen(p.name,
+            (p.brand ? esc(p.brand) + ' · ' : '')
+            + (eigene.length
+                ? eigene.map(e => `1 ${e.label} = ${e.grams} ${p.base_unit || 'g'}`).join(' · ')
+                : `keine eigene Größe hinterlegt`),
+            `<div class="ern-menge">
+                <input type="number" class="ern-menge-zahl" min="0" step="0.25"
+                       inputmode="decimal" value="${menge}" data-menge="${p.id}"
+                       aria-label="Menge für ${esc(p.name)}">
+                <select class="v-select v-select--sm" data-einheit="${p.id}"
+                        aria-label="Einheit für ${esc(p.name)}">
+                    ${einheiten.map(e => `<option value="${esc(e.key)}"${
+                        e.key === start.key ? ' selected' : ''}>${esc(e.label)}</option>`).join('')}
+                </select>
+                <button type="button" class="v-btn v-btn--sm" data-item="${p.id}">Eintragen</button>
+            </div>`);
+    };
+
+    const gerichte = state.gerichte.filter(g => passt(g.name, ''));
+    // Lebensmittel mit eigener Groesse zuerst: dort geht das Eintragen mit
+    // einer Zahl, bei den anderen steht erst einmal 100 g im Feld.
+    const lebensmittel = state.bestand
+        .filter(p => passt(p.name, p.brand))
+        .sort((a, b) => ((b.sizes || []).length ? 1 : 0) - ((a.sizes || []).length ? 1 : 0));
+
+    const zeilen = gerichte.map(gerichtZeile).concat(lebensmittel.map(itemZeile));
 
     ziel.innerHTML = zeilen.length
         ? zeilen.slice(0, SCHNELL_MAX).join('')
           + (zeilen.length > SCHNELL_MAX
              ? `<p class="ern-klein">… und ${zeilen.length - SCHNELL_MAX} weitere — such oben danach.</p>`
              : '')
-        : `<p class="ern-klein">Nichts gefunden, das zu „${esc(state.schnellSuche)}" passt.</p>`;
+        : `<p class="ern-klein">Nichts gefunden, das zu „${esc(state.schnellSuche)}“ passt.</p>`;
 
     ziel.querySelectorAll('[data-stufe]').forEach(b => b.addEventListener('click', () =>
-        eintragen(b.dataset.art, Number(b.dataset.id), b.dataset.stufe, b)));
+        eintragen({ dish_id: Number(b.dataset.dish), level: b.dataset.stufe }, b)));
+    ziel.querySelectorAll('[data-item]').forEach(b => b.addEventListener('click', () => {
+        const id = Number(b.dataset.item);
+        const feld = ziel.querySelector(`[data-menge="${id}"]`);
+        const wahl = ziel.querySelector(`[data-einheit="${id}"]`);
+        const menge = Number(String(feld.value).replace(',', '.'));
+        if (!(menge > 0)) { melde('Wie viel davon?', 'error'); feld.focus(); return; }
+        eintragen({ item_id: id, amount: menge, unit: wahl.value }, b);
+    }));
+    // Die Zahl im Feld passt sich der Einheit an: 100 g, aber 1 Scheibe.
+    // Ohne das steht nach dem Umschalten "100 Scheiben" da.
+    ziel.querySelectorAll('[data-einheit]').forEach(w => w.addEventListener('change', () => {
+        const feld = ziel.querySelector(`[data-menge="${w.dataset.einheit}"]`);
+        if (feld) feld.value = BASIS.includes(w.value) ? 100 : 1;
+    }));
 }
 
-async function eintragen(art, id, stufe, knopf) {
+async function eintragen(daten, knopf) {
     knopf.classList.add('is-loading');
     try {
-        state.tag = await API.eintragen({
-            [art === 'dish' ? 'dish_id' : 'item_id']: id,
-            level: stufe, day: state.datum || heute(),
-        });
+        state.tag = await API.eintragen(
+            Object.assign({ day: state.datum || heute() }, daten));
         zeichneTag();
         melde('Eingetragen.', 'success');
     } catch (err) {
@@ -391,14 +468,15 @@ function zutatSuchen(text) {
     ziel.querySelectorAll('[data-zutat]').forEach(b => b.addEventListener('click', () => {
         const p = state.bestand.find(x => x.id === Number(b.dataset.zutat));
         if (!p) return;
-        // Die eigene Einheit als Vorschlag, wenn es eine gibt: "1 Stueck"
-        // trifft haeufiger als "62 g" und ist schneller zu pruefen.
-        const eigene = (p.units || []).find(u => u.key === 'portion');
+        // Die erste eigene Groesse als Vorschlag, wenn es eine gibt:
+        // "1 Stueck" trifft haeufiger als "62 g" und ist schneller zu pruefen.
+        const einheiten = p.units || [{ key: p.base_unit || 'g', label: p.base_unit || 'g', grams: 1 }];
+        const eigene = einheiten.find(u => !BASIS.includes(u.key));
         state.entwurf.items.push({
             item_id: p.id, name: p.name,
             amount: eigene ? 1 : 100,
-            unit: eigene ? 'portion' : (p.base_unit || 'g'),
-            units: p.units || [{ key: p.base_unit || 'g', label: p.base_unit || 'g', grams: 1 }],
+            unit: eigene ? eigene.key : (p.base_unit || 'g'),
+            units: einheiten,
         });
         document.getElementById('ernZutatSuche').value = '';
         ziel.innerHTML = '';
@@ -649,7 +727,7 @@ async function nachschlagen(e) {
     try {
         const res = await API.barcode(code);
         zeichneTreffer('ernTreffer', res.found ? res.product : null,
-                       res.known, res.note);
+                       res.known, res.note, res.origin);
     } catch (err) {
         document.getElementById('ernTreffer').innerHTML =
             `<div class="empty"><span class="empty-mark">🔎</span>
@@ -669,7 +747,9 @@ async function suchen(text) {
                 oft ein allgemeinerer Begriff — „Apfel" statt „Apfel Elstar".</p></div>`;
             return;
         }
-        ziel.innerHTML = res.results.map((p, i) => `
+        ziel.innerHTML = `<p class="ern-klein">${res.results.length} Treffer aus
+            ${esc(HERKUNFT[res.origin] || 'Open Food Facts')}</p>`
+            + res.results.map((p, i) => `
             <div class="v-row ern-treffer">
                 <div class="ern-kopf"><strong>${esc(p.name)}</strong>
                     ${p.brand ? `<span class="ern-marke">${esc(p.brand)}</span>` : ''}</div>
@@ -696,6 +776,10 @@ async function uebernehmen(produkt) {
             fat_g: produkt.fat_g, sat_fat_g: produkt.sat_fat_g,
             fiber_g: produkt.fiber_g, salt_g: produkt.salt_g,
             portion_g: produkt.portion_g,
+            // Der eigene Katalog weiss, ob sich die Angaben auf 100 g oder
+            // 100 ml beziehen -- bei einem Getraenk waere "100 g" schlicht
+            // falsch abgelesen.
+            base_unit: produkt.base_unit || 'g',
         });
         await ladeBestand();
         const neu = antwort && antwort.item;
@@ -703,10 +787,10 @@ async function uebernehmen(produkt) {
         // Statt das stillschweigend hinzunehmen, steht das Formular gleich
         // offen -- ein Feld ausfuellen ist leichter, als den Eintrag spaeter
         // wiederzufinden.
-        if (neu && !neu.portion_g) {
+        if (neu && !(neu.sizes || []).length) {
             formFuellen(neu);
-            melde('Aufgenommen. Trag noch ein, was eine Portion wiegt — dann '
-                + 'kannst du sie später mit einem Tipp eintragen.', 'info');
+            melde('Aufgenommen. Trag noch ein, was eine Einheit wiegt — dann '
+                + 'kannst du „2 × Scheibe“ eintragen statt in Gramm zu rechnen.', 'info');
         } else {
             melde('In den Bestand aufgenommen.', 'success');
         }
@@ -727,19 +811,58 @@ const FORM = {
     fName: 'name', fBrand: 'brand', fBase: 'base_unit',
     fKcal: 'kcal', fProtein: 'protein_g', fFiber: 'fiber_g',
     fCarbs: 'carbs_g', fFat: 'fat_g',
-    fPortionLabel: 'portion_label', fPortion: 'portion_g', fPackage: 'package_g',
 };
-const ZAHLENFELDER = ['fKcal', 'fProtein', 'fFiber', 'fCarbs', 'fFat',
-                      'fPortion', 'fPackage'];
+const ZAHLENFELDER = ['fKcal', 'fProtein', 'fFiber', 'fCarbs', 'fFat'];
+
+/* Die eigenen Groessen sind eine Liste, kein festes Feldpaar: dasselbe
+   Lebensmittel hat oft mehrere (Scheibe, Laib, Packung), und wer nur eine
+   hinterlegen kann, rechnet den Rest jedes Mal im Kopf. */
+function zeichneGroessen() {
+    const ziel = document.getElementById('fGroessen');
+    const basis = document.getElementById('fBase').value || 'g';
+    ziel.innerHTML = !state.formGroessen.length
+        ? `<p class="ern-klein">Noch keine eigene Größe. Ohne eine trägst du dieses
+           Lebensmittel in ${basis} ein — das reicht für Loses völlig.</p>`
+        : state.formGroessen.map((g, i) => `
+            <div class="ern-groesse">
+                <input type="text" list="ernGroessenVorschlaege" data-g-label="${i}"
+                       value="${esc(g.label)}" autocomplete="off"
+                       placeholder="Scheibe" aria-label="Bezeichnung der ${i + 1}. Größe">
+                <span class="ern-groesse-ist" aria-hidden="true">=</span>
+                <input type="number" min="0" step="0.1" inputmode="decimal"
+                       data-g-gramm="${i}" value="${g.grams == null ? '' : g.grams}"
+                       placeholder="45" aria-label="Gewicht der ${i + 1}. Größe">
+                <span class="ern-groesse-basis">${esc(basis)}</span>
+                <button type="button" class="v-btn v-btn--icon" data-g-weg="${i}"
+                        aria-label="Größe entfernen" title="Entfernen">🗑️</button>
+            </div>`).join('')
+          + '<p class="ern-klein">Die erste Zeile ist die Standardgröße.</p>';
+
+    // Waehrend des Tippens in den Zustand schreiben, aber NICHT neu zeichnen:
+    // ein Neuaufbau bei jedem Zeichen nimmt dem Feld den Fokus.
+    ziel.querySelectorAll('[data-g-label]').forEach(f => f.addEventListener('input', () => {
+        state.formGroessen[Number(f.dataset.gLabel)].label = f.value;
+    }));
+    ziel.querySelectorAll('[data-g-gramm]').forEach(f => f.addEventListener('input', () => {
+        const roh = String(f.value).replace(',', '.').trim();
+        state.formGroessen[Number(f.dataset.gGramm)].grams = roh ? Number(roh) : null;
+    }));
+    ziel.querySelectorAll('[data-g-weg]').forEach(b => b.addEventListener('click', () => {
+        state.formGroessen.splice(Number(b.dataset.gWeg), 1);
+        zeichneGroessen();
+    }));
+}
 
 let bearbeitet = null;   // id des Lebensmittels, das gerade geaendert wird
 
 function formLeeren() {
     bearbeitet = null;
+    state.formGroessen = [];
     Object.keys(FORM).forEach(id => {
         const feld = document.getElementById(id);
         if (feld) feld.value = id === 'fBase' ? 'g' : '';
     });
+    zeichneGroessen();
     document.getElementById('ernFormTitel').textContent = 'Von Hand anlegen';
     document.getElementById('fSpeichern').textContent = 'Aufnehmen';
     document.getElementById('fAbbrechen').hidden = true;
@@ -752,6 +875,8 @@ function formFuellen(p) {
         if (el) el.value = p[feld] == null ? '' : p[feld];
     });
     document.getElementById('fBase').value = p.base_unit || 'g';
+    state.formGroessen = (p.sizes || []).map(g => ({ label: g.label, grams: g.grams }));
+    zeichneGroessen();
     document.getElementById('ernFormTitel').textContent = 'Lebensmittel ändern';
     document.getElementById('fSpeichern').textContent = 'Änderung speichern';
     document.getElementById('fAbbrechen').hidden = false;
@@ -768,6 +893,8 @@ async function formSpeichern() {
     const daten = { source: 'eigen', user_edited: true };
     Object.entries(FORM).forEach(([id, feld]) => { daten[feld] = wert(id); });
     daten.base_unit = document.getElementById('fBase').value || 'g';
+    // Leere Zeilen fallen weg; den Rest prueft der Server und sagt, was fehlt.
+    daten.sizes = state.formGroessen.filter(g => (g.label || '').trim() || g.grams);
     if (!daten.name) { melde('Ohne Namen geht es nicht.', 'error'); return; }
     if (bearbeitet) daten.id = bearbeitet;
 
@@ -791,6 +918,11 @@ async function ladeBestand() {
     try {
         const res = await API.bestand();
         state.bestand = res.items;
+        if (res.size_suggestions) {
+            state.groessenVorschlaege = res.size_suggestions;
+            document.getElementById('ernGroessenVorschlaege').innerHTML =
+                res.size_suggestions.map(v => `<option value="${esc(v)}"></option>`).join('');
+        }
     } catch (err) {
         ziel.innerHTML = `<div class="empty is-error"><span class="empty-mark">⚠️</span>
             <p class="empty-text">Der Bestand konnte nicht geladen werden.</p></div>`;
@@ -811,9 +943,11 @@ async function ladeBestand() {
                 ${p.brand ? `<span class="ern-marke">${esc(p.brand)}</span>` : ''}
                 <div class="ern-klein">${zahl(p.kcal, '')} kcal · ${zahl(p.protein_g, ' g')} Eiweiß
                     · ${zahl(p.fiber_g, ' g')} Ballaststoffe · je 100 ${esc(p.base_unit || 'g')}</div>
-                <div class="ern-klein">${(p.units || []).map(e =>
-                    e.grams === 1 ? esc(e.label) : `${esc(e.label)} = ${e.grams} ${esc(p.base_unit || 'g')}`
-                ).join(' · ')}${p.user_edited ? ' · von Hand gepflegt' : ''}</div>
+                <div class="ern-klein">${(p.sizes || []).length
+                    ? (p.sizes || []).map(g =>
+                        `${esc(g.label)} = ${g.grams} ${esc(p.base_unit || 'g')}`).join(' · ')
+                    : 'keine eigene Größe — wird in ' + esc(p.base_unit || 'g') + ' eingetragen'
+                }${p.user_edited ? ' · von Hand gepflegt' : ''}</div>
             </div>
             <div class="ern-schnell-tasten">
                 <button type="button" class="v-btn v-btn--sm" data-aendern="${p.id}">Ändern</button>
@@ -909,6 +1043,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('fSpeichern').addEventListener('click', formSpeichern);
     document.getElementById('fAbbrechen').addEventListener('click', formLeeren);
+    document.getElementById('fGroesseNeu').addEventListener('click', () => {
+        state.formGroessen.push({ label: '', grams: null });
+        zeichneGroessen();
+        const felder = document.querySelectorAll('[data-g-label]');
+        if (felder.length) felder[felder.length - 1].focus();
+    });
+    // Die Einheit hinter den Groessen ist die Basis -- wechselt sie von g auf
+    // ml, muss dort auch ml stehen.
+    document.getElementById('fBase').addEventListener('change', zeichneGroessen);
     // Die Eingabefelder stehen bewusst in keinem <form> (ein Absenden waere
     // ein Seitenwechsel) -- die Enter-Taste soll trotzdem das tun, was jeder
     // erwartet.
@@ -932,6 +1075,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     zeichneEntwurf();
     formLeeren();
+    katalogStand();
     await ladeBestand();
     await ladeGerichte();
     await ladeTag(heute());

@@ -118,6 +118,36 @@ body.ready { visibility: visible; }
 .ern-massstab { margin-top: var(--space-3); }
 
 /* ---------- Schnelleintrag ---------- */
+/* Eine Groesse je Zeile: Bezeichnung, Gewicht, Einheit, weg damit. */
+.ern-groessen-kopf {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-top: var(--space-4);
+}
+.ern-groessen-kopf h4 { margin: 0; font-size: 0.95rem; }
+.ern-groessen { margin: var(--space-2) 0; }
+.ern-groesse {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+.ern-groesse input[type="text"] { flex: 1 1 8rem; min-width: 0; }
+.ern-groesse input[type="number"] { flex: 0 1 5.5rem; min-width: 0; }
+.ern-groesse-ist,
+.ern-groesse-basis { color: var(--text-3); font-size: 0.85rem; }
+
+/* Menge + Einheit + Knopf beim Schnelleintrag eines Lebensmittels. */
+.ern-menge {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
+}
+.ern-menge-zahl { width: 4.5rem; }
+.ern-menge .v-select { max-width: 8rem; }
+
 .ern-schnell {
     display: flex;
     align-items: center;
@@ -147,6 +177,14 @@ body.ready { visibility: visible; }
 .ern-stufe.is-viel {
     background: var(--m-ernaehrung-soft);
     color: var(--m-ernaehrung);
+}
+/* Eine gemessene Menge ist keine Stufe. Sie traegt deshalb keine
+   Modulfarbe, sondern eine Haarlinie: der Unterschied zwischen "geschaetzt"
+   und "abgezaehlt" soll auf einen Blick zu sehen sein. */
+.ern-stufe.is-menge {
+    background: transparent;
+    color: var(--text-2);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
 /* ---------- Gerichte ---------- */

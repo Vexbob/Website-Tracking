@@ -29,10 +29,11 @@
     <header class="page-head">
         <h1>🥗 Ernährung</h1>
         <p class="page-sub">
-            Ein Tracker, der <strong>locker</strong> bleibt: Mengen gibt es nur als
-            <em>normal</em> oder <em>übermäßig</em>, keine Waage, keine Gramm. Was zählt, ist die
-            grobe Richtung über den Tag — Kalorien, Eiweiß, Ballaststoffe. Angezeigt wird
-            deshalb eine <strong>Spanne</strong>, keine erfundene Einzelzahl.
+            Ein Tracker, der <strong>locker</strong> bleibt. Bei einem <strong>Gericht</strong>
+            reicht <em>normal</em> oder <em>übermäßig</em> — die Gramm stehen einmal im Rezept.
+            Ein einzelnes <strong>Lebensmittel</strong> trägst du so ein, wie es dasteht:
+            100 g, zwei Scheiben, eine Packung. Was geschätzt ist, wird als
+            <strong>Spanne</strong> angezeigt statt als erfundene Einzelzahl.
         </p>
     </header>
 
@@ -64,7 +65,7 @@
         <div class="v-card">
             <div class="v-card-head">
                 <h3>Schnell eintragen</h3>
-                <span class="v-card-sub">ein Tipp genügt</span>
+                <span class="v-card-sub">Gericht antippen, Lebensmittel abmessen</span>
             </div>
             <label class="ern-suche ern-schnell-suche">
                 <span class="ern-suche-ico" aria-hidden="true">🔎</span>
@@ -133,7 +134,7 @@
         <div class="v-card">
             <div class="v-card-head">
                 <h3>Strichcode nachschlagen</h3>
-                <span class="v-card-sub">Quelle: Open Food Facts</span>
+                <span class="v-card-sub" id="ernKatalogStand">eigener Katalog, sonst Open Food Facts</span>
             </div>
             <form class="ern-form" id="ernScanForm">
                 <label class="ern-feld">
@@ -158,7 +159,9 @@
                 Open Food Facts ist eine offene Datenbank, die von Freiwilligen gepflegt wird:
                 frei nutzbar, ohne Anmeldung — dafür nicht lückenlos. Was von dort kommt, ist ein
                 <strong>Vorschlag zum Nachbessern</strong>, keine Wahrheit; fehlende Angaben
-                bleiben leer statt still auf null gesetzt zu werden.
+                bleiben leer statt still auf null gesetzt zu werden. Gesucht wird zuerst im
+                <strong>eigenen Katalog</strong> — einem Abzug derselben Datenbank, der hier
+                liegt und deshalb sofort antwortet, auch wenn der Dienst gerade überlastet ist.
             </p>
             <div id="ernTreffer"></div>
         </div>
@@ -214,19 +217,17 @@
             <p class="ern-klein">Leer lassen, was du nicht weißt — leer heißt „keine Angabe“
                 und wird später als Lücke ausgewiesen, nicht als Null verrechnet.</p>
 
-            <div class="ern-gitter">
-                <label class="ern-feld"><span>Einheit heißt</span>
-                    <input type="text" id="fPortionLabel" autocomplete="off"
-                           placeholder="Stück, Scheibe, Glas …"></label>
-                <label class="ern-feld"><span>Eine Einheit wiegt</span>
-                    <input type="number" id="fPortion" min="0" step="1" inputmode="decimal"
-                           placeholder="z. B. 62"></label>
-                <label class="ern-feld"><span>Ganze Packung</span>
-                    <input type="number" id="fPackage" min="0" step="1" inputmode="decimal"
-                           placeholder="optional"></label>
+            <div class="ern-groessen-kopf">
+                <h4>Eigene Größen</h4>
+                <span class="ern-klein">so viele, wie du brauchst</span>
             </div>
-            <p class="ern-klein">Was hier steht, kannst du danach beim Eintragen auswählen —
-                „2 Stück“ statt „124 g“.</p>
+            <div class="ern-groessen" id="fGroessen"></div>
+            <datalist id="ernGroessenVorschlaege"></datalist>
+            <button type="button" class="v-btn v-btn--sm" id="fGroesseNeu">Größe hinzufügen</button>
+            <p class="ern-klein">Jede Zeile ist eine Einheit, die du beim Eintragen auswählen
+                kannst — „2 × Scheibe“ statt „90 g“. Ein Brot darf gleichzeitig eine
+                <em>Scheibe</em>, einen <em>Laib</em> und eine <em>Packung</em> haben.
+                Die <strong>erste</strong> Zeile ist die Standardgröße und wird vorgeschlagen.</p>
 
             <div class="ern-tasten">
                 <button type="button" class="v-btn v-btn--primary" id="fSpeichern">Aufnehmen</button>

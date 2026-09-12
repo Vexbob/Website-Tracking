@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.90.0', date: '2026-09-12', title: 'Ernährung: Mengen statt Stufen, wo man sie weiß', notes: [
+        '„Normal“ und „übermäßig“ gelten ab jetzt nur noch für Gerichte — wie viel vom eigenen Rezept auf dem Teller lag, weiß niemand in Gramm.',
+        'Ein einzelnes Lebensmittel trägst du dagegen so ein, wie es dasteht: 100 g, zwei Scheiben, eine Packung. Solche Einträge erscheinen als Zahl, nicht als Spanne, und machen den Tag genauer statt unschärfer.',
+        'Jedes Lebensmittel darf beliebig viele eigene Größen haben statt einer einzigen: ein Brot hat gleichzeitig eine Scheibe, einen Laib und eine Packung.',
+        'Die Suche läuft zuerst gegen einen eigenen Katalog aus dem Open-Food-Facts-Abzug — sie antwortet damit sofort und auch dann, wenn der fremde Dienst überlastet ist; live gefragt wird nur noch, was dort nicht steht.',
+        'Ältere Einträge behalten ihre Stufe: aus „Apfel, übermäßig“ nachträglich eine Grammzahl zu erfinden, wäre genau die falsche Genauigkeit.',
+    ]},
     { v: 'v1.89.0', date: '2026-09-12', title: 'Ernährung: Feinschliff im Alltag', notes: [
         'Nachgezogen: im Schnelleintrag fehlten frisch gescannte Lebensmittel — die Liste zeigte nur acht mit hinterlegter Portion. Jetzt steht alles dort, durchsuchbar, und bei fehlender Portionsgröße sagt die Zeile, dass mit 100 g gerechnet wird.',
         'Wer ein Lebensmittel löscht, erfährt vorher, in welchen Gerichten es steckt — es fiel dort bisher stillschweigend heraus.',

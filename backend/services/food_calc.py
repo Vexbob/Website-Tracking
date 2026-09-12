@@ -1,6 +1,7 @@
 """Aus Stufen werden Spannen — die Rechnung des Ernaehrungs-Moduls.
 
-Eingetragen wird eine Stufe ("normal" oder "uebermaessig"), keine Gramm.
+Bei einem GERICHT wird eine Stufe eingetragen ("normal" oder
+"uebermaessig"), keine Gramm.
 Daraus eine einzelne Zahl zu machen, waere die Genauigkeit, die es nie gab:
 "2.147 kcal" aus zwei Grobstufen ist erfunden. Deshalb rechnet dieses Modul
 grundsaetzlich mit **Spannen** -- von bis.
@@ -16,6 +17,13 @@ gehoert an eine Stelle, an der sie jemand liest.
                   "Deutlich mehr" heisst irgendetwas zwischen anderthalb und
                   doppelt. Breiter als die normale Stufe, weil die Erinnerung
                   daran auch unschaerfer ist.
+
+Bei einem einzelnen LEBENSMITTEL wird dagegen eine echte Menge
+eingetragen: 100 g, zwei Scheiben, eine Packung. Die Stufe ist dort nur
+unnoetig ungenau -- was auf der Packung steht, weiss man. Solche Eintraege
+ergeben eine Spanne der Breite null (``exakte_spanne``); sie laufen durch
+dieselbe Tagessumme wie die geschaetzten und machen sie genauer, statt
+danebenzustehen.
 
 Fehlende Naehrwerte bleiben fehlend. Wenn eine Zutat keine Ballaststoffe
 angibt, ist die Ballaststoff-Summe des Tages **unvollstaendig** -- nicht
@@ -71,58 +79,102 @@ def _zahl(wert):
 # Packung -- ist eine BENANNTE Menge, deren Groesse am Lebensmittel steht.
 # Umgerechnet wird beim Speichern, nicht bei jeder Anzeige: sonst aendert
 # sich ein altes Rezept, sobald jemand die Portionsgroesse korrigiert.
-EINHEITEN = ("g", "ml", "portion", "packung")
-EINHEIT_LABEL = {"g": "g", "ml": "ml", "portion": "Portion", "packung": "Packung"}
+# 'g' und 'ml' sind die Basis, in der die Naehrwerte stehen -- sie sind
+# deshalb als Bezeichnung gesperrt. Alles andere ist frei benannt und steht
+# als eigene Zeile am Lebensmittel: Scheibe, Becher, Riegel, halbe Packung.
+# Der Schluessel IST die Bezeichnung: mit beliebig vielen Groessen gibt es
+# keine feste Liste mehr, gegen die man pruefen koennte, und ein sprechender
+# Wert ("Scheibe") bleibt auch in einem alten Rezept lesbar.
+RESERVIERT = ("g", "ml")
+
+# Vorschlaege fuer das Auswahlfeld -- reine Bequemlichkeit, keine Vorschrift.
+GAENGIGE_GROESSEN = ("Stück", "Scheibe", "Portion", "Packung", "Glas",
+                     "Becher", "Riegel", "Handvoll", "Esslöffel", "Teelöffel")
 
 
-def einheiten_fuer(lebensmittel: dict) -> list:
+def groessen_sauber(rohe) -> list:
+    """Prueft eine eingegebene Groessenliste — und sagt, was nicht geht.
+
+    Rueckgabe: (liste, fehler). Die Liste ist entdoppelt und nummeriert.
+    """
+    raus, gesehen = [], set()
+    for eintrag in rohe or ():
+        label = str(eintrag.get("label") or "").strip()
+        gramm = _zahl(eintrag.get("grams"))
+        if not label and not gramm:
+            continue            # eine leere Zeile ist keine Eingabe
+        if not label:
+            return [], "Eine Größe ohne Bezeichnung lässt sich nicht auswählen."
+        if label.lower() in RESERVIERT:
+            return [], ("„g“ und „ml“ sind schon vergeben — sie sind "
+                        "die Grundeinheit. Nimm ein eigenes Wort: Stück, "
+                        "Scheibe, Becher …")
+        if not gramm or gramm <= 0:
+            return [], f"Wie schwer ist eine Einheit „{label}“?"
+        if label.lower() in gesehen:
+            return [], f"„{label}“ steht zweimal in der Liste."
+        gesehen.add(label.lower())
+        raus.append({"label": label, "grams": round(gramm, 2),
+                     "position": len(raus)})
+    return raus, None
+
+
+def einheiten_fuer(lebensmittel: dict, groessen=()) -> list:
     """Welche Einheiten dieses Lebensmittel anbietet — mit Beschriftung.
 
-    Eine Einheit ohne hinterlegte Groesse wird gar nicht erst angeboten: ein
-    Auswahlfeld mit "Packung", das dann 100 g rechnet, waere geraten.
+    Immer dabei: die Basis (g oder ml). Dazu jede eigene Groesse, die am
+    Lebensmittel hinterlegt ist. Was nicht hinterlegt ist, wird nicht
+    angeboten: ein Auswahlfeld mit "Packung", das dann 100 g rechnet, waere
+    geraten.
     """
     basis = lebensmittel.get("base_unit") or "g"
-    raus = [{"key": basis, "label": EINHEIT_LABEL[basis], "grams": 1.0}]
-    portion = _zahl(lebensmittel.get("portion_g"))
-    if portion:
-        raus.append({
-            "key": "portion",
-            "label": (lebensmittel.get("portion_label") or "Portion"),
-            "grams": portion,
-        })
-    packung = _zahl(lebensmittel.get("package_g"))
-    if packung:
-        raus.append({"key": "packung", "label": "Packung", "grams": packung})
+    raus = [{"key": basis, "label": basis, "grams": 1.0}]
+    for g in groessen or ():
+        label = str(g.get("label") or "").strip()
+        gramm = _zahl(g.get("grams"))
+        if not label or not gramm or label.lower() in RESERVIERT:
+            continue
+        raus.append({"key": label, "label": label, "grams": round(gramm, 2)})
     return raus
 
 
-def in_basis(menge, einheit: str, lebensmittel: dict):
+def in_basis(menge, einheit: str, lebensmittel: dict, groessen=()):
     """Rechnet eine Eingabe in Gramm bzw. Milliliter um.
 
     Rueckgabe: (wert, hinweis) -- der Hinweis ist gesetzt, wenn geraten
-    werden musste (Einheit ohne hinterlegte Groesse).
+    werden musste (eine Bezeichnung, zu der keine Groesse mehr passt).
     """
     menge = float(menge or 0)
     if menge <= 0:
         return 0.0, "Eine Menge von null ergibt keine Portion."
     basis = lebensmittel.get("base_unit") or "g"
-    if einheit in ("g", "ml"):
+    if einheit in RESERVIERT:
         return menge, None
-    if einheit == "portion":
-        gramm = _zahl(lebensmittel.get("portion_g"))
-        if not gramm:
-            return menge * PORTION_FALLBACK, (
-                "Für dieses Lebensmittel ist keine Portionsgröße hinterlegt — "
-                f"gerechnet wird mit {PORTION_FALLBACK:.0f} {basis}.")
-        return menge * gramm, None
-    if einheit == "packung":
-        gramm = _zahl(lebensmittel.get("package_g"))
-        if not gramm:
-            return menge * PORTION_FALLBACK, (
-                "Für dieses Lebensmittel ist keine Packungsgröße hinterlegt — "
-                f"gerechnet wird mit {PORTION_FALLBACK:.0f} {basis}.")
-        return menge * gramm, None
-    return menge, None
+    gesucht = str(einheit or "").strip().lower()
+    for g in groessen or ():
+        label = str(g.get("label") or "").strip()
+        gramm = _zahl(g.get("grams"))
+        if gramm and label.lower() == gesucht:
+            return menge * gramm, None
+    # Bis v1.89.0 hiessen die Einheiten 'portion' und 'packung'. Zeilen aus
+    # der Zeit sind migriert, aber ein alter Tab im Browser kann sie noch
+    # schicken -- die Spalten dafuer gibt es weiter.
+    alt = {"portion": "portion_g", "packung": "package_g"}.get(gesucht)
+    if alt:
+        gramm = _zahl(lebensmittel.get(alt))
+        if gramm:
+            return menge * gramm, None
+    return menge * PORTION_FALLBACK, (
+        f"Zu „{einheit}“ ist keine Größe hinterlegt — gerechnet wird mit "
+        f"{PORTION_FALLBACK:.0f} {basis}.")
+
+
+def je_menge(lebensmittel: dict, gramm) -> dict:
+    """Die Naehrwerte fuer eine bestimmte Menge, nicht fuer 100."""
+    anteil = float(gramm or 0) / 100.0
+    return {m: (None if lebensmittel.get(m) is None
+                else round(float(lebensmittel[m]) * anteil, 1))
+            for m in MAKROS}
 
 
 def zutaten_summe(zutaten) -> dict:
@@ -164,6 +216,20 @@ def eintrag_spanne(basis: dict, stufe: str) -> dict:
             raus[makro] = None
         else:
             raus[makro] = (round(wert * unten, 1), round(wert * oben, 1))
+    return raus
+
+
+def exakte_spanne(basis: dict) -> dict:
+    """Eine gewogene Menge als Spanne der Breite null.
+
+    Damit laeuft ein genauer Eintrag durch dieselbe Tagessumme wie ein
+    geschaetzter. Der Unterschied bleibt trotzdem sichtbar: er macht die
+    Spanne des Tages schmaler, statt sie zu verbreitern.
+    """
+    raus = {}
+    for makro in MAKROS:
+        wert = _zahl(basis.get(makro))
+        raus[makro] = None if wert is None else (round(wert, 1), round(wert, 1))
     return raus
 
 

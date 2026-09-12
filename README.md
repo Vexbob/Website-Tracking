@@ -146,6 +146,24 @@ python3 -m http.server 5500
 ```
 Anschließend `http://localhost:5500` öffnen. `frontend/js/config.js` zeigt standardmäßig auf `http://localhost:8000` — für Produktivbetrieb dort die Backend-URL anpassen.
 
+### 5. Optional: eigener Lebensmittel-Katalog (Ernährungs-Modul)
+
+Ohne diesen Schritt funktioniert das Modul vollständig — es fragt dann bei jeder Suche live bei Open Food Facts nach. Das ist ein ehrenamtlich betriebener Dienst, der unter Last mit `503` antwortet; ein eigener Abzug macht die Suche schnell und unabhängig davon.
+
+```bash
+# 1. Den täglichen Abzug holen (~1,2 GB gepackt)
+curl -O https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz
+
+# 2. Auf das eindampfen, was hier im Regal steht und Nährwerte hat.
+#    Wird strömend gelesen — die ~10 GB Text landen nie auf der Platte.
+python backend/scripts/off_katalog.py en.openfoodfacts.org.products.csv.gz     -z katalog.csv.gz
+
+# 3. Dort einspielen, wo DATABASE_URL erreichbar ist
+python backend/scripts/off_katalog.py katalog.csv.gz --einspielen
+```
+
+`--nur-zaehlen` sagt vorher, was übrig bliebe, ohne etwas zu schreiben; `--laender` stellt ein, welche Märkte behalten werden (Voreinstellung: Deutschland, Österreich, Schweiz). Eingespielt wird immer **ersetzend** — ein neuer Abzug ist ein neuer Stand. Wie alt er ist, steht im Modul auf der Scanner-Karte.
+
 ---
 
 ## 🐳 Docker
