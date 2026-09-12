@@ -373,6 +373,18 @@ def main():
                                 "wird DATABASE_URL genommen oder danach gefragt")
     a = p.parse_args()
 
+    # Die Datei zuerst, vor allem anderen: sonst faellt es erst auf, wenn
+    # die Verbindung schon steht -- und der Pfad ist der haeufigste
+    # Vertipper, weil er im Container anders lautet als davor.
+    if not os.path.isfile(a.datei):
+        hinweis = ""
+        for wo in ("backend/scripts", "scripts", "backend/data", "data"):
+            kandidat = os.path.join(wo, os.path.basename(a.datei))
+            if os.path.isfile(kandidat):
+                hinweis = "%sHier läge sie als: %s" % (chr(10), kandidat)
+                break
+        sys.exit("Diese Datei gibt es nicht: %s%s" % (a.datei, hinweis))
+
     if a.einspielen:
         import asyncio
         adresse = _adresse(a.db)
