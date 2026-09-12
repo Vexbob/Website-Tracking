@@ -31,9 +31,8 @@
         <p class="page-sub">
             Ein Tracker, der <strong>locker</strong> bleibt: Mengen gibt es nur als
             <em>normal</em> oder <em>übermäßig</em>, keine Waage, keine Gramm. Was zählt, ist die
-            grobe Richtung über den Tag — Kalorien, Eiweiß, Ballaststoffe. Der
-            Lebensmittel-Bestand steht schon und füllt sich über den Strichcode; Gerichte und
-            Tagebuch folgen.
+            grobe Richtung über den Tag — Kalorien, Eiweiß, Ballaststoffe. Angezeigt wird
+            deshalb eine <strong>Spanne</strong>, keine erfundene Einzelzahl.
         </p>
     </header>
 
@@ -45,75 +44,81 @@
 
     <!-- ---------- Heute ---------- -->
     <div id="tab-heute">
-        <div class="v-card">
-            <div class="v-card-head">
-                <h3>Tagestabelle</h3>
-                <span class="v-card-sub">Kalorien und Makronährwerte</span>
+        <div class="v-card ern-tag">
+            <div class="ern-tag-kopf">
+                <button type="button" class="v-btn v-btn--icon" id="ernTagZurueck"
+                        aria-label="Tag zurück">◀</button>
+                <div class="ern-tag-datum">
+                    <div id="ernTagName">Heute</div>
+                    <div class="ern-klein" id="ernTagDatum"></div>
+                </div>
+                <button type="button" class="v-btn v-btn--icon" id="ernTagVor"
+                        aria-label="Tag vor">▶</button>
             </div>
-            <div class="empty">
-                <span class="empty-mark">🍽️</span>
-                <p class="empty-text">
-                    Für heute ist noch nichts erfasst — und erfassen lässt sich noch nichts,
-                    solange es keine Gerichte gibt. Sobald das erste Gericht angelegt ist, steht
-                    hier die Summe des Tages: Kalorien, Eiweiß, Ballaststoffe, Kohlenhydrate,
-                    Fett.
-                </p>
-            </div>
+
+            <div class="ern-summe" id="ernSumme"><span class="skel skel-block"></span></div>
+            <div id="ernBaender"></div>
+            <p class="ern-klein ern-massstab" id="ernMassstab"></p>
         </div>
 
         <div class="v-card">
             <div class="v-card-head">
-                <h3>Was hier entsteht</h3>
-                <span class="v-card-sub">geplanter Umfang</span>
+                <h3>Schnell eintragen</h3>
+                <span class="v-card-sub">ein Tipp genügt</span>
             </div>
-            <div class="wip-stack">
-                <div class="v-row wip-row">
-                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">📖</span>
-                    <div class="wip-text">
-                        <div class="wip-title">Gerichte anlegen</div>
-                        <div class="wip-sub">Einmal zusammenstellen, danach mit einem Tipp für den Tag übernehmen — die immer gleichen Mahlzeiten sind der Regelfall.</div>
-                    </div>
-                </div>
-                <div class="v-row wip-row">
-                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">💡</span>
-                    <div class="wip-text">
-                        <div class="wip-title">Vorschläge statt Suchen</div>
-                        <div class="wip-sub">Was an diesem Wochentag zu dieser Zeit meist gegessen wird, steht oben — getippt wird nur, was davon abweicht.</div>
-                    </div>
-                </div>
-                <div class="v-row wip-row">
-                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">⚖️</span>
-                    <div class="wip-text">
-                        <div class="wip-title">Zwei Mengen, mehr nicht</div>
-                        <div class="wip-sub">„Normal“ oder „übermäßig“. Gramm-Angaben wären genauer, aber nach einer Woche tippt sie niemand mehr — und geschätzte Gramm sind nicht genauer als eine ehrliche Grobstufe.</div>
-                    </div>
-                </div>
-                <div class="v-row wip-row">
-                    <span class="v-icon-tile wip-tile" style="--tone:var(--m-ernaehrung)" aria-hidden="true">🎙️</span>
-                    <div class="wip-text">
-                        <div class="wip-title">Einsprechen statt eintippen</div>
-                        <div class="wip-sub">„Zwei Eier und ein Brot“ am Küchentisch gesprochen — der schnellste Weg, solange die Hände beschäftigt sind.</div>
-                    </div>
-                </div>
+            <div id="ernSchnell"><span class="skel skel-block"></span></div>
+        </div>
+
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Eingetragen</h3>
+                <span class="v-card-sub" id="ernEintraegeZahl"></span>
             </div>
+            <div id="ernEintraege"></div>
         </div>
     </div>
+
 
     <!-- ---------- Gerichte ---------- -->
     <div id="tab-gerichte" hidden>
         <div class="v-card">
             <div class="v-card-head">
-                <h3>Gerichte</h3>
-                <span class="v-card-sub">eigene Zusammenstellungen</span>
+                <h3 id="ernGerichtTitel">Neues Gericht</h3>
+                <span class="v-card-sub">einmal anlegen, hundertmal eintragen</span>
             </div>
-            <div class="empty">
-                <span class="empty-mark">📖</span>
-                <p class="empty-text">
-                    Noch keine Gerichte. Ein Gericht ist eine Zusammenstellung, die einmal angelegt
-                    und danach immer wieder mit einem Tipp übernommen wird — das Anlegen kommt mit
-                    dem Anschluss ans Backend.
-                </p>
+            <label class="ern-feld">
+                <span>Name</span>
+                <input type="text" id="ernGerichtName" autocomplete="off"
+                       placeholder="z. B. Wraps">
+            </label>
+
+            <div class="ern-zutaten" id="ernZutaten"></div>
+
+            <label class="ern-suche ern-zutat-suche">
+                <span class="ern-suche-ico" aria-hidden="true">➕</span>
+                <input type="search" id="ernZutatSuche" autocomplete="off"
+                       aria-label="Zutat aus dem Bestand suchen"
+                       placeholder="Zutat aus dem Bestand suchen">
+            </label>
+            <div id="ernZutatTreffer"></div>
+
+            <p class="ern-hinweis">
+                Gramm stehen nur hier, im Rezept — einmal geschrieben, hundertmal benutzt.
+                Beim Eintragen sagst du danach nur noch <em>normal</em> oder <em>übermäßig</em>.
+            </p>
+
+            <div class="ern-tasten">
+                <button type="button" class="v-btn v-btn--primary" id="ernGerichtSpeichern">Gericht speichern</button>
+                <button type="button" class="v-btn" id="ernGerichtNeu" hidden>Neues Gericht</button>
             </div>
+        </div>
+
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Meine Gerichte</h3>
+                <span class="v-card-sub" id="ernGerichteZahl"></span>
+            </div>
+            <div id="ernGerichte"><span class="skel skel-block"></span></div>
         </div>
     </div>
 

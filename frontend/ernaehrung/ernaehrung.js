@@ -26,11 +26,24 @@ const API = {
     bestand:  ()   => apiCall('/api/food/items'),
     aufnehmen:(d)  => apiCall('/api/food/items', { method: 'POST', body: d }),
     entfernen:(id) => apiCall('/api/food/items/' + id, { method: 'DELETE' }),
+    gerichte: ()   => apiCall('/api/food/dishes'),
+    gericht:  (d)  => apiCall('/api/food/dishes', { method: 'POST', body: d }),
+    gerichtWeg: (id) => apiCall('/api/food/dishes/' + id, { method: 'DELETE' }),
+    tag:      (d)  => apiCall('/api/food/day' + (d ? '?date=' + d : '')),
+    eintragen:(d)  => apiCall('/api/food/log', { method: 'POST', body: d }),
+    eintragWeg: (id) => apiCall('/api/food/log/' + id, { method: 'DELETE' }),
 };
 
 const TABS = ['heute', 'gerichte', 'scanner'];
 
-const state = { bestand: [], vorschlag: null };
+const state = {
+    bestand: [], vorschlag: null,
+    tag: null, datum: null, gerichte: [],
+    // Das Gericht, das gerade gebaut wird: {id, name, items:[{item_id, name, grams}]}
+    entwurf: { id: null, name: '', items: [] },
+};
+
+const heute = () => new Date().toISOString().slice(0, 10);
 
 const esc = (v) => String(v == null ? '' : v)
     .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -90,6 +103,348 @@ function zeichneTreffer(ziel, produkt, bekannt, notiz) {
     </div>`;
     const knopf = document.getElementById('ernUebernehmen');
     if (knopf) knopf.addEventListener('click', () => uebernehmen(produkt));
+}
+
+/* ----------------------------------------------------------------- Tag
+ *
+ * Die Anzeige zeigt SPANNEN, keine Einzelwerte. Wer "Wraps, uebermaessig"
+ * eintraegt, hat keine 612 kcal gegessen -- er hat irgendetwas zwischen
+ * anderthalb und doppelt so viel wie eine Portion gegessen. Genau das steht
+ * da: ein Balken mit Anfang und Ende, keine Scheibe eines Kreises.
+ *
+ * Das uebliche Halbkreis-Design der Ernaehrungs-Apps setzt eine genaue Zahl
+ * und ein festes Ziel voraus. Beides gibt es hier nicht -- ein Ring, der zu
+ * 73 % gefuellt ist, waere zwei Behauptungen auf einmal.
+ */
+
+const TAG_NAMEN = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
+                   'Freitag', 'Samstag'];
+
+const zahlKurz = (v) => Math.round(v).toLocaleString('de-DE');
+
+function tagVerschieben(tage) {
+    const d = new Date((state.datum || heute()) + 'T12:00:00');
+    d.setDate(d.getDate() + tage);
+    const neu = d.toISOString().slice(0, 10);
+    // Nicht in die Zukunft: was morgen gegessen wird, weiss heute niemand.
+    if (neu > heute()) return;
+    ladeTag(neu);
+}
+
+function zeichneTagKopf() {
+    const datum = state.datum || heute();
+    const d = new Date(datum + 'T12:00:00');
+    const istHeute = datum === heute();
+    const gestern = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    document.getElementById('ernTagName').textContent =
+        istHeute ? 'Heute' : (datum === gestern ? 'Gestern' : TAG_NAMEN[d.getDay()]);
+    document.getElementById('ernTagDatum').textContent =
+        d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    document.getElementById('ernTagVor').disabled = istHeute;
+}
+
+function zeichneSumme() {
+    const t = state.tag;
+    const kcal = t.totals.kcal;
+    const anzahl = t.entries.length;
+    document.getElementById('ernSumme').innerHTML = !anzahl
+        ? `<div class="ern-summe-leer">Für diesen Tag ist noch nichts eingetragen.</div>`
+        : `<div class="ern-summe-zahl">
+               <span>${zahlKurz(kcal.min)}</span>
+               <span class="ern-summe-bis">bis</span>
+               <span>${zahlKurz(kcal.max)}</span>
+               <span class="ern-summe-einheit">kcal</span>
+           </div>
+           <div class="ern-klein">geschätzt aus ${anzahl} ${anzahl === 1 ? 'Eintrag' : 'Einträgen'} — ${
+               kcal.incomplete ? 'mindestens, es fehlen Angaben' : 'zwei Grobstufen ergeben eine Spanne, keine genaue Zahl'}</div>`;
+}
+
+/* Ein Band je Naehrwert: die Spur reicht bis zum Anderthalbfachen des
+   Richtwerts, der Richtwert selbst steht als Strich darin. Gefuellt ist
+   genau der Bereich zwischen der unteren und der oberen Schaetzung -- die
+   Breite des Balkens IST die Unsicherheit. */
+function band(makro, d) {
+    const links = Math.min(100, (d.share_min / 1.5) * 100);
+    const breite = Math.max(2, Math.min(100 - links, ((d.share_max - d.share_min) / 1.5) * 100));
+    const einheit = makro === 'kcal' ? '' : ' g';
+    return `<div class="ern-band${d.incomplete ? ' is-unvollstaendig' : ''}">
+        <div class="ern-band-kopf">
+            <span class="ern-band-lbl">${d.label}</span>
+            <span class="ern-band-wert">${d.incomplete ? 'mind. ' : ''}${zahlKurz(d.min)}–${zahlKurz(d.max)}${einheit}</span>
+        </div>
+        <div class="ern-band-spur" role="img"
+             aria-label="${d.label}: ${zahlKurz(d.min)} bis ${zahlKurz(d.max)}${einheit}, Richtwert ${zahlKurz(d.reference)}${einheit}">
+            <span class="ern-band-marke" style="left:66.7%"></span>
+            <span class="ern-band-fuell" style="left:${links.toFixed(1)}%;width:${breite.toFixed(1)}%"></span>
+        </div>
+        ${d.incomplete ? '<div class="ern-band-fuss">Eine Zutat macht dazu keine Angabe — der Wert ist mindestens so hoch.</div>' : ''}
+    </div>`;
+}
+
+function zeichneBaender() {
+    const t = state.tag;
+    document.getElementById('ernBaender').innerHTML = t.entries.length
+        ? t.macros.filter(m => m !== 'kcal').map(m => band(m, t.totals[m])).join('')
+        : '';
+    document.getElementById('ernMassstab').textContent = t.entries.length
+        ? 'Der Strich im Balken ist der Richtwert für einen Tag. ' + t.reference_note
+        : '';
+}
+
+function zeichneEintraege() {
+    const t = state.tag;
+    document.getElementById('ernEintraegeZahl').textContent =
+        t.entries.length ? t.entries.length + ' an diesem Tag' : '';
+    document.getElementById('ernEintraege').innerHTML = !t.entries.length
+        ? `<div class="empty"><span class="empty-mark">🍽️</span>
+             <p class="empty-text">Noch nichts eingetragen. Ein Tipp auf ein Gericht oben genügt —
+             die Menge ist entweder normal oder übermäßig, mehr wird nicht gefragt.</p></div>`
+        : t.entries.map(e => `
+            <div class="v-row ern-zeile">
+                <div class="ern-zeile-text">
+                    <strong>${esc(e.name)}</strong>
+                    <span class="ern-stufe is-${e.level}">${esc(e.level_label)}</span>
+                    <div class="ern-klein">${esc(e.sub || '')}${
+                        e.kcal_min != null ? ` · ${zahlKurz(e.kcal_min)}–${zahlKurz(e.kcal_max)} kcal` : ''}${
+                        e.assumed_portion ? ' · Portion mit 100 g angenommen' : ''}</div>
+                </div>
+                <button type="button" class="v-btn v-btn--icon" data-eintrag="${e.id}"
+                        aria-label="Eintrag entfernen" title="Entfernen">🗑️</button>
+            </div>`).join('');
+    document.querySelectorAll('[data-eintrag]').forEach(b =>
+        b.addEventListener('click', () => eintragEntfernen(Number(b.dataset.eintrag))));
+}
+
+/* Schnelleintrag: je Gericht eine Zeile mit zwei Knoepfen. Ein Tipp, fertig --
+   erst eine Auswahlliste zu oeffnen und dann die Menge zu waehlen, waere der
+   Weg, den man nach einer Woche nicht mehr geht. */
+function zeichneSchnell() {
+    const ziel = document.getElementById('ernSchnell');
+    const eigene = state.bestand.filter(p => p.portion_g);
+    if (!state.gerichte.length && !eigene.length) {
+        ziel.innerHTML = `<div class="empty"><span class="empty-mark">📖</span>
+            <p class="empty-text">Noch nichts zum Eintragen da. Unter <strong>Gerichte</strong>
+            stellst du aus deinem Bestand eines zusammen — danach steht es hier.</p></div>`;
+        return;
+    }
+    const zeile = (name, sub, art, id) => `
+        <div class="v-row ern-schnell">
+            <div class="ern-zeile-text">
+                <strong>${esc(name)}</strong>
+                <div class="ern-klein">${esc(sub)}</div>
+            </div>
+            <div class="ern-schnell-tasten">
+                <button type="button" class="v-btn v-btn--sm" data-art="${art}" data-id="${id}" data-stufe="normal">normal</button>
+                <button type="button" class="v-btn v-btn--sm" data-art="${art}" data-id="${id}" data-stufe="viel">übermäßig</button>
+            </div>
+        </div>`;
+    ziel.innerHTML = state.gerichte.map(g => zeile(
+        g.name,
+        g.portion.kcal != null ? `${zahlKurz(g.portion.kcal)} kcal je Portion` : 'Portion unvollständig',
+        'dish', g.id)).join('')
+        + eigene.slice(0, 8).map(p => zeile(
+            p.name, `${p.portion_g} g je Portion`, 'item', p.id)).join('');
+    ziel.querySelectorAll('[data-stufe]').forEach(b => b.addEventListener('click', () =>
+        eintragen(b.dataset.art, Number(b.dataset.id), b.dataset.stufe, b)));
+}
+
+async function eintragen(art, id, stufe, knopf) {
+    knopf.classList.add('is-loading');
+    try {
+        state.tag = await API.eintragen({
+            [art === 'dish' ? 'dish_id' : 'item_id']: id,
+            level: stufe, day: state.datum || heute(),
+        });
+        zeichneTag();
+        melde('Eingetragen.', 'success');
+    } catch (err) {
+        melde(err.message || 'Das ging nicht.', 'error');
+    } finally {
+        knopf.classList.remove('is-loading');
+    }
+}
+
+async function eintragEntfernen(id) {
+    try {
+        state.tag = await API.eintragWeg(id);
+        zeichneTag();
+    } catch (err) {
+        melde(err.message || 'Das ging nicht.', 'error');
+    }
+}
+
+function zeichneTag() {
+    zeichneTagKopf();
+    zeichneSumme();
+    zeichneBaender();
+    zeichneEintraege();
+}
+
+async function ladeTag(datum) {
+    state.datum = datum || state.datum || heute();
+    try {
+        state.tag = await API.tag(state.datum);
+    } catch (err) {
+        melde(err.message || 'Der Tag konnte nicht geladen werden.', 'error');
+        return;
+    }
+    zeichneTag();
+}
+
+/* ------------------------------------------------------------- Gerichte */
+
+function zeichneEntwurf() {
+    const e = state.entwurf;
+    document.getElementById('ernGerichtTitel').textContent =
+        e.id ? 'Gericht bearbeiten' : 'Neues Gericht';
+    document.getElementById('ernGerichtNeu').hidden = !e.id;
+    document.getElementById('ernZutaten').innerHTML = !e.items.length
+        ? '<p class="ern-klein">Noch keine Zutat. Such unten etwas aus deinem Bestand.</p>'
+        : e.items.map((z, i) => `
+            <div class="v-row ern-zutat">
+                <div class="ern-zeile-text"><strong>${esc(z.name)}</strong></div>
+                <label class="ern-gramm">
+                    <input type="number" min="1" step="1" value="${z.grams}" data-gramm="${i}"
+                           aria-label="Gramm für ${esc(z.name)}">
+                    <span>g</span>
+                </label>
+                <button type="button" class="v-btn v-btn--icon" data-zutat-weg="${i}"
+                        aria-label="Zutat entfernen" title="Entfernen">🗑️</button>
+            </div>`).join('');
+    document.querySelectorAll('[data-gramm]').forEach(f => f.addEventListener('change', () => {
+        const wert = Number(f.value);
+        if (wert > 0) state.entwurf.items[Number(f.dataset.gramm)].grams = wert;
+    }));
+    document.querySelectorAll('[data-zutat-weg]').forEach(b => b.addEventListener('click', () => {
+        state.entwurf.items.splice(Number(b.dataset.zutatWeg), 1);
+        zeichneEntwurf();
+    }));
+}
+
+function zutatSuchen(text) {
+    const ziel = document.getElementById('ernZutatTreffer');
+    const begriff = text.trim().toLowerCase();
+    if (!begriff) { ziel.innerHTML = ''; return; }
+    const treffer = state.bestand.filter(p =>
+        p.name.toLowerCase().includes(begriff)
+        || (p.brand || '').toLowerCase().includes(begriff)).slice(0, 6);
+    ziel.innerHTML = !treffer.length
+        ? `<p class="ern-klein">Nichts im Bestand. Über den <strong>Scanner</strong> kommt es hinein.</p>`
+        : treffer.map(p => `
+            <button type="button" class="v-chip ern-zutat-treffer" data-zutat="${p.id}">
+                ${esc(p.name)}${p.brand ? ' · ' + esc(p.brand) : ''}
+            </button>`).join('');
+    ziel.querySelectorAll('[data-zutat]').forEach(b => b.addEventListener('click', () => {
+        const p = state.bestand.find(x => x.id === Number(b.dataset.zutat));
+        if (!p) return;
+        // Die uebliche Portion als Vorschlag: meistens stimmt sie, und wenn
+        // nicht, ist es eine Zahl statt eines leeren Feldes.
+        state.entwurf.items.push({ item_id: p.id, name: p.name, grams: p.portion_g || 100 });
+        document.getElementById('ernZutatSuche').value = '';
+        ziel.innerHTML = '';
+        zeichneEntwurf();
+    }));
+}
+
+async function gerichtSpeichern() {
+    const name = document.getElementById('ernGerichtName').value.trim();
+    if (!name) { melde('Das Gericht braucht einen Namen.', 'error'); return; }
+    if (!state.entwurf.items.length) { melde('Mindestens eine Zutat.', 'error'); return; }
+    const knopf = document.getElementById('ernGerichtSpeichern');
+    knopf.classList.add('is-loading');
+    try {
+        const res = await API.gericht({
+            id: state.entwurf.id, name,
+            items: state.entwurf.items.map(z => ({ item_id: z.item_id, grams: z.grams })),
+        });
+        state.gerichte = res.dishes;
+        entwurfLeeren();
+        zeichneGerichte();
+        zeichneSchnell();
+        melde('Gericht gespeichert.', 'success');
+    } catch (err) {
+        melde(err.message || 'Das ging nicht.', 'error');
+    } finally {
+        knopf.classList.remove('is-loading');
+    }
+}
+
+function entwurfLeeren() {
+    state.entwurf = { id: null, name: '', items: [] };
+    document.getElementById('ernGerichtName').value = '';
+    document.getElementById('ernZutatSuche').value = '';
+    document.getElementById('ernZutatTreffer').innerHTML = '';
+    zeichneEntwurf();
+}
+
+function gerichtBearbeiten(id) {
+    const g = state.gerichte.find(x => x.id === id);
+    if (!g) return;
+    state.entwurf = {
+        id: g.id, name: g.name,
+        items: g.items.map(z => ({ item_id: z.item_id, name: z.name, grams: z.grams })),
+    };
+    document.getElementById('ernGerichtName').value = g.name;
+    zeichneEntwurf();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function gerichtLoeschen(id) {
+    const g = state.gerichte.find(x => x.id === id);
+    const ok = await askConfirm({
+        title: 'Gericht löschen?',
+        text: `„${g ? g.name : 'Das Gericht'}" verschwindet samt Rezept. Bereits eingetragene Tage verlieren diese Einträge.`,
+        confirmText: 'Löschen', danger: true,
+    });
+    if (!ok) return;
+    try {
+        await API.gerichtWeg(id);
+        await ladeGerichte();
+        if (state.tag) await ladeTag(state.datum);
+    } catch (err) {
+        melde(err.message || 'Das ging nicht.', 'error');
+    }
+}
+
+function zeichneGerichte() {
+    const ziel = document.getElementById('ernGerichte');
+    document.getElementById('ernGerichteZahl').textContent =
+        state.gerichte.length ? state.gerichte.length + ' Gerichte' : '';
+    ziel.innerHTML = !state.gerichte.length
+        ? `<div class="empty"><span class="empty-mark">📖</span>
+             <p class="empty-text">Noch keine Gerichte. Was du oft isst, legst du einmal an —
+             danach reicht ein Tipp am Tag.</p></div>`
+        : state.gerichte.map(g => `
+            <div class="v-row ern-gericht">
+                <div class="ern-zeile-text">
+                    <strong>${esc(g.name)}</strong>
+                    <div class="ern-klein">${g.items.map(z => esc(z.name) + ' ' + z.grams + ' g').join(' · ')}</div>
+                    <div class="ern-klein">${g.portion.kcal != null
+                        ? `${zahlKurz(g.portion.kcal)} kcal je Portion (${g.portion.grams} g)`
+                        : 'Nährwerte unvollständig'}${g.portion.incomplete.length
+                        ? ' · ohne Angabe: ' + g.portion.incomplete.length : ''}</div>
+                </div>
+                <div class="ern-schnell-tasten">
+                    <button type="button" class="v-btn v-btn--sm" data-bearbeiten="${g.id}">Ändern</button>
+                    <button type="button" class="v-btn v-btn--icon" data-gericht-weg="${g.id}"
+                            aria-label="Gericht löschen" title="Löschen">🗑️</button>
+                </div>
+            </div>`).join('');
+    ziel.querySelectorAll('[data-bearbeiten]').forEach(b =>
+        b.addEventListener('click', () => gerichtBearbeiten(Number(b.dataset.bearbeiten))));
+    ziel.querySelectorAll('[data-gericht-weg]').forEach(b =>
+        b.addEventListener('click', () => gerichtLoeschen(Number(b.dataset.gerichtWeg))));
+}
+
+async function ladeGerichte() {
+    try {
+        const res = await API.gerichte();
+        state.gerichte = res.dishes;
+    } catch (e) {
+        state.gerichte = [];
+    }
+    zeichneGerichte();
+    zeichneSchnell();
 }
 
 /* ---------------------------------------------------------------- Kamera
@@ -376,5 +731,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         tippen = setTimeout(() => suchen(wert), 400);
     });
 
+    document.getElementById('ernTagZurueck').addEventListener('click', () => tagVerschieben(-1));
+    document.getElementById('ernTagVor').addEventListener('click', () => tagVerschieben(1));
+    document.getElementById('ernGerichtSpeichern').addEventListener('click', gerichtSpeichern);
+    document.getElementById('ernGerichtNeu').addEventListener('click', entwurfLeeren);
+    document.getElementById('ernZutatSuche').addEventListener('input',
+        (e) => zutatSuchen(e.target.value));
+
+    zeichneEntwurf();
     await ladeBestand();
+    await ladeGerichte();
+    await ladeTag(heute());
 });

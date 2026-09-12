@@ -13,6 +13,182 @@
 body { visibility: hidden; }
 body.ready { visibility: visible; }
 
+/* ---------- Der Tag ----------
+ *
+ * Kein Ring, kein Halbkreis. Beide setzen eine genaue Zahl und ein festes
+ * Ziel voraus -- hier gibt es weder das eine noch das andere. Stattdessen ein
+ * BAND: die Spur reicht bis zum Anderthalbfachen des Richtwerts, der
+ * Richtwert steht als Strich darin, und gefuellt ist genau der Bereich
+ * zwischen unterer und oberer Schaetzung. Die Breite des Balkens ist die
+ * Unsicherheit -- man sieht sie, statt sie wegzurunden.
+ */
+.ern-tag-kopf {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: var(--space-3);
+}
+.ern-tag-datum { text-align: center; font-weight: 600; }
+.ern-tag-datum .ern-klein { margin: 0; font-weight: 400; }
+
+.ern-summe { margin-bottom: var(--space-4); }
+.ern-summe-leer { color: var(--text-3); font-size: 0.9375rem; }
+
+.ern-summe-zahl {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    font-size: 2.25rem;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--figure, var(--m-ernaehrung));
+}
+.ern-summe-bis, .ern-summe-einheit {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-3);
+    letter-spacing: 0;
+}
+
+.ern-band + .ern-band { margin-top: var(--space-3); }
+
+.ern-band-kopf {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.35rem;
+}
+.ern-band-lbl { font-size: 0.8125rem; color: var(--text-2); }
+.ern-band-wert {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
+}
+
+.ern-band-spur {
+    position: relative;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--surface-3);
+    overflow: hidden;
+}
+
+/* Der Richtwert: ein Strich, keine Beschriftung im Balken. */
+.ern-band-marke {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--text-4);
+    opacity: 0.9;
+}
+
+/* Textfreie Flaeche -- hier ist der Verlauf erlaubt. Es ist ein
+   Fortschrittsbalken, also --grad-progress und nicht --grad-accent: sonst
+   folgt er der Einstellung fuer die Aktionen. */
+.ern-band-fuell {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 999px;
+    background: var(--grad-progress);
+    transition: left 0.25s ease, width 0.25s ease;
+}
+
+/* Unvollstaendig: die Kante franst aus, weil die Zahl nach oben offen ist. */
+.ern-band.is-unvollstaendig .ern-band-fuell {
+    background: repeating-linear-gradient(
+        110deg,
+        var(--m-ernaehrung-soft) 0 6px,
+        var(--surface-3) 6px 12px);
+    border: 1px solid var(--m-ernaehrung-soft);
+}
+.ern-band-fuss {
+    margin-top: 0.3rem;
+    font-size: 0.6875rem;
+    color: var(--text-4);
+}
+
+.ern-massstab { margin-top: var(--space-3); }
+
+/* ---------- Schnelleintrag ---------- */
+.ern-schnell {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.ern-schnell + .ern-schnell { margin-top: var(--space-2); }
+.ern-schnell-tasten {
+    display: flex;
+    gap: 0.4rem;
+    flex: none;
+}
+
+/* Die Stufe als Marke am Eintrag. "Uebermaessig" traegt einen waermeren Ton,
+   ist aber keine Warnung -- niemand wird hier bewertet. */
+.ern-stufe {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    background: var(--surface-3);
+    color: var(--text-2);
+}
+.ern-stufe.is-viel {
+    background: var(--m-ernaehrung-soft);
+    color: var(--m-ernaehrung);
+}
+
+/* ---------- Gerichte ---------- */
+.ern-zutaten { margin: var(--space-3) 0; }
+.ern-zutat {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.ern-zutat + .ern-zutat { margin-top: var(--space-2); }
+
+.ern-gramm {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex: none;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+.ern-gramm input {
+    width: 72px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.35rem 0.5rem;
+    color: var(--text-1);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+}
+.ern-gramm input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+.ern-zutat-suche { margin-bottom: var(--space-2); }
+.ern-zutat-treffer { margin: 0 0.35rem 0.35rem 0; }
+
+.ern-gericht {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.ern-gericht + .ern-gericht { margin-top: var(--space-2); }
+
 /* ---------- Lebensmittel ---------- */
 .ern-form {
     display: flex;

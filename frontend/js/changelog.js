@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.87.0', date: '2026-09-12', title: 'Ernährung: Gerichte und der Tag', notes: [
+        'Aus dem Bestand lassen sich Gerichte zusammenstellen — Gramm stehen nur dort, im Rezept, einmal geschrieben und hundertmal benutzt.',
+        'Eingetragen wird danach mit einem Tipp: „Wraps, normal" oder „Wraps, übermäßig". Mehr fragt der Tag nicht.',
+        'Der Tag zeigt eine Spanne statt einer Zahl — aus zwei Grobstufen ließe sich keine genaue Summe rechnen, und ein zu 73 % gefüllter Ring wäre eine doppelte Behauptung.',
+        'Je Nährwert ein Band: die Breite ist die Unsicherheit, der Strich darin der Richtwert für einen Tag.',
+        'Fehlt einer Zutat eine Angabe, sagt das Band „mindestens" statt stillschweigend zu wenig zu zeigen.',
+    ]},
     { v: 'v1.86.0', date: '2026-09-12', title: 'Strichcode mit der Kamera', notes: [
         'Der Scanner öffnet jetzt die Kamera: Packung ins Bild halten, der Code wird erkannt und sofort nachgeschlagen.',
         'Chrome und Android nutzen den eingebauten Erkenner; Safari lädt einen Scanner nach — erst beim Druck auf den Knopf, nicht beim Seitenaufruf.',
