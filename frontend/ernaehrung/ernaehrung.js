@@ -38,7 +38,7 @@ const TABS = ['heute', 'gerichte', 'scanner'];
 
 const state = {
     bestand: [], vorschlag: null,
-    tag: null, datum: null, gerichte: [],
+    tag: null, datum: null, gerichte: [], schnellSuche: '',
     // Das Gericht, das gerade gebaut wird: {id, name, items:[{item_id, name, grams}]}
     entwurf: { id: null, name: '', items: [] },
 };
@@ -48,7 +48,18 @@ const heute = () => new Date().toISOString().slice(0, 10);
 const esc = (v) => String(v == null ? '' : v)
     .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const melde = (text, art) => { if (window.Toast) Toast[art || 'info'](text); };
+function melde(text, art, versuche) {
+    if (window.Toast) { Toast[art || 'info'](text); return; }
+    // ui.js wird von nav-switcher.js nachgeladen. In der ersten Sekunde ist
+    // es womoeglich noch nicht da -- eine Fehlermeldung darf deshalb nicht
+    // einfach verschwinden, sondern wartet kurz.
+    const offen = versuche == null ? 10 : versuche;
+    if (offen > 0) {
+        setTimeout(() => melde(text, art, offen - 1), 200);
+    } else if (art === 'error') {
+        askAlert({ title: 'Das ging nicht', text: text });
+    }
+}
 
 // Naehrwerte in der Reihenfolge, in der sie gelesen werden. "fehlt" ist ein
 // eigener Zustand -- nicht 0.
@@ -218,15 +229,26 @@ function zeichneEintraege() {
 /* Schnelleintrag: je Gericht eine Zeile mit zwei Knoepfen. Ein Tipp, fertig --
    erst eine Auswahlliste zu oeffnen und dann die Menge zu waehlen, waere der
    Weg, den man nach einer Woche nicht mehr geht. */
+const SCHNELL_MAX = 12;
+
+/* Gerichte zuerst, danach einzelne Lebensmittel -- und alles durchsuchbar.
+   Vorher waren nur acht Lebensmittel MIT hinterlegter Portion zu sehen: alles
+   frisch Gescannte fehlte in der Liste, ohne dass man den Grund sah. */
 function zeichneSchnell() {
     const ziel = document.getElementById('ernSchnell');
-    const eigene = state.bestand.filter(p => p.portion_g);
-    if (!state.gerichte.length && !eigene.length) {
+    const suche = (state.schnellSuche || '').toLowerCase();
+    const passt = (name, marke) => !suche
+        || name.toLowerCase().includes(suche)
+        || (marke || '').toLowerCase().includes(suche);
+
+    if (!state.gerichte.length && !state.bestand.length) {
         ziel.innerHTML = `<div class="empty"><span class="empty-mark">📖</span>
-            <p class="empty-text">Noch nichts zum Eintragen da. Unter <strong>Gerichte</strong>
-            stellst du aus deinem Bestand eines zusammen — danach steht es hier.</p></div>`;
+            <p class="empty-text">Noch nichts zum Eintragen da. Über den <strong>Scanner</strong>
+            kommen Lebensmittel herein, unter <strong>Gerichte</strong> stellst du daraus
+            eines zusammen — danach steht beides hier.</p></div>`;
         return;
     }
+
     const zeile = (name, sub, art, id) => `
         <div class="v-row ern-schnell">
             <div class="ern-zeile-text">
@@ -238,12 +260,37 @@ function zeichneSchnell() {
                 <button type="button" class="v-btn v-btn--sm" data-art="${art}" data-id="${id}" data-stufe="viel">übermäßig</button>
             </div>
         </div>`;
-    ziel.innerHTML = state.gerichte.map(g => zeile(
+
+    const gerichte = state.gerichte.filter(g => passt(g.name, ''));
+    // Lebensmittel mit eigener Einheit zuerst: bei ihnen steht die Portion
+    // fest, bei den anderen wird mit 100 g gerechnet -- und das steht dann
+    // auch dran.
+    const lebensmittel = state.bestand
+        .filter(p => passt(p.name, p.brand))
+        .sort((a, b) => (b.portion_g ? 1 : 0) - (a.portion_g ? 1 : 0));
+
+    const zeilen = gerichte.map(g => zeile(
         g.name,
-        g.portion.kcal != null ? `${zahlKurz(g.portion.kcal)} kcal je Portion` : 'Portion unvollständig',
-        'dish', g.id)).join('')
-        + eigene.slice(0, 8).map(p => zeile(
-            p.name, `${p.portion_g} g je Portion`, 'item', p.id)).join('');
+        g.portion.kcal != null
+            ? `${zahlKurz(g.portion.kcal)} kcal je Portion`
+            : 'Nährwerte unvollständig',
+        'dish', g.id))
+        .concat(lebensmittel.map(p => {
+            const eigene = (p.units || []).find(u => u.key === 'portion');
+            const einheit = p.base_unit || 'g';
+            return zeile(p.name, eigene
+                ? `1 ${eigene.label} = ${eigene.grams} ${einheit}`
+                : `ohne Portionsgröße — gerechnet mit 100 ${einheit}`,
+                'item', p.id);
+        }));
+
+    ziel.innerHTML = zeilen.length
+        ? zeilen.slice(0, SCHNELL_MAX).join('')
+          + (zeilen.length > SCHNELL_MAX
+             ? `<p class="ern-klein">… und ${zeilen.length - SCHNELL_MAX} weitere — such oben danach.</p>`
+             : '')
+        : `<p class="ern-klein">Nichts gefunden, das zu „${esc(state.schnellSuche)}" passt.</p>`;
+
     ziel.querySelectorAll('[data-stufe]').forEach(b => b.addEventListener('click', () =>
         eintragen(b.dataset.art, Number(b.dataset.id), b.dataset.stufe, b)));
 }
@@ -642,7 +689,7 @@ async function suchen(text) {
 
 async function uebernehmen(produkt) {
     try {
-        await API.aufnehmen({
+        const antwort = await API.aufnehmen({
             name: produkt.name, brand: produkt.brand, barcode: produkt.barcode,
             source: 'off', kcal: produkt.kcal, protein_g: produkt.protein_g,
             carbs_g: produkt.carbs_g, sugar_g: produkt.sugar_g,
@@ -651,7 +698,18 @@ async function uebernehmen(produkt) {
             portion_g: produkt.portion_g,
         });
         await ladeBestand();
-        melde('In den Bestand aufgenommen.', 'success');
+        const neu = antwort && antwort.item;
+        // Ohne Portionsgroesse laesst sich spaeter nur "100 g" eintragen.
+        // Statt das stillschweigend hinzunehmen, steht das Formular gleich
+        // offen -- ein Feld ausfuellen ist leichter, als den Eintrag spaeter
+        // wiederzufinden.
+        if (neu && !neu.portion_g) {
+            formFuellen(neu);
+            melde('Aufgenommen. Trag noch ein, was eine Portion wiegt — dann '
+                + 'kannst du sie später mit einem Tipp eintragen.', 'info');
+        } else {
+            melde('In den Bestand aufgenommen.', 'success');
+        }
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
     }
@@ -773,15 +831,26 @@ async function ladeBestand() {
 
 async function entfernen(id) {
     const p = state.bestand.find(x => x.id === id);
+    // Ein geloeschtes Lebensmittel verschwindet auch aus jedem Gericht, in
+    // dem es steckt -- ohne Warnung faende man das erst wieder, wenn die
+    // Naehrwerte eines Rezepts ploetzlich niedriger sind.
+    const betroffen = state.gerichte.filter(g =>
+        g.items.some(z => z.item_id === id));
     const ok = await askConfirm({
         title: 'Entfernen?',
-        text: `„${p ? p.name : 'Das Lebensmittel'}" wird aus dem Bestand gelöscht.`,
+        text: `„${p ? p.name : 'Das Lebensmittel'}" wird aus dem Bestand gelöscht.`
+            + (betroffen.length
+                ? ` Es steckt in ${betroffen.length === 1 ? 'einem Gericht' : betroffen.length + ' Gerichten'}`
+                  + ` (${betroffen.map(g => g.name).join(', ')}) und fällt dort ersatzlos heraus.`
+                : ''),
         confirmText: 'Entfernen', danger: true,
     });
     if (!ok) return;
     try {
         await API.entfernen(id);
         await ladeBestand();
+        // Die Gerichte haben sich mit geaendert -- ihre Naehrwerte auch.
+        await ladeGerichte();
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
     }
@@ -840,6 +909,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('fSpeichern').addEventListener('click', formSpeichern);
     document.getElementById('fAbbrechen').addEventListener('click', formLeeren);
+    // Die Eingabefelder stehen bewusst in keinem <form> (ein Absenden waere
+    // ein Seitenwechsel) -- die Enter-Taste soll trotzdem das tun, was jeder
+    // erwartet.
+    Object.keys(FORM).forEach(id => {
+        const feld = document.getElementById(id);
+        if (feld && feld.tagName === 'INPUT') {
+            feld.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); formSpeichern(); }
+            });
+        }
+    });
+    let schnellTippen = null;
+    document.getElementById('ernSchnellSuche').addEventListener('input', (e) => {
+        clearTimeout(schnellTippen);
+        const wert = e.target.value;
+        schnellTippen = setTimeout(() => {
+            state.schnellSuche = wert.trim();
+            zeichneSchnell();
+        }, 150);
+    });
 
     zeichneEntwurf();
     formLeeren();

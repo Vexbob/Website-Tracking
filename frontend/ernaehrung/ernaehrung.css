@@ -121,8 +121,11 @@ body.ready { visibility: visible; }
 .ern-schnell {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.75rem;
 }
+.ern-schnell .ern-zeile-text { flex: 1 1 60%; min-width: 0; }
+.ern-schnell-suche { margin-bottom: var(--space-3); }
 .ern-schnell + .ern-schnell { margin-top: var(--space-2); }
 .ern-schnell-tasten {
     display: flex;

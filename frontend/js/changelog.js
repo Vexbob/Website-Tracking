@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.89.0', date: '2026-09-12', title: 'Ernährung: Feinschliff im Alltag', notes: [
+        'Nachgezogen: im Schnelleintrag fehlten frisch gescannte Lebensmittel — die Liste zeigte nur acht mit hinterlegter Portion. Jetzt steht alles dort, durchsuchbar, und bei fehlender Portionsgröße sagt die Zeile, dass mit 100 g gerechnet wird.',
+        'Wer ein Lebensmittel löscht, erfährt vorher, in welchen Gerichten es steckt — es fiel dort bisher stillschweigend heraus.',
+        'Nach dem Scannen steht das Formular gleich offen, wenn die Portionsgröße fehlt: ein Feld ausfüllen ist leichter, als den Eintrag später wiederzufinden.',
+        'Die Enter-Taste speichert im Formular, und Meldungen gehen nicht mehr verloren, wenn man in der ersten Sekunde nach dem Laden etwas auslöst.',
+    ]},
     { v: 'v1.88.0', date: '2026-09-12', title: 'Ernährung: eigene Einträge und Einheiten', notes: [
         'Lebensmittel lassen sich von Hand anlegen — für alles ohne Strichcode, von Omas Gulasch bis zum losen Obst.',
         'Jeder Eintrag im Bestand ist änderbar: Nährwerte, Marke, und ob sich die Angaben auf 100 g oder 100 ml beziehen.',
