@@ -228,6 +228,13 @@ def filtern(quelle: str, ziel: str, laender, grenze=None) -> dict:
     return stand
 
 
+def _ziel(url: str):
+    """Wirt und Port aus der Adresse — ohne das Passwort."""
+    import urllib.parse
+    teile = urllib.parse.urlsplit(url)
+    return (teile.hostname or "?"), (teile.port or 5432)
+
+
 def _adresse(vorgabe=None) -> str:
     """Die Verbindungsadresse — aus dem Aufruf, der Umgebung oder der Frage.
 
@@ -248,6 +255,23 @@ def _adresse(vorgabe=None) -> str:
     if not url.startswith(("postgres://", "postgresql://")):
         sys.exit("Das sieht nicht nach einer Postgres-Adresse aus — sie fängt "
                  "mit postgresql:// an.")
+    wirt, port = _ziel(url)
+    if wirt.endswith(".railway.internal"):
+        sys.exit(
+            "Das ist die INTERNE Adresse (%s) — die gilt nur zwischen den "
+            "Diensten innerhalb von Railway.\n"
+            "Gebraucht wird DATABASE_PUBLIC_URL: Postgres-Dienst → Variables "
+            "→ DATABASE_PUBLIC_URL. Der Wirt endet dort auf .proxy.rlwy.net "
+            "und der Port ist fünfstellig." % wirt)
+    if "proxy.rlwy.net" in wirt and port == 5432:
+        # Der Proxy hoert auf einem zufaelligen hohen Port; 5432 ist der,
+        # den Postgres INNEN benutzt. Die beiden zu mischen ist der
+        # haeufigste Griff daneben -- und er sieht aus wie ein Serverfehler.
+        sys.exit(
+            "Wirt und Port passen nicht zusammen: %s ist der öffentliche "
+            "Proxy, aber 5432 ist der Port von INNEN.\n"
+            "In DATABASE_PUBLIC_URL steht hinter dem Doppelpunkt ein "
+            "fünfstelliger Port (z. B. :23456) — den braucht es." % wirt)
     return url
 
 
@@ -271,10 +295,21 @@ async def einspielen(datei: str, url=None) -> None:
                  "Railway enthält beides — am besten noch einmal ganz "
                  "kopieren.")
     except (OSError, asyncio.TimeoutError) as e:
-        sys.exit("Kein Kontakt zum Server (%s). Bei Railway braucht es die "
-                 "DATABASE_PUBLIC_URL — die interne Adresse "
-                 "(postgres.railway.internal) ist von außen nicht "
-                 "erreichbar." % e.__class__.__name__)
+        wirt, port = _ziel(url)
+        grund = ("Dort nimmt niemand Verbindungen an"
+                 if isinstance(e, ConnectionRefusedError) else
+                 "Diesen Rechner gibt es nicht"
+                 if e.__class__.__name__ == "gaierror" else
+                 "Keine Antwort in 20 Sekunden")
+        sys.exit(
+            "Versucht wurde: %s Port %s\n"
+            "%s (%s).\n\n"
+            "Bei Railway: Postgres-Dienst → Variables → DATABASE_PUBLIC_URL "
+            "kopieren. Dort steht ein Wirt auf .proxy.rlwy.net mit einem "
+            "fünfstelligen Port. Steht diese Variable nicht da, ist der "
+            "öffentliche Zugang für den Dienst noch nicht eingeschaltet: "
+            "Settings → Networking → TCP Proxy."
+            % (wirt, port, grund, e.__class__.__name__))
     except Exception as e:
         sys.exit("Die Verbindung kam nicht zustande: %s" % e)
     try:
