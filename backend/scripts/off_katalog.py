@@ -75,6 +75,20 @@ GRENZE = {"kcal": 900.0, "protein_g": 100.0, "carbs_g": 100.0,
 NAME_MAX = 160
 
 
+def _oeffnen(pfad: str, modus: str = "rt"):
+    """Oeffnet gepackt oder ungepackt — je nachdem, wie die Datei heisst.
+
+    Open Food Facts bietet den Abzug gepackt an; ausgepackt liegt er als
+    zwoelf Gigabyte Text da. Gelesen wird so oder so zeilenweise, gepackt
+    ist nur die sparsamere Variante.
+    """
+    if pfad.lower().endswith(".gz"):
+        return gzip.open(pfad, modus, encoding="utf-8",
+                         errors="replace" if "r" in modus else None, newline="")
+    return open(pfad, modus, encoding="utf-8",
+                errors="replace" if "r" in modus else None, newline="")
+
+
 def _zahl(roh, grenze):
     """Eine Zahl aus der Zelle ziehen — oder nichts, wenn sie nicht stimmen kann."""
     roh = (roh or "").strip().replace(",", ".")
@@ -138,18 +152,17 @@ def zeile_pruefen(z: dict, laender) -> dict:
 def filtern(quelle: str, ziel: str, laender, grenze=None) -> dict:
     """Liest den Abzug und schreibt den Katalog. Gibt die Zaehlerstaende zurueck."""
     stand = {"gelesen": 0, "kein_code": 0, "kein_name": 0, "fremd": 0,
-             "keine_kcal": 0, "doppelt": 0, "behalten": 0}
+             "keine_kcal": 0, "doppelt": 0, "behalten": 0, "juengste": 0}
     gesehen = set()
     begonnen = time.time()
     schreiber = None
     raus = None
     if ziel:
-        raus = gzip.open(ziel, "wt", encoding="utf-8", newline="")
+        raus = _oeffnen(ziel, "wt")
         schreiber = csv.writer(raus, delimiter="\t", lineterminator="\n",
                                quoting=csv.QUOTE_MINIMAL)
 
-    with gzip.open(quelle, "rt", encoding="utf-8", errors="replace",
-                   newline="") as f:
+    with _oeffnen(quelle) as f:
         leser = csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE)
         for z in leser:
             stand["gelesen"] += 1
@@ -182,6 +195,13 @@ def filtern(quelle: str, ziel: str, laender, grenze=None) -> dict:
                 continue
             gesehen.add(zeile["code"])
             stand["behalten"] += 1
+            # Woher der Abzug stammt, steht nirgends in der Datei -- die
+            # juengste Aenderung darin ist die beste Auskunft darueber.
+            try:
+                stand["juengste"] = max(stand["juengste"],
+                                        int(zeile["updated_at"] or 0))
+            except (TypeError, ValueError):
+                pass
             if schreiber:
                 schreiber.writerow(["" if zeile[s] is None else zeile[s]
                                     for s in AUSGABE])
@@ -208,7 +228,7 @@ async def einspielen(datei: str) -> None:
     try:
         async with conn.transaction():
             await conn.execute("TRUNCATE food_catalog")
-            with gzip.open(datei, "rt", encoding="utf-8", newline="") as f:
+            with _oeffnen(datei) as f:
                 ergebnis = await conn.copy_to_table(
                     "food_catalog", source=f, columns=list(AUSGABE),
                     format="csv", delimiter="\t", null="")
@@ -252,6 +272,9 @@ def main():
     print("  ohne Kalorienangabe:         %(keine_kcal)d" % stand)
     print("  doppelter Strichcode:        %(doppelt)d" % stand)
     print("  BEHALTEN:                    %(behalten)d" % stand)
+    if stand["juengste"]:
+        print("  juengste Aenderung darin:    %s"
+              % time.strftime("%d.%m.%Y", time.localtime(stand["juengste"])))
     if a.ziel and not a.nur_zaehlen:
         mb = os.path.getsize(a.ziel) / 1024 / 1024
         print("\n%s: %.1f MB gepackt" % (a.ziel, mb))

@@ -150,19 +150,28 @@ Anschließend `http://localhost:5500` öffnen. `frontend/js/config.js` zeigt sta
 
 Ohne diesen Schritt funktioniert das Modul vollständig — es fragt dann bei jeder Suche live bei Open Food Facts nach. Das ist ein ehrenamtlich betriebener Dienst, der unter Last mit `503` antwortet; ein eigener Abzug macht die Suche schnell und unabhängig davon.
 
+Der fertige Katalog liegt als **`backend/data/off-katalog-dach.csv.gz`** im Repo (rund 10 MB) und ist damit nach `git pull` und einem Image-Neubau auch im Container. Einspielen:
+
 ```bash
-# 1. Den täglichen Abzug holen (~1,2 GB gepackt)
-curl -O https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz
-
-# 2. Auf das eindampfen, was hier im Regal steht und Nährwerte hat.
-#    Wird strömend gelesen — die ~10 GB Text landen nie auf der Platte.
-python backend/scripts/off_katalog.py en.openfoodfacts.org.products.csv.gz     -z katalog.csv.gz
-
-# 3. Dort einspielen, wo DATABASE_URL erreichbar ist
-python backend/scripts/off_katalog.py katalog.csv.gz --einspielen
+docker exec -it <container> python scripts/off_katalog.py     data/off-katalog-dach.csv.gz --einspielen
 ```
 
-`--nur-zaehlen` sagt vorher, was übrig bliebe, ohne etwas zu schreiben; `--laender` stellt ein, welche Märkte behalten werden (Voreinstellung: Deutschland, Österreich, Schweiz). Eingespielt wird immer **ersetzend** — ein neuer Abzug ist ein neuer Stand. Wie alt er ist, steht im Modul auf der Scanner-Karte.
+Ohne Docker, dort wo `DATABASE_URL` gesetzt ist:
+
+```bash
+python backend/scripts/off_katalog.py backend/data/off-katalog-dach.csv.gz --einspielen
+```
+
+Eingespielt wird immer **ersetzend** — ein neuer Abzug ist ein neuer Stand, zwei Stände nebeneinander wären nicht zu trennen. Läuft in einer Transaktion: schlägt es fehl, steht der alte Katalog unverändert da.
+
+**Neu bauen**, wenn der Katalog altern soll (der Abzug erscheint täglich, ein paar Mal im Jahr reicht):
+
+```bash
+curl -O https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz
+python backend/scripts/off_katalog.py en.openfoodfacts.org.products.csv.gz     -z backend/data/off-katalog-dach.csv.gz
+```
+
+Gelesen wird strömend — die ~12 GB Text landen nie auf der Platte, gepackt wie ungepackt. `--nur-zaehlen` sagt vorher, was übrig bliebe, ohne etwas zu schreiben; `--laender` stellt ein, welche Märkte behalten werden (Voreinstellung: Deutschland, Österreich, Schweiz). Wie alt der Katalog ist, steht im Modul auf der Scanner-Karte.
 
 ---
 
