@@ -15,6 +15,14 @@ steht hier noch nicht.
 NAEHRWERTE = ("kcal", "protein_g", "carbs_g", "sugar_g", "fat_g",
               "sat_fat_g", "fiber_g", "salt_g")
 
+# Die Spalten der Katalogdatei, in genau dieser Reihenfolge. Sie muss zu
+# AUSGABE in ``scripts/off_katalog.py`` passen -- dort wird die Datei
+# geschrieben, hier wird sie gelesen. Eine Abweichung faellt beim Einspielen
+# sofort auf: die Anzahl wird geprueft, bevor irgendetwas geleert wird.
+SPALTEN = ("code", "name", "brand", "base_unit", "kcal", "protein_g",
+           "carbs_g", "sugar_g", "fat_g", "sat_fat_g", "fiber_g", "salt_g",
+           "portion_g", "updated_at")
+
 # Mehr Woerter helfen der Suche nicht mehr, kosten aber je eines einen
 # weiteren Durchgang durch den Index.
 WOERTER_MAX = 4

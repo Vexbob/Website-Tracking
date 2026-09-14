@@ -179,6 +179,30 @@
             <div id="ernSuchTreffer"></div>
         </div>
 
+        <!-- Nur fuer Admins: der Katalog gehoert keinem Nutzer, er ist das
+             Nachschlagewerk fuer alle. Die Karte blendet sich selbst ein,
+             wenn der Server das Recht dazu meldet. -->
+        <div class="v-card" id="ernKatalogKarte" hidden>
+            <div class="v-card-head">
+                <h3>Katalog einspielen</h3>
+                <span class="v-card-sub" id="ernKatalogKarteSub"></span>
+            </div>
+            <p class="ern-hinweis">
+                Der Katalog ist ein Abzug von Open Food Facts, der hier liegt — damit
+                antwortet die Suche sofort, auch wenn der Dienst gerade überlastet ist.
+                Die Datei entsteht aus dem Tagesabzug und liegt im Projekt unter
+                <strong>backend/data/off-katalog-dach.csv.gz</strong>. Einspielen
+                <strong>ersetzt</strong> den bisherigen Stand vollständig.
+            </p>
+            <div class="dropzone" id="ernKatDrop" role="button" tabindex="0"
+                 aria-label="Katalogdatei auswählen">
+                <div class="dropzone-icon" aria-hidden="true">🗂️</div>
+                <div class="dropzone-title">Katalogdatei hier ablegen oder klicken</div>
+                <div class="dropzone-sub" id="ernKatDropSub">off-katalog-dach.csv.gz</div>
+                <input type="file" id="ernKatFile" accept=".gz,.csv,.tsv" hidden>
+            </div>
+        </div>
+
         <div class="v-card">
             <div class="v-card-head">
                 <h3 id="ernFormTitel">Von Hand anlegen</h3>

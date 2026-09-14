@@ -31,6 +31,11 @@ const API = {
     gericht:  (d)  => apiCall('/api/food/dishes', { method: 'POST', body: d }),
     gerichtWeg: (id) => apiCall('/api/food/dishes/' + id, { method: 'DELETE' }),
     katalog:  ()   => apiCall('/api/food/catalog'),
+    katalogEinspielen: (datei) => {
+        const fd = new FormData();
+        fd.append('file', datei);
+        return apiCall('/api/food/catalog', { method: 'POST', body: fd });
+    },
     tag:      (d)  => apiCall('/api/food/day' + (d ? '?date=' + d : '')),
     eintragen:(d)  => apiCall('/api/food/log', { method: 'POST', body: d }),
     eintragWeg: (id) => apiCall('/api/food/log/' + id, { method: 'DELETE' }),
@@ -45,6 +50,7 @@ const BASIS = ['g', 'ml'];
 
 const state = {
     bestand: [], vorschlag: null, groessenVorschlaege: [],
+    katalog: null, katalogLaeuft: false,
     // Die Groessen-Zeilen des Formulars: [{label, grams}]
     formGroessen: [],
     tag: null, datum: null, gerichte: [], schnellSuche: '',
@@ -102,19 +108,86 @@ const HERKUNFT = {
    dessen Stand man nicht sieht, wird irgendwann geglaubt, obwohl es nicht
    mehr stimmt. */
 async function katalogStand() {
-    const el = document.getElementById('ernKatalogStand');
     let stand;
     try { stand = await API.katalog(); } catch (e) { return; }
-    if (!stand.count) {
-        el.textContent = 'kein eigener Katalog — es wird direkt bei Open Food Facts gefragt';
-        return;
-    }
+    state.katalog = stand;
+
     const alter = stand.newest
         ? new Date(stand.newest * 1000).toLocaleDateString('de-DE',
             { day: '2-digit', month: '2-digit', year: 'numeric' })
         : null;
-    el.textContent = `eigener Katalog: ${stand.count.toLocaleString('de-DE')} Produkte`
-        + (alter ? ` · Stand ${alter}` : '');
+    const text = stand.count
+        ? `eigener Katalog: ${stand.count.toLocaleString('de-DE')} Produkte`
+          + (alter ? ` · Stand ${alter}` : '')
+        : 'kein eigener Katalog — es wird direkt bei Open Food Facts gefragt';
+
+    document.getElementById('ernKatalogStand').textContent = text;
+    // Die Karte zum Einspielen gibt es nur, wenn der Server das Recht dazu
+    // meldet -- der Katalog gehoert keinem Nutzer, sondern allen.
+    const karte = document.getElementById('ernKatalogKarte');
+    karte.hidden = !stand.may_import;
+    if (stand.may_import) {
+        document.getElementById('ernKatalogKarteSub').textContent = stand.count
+            ? `${stand.count.toLocaleString('de-DE')} Produkte drin`
+            : 'noch leer';
+    }
+}
+
+/* Die Ablegeflaeche fuer den Katalog. Dasselbe Muster wie beim
+   Ausgaben-Import: klicken, ziehen, Tastatur -- und vor dem Ersetzen steht
+   da, was ersetzt wird. */
+function setupKatalogDrop() {
+    const drop = document.getElementById('ernKatDrop');
+    const feld = document.getElementById('ernKatFile');
+    if (!drop) return;
+
+    const nimm = (datei) => { if (datei) katalogHochladen(datei); };
+    drop.onclick = () => { if (!state.katalogLaeuft) feld.click(); };
+    drop.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); drop.onclick(); }
+    };
+    drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('drag'); };
+    drop.ondragleave = () => drop.classList.remove('drag');
+    drop.ondrop = (e) => {
+        e.preventDefault();
+        drop.classList.remove('drag');
+        if (!state.katalogLaeuft) nimm(e.dataTransfer.files && e.dataTransfer.files[0]);
+    };
+    feld.onchange = () => nimm(feld.files[0]);
+}
+
+async function katalogHochladen(datei) {
+    const drin = (state.katalog && state.katalog.count) || 0;
+    const ok = await askConfirm({
+        title: 'Katalog ersetzen?',
+        text: drin
+            ? `Im Katalog stehen ${drin.toLocaleString('de-DE')} Produkte. `
+              + `„${datei.name}" ersetzt sie vollständig — ein Abzug ist ein Stand, `
+              + 'zwei nebeneinander wären später nicht zu trennen.'
+            : `Der Katalog ist leer. „${datei.name}" legt ihn an.`,
+        confirmText: 'Einspielen',
+    });
+    document.getElementById('ernKatFile').value = '';
+    if (!ok) return;
+
+    const drop = document.getElementById('ernKatDrop');
+    const sub = document.getElementById('ernKatDropSub');
+    state.katalogLaeuft = true;
+    drop.classList.add('has-files');
+    sub.textContent = `${datei.name} wird eingespielt — das dauert bis zu einer Minute …`;
+    try {
+        const neu = await API.katalogEinspielen(datei);
+        sub.textContent = `${neu.count.toLocaleString('de-DE')} Produkte eingespielt.`;
+        melde(`Katalog eingespielt: ${neu.count.toLocaleString('de-DE')} Produkte.`,
+              'success');
+        await katalogStand();
+    } catch (err) {
+        drop.classList.remove('has-files');
+        sub.textContent = 'off-katalog-dach.csv.gz';
+        melde(err.message || 'Das Einspielen ging nicht.', 'error');
+    } finally {
+        state.katalogLaeuft = false;
+    }
 }
 
 function zeichneTreffer(ziel, produkt, bekannt, notiz, herkunft) {
@@ -1075,6 +1148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     zeichneEntwurf();
     formLeeren();
+    setupKatalogDrop();
     katalogStand();
     await ladeBestand();
     await ladeGerichte();

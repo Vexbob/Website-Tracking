@@ -150,7 +150,11 @@ Anschließend `http://localhost:5500` öffnen. `frontend/js/config.js` zeigt sta
 
 Ohne diesen Schritt funktioniert das Modul vollständig — es fragt dann bei jeder Suche live bei Open Food Facts nach. Das ist ein ehrenamtlich betriebener Dienst, der unter Last mit `503` antwortet; ein eigener Abzug macht die Suche schnell und unabhängig davon.
 
-Der fertige Katalog liegt als **`backend/data/off-katalog-dach.csv.gz`** im Repo (rund 10 MB) und ist damit nach `git pull` und einem Image-Neubau auch im Container. Einspielen:
+Der fertige Katalog liegt als **`backend/data/off-katalog-dach.csv.gz`** im Repo (rund 10 MB).
+
+**Der einfache Weg:** im Modul unter *Scanner* → Karte **Katalog einspielen** die Datei ablegen. Sichtbar ist die Karte nur für Admins; der Katalog gehört keinem Konto. Vor dem Ersetzen steht da, was ersetzt wird.
+
+Ohne Browser geht es weiterhin über das Skript — die Datei ist nach `git pull` und einem Image-Neubau auch im Container:
 
 ```bash
 docker exec -it <container> python scripts/off_katalog.py \n    data/off-katalog-dach.csv.gz --einspielen

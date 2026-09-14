@@ -4,6 +4,7 @@ Endpoints:
   GET    /api/food/barcode/{code}  — Strichcode nachschlagen
   GET    /api/food/search          — Textsuche
   GET    /api/food/catalog         — Stand des eigenen Katalogs
+  POST   /api/food/catalog         — Katalogdatei einspielen (nur Admin)
   GET    /api/food/items           — eigener Lebensmittel-Bestand
   POST   /api/food/items           — Lebensmittel aufnehmen oder aendern
   DELETE /api/food/items/{id}      — Lebensmittel entfernen
@@ -35,12 +36,15 @@ in der Antwort (``origin``) -- das gehoert auf den Bildschirm, nicht in eine
 stille Annahme.
 """
 import asyncio
+import gzip
+import io
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import (APIRouter, Depends, File, HTTPException, Query, Request,
+                     UploadFile)
 from pydantic import BaseModel
 
-from auth import get_current_user
+from auth import get_current_user, require_admin
 from database import get_db
 from deps import (limiter, LIMIT_WRITE_FREQUENT, LIMIT_WRITE_RARE,
                   LIMIT_WRITE_STANDARD)
@@ -244,7 +248,90 @@ async def suche(request: Request, q: str = Query(..., min_length=2),
 @router.get("/api/food/catalog")
 async def katalog_stand(db=Depends(get_db), user=Depends(get_current_user)):
     """Wie viel im Katalog steht und wie alt er ist."""
-    return await katalog.stand(db)
+    stand = await katalog.stand(db)
+    # Nur wer den Katalog ersetzen darf, bekommt die Ablegeflaeche zu sehen.
+    stand["may_import"] = bool(user.get("is_admin"))
+    return stand
+
+
+# Der fertige Katalog sind heute knapp 10 MB. Die Grenze liegt darueber,
+# damit ein spaeter etwas groesserer Schnitt nicht am Limit scheitert -- und
+# tief genug, dass eine versehentlich abgelegte Urlaubsvideodatei nicht erst
+# durch die Leitung muss.
+KATALOG_MAX_BYTES = 32 * 1024 * 1024
+KATALOG_SPALTEN = 14
+
+
+def _katalog_strom(rohdaten: bytes):
+    """Die hochgeladene Datei als Datenstrom — gepackt oder nicht.
+
+    Erkannt wird am Inhalt, nicht am Dateinamen: wer die Datei einmal
+    ausgepackt hat, soll sie trotzdem ablegen koennen.
+    """
+    if rohdaten[:2] == b"\x1f\x8b":
+        return gzip.GzipFile(fileobj=io.BytesIO(rohdaten))
+    return io.BytesIO(rohdaten)
+
+
+@router.post("/api/food/catalog")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def katalog_einspielen(request: Request, file: UploadFile = File(...),
+                             db=Depends(get_db), user=Depends(require_admin)):
+    """Ersetzt den Katalog durch die hochgeladene Datei.
+
+    Ersetzen, nicht ergaenzen: ein neuer Abzug ist ein neuer Stand, und zwei
+    Staende nebeneinander waeren spaeter nicht zu trennen. Alles laeuft in
+    einer Transaktion -- schlaegt es fehl, steht der alte Katalog unberuehrt
+    da, statt halb ueberschrieben.
+
+    Gebaut wird die Datei mit ``scripts/off_katalog.py``. Den ganzen Abzug
+    hier hochzuladen waere keine Erleichterung: 1,2 GB durch eine
+    HTTP-Anfrage, damit der Server dieselbe Arbeit macht, die auf einem
+    Rechner mit der Datei in vier Minuten erledigt ist.
+    """
+    rohdaten = await file.read()
+    if not rohdaten:
+        raise HTTPException(400, "Die Datei ist leer.")
+    if len(rohdaten) > KATALOG_MAX_BYTES:
+        raise HTTPException(
+            413, "Die Datei ist größer als %d MB. Der gefilterte Katalog ist "
+                 "rund 10 MB — sicher, dass das nicht der ganze Abzug ist?"
+                 % (KATALOG_MAX_BYTES // 1024 // 1024))
+
+    # Erst hineinsehen, dann die Tabelle leeren. Andersherum stuende der
+    # Katalog leer da, weil jemand die falsche Datei erwischt hat.
+    try:
+        probe = _katalog_strom(rohdaten).read(64 * 1024)
+    except (OSError, EOFError) as e:
+        raise HTTPException(400, "Die Datei ließ sich nicht lesen (%s)." % e)
+    erste = probe.split(b"\n", 1)[0].decode("utf-8", "replace")
+    felder = erste.split("\t")
+    if len(felder) != KATALOG_SPALTEN or not felder[0].strip().isdigit():
+        raise HTTPException(
+            400, "Das sieht nicht nach einem Katalog aus: erwartet werden %d "
+                 "durch Tabulator getrennte Spalten, die erste ein Strichcode "
+                 "— gefunden %d. Gebaut wird die Datei mit "
+                 "scripts/off_katalog.py."
+                 % (KATALOG_SPALTEN, len(felder)))
+
+    vorher = await katalog.stand(db)
+    try:
+        async with db.transaction():
+            await db.execute("TRUNCATE food_catalog")
+            await db.copy_to_table(
+                "food_catalog", source=_katalog_strom(rohdaten),
+                columns=list(katalog.SPALTEN), format="csv", delimiter="\t",
+                null="")
+    except Exception as e:
+        # Der haeufigste Fall ist eine Datei mit anderen Spalten -- die
+        # Meldung von Postgres nennt Zeile und Wert, das hilft mehr als ein
+        # eigener Satz darueber.
+        raise HTTPException(400, "Einspielen fehlgeschlagen: %s" % e)
+
+    nachher = await katalog.stand(db)
+    nachher["may_import"] = True
+    nachher["replaced"] = vorher["count"]
+    return nachher
 
 
 # ---------------------------------------------------------------------------

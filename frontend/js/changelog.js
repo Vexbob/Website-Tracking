@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.91.0', date: '2026-09-14', title: 'Ernährung: Katalog per Ablegefläche', notes: [
+        'Der Lebensmittel-Katalog lässt sich jetzt auf der Seite selbst einspielen — Datei ablegen, fertig. Kommandozeile und ein öffentlich erreichbarer Datenbankzugang entfallen damit.',
+        'Vor dem Ersetzen steht da, wie viele Produkte gerade im Katalog stehen: ein Abzug ist ein Stand und ersetzt den bisherigen vollständig.',
+        'Eine falsche Datei fällt auf, bevor irgendetwas geleert wird — erwartet werden 14 Spalten mit einem Strichcode in der ersten.',
+        'Ob die Datei gepackt ist, erkennt der Server am Inhalt statt am Dateinamen.',
+        'Die Karte zum Einspielen sieht nur, wer das darf: der Katalog gehört keinem Konto, sondern allen.',
+    ]},
     { v: 'v1.90.0', date: '2026-09-12', title: 'Ernährung: Mengen statt Stufen, wo man sie weiß', notes: [
         '„Normal“ und „übermäßig“ gelten ab jetzt nur noch für Gerichte — wie viel vom eigenen Rezept auf dem Teller lag, weiß niemand in Gramm.',
         'Ein einzelnes Lebensmittel trägst du dagegen so ein, wie es dasteht: 100 g, zwei Scheiben, eine Packung. Solche Einträge erscheinen als Zahl, nicht als Spanne, und machen den Tag genauer statt unschärfer.',
