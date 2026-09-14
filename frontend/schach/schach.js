@@ -1,30 +1,42 @@
-/* schach.js — v1.92.0
+/* schach.js — v1.92.1
  *
  * Wertungszahlen, Verlauf und Partien von Lichess und Chess.com.
  *
- * Vier Dinge, die dieses Modul von den anderen unterscheiden:
+ * Der Aufbau der Seite folgt den drei Fragen, die man an dieses Modul hat:
  *
- *   1. **Die Daten liegen woanders.** Beide Plattformen geben sie oeffentlich
- *      heraus; hinterlegt wird nur ein Benutzername. Deshalb gibt es hier
- *      kein Formular zum Eintragen von Partien -- nur einen Knopf, der holt.
- *   2. **Der Import laeuft in Stuecken.** Der Server holt je Aufruf ein
- *      Stueck und sagt, ob noch mehr kommt; diese Seite ruft in einer
- *      Schleife, zeigt den Stand mit und laesst sich jederzeit anhalten. Ein
- *      Abbruch verliert nichts.
- *   3. **Den Verlauf gibt es nur hier.** Beide Plattformen kennen nur den
- *      aktuellen Stand. Vexbob haelt je Abruf eine Tageszeile fest -- das
- *      Diagramm ist damit der einzige Ort, an dem die Entwicklung steht, und
- *      es sagt selbst, wie weit es zurueckreicht.
- *   4. **Nicht jede Zahl bedeutet dasselbe.** Chess.com gibt zur
- *      Raetsel-Wertung nur den Bestwert heraus und zu keiner Partie eine
- *      Wertungsdifferenz. Beides steht dabei, statt dass eine Luecke wie eine
- *      Null aussieht.
+ *   1. **Wo stehe ich, und wohin geht es?** Das ist die Kopfkarte: je
+ *      Plattform die aktuelle Zahl, daneben ihre Kurve, darueber die
+ *      Disziplinen als Umschalter, der seine Zahlen mittraegt. Vorher waren
+ *      das drei Bloecke -- eine grosse Zahl, ein Raster aller Disziplinen,
+ *      ein Diagramm -- die im Kern dasselbe gesagt haben.
+ *   2. **Wie steht es insgesamt?** Die Bilanz aus den Kopfzahlen des Servers,
+ *      ueber den ganzen Bestand.
+ *   3. **Wie lief es zuletzt?** Form, Eroeffnungen, Zeitkontrollen, Gegner --
+ *      alle vier aus den zuletzt geladenen Partien. Dass das eine andere
+ *      Grundgesamtheit ist als die Bilanz, steht als Ueberschrift ueber dem
+ *      Abschnitt: zwei Gesamtheiten auf einem Bildschirm muessen als solche
+ *      zu erkennen sein.
  *
- * Die Auswertung (Form, Eroeffnungen, Zeitkontrollen) rechnet ueber die
- * juengsten ANALYSE_STUECK Partien, nicht ueber den ganzen Bestand: der
+ * Vier Eigenheiten, die dieses Modul von den anderen unterscheiden:
+ *
+ *   - **Die Daten liegen woanders.** Beide Plattformen geben sie oeffentlich
+ *     heraus; hinterlegt wird nur ein Benutzername. Deshalb gibt es hier kein
+ *     Formular zum Eintragen von Partien -- nur einen Knopf, der holt.
+ *   - **Der Import laeuft in Stuecken.** Der Server holt je Aufruf ein Stueck
+ *     und sagt, ob noch mehr kommt; diese Seite ruft in einer Schleife, zeigt
+ *     den Stand mit und laesst sich jederzeit anhalten.
+ *   - **Den Verlauf gibt es nur hier.** Beide Plattformen kennen nur den
+ *     aktuellen Stand. Vexbob haelt je Abruf eine Tageszeile fest -- das
+ *     Diagramm ist damit der einzige Ort, an dem die Entwicklung steht, und
+ *     es sagt selbst, wie weit es zurueckreicht.
+ *   - **Nicht jede Zahl bedeutet dasselbe.** Chess.com gibt zur
+ *     Raetsel-Wertung nur den Bestwert heraus und zu keiner Partie eine
+ *     Wertungsdifferenz. Beides steht dabei, statt dass eine Luecke wie eine
+ *     Null aussieht.
+ *
+ * Die Auswertung rechnet ueber die juengsten ANALYSE_STUECK Partien: der
  * Endpunkt kennt keinen Zeitraum, und mehrere Seiten nachzuladen waere bei
- * zehn Jahren Historie ein Dutzend Abfragen fuer eine Randzahl. Wie weit der
- * Ausschnitt reicht, steht in jeder dieser Karten.
+ * zehn Jahren Historie ein Dutzend Abfragen fuer eine Randzahl.
  */
 
 const API = {
@@ -158,13 +170,14 @@ function verschmelze(listen) {
     return raus;
 }
 
+/* Alle Disziplinen, die irgendein Konto kennt -- in der Reihenfolge des
+   Servers. Bestwerte bleiben dabei: die Raetsel-Wertung von Chess.com ist
+   eine Zahl, die man sehen will, sie hat nur keinen Tagesverlauf. */
 function disziplinen() {
-    const raus = [];
-    state.konten.forEach(k => (k.ratings || []).forEach(r => {
-        if (r.is_best) return;
-        if (!raus.some(d => d.perf === r.perf)) raus.push({ perf: r.perf, label: r.label });
-    }));
-    return raus;
+    const label = {};
+    state.konten.forEach(k => (k.ratings || []).forEach(r => { label[r.perf] = r.label; }));
+    return verschmelze(state.konten.map(k => (k.ratings || []).map(r => r.perf)))
+        .map(perf => ({ perf, label: label[perf] || perf }));
 }
 
 /* -------------------------------------------------------- Leerer Zustand */
@@ -197,58 +210,114 @@ function zeichneUeberblick() {
     leer.hidden = true;
     box.hidden = false;
 
-    zeichneKpi();
-    zeichneWertungen();
+    zeichneDisziplinen();
+    zeichneStaende();
     zeichneBilanz();
     zeichneAnalyse();
     mountRange();
 }
 
-/* Eine Hauptzahl, darunter die Einordnung. Sechs gleich grosse Kacheln
-   nebeneinander waeren sechs Zahlen und keine Aussage (DESIGN.md,
-   .kpi-block). */
-function zeichneKpi() {
-    const ziel = document.getElementById('schKpi');
-    const perf = state.perf || fuehrendeDisziplin();
-    let haupt = null;
-    state.konten.forEach(k => (k.ratings || []).forEach(r => {
-        if (r.perf !== perf || r.is_best) return;
-        if (!haupt || r.rating > haupt.r.rating) haupt = { r, konto: k };
+/* Der Umschalter traegt die Zahlen mit. Er ist damit zugleich die Uebersicht
+   ueber alle Disziplinen -- ohne ihn muesste man fuenfmal klicken, um zu
+   sehen, wo man steht, und genau dafuer stand hier vorher ein eigenes
+   Raster, das dasselbe noch einmal sagte. */
+function zeichneDisziplinen() {
+    const ziel = document.getElementById('schDisziplinen');
+    const liste = disziplinen();
+    if (liste.length < 2) { ziel.innerHTML = ''; return; }
+
+    ziel.innerHTML = liste.map(d => {
+        // Gezeigt wird der aktuelle Stand, und davon der der Plattform mit
+        // mehr Partien. Ein Bestwert kommt nur dran, wenn es sonst keinen
+        // gibt -- er steht sonst als "Zahl von heute" da, ohne eine zu sein.
+        let beste = null;
+        state.konten.forEach(k => (k.ratings || []).forEach(r => {
+            if (r.perf !== d.perf) return;
+            if (!beste) { beste = r; return; }
+            if (beste.is_best && !r.is_best) { beste = r; return; }
+            if (!r.is_best && (r.games || 0) > (beste.games || 0)) beste = r;
+        }));
+        return `<button type="button" class="v-chip${state.perf === d.perf ? ' is-active' : ''}"
+            data-perf="${esc(d.perf)}">${esc(d.label)}${beste
+                ? ` <b>${wertung(beste.rating)}</b>${beste.is_best ? ' <i>Bestwert</i>' : ''}` : ''}</button>`;
+    }).join('');
+
+    ziel.querySelectorAll('.v-chip').forEach(b => b.addEventListener('click', () => {
+        state.perf = b.dataset.perf;
+        zeichneDisziplinen();
+        zeichneStaende();
+        ladeVerlauf();
     }));
+}
 
-    const gesamt = state.bilanz.reduce((s, b) => s + (b.partien || 0), 0);
-    const siege = state.bilanz.reduce((s, b) => s + (b.siege || 0), 0);
-    const letzte = state.bilanz.map(b => b.bis).filter(Boolean).sort().slice(-1)[0];
-    const serie = aktuelleSerie();
+/* Je Plattform ein Block: Zahl, Entwicklung, Anzahl Partien. Die Zahl traegt
+   die Farbe ihrer Linie im Diagramm daneben -- deshalb braucht die Karte
+   keine eigene Legende. */
+function zeichneStaende() {
+    const ziel = document.getElementById('schStaende');
+    const stand = document.getElementById('schStand');
+    const perf = state.perf || fuehrendeDisziplin();
 
-    const kopf = haupt
-        ? `<div class="lbl">${esc(haupt.r.label)} · ${esc(LABEL[haupt.konto.platform])}</div>
-           <div class="val">${wertung(haupt.r.rating)}</div>
-           <div class="sub">${trendSatz(haupt.r)}</div>`
-        : `<div class="lbl">Wertungszahl</div>
-           <div class="val">–</div>
-           <div class="sub">Das Konto hat dort noch keine gewertete Partie — deshalb gibt die
-               Plattform auch keine Zahl heraus.</div>`;
+    // Die Plattform mit den meisten Partien in dieser Disziplin steht oben --
+    // ihre Zahl ist auch die, die der Umschalter oben mittraegt.
+    const bloecke = [];
+    PLATTFORMEN.forEach(pl => {
+        const konto = state.konten.find(k => k.platform === pl.key);
+        if (!konto) return;
+        const r = (konto.ratings || []).find(x => x.perf === perf);
+        bloecke.push({ pl, konto, r });
+    });
+    bloecke.sort((a, b) => ((b.r && b.r.games) || 0) - ((a.r && a.r.games) || 0));
 
-    const stark = staerksterSieg();
-    const minis = [
-        { lbl: 'Partien', val: gesamt ? zahl(gesamt) : '–',
-          note: gesamt ? state.bilanz.map(b => LABEL[b.platform]).join(' · ') : 'noch keine geholt' },
-        { lbl: 'Siegquote', val: gesamt ? anteil(siege, gesamt) + ' %' : '–',
-          note: gesamt ? zahl(siege) + ' Siege' : '' },
-        { lbl: 'Serie', val: serie ? serie.kurz : '–', note: serie ? 'in Folge' : '' },
-        { lbl: 'Stärkster Sieg', val: stark ? wertung(stark.opponent_rating) : '–',
-          note: stark ? 'gegen ' + stark.opponent : (gesamt ? 'im Ausschnitt keiner' : '') },
-        { lbl: 'Letzte Partie', val: letzte ? datum(letzte) : '–',
-          note: letzte ? vorTagen(letzte) : '' },
-    ];
+    const zuletzt = state.konten.map(k => k.ratings_at).filter(Boolean).sort().slice(-1)[0];
+    stand.textContent = zuletzt ? 'Stand: ' + datum(zuletzt, true) : '';
 
-    ziel.innerHTML = `<div class="kpi-hero"><div class="kpi-hero-main">${kopf}</div></div>
-        <div class="kpi-mini-row">${minis.map(m => `<div class="kpi-mini">
-            <div class="lbl">${esc(m.lbl)}</div>
-            <div class="val">${esc(m.val)}</div>
-            ${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}
-        </div>`).join('')}</div>`;
+    if (!bloecke.some(b => b.r)) {
+        ziel.innerHTML = leerKarte('♟️', perf
+            ? 'In dieser Disziplin gibt es noch keine gewertete Partie — ohne die gibt die '
+              + 'Plattform auch keine Zahl heraus.'
+            : 'Das Konto ist verbunden, hat dort aber noch keine gewertete Partie.');
+        return;
+    }
+
+    ziel.innerHTML = bloecke.map(b => {
+        const farbe = b.pl.key === 'chesscom' ? 'var(--sch-chesscom)' : 'var(--sch-lichess)';
+        if (!b.r) {
+            return `<div class="sch-stand" style="--ton:var(--text-4)">
+                <div class="sch-stand-kopf">
+                    <span class="sch-dot" data-platform="${b.pl.key}" aria-hidden="true"></span>
+                    ${b.pl.label}</div>
+                <div class="sch-stand-zahl">–</div>
+                <div class="sch-stand-sub">dort nicht gespielt</div>
+            </div>`;
+        }
+        return `<div class="sch-stand" style="--ton:${farbe}">
+            <div class="sch-stand-kopf">
+                <span class="sch-dot" data-platform="${b.pl.key}" aria-hidden="true"></span>
+                ${b.pl.label}</div>
+            <div class="sch-stand-zahl">${wertung(b.r.rating)}</div>
+            <div class="sch-stand-sub">${trendSatz(b.r)}</div>
+            <div class="sch-stand-meta">${b.r.games ? zahl(b.r.games) + ' Partien' : ''}</div>
+        </div>`;
+    }).join('');
+}
+
+/* Die Entwicklung in kurzen Worten. Sie steht erst da, wenn es einen zweiten
+   Tag zum Vergleichen gibt -- ein Pfeil mit 0 daneben saehe aus wie
+   "unveraendert", waehrend in Wahrheit noch nichts zu vergleichen ist.
+   Bestwerte bekommen gar keinen: sie koennen nur steigen. */
+function trendSatz(r) {
+    if (r.is_best) return 'Bestwert, kein Tagesstand';
+    if (r.trend == null) return 'Entwicklung ab dem zweiten Abruf';
+    const tage = r.trend_days;
+    return trendMarke(r) + ' ' + (tage >= 28 ? 'in 30 Tagen' : 'in ' + tage + (tage === 1 ? ' Tag' : ' Tagen'));
+}
+
+function trendMarke(r) {
+    if (r.trend == null) return '';
+    const richtung = r.trend > 0 ? 'hoch' : (r.trend < 0 ? 'runter' : 'gleich');
+    const pfeil = r.trend > 0 ? '▲' : (r.trend < 0 ? '▼' : '•');
+    return `<span class="sch-trend is-${richtung}">${pfeil} ${r.trend > 0 ? '+' : ''}${r.trend}</span>`;
 }
 
 /* Der hoechstbewertete Gegner, den man geschlagen hat -- im Ausschnitt, wie
@@ -272,99 +341,6 @@ function vorTagen(iso) {
     return 'vor ' + tage + ' Tagen';
 }
 
-/* Die Entwicklung als Satz. Sie steht erst da, wenn es einen zweiten Tag zum
-   Vergleichen gibt -- ein Pfeil mit 0 daneben saehe aus wie "unveraendert",
-   waehrend in Wahrheit noch nichts zu vergleichen ist. */
-function trendSatz(r) {
-    if (r.trend == null) {
-        return 'Die Entwicklung steht hier, sobald der Verlauf zwei Tage umfasst — '
-             + 'er beginnt mit dem ersten Abruf.';
-    }
-    const tage = r.trend_days;
-    const zeit = tage >= 28 ? 'in den letzten 30 Tagen'
-        : `seit ${tage} ${tage === 1 ? 'Tag' : 'Tagen'} — so weit reicht der Verlauf bisher`;
-    return trendMarke(r) + ' ' + zeit;
-}
-
-function trendMarke(r) {
-    if (r.trend == null) return '';
-    const richtung = r.trend > 0 ? 'hoch' : (r.trend < 0 ? 'runter' : 'gleich');
-    const pfeil = r.trend > 0 ? '▲' : (r.trend < 0 ? '▼' : '•');
-    return `<span class="sch-trend is-${richtung}">${pfeil} ${r.trend > 0 ? '+' : ''}${r.trend}</span>`;
-}
-
-/* ---------------------------------------------------- Wertungen im Raster */
-
-function zeichneWertungen() {
-    const ziel = document.getElementById('schRatings');
-    const stand = document.getElementById('schStand');
-    const mitWertung = state.konten.filter(k => k.ratings.length);
-
-    if (!mitWertung.length) {
-        stand.textContent = '';
-        ziel.innerHTML = leerKarte('🏅',
-            'Das Konto ist verbunden, hat dort aber noch keine gewertete Partie — deshalb gibt '
-            + 'die Plattform auch keine Wertungszahl heraus.');
-        return;
-    }
-
-    const zuletzt = mitWertung.map(k => k.ratings_at).filter(Boolean).sort().slice(-1)[0];
-    stand.textContent = zuletzt ? 'Stand: ' + datum(zuletzt, true) : '';
-
-    // Eine Zeile je Disziplin, daneben die beiden Plattformen -- so steht
-    // Blitz neben Blitz. Zwei Bloecke untereinander hiessen: zum Vergleichen
-    // scrollen und die erste Zahl im Kopf behalten.
-    const nachPlattform = {};
-    state.konten.forEach(k => { nachPlattform[k.platform] = k; });
-    const spalten = PLATTFORMEN.filter(p => nachPlattform[p.key]);
-
-    const label = {};
-    spalten.forEach(sp => nachPlattform[sp.key].ratings.forEach(r => { label[r.perf] = r.label; }));
-    const reihen = verschmelze(spalten.map(sp =>
-        nachPlattform[sp.key].ratings.map(r => r.perf)))
-        .map(perf => ({ perf, label: label[perf] || perf }));
-
-    const zelle = (konto, perf) => {
-        const r = konto && konto.ratings.find(x => x.perf === perf);
-        if (!r) return '<div class="sch-vz is-leer">–</div>';
-        const sub = r.is_best ? 'Bestwert'
-            : (r.games ? zahl(r.games) + ' Partien' : 'aktueller Stand');
-        const inhalt = `<span class="sch-vz-num">${wertung(r.rating)}</span>${trendMarke(r)}
-            <span class="sch-vz-sub">${sub}</span>`;
-        // Ein Bestwert hat keinen Tagesverlauf -- die Zelle ist dann kein
-        // Knopf, weil dahinter nichts aufginge.
-        if (r.is_best) {
-            return `<div class="sch-vz" title="Chess.com gibt zur Rätsel-Wertung nur den Bestwert heraus, nicht den aktuellen Stand">${inhalt}</div>`;
-        }
-        return `<button type="button" class="sch-vz${state.perf === perf ? ' is-gewaehlt' : ''}"
-            data-perf="${esc(perf)}" title="Verlauf dieser Disziplin zeigen">${inhalt}</button>`;
-    };
-
-    ziel.innerHTML = `
-        <div class="sch-vergleich" style="--spalten:${spalten.length}">
-            <div class="sch-vk"></div>
-            ${spalten.map(sp => `<div class="sch-vk">
-                <span class="sch-dot" data-platform="${sp.key}" aria-hidden="true"></span>
-                <a href="${esc(nachPlattform[sp.key].profile_url)}" target="_blank"
-                   rel="noopener">${sp.label}</a>
-                <span class="sch-vk-name">${esc(nachPlattform[sp.key].username)}</span>
-            </div>`).join('')}
-            ${reihen.map(d => `
-                <div class="sch-vl${state.perf === d.perf ? ' is-gewaehlt' : ''}">${esc(d.label)}</div>
-                ${spalten.map(sp => zelle(nachPlattform[sp.key], d.perf)).join('')}
-            `).join('')}
-        </div>
-        <p class="sch-note">Ein Klick auf eine Zahl stellt den Verlauf darunter auf diese
-        Disziplin.</p>`;
-
-    ziel.querySelectorAll('[data-perf]').forEach(b => b.addEventListener('click', () => {
-        state.perf = b.dataset.perf;
-        zeichneWertungen();
-        zeichneVerlaufChips();
-        ladeVerlauf();
-    }));
-}
-
 /* --------------------------------------------------------------- Verlauf */
 
 function mountRange() {
@@ -372,28 +348,12 @@ function mountRange() {
     const host = document.getElementById('schVerlaufRange');
     if (!host) return;
     if (!state.perf) state.perf = fuehrendeDisziplin();
-    zeichneVerlaufChips();
     // Der Zeitraum-Knopf meldet beim Einhaengen einmal -- das ist die erste
     // Ladung des Verlaufs.
     state.rangeMount = VexRange.mount(host, {
         preset: '30',
         onChange: (r) => { state.range = r; ladeVerlauf(); },
     });
-}
-
-function zeichneVerlaufChips() {
-    const ziel = document.getElementById('schVerlaufChips');
-    if (!ziel) return;
-    const liste = disziplinen();
-    if (liste.length < 2) { ziel.innerHTML = ''; return; }
-    ziel.innerHTML = liste.map(d => `<button type="button" class="v-chip${
-        state.perf === d.perf ? ' is-active' : ''}" data-perf="${esc(d.perf)}">${esc(d.label)}</button>`).join('');
-    ziel.querySelectorAll('.v-chip').forEach(b => b.addEventListener('click', () => {
-        state.perf = b.dataset.perf;
-        zeichneVerlaufChips();
-        zeichneWertungen();
-        ladeVerlauf();
-    }));
 }
 
 async function ladeVerlauf() {
@@ -528,17 +488,10 @@ function zeichneVerlauf(punkte, tage) {
 
     state.chart = new Chart(canvas, { type: 'line', data: { labels: kurz, datasets }, options: opts });
 
-    document.getElementById('schVerlaufLegende').innerHTML = reihen.length > 1
-        ? reihen.map(r => `<span><i style="background:${r.farbe}"></i>${esc(LABEL[r.platform])}</span>`).join('')
-        : '';
-
-    const erste = reihen.map(r => r.werte.find(v => v != null)).filter(v => v != null);
-    const letzte = reihen.map(r => [...r.werte].reverse().find(v => v != null)).filter(v => v != null);
-    const diff = (erste.length === 1 && letzte.length === 1) ? letzte[0] - erste[0] : null;
     document.getElementById('schVerlaufNote').textContent =
-        `${perfLabel(state.perf)} · ${datum(von)} bis ${datum(bis)}`
-        + (diff != null ? ` · ${diff > 0 ? '+' : ''}${diff} in diesem Zeitraum` : '')
-        + '. An Tagen ohne Abruf gilt der letzte bekannte Stand.';
+        `${perfLabel(state.perf)}, ${datum(von)} bis ${datum(bis)}. `
+        + 'An Tagen ohne Abruf gilt der letzte bekannte Stand — eine Wertungszahl '
+        + 'bewegt sich nur nach einer Partie.';
 }
 
 /* Verlauf von 18 % auf 0 % derselben Farbe (DESIGN.md 7). */
@@ -553,12 +506,22 @@ function flaeche(ctx, farbe) {
 
 /* ---------------------------------------------------------------- Bilanz */
 
+/* Alles, was der Server ueber den ganzen Bestand weiss: Anzahl, Quote,
+   Verteilung, Zeitraum. Getrennt von der Auswertung darunter, die nur den
+   geladenen Ausschnitt kennt -- zwei Grundgesamtheiten auf einem Bildschirm
+   muessen als solche zu erkennen sein. */
 function zeichneBilanz() {
     const ziel = document.getElementById('schBilanz');
+    const sub = document.getElementById('schBilanzSub');
+
     if (!state.bilanz.length) {
+        sub.textContent = '';
         ziel.innerHTML = leerKarte('⚖️',
             'Noch keine Partien im Bestand. Sie werden nicht von Hand erfasst, sondern unter '
-            + '<strong>Konten</strong> von der Plattform geholt.');
+            + '<strong>Konten</strong> von der Plattform geholt.',
+            '<button type="button" class="v-btn v-btn--sm" id="schBilanzKonten">Zu den Konten</button>');
+        const zu = document.getElementById('schBilanzKonten');
+        if (zu) zu.addEventListener('click', () => activateTab('konten'));
         return;
     }
 
@@ -567,39 +530,48 @@ function zeichneBilanz() {
         remis: a.remis + (b.remis || 0), niederlagen: a.niederlagen + (b.niederlagen || 0),
     }), { partien: 0, siege: 0, remis: 0, niederlagen: 0 });
 
+    const von = state.bilanz.map(b => b.von).filter(Boolean).sort()[0];
+    const bis = state.bilanz.map(b => b.bis).filter(Boolean).sort().slice(-1)[0];
+    sub.textContent = von
+        ? `${zahl(summe.partien)} Partien von ${datum(von)} bis ${datum(bis)}`
+        : `${zahl(summe.partien)} Partien im Bestand`;
+
     // Zwei Masse, weil sie zwei Fragen beantworten: die Siegquote zaehlt
     // gewonnene Partien, die Punktequote rechnet ein Remis als halben Punkt
     // -- so zaehlt es die Schachwelt.
     const punkte = summe.partien
         ? Math.round(((summe.siege + summe.remis / 2) / summe.partien) * 100) : 0;
 
-    ziel.innerHTML = `
-        <div class="sch-quote">
-            <span class="sch-quote-num">${anteil(summe.siege, summe.partien)} %</span>
-            <span class="sch-quote-lbl">Siegquote · Punktequote ${punkte} %
-                <span style="color:var(--text-4)">(Remis zählt halb)</span></span>
+    ziel.innerHTML = `<div class="sch-bilanz-grid">
+        <div>
+            <div class="sch-quote">
+                <span class="sch-quote-num">${anteil(summe.siege, summe.partien)} %</span>
+                <span class="sch-quote-lbl">gewonnen<br>
+                    <span style="color:var(--text-4)">Punktequote ${punkte} %, Remis zählt halb</span></span>
+            </div>
+            ${balken(summe, 'gross')}
+            <div class="sch-bilanz-zahlen">
+                <span class="is-sieg">${zahl(summe.siege)} Siege</span>
+                <span class="is-remis">${zahl(summe.remis)} Remis</span>
+                <span class="is-verlust">${zahl(summe.niederlagen)} Niederlagen</span>
+            </div>
         </div>
-        ${balken(summe, 'gross')}
-        <div class="sch-bilanz-zahlen">
-            <span>${zahl(summe.partien)} Partien</span>
-            <span class="is-sieg">${zahl(summe.siege)} Siege</span>
-            <span class="is-remis">${zahl(summe.remis)} Remis</span>
-            <span class="is-verlust">${zahl(summe.niederlagen)} Niederlagen</span>
+        <div>
+            ${state.bilanz.map(b => `
+                <div class="sch-bilanz">
+                    <div class="sch-bilanz-kopf">
+                        <span class="sch-dot" data-platform="${esc(b.platform)}" aria-hidden="true"></span>
+                        <strong>${esc(LABEL[b.platform] || b.platform)}</strong>
+                        <span class="sch-bilanz-zeit">${zahl(b.partien)} Partien</span>
+                    </div>
+                    ${balken(b)}
+                    <div class="sch-bilanz-zahlen">
+                        <span class="is-sieg">${anteil(b.siege, b.partien)} % gewonnen</span>
+                        <span>${datum(b.von)} – ${datum(b.bis)}</span>
+                    </div>
+                </div>`).join('')}
         </div>
-        ${state.bilanz.length > 1 ? state.bilanz.map(b => `
-            <div class="sch-bilanz">
-                <div class="sch-bilanz-kopf">
-                    <span class="sch-dot" data-platform="${esc(b.platform)}" aria-hidden="true"></span>
-                    <strong>${esc(LABEL[b.platform] || b.platform)}</strong>
-                    <span class="sch-bilanz-zeit">${datum(b.von)} – ${datum(b.bis)}</span>
-                </div>
-                ${balken(b)}
-                <div class="sch-bilanz-zahlen">
-                    <span>${zahl(b.partien)} Partien</span>
-                    <span class="is-sieg">${anteil(b.siege, b.partien)} % gewonnen</span>
-                </div>
-            </div>`).join('') : `<p class="sch-note">${esc(LABEL[state.bilanz[0].platform])} ·
-                ${datum(state.bilanz[0].von)} bis ${datum(state.bilanz[0].bis)}</p>`}`;
+    </div>`;
 }
 
 function balken(b, gross) {
@@ -618,12 +590,15 @@ function balken(b, gross) {
 /* Der Ausschnitt, ueber den Form, Eroeffnungen und Zeitkontrollen rechnen.
    Er sagt selbst, wie weit er reicht -- eine Auswertung ohne diese Angabe
    waere eine Behauptung ueber den ganzen Bestand. */
-function ausschnittLabel() {
-    if (!state.analyse) return '';
+function zeichneAusschnittKopf() {
+    const titel = document.getElementById('schAusschnittTitel');
+    const marke = document.getElementById('schAusschnittMarke');
+    if (!state.analyse) return;
     const n = state.analyse.games.length;
-    if (!n) return '';
-    return state.analyse.total > n
-        ? `die letzten ${zahl(n)} Partien` : `alle ${zahl(n)} Partien`;
+    titel.textContent = !n ? 'Die letzten Partien'
+        : (state.analyse.total > n ? `Die letzten ${zahl(n)} Partien`
+                                   : `Alle ${zahl(n)} Partien`);
+    marke.textContent = state.analyse.total > n ? 'Ausschnitt' : 'Gesamter Bestand';
 }
 
 function leerRechnung() { return { n: 0, s: 0, r: 0, v: 0 }; }
@@ -647,17 +622,21 @@ function aktuelleSerie() {
 }
 
 function zeichneAnalyse() {
+    zeichneAusschnittKopf();
     zeichneForm();
     zeichneEroeffnungen();
     zeichneArten();
+    zeichneGegner();
 }
 
+/* Die Form: die Strecke, nicht die Summe. Eine Reihe aus zwanzig Marken
+   liest sich schneller als "13 Siege, 3 Remis, 4 Niederlagen" -- und darunter
+   stehen die beiden Zahlen, die man danach erzaehlt: die laufende Serie und
+   der staerkste geschlagene Gegner. */
 function zeichneForm() {
     const ziel = document.getElementById('schForm');
-    const lbl = document.getElementById('schFormLbl');
     if (!state.analyse) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
     const spiele = state.analyse.games;
-    lbl.textContent = ausschnittLabel();
 
     if (!spiele.length) {
         ziel.innerHTML = leerKarte('🔥',
@@ -667,12 +646,13 @@ function zeichneForm() {
 
     const letzte = spiele.slice(0, 20);
     const serie = aktuelleSerie();
+    const stark = staerksterSieg();
     const farben = { weiss: leerRechnung(), schwarz: leerRechnung() };
     spiele.forEach(g => { if (farben[g.color]) zaehle(farben[g.color], g); });
 
     const reihen = [
-        { key: 'weiss', label: 'Mit Weiß', mark: '◻', tone: 'var(--text-1)', topf: farben.weiss },
-        { key: 'schwarz', label: 'Mit Schwarz', mark: '◼', tone: 'var(--text-3)', topf: farben.schwarz },
+        { label: 'Mit Weiß', mark: '◻', tone: 'var(--text-1)', topf: farben.weiss },
+        { label: 'Mit Schwarz', mark: '◼', tone: 'var(--text-3)', topf: farben.schwarz },
     ].filter(r => r.topf.n);
     const maxFarbe = Math.max(1, ...reihen.map(r => r.topf.n));
 
@@ -684,9 +664,9 @@ function zeichneForm() {
         <p class="sch-serie">${serie
             ? `Gerade <strong>${serie.n} ${serie.n === 1 ? 'Partie' : 'Partien'}</strong> in Folge
                ${serie.art === 'sieg' ? 'gewonnen' : serie.art === 'remis' ? 'remis' : 'verloren'},
-               zuletzt ${esc(vorTagen(spiele[0].played_at))}.`
-            : ''}
-            Die Reihe oben zeigt die letzten ${letzte.length} Partien, neueste links.</p>
+               zuletzt ${esc(vorTagen(spiele[0].played_at))}.` : ''}
+            ${stark ? `Stärkster Sieg: <strong>${wertung(stark.opponent_rating)}</strong>
+               gegen ${esc(stark.opponent)}.` : ''}</p>
         <div class="rank-list">${reihen.map(r => `
             <div class="rank-row" style="--tone:${r.tone}">
                 <span class="rank-mark sch-farbe-mark">${r.mark}</span>
@@ -695,7 +675,9 @@ function zeichneForm() {
                 <span class="rank-bar"><i style="width:${anteil(r.topf.n, maxFarbe)}%"></i></span>
                 <span class="rank-sub">${zahl(r.topf.n)} Partien · ${r.topf.s} Siege,
                     ${r.topf.r} Remis, ${r.topf.v} Niederlagen</span>
-            </div>`).join('')}</div>`;
+            </div>`).join('')}</div>
+        <p class="sch-note">Die Reihe oben zeigt die letzten ${letzte.length} Partien,
+            neueste links.</p>`;
 }
 
 /* Aus "Sicilian Defense: Najdorf Variation" und "Sicilian Defense Najdorf
@@ -715,9 +697,7 @@ function eroeffnungsFamilie(name) {
 
 function zeichneEroeffnungen() {
     const ziel = document.getElementById('schEroeffnungen');
-    const lbl = document.getElementById('schEroeffnungenLbl');
     if (!state.analyse) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
-    lbl.textContent = ausschnittLabel();
 
     const topf = {};
     state.analyse.games.forEach(g => {
@@ -745,22 +725,15 @@ function zeichneEroeffnungen() {
             <span class="rank-bar"><i style="width:${anteil(e.n, max)}%"></i></span>
             <span class="rank-sub">${anteil(e.s, e.n)} % gewonnen · ${e.s} S, ${e.r} R, ${e.v} N</span>
         </button>`).join('')}</div>
-        <p class="sch-note">Klick sucht die Eröffnung in den Partien.</p>`;
+`;
 
-    ziel.querySelectorAll('[data-eroeffnung]').forEach(b => b.addEventListener('click', () => {
-        state.filter.q = b.dataset.eroeffnung;
-        document.getElementById('schSuche').value = b.dataset.eroeffnung;
-        activateTab('partien');
-        zeichneFilterStand();
-        ladePartien(true);
-    }));
+    ziel.querySelectorAll('[data-eroeffnung]').forEach(b =>
+        b.addEventListener('click', () => sucheInPartien(b.dataset.eroeffnung)));
 }
 
 function zeichneArten() {
     const ziel = document.getElementById('schArten');
-    const lbl = document.getElementById('schArtenLbl');
     if (!state.analyse) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
-    lbl.textContent = ausschnittLabel();
 
     const topf = {};
     state.analyse.games.forEach(g => {
@@ -785,7 +758,7 @@ function zeichneArten() {
             <span class="rank-bar"><i style="width:${anteil(a.n, max)}%"></i></span>
             <span class="rank-sub">${anteil(a.s, a.n)} % gewonnen · ${a.s} S, ${a.r} R, ${a.v} N</span>
         </button>`).join('')}</div>
-        <p class="sch-note">Klick filtert die Partien auf diese Zeitkontrolle.</p>`;
+`;
 
     ziel.querySelectorAll('[data-art]').forEach(b => b.addEventListener('click', () => {
         state.filter.perf = b.dataset.art;
@@ -795,6 +768,56 @@ function zeichneArten() {
         zeichneFilterStand();
         ladePartien(true);
     }));
+}
+
+/* Gegen wen man wirklich spielt. Im Netz sind das oft dieselben Namen --
+   und die Bilanz gegen einen wiederkehrenden Gegner ist die Zahl, die man
+   wissen will. Unter zwei Partien steht niemand in der Liste: eine einzelne
+   Begegnung ist keine Bilanz. */
+function zeichneGegner() {
+    const ziel = document.getElementById('schGegner');
+    if (!state.analyse) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
+
+    const topf = {};
+    state.analyse.games.forEach(g => {
+        const name = (g.opponent || '').trim();
+        if (!name) return;
+        if (!topf[name]) topf[name] = leerRechnung();
+        zaehle(topf[name], g);
+    });
+    const liste = Object.keys(topf).map(k => ({ name: k, ...topf[k] }))
+        .filter(g => g.n > 1).sort((a, b) => b.n - a.n).slice(0, 6);
+
+    if (!liste.length) {
+        ziel.innerHTML = leerKarte('👥',
+            'In diesem Ausschnitt ist dir niemand zweimal begegnet — gegen einen einzelnen '
+            + 'Gegner gibt es noch keine Bilanz.');
+        return;
+    }
+    const max = liste[0].n;
+    ziel.innerHTML = `<div class="rank-list">${liste.map((g, i) => `
+        <button type="button" class="rank-row" style="--tone:var(--figure, var(--m-schach))"
+                data-gegner="${esc(g.name)}" title="Partien gegen ${esc(g.name)} suchen">
+            <span class="rank-mark">${i + 1}</span>
+            <span class="rank-name">${esc(g.name)}</span>
+            <span class="rank-val">${zahl(g.n)}</span>
+            <span class="rank-bar"><i style="width:${anteil(g.n, max)}%"></i></span>
+            <span class="rank-sub">${g.s} S, ${g.r} R, ${g.v} N · ${anteil(g.s, g.n)} % gewonnen</span>
+        </button>`).join('')}</div>`;
+
+    ziel.querySelectorAll('[data-gegner]').forEach(b => b.addEventListener('click', () => {
+        sucheInPartien(b.dataset.gegner);
+    }));
+}
+
+/* Ein Klick in einer Auswertung landet im selben Zustand, den man von Hand
+   erzeugen wuerde: Suchfeld gefuellt, Reiter gewechselt, Liste neu geladen. */
+function sucheInPartien(wert) {
+    state.filter.q = wert;
+    document.getElementById('schSuche').value = wert;
+    activateTab('partien');
+    zeichneFilterStand();
+    ladePartien(true);
 }
 
 /* --------------------------------------------------------------- Partien */
@@ -950,13 +973,7 @@ function zeigePartie(g) {
     </div>`;
 
     const modal = openModal(esc(g.opponent || 'Partie'), inhalt);
-    const such = (wert) => {
-        state.filter.q = wert;
-        document.getElementById('schSuche').value = wert;
-        modal.close();
-        zeichneFilterStand();
-        ladePartien(true);
-    };
+    const such = (wert) => { modal.close(); sucheInPartien(wert); };
     const e1 = document.getElementById('schDetailEroeffnung');
     if (e1) e1.addEventListener('click', () => such(eroeffnungsFamilie(g.opening) || g.opening));
     const e2 = document.getElementById('schDetailGegner');
@@ -1104,17 +1121,22 @@ function filterZuruecksetzen() {
 
 /* ---------------------------------------------------------------- Konten */
 
+/* Die Kontokarte traegt den Satz zum Import selbst -- und zwar den, der
+   gerade gilt: vor dem ersten Lauf die Warnung, dass es dauert, danach den
+   Hinweis, dass nur noch Neues kommt. Vorher stand beides in einer eigenen
+   Erklaerkarte am Ende der Seite, weit weg vom Knopf, den es erklaert. */
 function zeichneKonten() {
     const ziel = document.getElementById('schKonten');
     ziel.innerHTML = PLATTFORMEN.map(p => {
         const k = state.konten.find(x => x.platform === p.key);
+        const kopf = `<div class="v-card-head">
+                <h3><span class="sch-dot" data-platform="${p.key}" aria-hidden="true"></span>
+                    ${p.label}</h3>
+                <span class="v-card-sub">${k ? 'verbunden seit ' + datum(k.linked_at)
+                                             : 'nicht verbunden'}</span>
+            </div>`;
         if (!k) {
-            return `<div class="v-card">
-                <div class="v-card-head">
-                    <h3><span class="sch-dot" data-platform="${p.key}" aria-hidden="true"></span>
-                        ${p.label}</h3>
-                    <span class="v-card-sub">nicht verbunden</span>
-                </div>
+            return `<div class="v-card">${kopf}
                 <form class="sch-form" data-platform="${p.key}">
                     <label class="sch-feld">
                         <span>${p.hinweis}</span>
@@ -1123,22 +1145,21 @@ function zeichneKonten() {
                     </label>
                     <button type="submit" class="v-btn v-btn--primary">Verbinden</button>
                 </form>
+                <p class="sch-hinweis sch-hinweis--klein">Nur der Name — ${p.label} gibt Wertung
+                    und Partien öffentlich heraus, ein Passwort braucht es dafür nicht.</p>
             </div>`;
         }
-        const partien = k.games_count
+        const bestand = k.games_count
             ? `${zahl(k.games_count)} Partien · ${datum(k.games_from)} – ${datum(k.games_to)}`
             : 'noch keine Partien geholt';
-        return `<div class="v-card">
-            <div class="v-card-head">
-                <h3><span class="sch-dot" data-platform="${p.key}" aria-hidden="true"></span>
-                    ${p.label}</h3>
-                <span class="v-card-sub">verbunden seit ${datum(k.linked_at)}</span>
-            </div>
+        const geholt = k.games_at ? 'zuletzt geholt ' + vorTagen(k.games_at) : '';
+        return `<div class="v-card">${kopf}
             <div class="sch-konto">
                 <span class="v-icon-tile sch-konto-tile" style="--tone:var(--m-schach)" aria-hidden="true">♟️</span>
                 <div class="sch-konto-text">
                     <a href="${esc(k.profile_url)}" target="_blank" rel="noopener">${esc(k.username)}</a>
-                    <div class="sch-konto-sub">${partien}</div>
+                    <div class="sch-konto-sub">${bestand}</div>
+                    ${geholt ? `<div class="sch-konto-sub">${geholt}</div>` : ''}
                 </div>
             </div>
             <div class="sch-lauf" data-rolle="lauf-${k.id}" hidden></div>
@@ -1148,6 +1169,10 @@ function zeichneKonten() {
                 <button type="button" class="v-btn" data-stopp="${k.id}" hidden>Anhalten</button>
                 <button type="button" class="v-btn v-btn--danger" data-loesen="${k.id}">Konto lösen</button>
             </div>
+            <p class="sch-hinweis sch-hinweis--klein">${k.games_count
+                ? 'Holt nur, was seit dem letzten Lauf dazugekommen ist.'
+                : 'Beim ersten Mal dauert das bei langer Historie ein paar Minuten. Geholt wird '
+                  + 'stückweise — Anhalten verliert nichts, der nächste Lauf setzt dort fort.'}</p>
         </div>`;
     }).join('');
 
@@ -1311,8 +1336,8 @@ function starteTakt() {
         try {
             const res = await API.aktualisieren();
             state.konten = res.accounts;
-            zeichneKpi();
-            zeichneWertungen();
+            zeichneDisziplinen();
+            zeichneStaende();
         } catch (e) { /* beim naechsten Takt wieder */ }
     }, minuten * 60 * 1000);
 }
@@ -1323,8 +1348,8 @@ async function aktualisieren() {
     try {
         const res = await API.aktualisieren();
         state.konten = res.accounts;
-        zeichneKpi();
-        zeichneWertungen();
+        zeichneDisziplinen();
+        zeichneStaende();
         zeichneKonten();
         if (state.rangeMount) ladeVerlauf();
         if (res.problems && res.problems.length) melde(res.problems.join(' · '), 'error');
@@ -1362,7 +1387,7 @@ async function ladeAnalyse() {
     } catch (e) {
         state.analyse = { games: [], total: 0 };
     }
-    if (state.konten.length) { zeichneKpi(); zeichneAnalyse(); }
+    if (state.konten.length) zeichneAnalyse();
 }
 
 /* -------------------------------------------------------------- Reiter */

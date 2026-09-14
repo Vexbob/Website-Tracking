@@ -34,8 +34,7 @@
         <h1>♟️ Schach</h1>
         <p class="page-sub">
             Wertungszahl, Verlauf und Partien von <strong>Lichess</strong> und
-            <strong>Chess.com</strong> an einer Stelle — abgeholt statt abgetippt. Hinterlegt wird
-            nur der Benutzername: beide Plattformen geben diese Daten öffentlich heraus.
+            <strong>Chess.com</strong> an einer Stelle — abgeholt statt abgetippt.
         </p>
     </header>
 
@@ -45,7 +44,13 @@
         <button class="tab-btn" data-tab="konten">🔗 Konten</button>
     </div>
 
-    <!-- ====================== Überblick ====================== -->
+    <!-- ====================== Überblick ======================
+         Aufbau: erst der Stand samt Verlauf (die Frage, wegen der man die
+         Seite aufmacht), dann zwei klar getrennte Auswertungsebenen —
+         „Insgesamt" aus den Kopfzahlen des Servers und „der Ausschnitt" aus
+         den zuletzt geladenen Partien. Die Trennung steht als Überschrift da,
+         weil sonst auf einem Bildschirm zwei verschiedene Grundgesamtheiten
+         nebeneinander stünden, ohne dass man es sieht. -->
     <div id="tab-ueberblick">
 
         <!-- Ohne verbundenes Konto steht hier nur dieser eine Satz: eine Seite
@@ -53,73 +58,71 @@
         <div id="schLeer" hidden></div>
 
         <div id="schUeberblick" hidden>
-            <div class="kpi-block" id="schKpi">
-                <div class="kpi-hero"><div class="kpi-hero-main">
-                    <div class="lbl">Wertungszahl</div>
-                    <span class="skel" style="display:block;width:9rem;height:2.5rem"></span>
-                </div></div>
-            </div>
 
-            <div class="stat-card">
+            <!-- Kopfkarte: die Wertungszahl steht neben ihrer eigenen Kurve.
+                 Vorher waren das drei Blöcke (große Zahl, Vergleichsraster,
+                 Diagramm), die alle dasselbe gesagt haben. -->
+            <div class="stat-card sch-wertung">
                 <div class="stat-card-head">
-                    <h3>🏅 Wertungszahlen</h3>
+                    <h3>♟️ Wertung</h3>
                     <div class="sch-card-tools">
                         <span class="stat-range-lbl" id="schStand"></span>
                         <button type="button" class="v-btn v-btn--sm" id="schRefresh">Aktualisieren</button>
-                    </div>
-                </div>
-                <div id="schRatings"><span class="skel skel-block"></span></div>
-            </div>
-
-            <!-- Der Verlauf ist der Teil, den keine der beiden Plattformen
-                 herausgibt: er entsteht hier aus den Tageszeilen. -->
-            <div class="stat-card">
-                <div class="stat-card-head">
-                    <h3>📈 Verlauf</h3>
-                    <div class="sch-card-tools">
-                        <div class="stat-preset-chips" id="schVerlaufChips"></div>
                         <div class="stat-filter-slot" id="schVerlaufRange"></div>
                     </div>
                 </div>
-                <div id="schVerlaufLeer" hidden></div>
-                <div id="schVerlaufBox">
-                    <div class="chart-wrap"><canvas id="schVerlaufChart"></canvas></div>
-                    <div class="sch-legende" id="schVerlaufLegende"></div>
+
+                <!-- Der Umschalter ist zugleich die Übersicht: jede Disziplin
+                     trägt ihre Zahl, sonst müsste man fünfmal klicken, um zu
+                     sehen, wo man steht. -->
+                <div class="stat-preset-chips sch-disziplinen" id="schDisziplinen"></div>
+
+                <div class="sch-wertung-koerper">
+                    <div class="sch-staende" id="schStaende"></div>
+                    <div class="sch-kurve">
+                        <div id="schVerlaufLeer" hidden></div>
+                        <div class="chart-wrap" id="schVerlaufBox"><canvas id="schVerlaufChart"></canvas></div>
+                    </div>
                 </div>
                 <p class="sch-note" id="schVerlaufNote"></p>
             </div>
 
+            <div class="section-header">
+                <span class="eyebrow">Insgesamt</span>
+                <h2>Bilanz</h2>
+                <div class="sub" id="schBilanzSub">alle Partien, die im Bestand liegen</div>
+            </div>
+            <div class="stat-card">
+                <div id="schBilanz"><span class="skel skel-block"></span></div>
+            </div>
+
+            <div class="section-header">
+                <span class="eyebrow" id="schAusschnittMarke">Ausschnitt</span>
+                <h2 id="schAusschnittTitel">Die letzten Partien</h2>
+                <div class="sub">Diese vier Karten rechnen über die zuletzt geladenen Partien —
+                    weiter zurück gibt der Bestand ohne einen eigenen Zeitraum nichts her.
+                    Ein Klick auf eine Zeile zeigt sie in den Partien.</div>
+            </div>
+
             <div class="split-2">
                 <div class="stat-card">
-                    <div class="stat-card-head">
-                        <h3>⚖️ Bilanz</h3>
-                        <span class="stat-range-lbl">alle gespeicherten Partien</span>
-                    </div>
-                    <div id="schBilanz"><span class="skel skel-block"></span></div>
+                    <div class="stat-card-head"><h3>🔥 Form</h3></div>
+                    <div id="schForm"><span class="skel skel-block"></span></div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-card-head">
-                        <h3>🔥 Form</h3>
-                        <span class="stat-range-lbl" id="schFormLbl"></span>
-                    </div>
-                    <div id="schForm"><span class="skel skel-block"></span></div>
+                    <div class="stat-card-head"><h3>⏱️ Zeitkontrollen</h3></div>
+                    <div id="schArten"><span class="skel skel-block"></span></div>
                 </div>
             </div>
 
             <div class="split-2">
                 <div class="stat-card">
-                    <div class="stat-card-head">
-                        <h3>📖 Eröffnungen</h3>
-                        <span class="stat-range-lbl" id="schEroeffnungenLbl"></span>
-                    </div>
+                    <div class="stat-card-head"><h3>📖 Eröffnungen</h3></div>
                     <div id="schEroeffnungen"><span class="skel skel-block"></span></div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-card-head">
-                        <h3>⏱️ Zeitkontrollen</h3>
-                        <span class="stat-range-lbl" id="schArtenLbl"></span>
-                    </div>
-                    <div id="schArten"><span class="skel skel-block"></span></div>
+                    <div class="stat-card-head"><h3>👥 Gegner</h3></div>
+                    <div id="schGegner"><span class="skel skel-block"></span></div>
                 </div>
             </div>
         </div>
@@ -205,12 +208,6 @@
                 <h3>Automatik</h3>
                 <span class="v-card-sub" id="schAutoStand"></span>
             </div>
-            <p class="sch-hinweis">
-                Zwei Takte, weil es zwei verschiedene Dinge sind: <strong>Partien</strong> holt der
-                Server einmal täglich von selbst — dafür muss keine Seite offen sein.
-                <strong>Wertungszahlen</strong> ändern sich nur, wenn gespielt wurde; sie werden
-                nachgeholt, solange diese Seite offen ist.
-            </p>
 
             <div class="sch-opt">
                 <label class="sch-schalter">
@@ -222,6 +219,8 @@
                     <select class="v-select" id="schAutoHour"></select>
                 </label>
             </div>
+            <p class="sch-hinweis sch-hinweis--klein">Dafür muss keine Seite offen sein — den
+                täglichen Lauf macht der Server.</p>
 
             <div class="sch-opt">
                 <label class="sch-feld sch-feld--eng">
@@ -235,39 +234,14 @@
                     </select>
                 </label>
             </div>
-
-            <p class="sch-hinweis sch-hinweis--klein">
-                Häufiger als alle fünf Minuten geht bewusst nicht: eine Wertungszahl bewegt sich
-                nur nach einer Partie, und beide Plattformen bremsen Abfragen, die im Minutentakt
-                kommen.
-            </p>
+            <p class="sch-hinweis sch-hinweis--klein">Häufiger als alle fünf Minuten geht bewusst
+                nicht: eine Wertungszahl bewegt sich nur nach einer Partie, und beide Plattformen
+                bremsen Abfragen im Minutentakt. Der Verlauf selbst entsteht dabei: jeder Abruf
+                hält eine Tageszeile fest, die es bei keiner der beiden Plattformen gibt.</p>
 
             <div class="sch-konto-tasten">
                 <button type="button" class="v-btn v-btn--primary" id="schAutoSpeichern">Speichern</button>
             </div>
-        </div>
-
-        <div class="v-card">
-            <div class="v-card-head">
-                <h3>Wie der Import arbeitet</h3>
-                <span class="v-card-sub">gut zu wissen</span>
-            </div>
-            <p class="sch-hinweis">
-                Partien werden <strong>stückweise</strong> geholt und der Stand am Konto vermerkt:
-                ein Abbruch mittendrin verliert nichts, der nächste Lauf setzt genau dort fort.
-                Beim ersten Mal kann das bei langer Historie ein paar Minuten dauern — danach holt
-                derselbe Knopf nur noch das Neue. Anhalten geht jederzeit; das Geholte bleibt.
-            </p>
-            <p class="sch-hinweis">
-                Die Wertungszahl gibt es bei beiden nur als <strong>aktuellen Stand</strong>, nicht
-                als Verlauf. Vexbob hält deshalb bei jedem Abruf eine Tageszeile fest — der Verlauf
-                entsteht ab heute und wächst mit jedem Tag, an dem du hier vorbeischaust.
-            </p>
-            <p class="sch-hinweis sch-hinweis--klein">
-                Zwei Angaben liefert <strong>Chess.com</strong> nicht mit: die Wertungsdifferenz je
-                Partie und den aktuellen Stand der Rätsel-Wertung — dort steht deshalb der
-                Bestwert, und er ist als solcher gekennzeichnet.
-            </p>
         </div>
     </div>
 
