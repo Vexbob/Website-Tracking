@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0a0c10">
-<meta name="description" content="Schach: Wertungszahl und Partien von Lichess und Chess.com an einer Stelle.">
+<meta name="description" content="Schach: Wertungszahl, Verlauf und Partien von Lichess und Chess.com an einer Stelle.">
 <title>Schach — Vexbob</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -16,6 +16,9 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/sw-update.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/range-filter.js"></script>
 </head>
 <body>
 <nav class="navbar">
@@ -30,9 +33,9 @@
     <header class="page-head">
         <h1>♟️ Schach</h1>
         <p class="page-sub">
-            Wertungszahl und Partien von <strong>Lichess</strong> und <strong>Chess.com</strong> an
-            einer Stelle — abgeholt statt abgetippt. Beide Plattformen geben das öffentlich heraus;
-            hinterlegt wird nur der Benutzername, kein Passwort.
+            Wertungszahl, Verlauf und Partien von <strong>Lichess</strong> und
+            <strong>Chess.com</strong> an einer Stelle — abgeholt statt abgetippt. Hinterlegt wird
+            nur der Benutzername: beide Plattformen geben diese Daten öffentlich heraus.
         </p>
     </header>
 
@@ -40,32 +43,89 @@
         <button class="tab-btn active" data-tab="ueberblick">📈 Überblick</button>
         <button class="tab-btn" data-tab="partien">♟️ Partien</button>
         <button class="tab-btn" data-tab="konten">🔗 Konten</button>
-        <button class="tab-btn" data-tab="automatik">⚙️ Automatik</button>
     </div>
 
-    <!-- ---------- Überblick ---------- -->
+    <!-- ====================== Überblick ====================== -->
     <div id="tab-ueberblick">
-        <div class="v-card">
-            <div class="v-card-head">
-                <h3>Wertungszahl</h3>
-                <div class="sch-head-tools">
-                    <span class="v-card-sub" id="schStand"></span>
-                    <button type="button" class="v-btn v-btn--sm" id="schRefresh">Aktualisieren</button>
+
+        <!-- Ohne verbundenes Konto steht hier nur dieser eine Satz: eine Seite
+             voller leerer Karten sagt nicht, was zu tun ist. -->
+        <div id="schLeer" hidden></div>
+
+        <div id="schUeberblick" hidden>
+            <div class="kpi-block" id="schKpi">
+                <div class="kpi-hero"><div class="kpi-hero-main">
+                    <div class="lbl">Wertungszahl</div>
+                    <span class="skel" style="display:block;width:9rem;height:2.5rem"></span>
+                </div></div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-card-head">
+                    <h3>🏅 Wertungszahlen</h3>
+                    <div class="sch-card-tools">
+                        <span class="stat-range-lbl" id="schStand"></span>
+                        <button type="button" class="v-btn v-btn--sm" id="schRefresh">Aktualisieren</button>
+                    </div>
+                </div>
+                <div id="schRatings"><span class="skel skel-block"></span></div>
+            </div>
+
+            <!-- Der Verlauf ist der Teil, den keine der beiden Plattformen
+                 herausgibt: er entsteht hier aus den Tageszeilen. -->
+            <div class="stat-card">
+                <div class="stat-card-head">
+                    <h3>📈 Verlauf</h3>
+                    <div class="sch-card-tools">
+                        <div class="stat-preset-chips" id="schVerlaufChips"></div>
+                        <div class="stat-filter-slot" id="schVerlaufRange"></div>
+                    </div>
+                </div>
+                <div id="schVerlaufLeer" hidden></div>
+                <div id="schVerlaufBox">
+                    <div class="chart-wrap"><canvas id="schVerlaufChart"></canvas></div>
+                    <div class="sch-legende" id="schVerlaufLegende"></div>
+                </div>
+                <p class="sch-note" id="schVerlaufNote"></p>
+            </div>
+
+            <div class="split-2">
+                <div class="stat-card">
+                    <div class="stat-card-head">
+                        <h3>⚖️ Bilanz</h3>
+                        <span class="stat-range-lbl">alle gespeicherten Partien</span>
+                    </div>
+                    <div id="schBilanz"><span class="skel skel-block"></span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-head">
+                        <h3>🔥 Form</h3>
+                        <span class="stat-range-lbl" id="schFormLbl"></span>
+                    </div>
+                    <div id="schForm"><span class="skel skel-block"></span></div>
                 </div>
             </div>
-            <div id="schRatings"><span class="skel skel-block"></span></div>
-        </div>
 
-        <div class="v-card" id="schBilanzCard" hidden>
-            <div class="v-card-head">
-                <h3>Bilanz</h3>
-                <span class="v-card-sub">aus den gespeicherten Partien</span>
+            <div class="split-2">
+                <div class="stat-card">
+                    <div class="stat-card-head">
+                        <h3>📖 Eröffnungen</h3>
+                        <span class="stat-range-lbl" id="schEroeffnungenLbl"></span>
+                    </div>
+                    <div id="schEroeffnungen"><span class="skel skel-block"></span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-head">
+                        <h3>⏱️ Zeitkontrollen</h3>
+                        <span class="stat-range-lbl" id="schArtenLbl"></span>
+                    </div>
+                    <div id="schArten"><span class="skel skel-block"></span></div>
+                </div>
             </div>
-            <div id="schBilanz"></div>
         </div>
     </div>
 
-    <!-- ---------- Partien ---------- -->
+    <!-- ====================== Partien ====================== -->
     <div id="tab-partien" hidden>
         <div class="stat-filterbar sch-filterbar">
             <label class="sch-suche">
@@ -73,9 +133,8 @@
                 <input type="search" id="schSuche" placeholder="Gegner oder Eröffnung"
                        aria-label="In den Partien suchen" autocomplete="off">
             </label>
-            <div class="stat-preset-chips" id="schChipsPlattform"></div>
             <div class="stat-preset-chips" id="schChipsErgebnis"></div>
-            <select class="v-select" id="schArt" aria-label="Zeitkontrolle"></select>
+
             <select class="v-select" id="schSort" aria-label="Sortierung">
                 <option value="datum:desc">Neueste zuerst</option>
                 <option value="datum:asc">Älteste zuerst</option>
@@ -84,6 +143,45 @@
                 <option value="gegner:desc">Stärkster Gegner</option>
                 <option value="eigen:desc">Eigene Wertung, hoch</option>
             </select>
+
+            <!-- Suche und Ergebnis bleiben sichtbar, alles Seltenere liegt
+                 hinter dem Knopf: dieselbe Aufteilung wie im Ausgaben-Modul.
+                 Auf dem Handy waren es vorher fünf Zeilen Filter über einer
+                 Liste, die man sehen wollte. Der Punkt am Knopf sagt, wie
+                 viele davon gesetzt sind — ein Filter, den man nicht sieht,
+                 ist eine Falle. -->
+            <div class="filter-popover-wrap">
+                <button type="button" id="schFilterKnopf" class="filter-toggle-btn"
+                        aria-expanded="false" aria-haspopup="dialog" aria-controls="schFilterFeld">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true"><path d="M4 5h16M7 12h10M10 19h4"/></svg>
+                    <span>Filter</span>
+                    <span class="filter-badge" id="schFilterBadge" hidden>0</span>
+                </button>
+                <div id="schFilterFeld" class="filter-popover" role="dialog" aria-label="Filter" hidden>
+                    <div class="fp-row" id="schPlattformZeile" hidden>
+                        <label class="fp-label" for="schPlattform">Plattform</label>
+                        <select id="schPlattform"></select>
+                    </div>
+                    <div class="fp-row">
+                        <label class="fp-label" for="schArt">Zeitkontrolle</label>
+                        <select id="schArt"></select>
+                    </div>
+                    <div class="fp-row">
+                        <label class="fp-label" for="schWertung">Wertung</label>
+                        <select id="schWertung">
+                            <option value="">Gewertet und nicht</option>
+                            <option value="true">Nur gewertete</option>
+                            <option value="false">Nur ungewertete</option>
+                        </select>
+                    </div>
+                    <div class="fp-actions">
+                        <button type="button" class="fp-btn fp-btn-ghost" id="schFilterWeg">Zurücksetzen</button>
+                        <button type="button" class="fp-btn fp-btn-primary" id="schFilterFertig">Fertig</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="stat-card">
@@ -91,49 +189,17 @@
                 <h3>♟️ Partien</h3>
                 <span class="stat-range-lbl" id="schPartienSumme"></span>
             </div>
-            <div class="sch-table-scroll">
-                <table class="stat-table" id="schPartienTabelle" hidden>
-                    <thead>
-                        <tr>
-                            <th>Datum</th><th>Wo</th><th>Art</th><th>Farbe</th>
-                            <th>Gegner</th><th>Ergebnis</th><th class="num">±</th><th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="schPartienBody"></tbody>
-                </table>
-            </div>
-            <div id="schPartienLeer"><span class="skel skel-block"></span></div>
+            <div id="schPartienListe"><span class="skel skel-block"></span></div>
             <div class="sch-pager">
-                <button type="button" class="v-btn v-btn--sm" id="schMehr" hidden>Mehr laden</button>
+                <button type="button" class="v-btn v-btn--sm" id="schMehr" hidden>Weitere laden</button>
             </div>
         </div>
     </div>
 
-    <!-- ---------- Konten ---------- -->
+    <!-- ====================== Konten ====================== -->
     <div id="tab-konten" hidden>
         <div id="schKonten"><span class="skel skel-block"></span></div>
 
-        <div class="v-card">
-            <div class="v-card-head">
-                <h3>Wie der Import arbeitet</h3>
-                <span class="v-card-sub">gut zu wissen</span>
-            </div>
-            <p class="sch-hinweis">
-                Partien werden <strong>stückweise</strong> geholt und der Stand am Konto vermerkt:
-                ein Abbruch mittendrin verliert nichts, der nächste Lauf setzt genau dort fort.
-                Beim ersten Mal kann das bei langer Historie ein paar Minuten dauern — danach holt
-                derselbe Knopf nur noch das Neue.
-            </p>
-            <p class="sch-hinweis">
-                Die Wertungszahl gibt es bei beiden nur als <strong>aktuellen Stand</strong>, nicht
-                als Verlauf. Vexbob hält deshalb bei jedem Abruf eine Tageszeile fest — der Verlauf
-                entsteht ab heute und wächst mit jedem Tag, an dem du hier vorbeischaust.
-            </p>
-        </div>
-    </div>
-
-    <!-- ---------- Automatik ---------- -->
-    <div id="tab-automatik" hidden>
         <div class="v-card">
             <div class="v-card-head">
                 <h3>Automatik</h3>
@@ -179,6 +245,29 @@
             <div class="sch-konto-tasten">
                 <button type="button" class="v-btn v-btn--primary" id="schAutoSpeichern">Speichern</button>
             </div>
+        </div>
+
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Wie der Import arbeitet</h3>
+                <span class="v-card-sub">gut zu wissen</span>
+            </div>
+            <p class="sch-hinweis">
+                Partien werden <strong>stückweise</strong> geholt und der Stand am Konto vermerkt:
+                ein Abbruch mittendrin verliert nichts, der nächste Lauf setzt genau dort fort.
+                Beim ersten Mal kann das bei langer Historie ein paar Minuten dauern — danach holt
+                derselbe Knopf nur noch das Neue. Anhalten geht jederzeit; das Geholte bleibt.
+            </p>
+            <p class="sch-hinweis">
+                Die Wertungszahl gibt es bei beiden nur als <strong>aktuellen Stand</strong>, nicht
+                als Verlauf. Vexbob hält deshalb bei jedem Abruf eine Tageszeile fest — der Verlauf
+                entsteht ab heute und wächst mit jedem Tag, an dem du hier vorbeischaust.
+            </p>
+            <p class="sch-hinweis sch-hinweis--klein">
+                Zwei Angaben liefert <strong>Chess.com</strong> nicht mit: die Wertungsdifferenz je
+                Partie und den aktuellen Stand der Rätsel-Wertung — dort steht deshalb der
+                Bestwert, und er ist als solcher gekennzeichnet.
+            </p>
         </div>
     </div>
 

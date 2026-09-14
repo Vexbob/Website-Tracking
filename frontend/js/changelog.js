@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.92.0', date: '2026-09-14', title: 'Schach: die fertige Fassung', notes: [
+        'Der Wertungsverlauf steht endlich als Kurve auf der Seite — die Tageszeilen dafür lagen längst im Bestand, zu sehen waren sie nirgends.',
+        'Der Überblick beantwortet die Fragen, die man beim Schach wirklich hat: Siegquote, aktuelle Serie, stärkster geschlagener Gegner, die Form der letzten zwanzig Partien und die eigenen Eröffnungen und Zeitkontrollen.',
+        'Die Partienliste ist keine quer scrollende Tabelle mehr: eine Zeile je Partie mit Ergebnis, Gegner, Eröffnung und Wertungsdifferenz, ein Tippen zeigt den Rest.',
+        'Gefiltert wird nach Ergebnis, Plattform, Zeitkontrolle und Wertung — das Seltene liegt hinter einem Knopf, der mitzählt, wie viel gesetzt ist.',
+        'Ein laufender Import lässt sich anhalten und zählt mit; Konten und Automatik stehen zusammen unter einem Reiter statt unter zweien.',
+    ]},
     { v: 'v1.91.0', date: '2026-09-14', title: 'Ernährung: Katalog per Ablegefläche', notes: [
         'Der Lebensmittel-Katalog lässt sich jetzt auf der Seite selbst einspielen — Datei ablegen, fertig. Kommandozeile und ein öffentlich erreichbarer Datenbankzugang entfallen damit.',
         'Vor dem Ersetzen steht da, wie viele Produkte gerade im Katalog stehen: ein Abzug ist ein Stand und ersetzt den bisherigen vollständig.',

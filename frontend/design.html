@@ -295,6 +295,57 @@
     </section>
 
     <section class="sg-sec">
+        <h2>Datensatzliste</h2>
+        <p class="sg-note">Viele gleichartige Datensätze untereinander: Marke, Titelzeile,
+        Meta-Zeile, Wert am Rand. Sie ersetzt die Tabelle überall dort, wo nicht Spalte gegen
+        Spalte gelesen wird — ein Partienprotokoll hat acht Angaben je Zeile, und davon lag auf
+        dem Handy die Hälfte hinter dem rechten Rand. <strong>Wenige, ungleiche Zeilen bleiben ein
+        <code>.v-row</code>-Stapel; ein Zahlenraster bleibt eine <code>.stat-table</code>.</strong>
+        Die Zeile darf ein <code>&lt;button&gt;</code> oder <code>&lt;a&gt;</code> sein, wenn
+        dahinter etwas aufgeht — dann trägt sie den Winkel rechts.</p>
+        <div class="v-card">
+            <div class="rec-list">
+                <button type="button" class="rec-row">
+                    <span class="rec-mark" style="--tone:var(--ok)">S</span>
+                    <span class="rec-main">
+                        <span class="rec-title">Kasparov1985 <span style="color:var(--text-3);font-weight:500">1842</span></span>
+                        <span class="rec-meta">Mo, 08.09.2026 14:32<span class="sep">·</span>Blitz<span class="sep">·</span>Weiß<span class="sep">·</span>Sizilianisch</span>
+                    </span>
+                    <span class="rec-side">
+                        <span class="rec-val" style="color:var(--ok)">+8</span>
+                        <span class="rec-sub">1721</span>
+                    </span>
+                    <span class="rec-go" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="rec-row">
+                    <span class="rec-mark" style="--tone:var(--text-3)">R</span>
+                    <span class="rec-main">
+                        <span class="rec-title">jan_fischer</span>
+                        <span class="rec-meta">So, 07.09.2026 19:04<span class="sep">·</span>Rapid<span class="sep">·</span>Schwarz</span>
+                    </span>
+                    <span class="rec-side">
+                        <span class="rec-val">±0</span>
+                        <span class="rec-sub">1713</span>
+                    </span>
+                    <span class="rec-go" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="rec-row">
+                    <span class="rec-mark" style="--tone:var(--danger)">N</span>
+                    <span class="rec-main">
+                        <span class="rec-title">Bot_Level5 <span style="color:var(--text-3);font-weight:500">2100</span></span>
+                        <span class="rec-meta">So, 07.09.2026 18:40<span class="sep">·</span>Bullet<span class="sep">·</span>Weiß<span class="sep">·</span>aufgegeben</span>
+                    </span>
+                    <span class="rec-side">
+                        <span class="rec-val" style="color:var(--danger)">−11</span>
+                        <span class="rec-sub">1713</span>
+                    </span>
+                    <span class="rec-go" aria-hidden="true">›</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
         <h2>Auswahlfeld</h2>
         <p class="sg-note">Ein <code>&lt;select&gt;</code> sieht ohne Zutun in jedem Browser
         anders aus. <code>.v-select</code> ist die einzige Fassung — kein Chip mit

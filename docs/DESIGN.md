@@ -209,6 +209,33 @@ Handy zwei Zeilen.
 - Ist etwas anderes als der Standard gewählt, trägt der Knopf den Akzent
   (`.has-active`). Ein Filter, den man nicht sieht, ist eine Falle.
 
+## 6c Listen von Datensätzen
+
+Drei Formen, und die Wahl hängt allein daran, **wie gelesen wird**:
+
+| Form | Wofür |
+|---|---|
+| `.v-row`-Stapel | wenige, ungleiche Zeilen in einer Karte |
+| `.rec-list` | viele gleichartige Datensätze (Partien, Buchungen, Läufe) |
+| `.stat-table` | ein Zahlenraster, bei dem Spalte gegen Spalte gelesen wird |
+
+Eine `.rec-list`-Zeile trägt eine Marke, eine Titelzeile, eine Meta-Zeile und
+einen Wert am Rand. Sie ist die Antwort auf die quer scrollende Tabelle: ein
+Partienprotokoll hat acht Angaben je Zeile, und davon lag auf dem Handy die
+Hälfte hinter dem rechten Rand. Wer waagerecht scrollen muss, um das Ergebnis
+zu sehen, liest die Liste nicht.
+
+- Die Zeile liegt eine Ebene über der Karte (`--surface-2`), getrennt wird
+  durch 1-px-Lücken auf `--line` — dieselbe Rasterkante wie beim
+  Wertungsvergleich, kein Schatten.
+- Sie darf ein `<a>` oder `<button>` sein, wenn dahinter etwas aufgeht; dann
+  trägt sie rechts den Winkel und die vollen sieben Zustände. Die globale
+  Button-Base wird dafür in `style.css` zurückgenommen — eine Ergänzung der
+  Komponente, keine zweite Variante.
+- Die Marke trägt Status- oder Entitätsfarbe als 18-%-Tönung, nie als
+  Vollfläche.
+- Trennzeichen in der Meta-Zeile sind `--text-4`; die Angaben daneben nicht.
+
 ## 7. Diagramme
 
 Reduziert, ruhig, dieselbe Farbwelt.
