@@ -150,7 +150,7 @@ Anschließend `http://localhost:5500` öffnen. `frontend/js/config.js` zeigt sta
 
 Ohne diesen Schritt funktioniert das Modul vollständig — es fragt dann bei jeder Suche live bei Open Food Facts nach. Das ist ein ehrenamtlich betriebener Dienst, der unter Last mit `503` antwortet; ein eigener Abzug macht die Suche schnell und unabhängig davon.
 
-Der fertige Katalog liegt als **`backend/data/off-katalog-dach.csv.gz`** im Repo (rund 10 MB).
+Der fertige Katalog liegt als **`backend/data/off-katalog-dach.csv.gz`** im Repo (rund 10 MB). Er ist ein Auszug aus der Datenbank von Open Food Facts und steht wie das Original unter der ODbL — Herkunft und Lizenz stehen in `backend/data/HERKUNFT.md`. Personenbezogene Daten sind keine darin, nur Produktangaben.
 
 **Der einfache Weg:** im Modul unter *Scanner* → Karte **Katalog einspielen** die Datei ablegen. Sichtbar ist die Karte nur für Admins; der Katalog gehört keinem Konto. Vor dem Ersetzen steht da, was ersetzt wird.
 
