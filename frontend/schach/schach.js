@@ -71,7 +71,7 @@ const state = {
     konten: [], bilanz: [], einstellungen: null,
     analyse: null,                 // { games, total } -- der Ausschnitt
     gezeigt: [],                   // die Partien, die gerade in der Liste stehen
-    offset: 0, gesamt: 0,
+    offset: 0,
     laeuft: false, stopp: false,
     perf: null,                    // Disziplin des Verlaufs
     range: null, rangeMount: null, filterFeldZu: null,
@@ -350,8 +350,9 @@ function mountRange() {
     if (!state.perf) state.perf = fuehrendeDisziplin();
     // Der Zeitraum-Knopf meldet beim Einhaengen einmal -- das ist die erste
     // Ladung des Verlaufs.
+    // Kein eigenes Preset: ohne ausdruecklichen Wunsch gilt die Einstellung
+    // des Kontos (ui_default_range), so wie in jedem anderen Modul.
     state.rangeMount = VexRange.mount(host, {
-        preset: '30',
         onChange: (r) => { state.range = r; ladeVerlauf(); },
     });
 }
@@ -387,7 +388,19 @@ async function ladeVerlauf() {
         if (state.chart) { state.chart.destroy(); state.chart = null; }
         box.hidden = true;
         leer.hidden = false;
-        leer.innerHTML = leerKarte('📈', tage.length
+        // Drei verschiedene Gruende, drei verschiedene Saetze. Der haeufigste
+        // Fehler waere, den Bestwert-Fall wie "noch keine Daten" aussehen zu
+        // lassen: dort wird nie eine Kurve entstehen.
+        // "Nur ein Bestwert" gilt erst, wenn KEINE Plattform zu dieser
+        // Disziplin einen Tagesstand fuehrt. Sonst stuende der Satz auch
+        // dort, wo eine Kurve entstehen wird -- sie ist nur noch leer.
+        const zahlen = state.konten.flatMap(k =>
+            (k.ratings || []).filter(r => r.perf === state.perf));
+        const nurBestwert = !tage.length && zahlen.length > 0 && zahlen.every(r => r.is_best);
+        leer.innerHTML = leerKarte('📈', nurBestwert
+            ? 'Zu dieser Zahl gibt es keinen Verlauf: Chess.com gibt hier nur den Bestwert '
+              + 'heraus, keinen Tagesstand — und ein Bestwert kann sich nur nach oben bewegen.'
+            : tage.length
             ? `Bisher steht genau ein Tag im Verlauf (${datum(tage[0])}). Eine Linie braucht zwei —
                der zweite kommt beim nächsten Abruf.`
             : 'Für diesen Zeitraum steht noch kein Stand fest. Der Verlauf entsteht hier und nicht '
@@ -488,9 +501,15 @@ function zeichneVerlauf(punkte, tage) {
 
     state.chart = new Chart(canvas, { type: 'line', data: { labels: kurz, datasets }, options: opts });
 
+    // Der hoechste Stand im Fenster ist die Zahl, nach der man sucht, wenn
+    // man auf eine Kurve schaut. Sie steht in den geladenen Punkten -- sie
+    // extra zu holen waere eine Abfrage fuer eine Zeile Text.
+    let hoch = null;
+    punkte.forEach(pt => { if (!hoch || pt.rating > hoch.rating) hoch = pt; });
     document.getElementById('schVerlaufNote').textContent =
-        `${perfLabel(state.perf)}, ${datum(von)} bis ${datum(bis)}. `
-        + 'An Tagen ohne Abruf gilt der letzte bekannte Stand — eine Wertungszahl '
+        `${perfLabel(state.perf)}, ${datum(von)} bis ${datum(bis)}`
+        + (hoch ? ` · höchster Stand ${hoch.rating} am ${datum(hoch.taken_on)}` : '')
+        + '. An Tagen ohne Abruf gilt der letzte bekannte Stand — eine Wertungszahl '
         + 'bewegt sich nur nach einer Partie.';
 }
 
@@ -724,8 +743,7 @@ function zeichneEroeffnungen() {
             <span class="rank-val">${zahl(e.n)}</span>
             <span class="rank-bar"><i style="width:${anteil(e.n, max)}%"></i></span>
             <span class="rank-sub">${anteil(e.s, e.n)} % gewonnen · ${e.s} S, ${e.r} R, ${e.v} N</span>
-        </button>`).join('')}</div>
-`;
+        </button>`).join('')}</div>`;
 
     ziel.querySelectorAll('[data-eroeffnung]').forEach(b =>
         b.addEventListener('click', () => sucheInPartien(b.dataset.eroeffnung)));
@@ -757,8 +775,7 @@ function zeichneArten() {
             <span class="rank-val">${zahl(a.n)}</span>
             <span class="rank-bar"><i style="width:${anteil(a.n, max)}%"></i></span>
             <span class="rank-sub">${anteil(a.s, a.n)} % gewonnen · ${a.s} S, ${a.r} R, ${a.v} N</span>
-        </button>`).join('')}</div>
-`;
+        </button>`).join('')}</div>`;
 
     ziel.querySelectorAll('[data-art]').forEach(b => b.addEventListener('click', () => {
         state.filter.perf = b.dataset.art;
@@ -848,7 +865,6 @@ async function ladePartien(vonVorn) {
         mehr.hidden = true;
         return;
     }
-    state.gesamt = res.total;
 
     if (!res.total) {
         mehr.hidden = true;
@@ -925,7 +941,11 @@ function partieZeile(g) {
         g.rated === false ? 'ungewertet' : '',
     ].filter(Boolean);
 
-    return `<button type="button" class="rec-row" data-partie="${esc(g.id)}">
+    // Das S/R/N ist eine Abkuerzung -- im Titel steht das Ergebnis
+    // ausgeschrieben, damit die Zeile auch vorgelesen einen Sinn ergibt.
+    const titel = `${ERGEBNIS_LABEL[g.result] || 'Partie'} gegen ${g.opponent || 'Unbekannt'}`;
+    return `<button type="button" class="rec-row" data-partie="${esc(g.id)}"
+            title="${esc(titel)} — für alle Angaben antippen">
         <span class="rec-mark" style="--tone:${ergebnisTon(g.result)}">${ERGEBNIS_KURZ[g.result] || '?'}</span>
         <span class="rec-main">
             <span class="rec-title">${esc(g.opponent || 'Unbekannt')}${g.opponent_rating
@@ -1162,7 +1182,7 @@ function zeichneKonten() {
                     ${geholt ? `<div class="sch-konto-sub">${geholt}</div>` : ''}
                 </div>
             </div>
-            <div class="sch-lauf" data-rolle="lauf-${k.id}" hidden></div>
+            <div class="sch-lauf" data-rolle="lauf-${k.id}" role="status" aria-live="polite" hidden></div>
             <div class="sch-konto-tasten">
                 <button type="button" class="v-btn v-btn--primary" data-holen="${k.id}">
                     ${k.games_count ? 'Neue Partien holen' : 'Alle Partien holen'}</button>
@@ -1372,7 +1392,12 @@ async function ladeSummary() {
     } catch (e) {
         state.konten = []; state.bilanz = [];
     }
-    if (!state.perf) state.perf = fuehrendeDisziplin();
+    // Nach dem Loesen eines Kontos kann die gewaehlte Disziplin verschwunden
+    // sein -- dann stuende der Umschalter auf nichts und das Diagramm fragte
+    // eine Zahl ab, die es nicht mehr gibt.
+    if (!state.perf || !disziplinen().some(d => d.perf === state.perf)) {
+        state.perf = fuehrendeDisziplin();
+    }
     zeichneUeberblick();
     zeichneKonten();
     zeichnePlattformAuswahl();
