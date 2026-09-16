@@ -305,6 +305,30 @@ Reduziert, ruhig, dieselbe Farbwelt.
   kleinere `order` weiter vorn — unter einer gefüllten Wertlinie wäre die
   Trendlinie bei sprunghaften Daten unsichtbar.
 
+## 7a. Ringe
+
+Ein Ring beantwortet **eine** Frage: wie viel von einem Ziel. Mehr als eine
+Zahl trägt er nicht, und für Anteile an einem Ganzen (Kategorien, Posten)
+bleibt die Rangliste zuständig — das ist der Unterschied zum Ringdiagramm,
+das in Abschnitt 7 bei fünf, sechs Posten endet.
+
+Eine Komponente, zwei Formen (`.v-ring` in `css/style.css`, Muster in
+`design.html`):
+
+- **Halbkreis** (`.v-ring--halb`) für die eine grosse Zahl. Er liest sich wie
+  ein Tank: es gibt ein Maximum, und der freie Rest ist die eigentliche
+  Auskunft.
+- **Vollkreis** für die kleinen daneben. Er liest sich als Anteil und
+  vergleicht sich gut mit seinen Nachbarn. Jeder trägt seine Beschriftung
+  darunter — so braucht keine Reihe eine Legende.
+- Gesteuert wird ausschliesslich über CSS-Variablen (`--ring-val`,
+  `--ring-over`, `--ring-tone`). Kein Hex in JS, keine Inline-Farbe.
+- **Über dem Ziel** reitet ein zweiter Bogen in `--warn` von vorn über den
+  vollen Ring, gedeckelt bei 200 %. Gelb und nicht rot: „mehr" ist keine
+  Bewertung. Wo mehr ein Erfolg ist, dreht `.v-ring--gut` ihn auf `--ok`.
+- **`.is-unvollstaendig`** macht die Spur gestrichelt. Ein Wert, zu dem
+  Angaben fehlen, darf nicht aussehen wie einer, zu dem alle da sind.
+
 ## 8. Was wir nicht tun
 
 - Kein Milchglas auf allem. Es bleibt der Navigationsleiste, Menüs und Overlays

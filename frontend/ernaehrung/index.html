@@ -3,223 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0a0c10">
-<meta name="description" content="Ernährung in zwei Modi: ein lockeres Tagebuch oder ein ausführlicher Tracker mit Mengen, Nährwerten und eigenen Tageszielen.">
-<title>Ernährung — Vexbob</title>
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<meta name="robots" content="noindex">
+<title>Ernährung — umgezogen</title>
+<!-- Das Ernaehrungs-Modul ist in v1.98.0 in zwei geteilt worden:
+       /essen/       Essenstagebuch  — was gab es, normal oder uebermaessig
+       /naehrwerte/  Tracker         — Mengen, Naehrwerte, Tagesziele
+     Diese Seite bleibt als Wegweiser stehen, damit ein Lesezeichen nicht ins
+     Leere laeuft. Sie fuehrt zum Tagebuch: das ist die Seite, die man
+     taeglich oeffnet. -->
+<meta http-equiv="refresh" content="0; url=/essen/">
 <link rel="stylesheet" href="/css/style.css">
-<link rel="stylesheet" href="/css/statistics.css">
-<link rel="stylesheet" href="/ernaehrung/ernaehrung.css">
-<script src="/js/config.js"></script>
-<script src="/js/version.js"></script>
-<script src="/js/api.js"></script>
-<script src="/js/nav-switcher.js"></script>
-<script src="/js/sw-update.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="/js/charts.js"></script>
-<script src="/js/range-filter.js"></script>
 </head>
 <body>
-<nav class="navbar">
-    <span class="nav-title">Ernährung</span>
-    <div class="nav-right">
-        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
-        <button class="nav-btn" id="logoutBtn">Logout</button>
-    </div>
-</nav>
-<main class="wide">
-
-    <header class="page-head">
-        <h1>🥗 Ernährung</h1>
-    </header>
-
-    <!-- Eine Navigationszeile, nicht drei. Der Modus steht rechts in
-         derselben Reihe wie die Reiter, weil er sie ändert: das Tagebuch hat
-         zwei, der Tracker vier. Was er bedeutet, steht dort, wo es gerade
-         gilt — beim Eintragen —, nicht als Absatz über der Seite. -->
-    <div class="ern-leiste">
-        <div class="tabs" id="ernTabs"></div>
-        <div class="ern-modus" role="group" aria-label="Modus">
-            <button type="button" data-modus="locker" aria-pressed="false"
-                    title="Tagebuch: hinschreiben, was es gab — normal oder übermäßig. Mehr wird nicht gefragt.">
-                <span aria-hidden="true">📓</span> Tagebuch
-            </button>
-            <button type="button" data-modus="ausfuehrlich" aria-pressed="false"
-                    title="Tracker: Mengen, Nährwerte und eigene Tagesziele. Dazu Gerichte und Bestand.">
-                <span aria-hidden="true">📊</span> Tracker
-            </button>
+<main>
+    <div class="v-card" style="max-width:34rem;margin:15vh auto 0">
+        <div class="v-card-head"><h3>Umgezogen</h3></div>
+        <p style="color:var(--text-2);line-height:1.6">
+            Die Ernährung ist jetzt zwei Module:
+            <strong>🍽️ Essenstagebuch</strong> für „was gab es, normal oder übermäßig"
+            und <strong>📊 Nährwerte</strong> für Mengen, Nährwerte und Tagesziele.
+        </p>
+        <p style="color:var(--text-3);font-size:0.875rem">
+            Du wirst zum Tagebuch weitergeleitet.
+        </p>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem">
+            <a class="v-btn v-btn--primary" href="/essen/" style="width:auto">Zum Essenstagebuch</a>
+            <a class="v-btn" href="/naehrwerte/" style="width:auto">Zu den Nährwerten</a>
         </div>
     </div>
-
-    <!-- ====================== Tag ======================
-         Der Tag IST die Seite: eine Karte, die oben sagt, welcher Tag gemeint
-         ist und wie er aussieht, und darunter die Mahlzeiten mit dem, was
-         darin steht. Eingetragen wird aus der Mahlzeit heraus — dadurch
-         braucht es keine Chipreihe, die fragt, wohin der nächste Eintrag
-         gehört: das sagt schon, wo man getippt hat. -->
-    <div id="tab-tag">
-        <!-- Ein Ladefehler tritt vor den Tag, statt ihn in Ladebalken stehen
-             zu lassen: ein Ladezustand, der nie endet, sieht aus wie ein
-             kaputter Browser — man wartet auf etwas, das nicht mehr kommt. -->
-        <div id="ernTagFehler" hidden></div>
-
-        <div id="ernTagInhalt">
-            <div class="stat-card">
-                <div class="ern-tagkopf">
-                    <button type="button" class="ern-pfeil" id="ernTagZurueck"
-                            aria-label="Tag zurück">◀</button>
-                    <div class="ern-tagkopf-mitte">
-                        <strong id="ernTagName">Heute</strong>
-                        <span id="ernTagDatum"></span>
-                    </div>
-                    <button type="button" class="ern-pfeil" id="ernTagVor"
-                            aria-label="Tag vor">▶</button>
-                    <button type="button" class="v-btn v-btn--primary ern-add" id="ernTagAdd">
-                        <span aria-hidden="true">＋</span> Eintragen</button>
-                </div>
-
-                <div id="ernTagBild"><span class="skel skel-block"></span></div>
-                <div id="ernTagMahlzeiten"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ====================== Verlauf ====================== -->
-    <div id="tab-verlauf" hidden>
-        <div class="stat-filterbar ern-verlaufleiste">
-            <div class="ern-kopf-text">
-                <strong id="ernVerlaufZeitraum"></strong>
-                <span id="ernVerlaufSub"></span>
-            </div>
-            <div class="stat-filter-slot" id="ernRange"></div>
-        </div>
-
-        <div class="stat-kpi-grid" id="ernVerlaufKpi"></div>
-
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3 id="ernChart1Titel">Verlauf</h3>
-                <span class="stat-range-lbl" id="ernChart1Sub"></span>
-            </div>
-            <div id="ernChart1Leer" hidden></div>
-            <div class="chart-wrap" id="ernChart1Box"><canvas id="ernChart1"></canvas></div>
-            <p class="ern-note" id="ernChart1Note"></p>
-        </div>
-
-        <div class="stat-card" id="ernChart2Karte" hidden>
-            <div class="stat-card-head">
-                <h3 id="ernChart2Titel">Eiweiß</h3>
-                <span class="stat-range-lbl" id="ernChart2Sub"></span>
-            </div>
-            <div class="chart-wrap small"><canvas id="ernChart2"></canvas></div>
-            <p class="ern-note" id="ernChart2Note"></p>
-        </div>
-
-        <!-- Nur im Tracker: ohne Mengen gibt es nichts, wogegen ein Ziel
-             gemessen werden könnte. -->
-        <div class="stat-card" id="ernZieleKarte" hidden>
-            <div class="stat-card-head">
-                <h3>Tagesziele</h3>
-                <span class="stat-range-lbl">freiwillig, einzeln</span>
-            </div>
-            <div class="ern-ziele" id="ernZiele"></div>
-            <div class="ern-tasten">
-                <button type="button" class="v-btn v-btn--primary" id="ernZieleSpeichern">Ziele speichern</button>
-                <button type="button" class="v-btn" id="ernZieleWeg">Alle zurücksetzen</button>
-            </div>
-            <p class="ern-note">Leere Felder messen weiter am allgemeinen Richtwert — wer nur
-                auf Eiweiß achtet, muss hier keine fünf Zahlen erfinden.</p>
-        </div>
-    </div>
-
-    <!-- ====================== Gerichte ======================
-         Die Liste zuerst, das Formular im Dialog: eine dauerhaft offene Maske
-         für etwas, das man selten anlegt, nimmt jedes Mal den Platz weg, an
-         dem das steht, was man sucht. -->
-    <div id="tab-gerichte" hidden>
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>Meine Gerichte</h3>
-                <div class="ern-kopf-tasten">
-                    <span class="stat-range-lbl" id="ernGerichteZahl"></span>
-                    <button type="button" class="v-btn v-btn--sm v-btn--primary" id="ernGerichtNeu">
-                        <span aria-hidden="true">＋</span> Neues Gericht</button>
-                </div>
-            </div>
-            <div id="ernGerichte"><span class="skel skel-block"></span></div>
-        </div>
-    </div>
-
-    <!-- ====================== Lebensmittel ====================== -->
-    <div id="tab-vorrat" hidden>
-        <!-- Ein Suchfeld, nicht zwei. Ob da ein Name oder ein Strichcode
-             steht, sieht man den Zeichen an — den Nutzer danach zu fragen,
-             wäre eine Frage nach etwas, das schon feststeht. -->
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>Lebensmittel finden</h3>
-                <span class="stat-range-lbl" id="ernKatalogStand">eigener Katalog, sonst Open Food Facts</span>
-            </div>
-            <div class="ern-suchzeile">
-                <label class="ern-suche">
-                    <span class="ern-suche-ico" aria-hidden="true">🔎</span>
-                    <input type="search" id="ernSuche" autocomplete="off"
-                           aria-label="Lebensmittel oder Strichcode suchen"
-                           placeholder="Name oder Strichcode">
-                </label>
-                <button type="button" class="v-btn" id="ernKamera">📷 Scannen</button>
-                <button type="button" class="v-btn v-btn--primary" id="ernItemNeu">
-                    <span aria-hidden="true">＋</span> Von Hand</button>
-            </div>
-
-            <div class="ern-kamera" id="ernKameraBereich" hidden>
-                <!-- playsinline: ohne das Attribut spielt iOS das Bild im
-                     Vollbild ab, und der Rest der Seite ist weg. -->
-                <video id="ernVideo" playsinline muted autoplay></video>
-                <div class="ern-kamera-leiste">
-                    <span class="ern-note" id="ernKameraHinweis">Kamera wird geöffnet …</span>
-                    <button type="button" class="v-btn v-btn--sm" id="ernKameraStop">Schließen</button>
-                </div>
-            </div>
-
-            <div id="ernTreffer"></div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>Eigener Bestand</h3>
-                <span class="stat-range-lbl" id="ernBestandZahl"></span>
-            </div>
-            <div id="ernBestand"><span class="skel skel-block"></span></div>
-        </div>
-
-        <!-- Nur für Admins, und zugeklappt: der Katalog gehört keinem
-             Nutzer, er wird einmal im Jahr eingespielt. -->
-        <details class="ern-klapp" id="ernKatalogKarte" hidden>
-            <summary>
-                <span>Katalog einspielen</span>
-                <span class="stat-range-lbl" id="ernKatalogKarteSub"></span>
-            </summary>
-            <p class="ern-note">
-                Ein Abzug von Open Food Facts, der hier liegt — damit antwortet die Suche
-                sofort. Die Datei entsteht aus dem Tagesabzug und liegt im Projekt unter
-                <strong>backend/data/off-katalog-dach.csv.gz</strong>. Einspielen
-                <strong>ersetzt</strong> den bisherigen Stand vollständig.
-            </p>
-            <div class="dropzone" id="ernKatDrop" role="button" tabindex="0"
-                 aria-label="Katalogdatei auswählen">
-                <div class="dropzone-icon" aria-hidden="true">🗂️</div>
-                <div class="dropzone-title">Katalogdatei hier ablegen oder klicken</div>
-                <div class="dropzone-sub" id="ernKatDropSub">off-katalog-dach.csv.gz</div>
-                <input type="file" id="ernKatFile" accept=".gz,.csv,.tsv" hidden>
-            </div>
-        </details>
-    </div>
-
-    <datalist id="ernGroessenVorschlaege"></datalist>
-    <div class="version-tag"></div>
 </main>
-<script src="/ernaehrung/ernaehrung.js"></script>
 </body>
 </html>

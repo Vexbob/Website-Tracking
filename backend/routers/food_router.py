@@ -1,52 +1,46 @@
-"""Ernaehrungs-Router — Lebensmittel nachschlagen und aufbewahren.
+"""Ernaehrungs-Tracker — Lebensmittel, Gerichte, Mengen, Naehrwerte.
 
 Endpoints:
-  GET    /api/food/barcode/{code}  — Strichcode nachschlagen
-  GET    /api/food/search          — Textsuche
-  GET    /api/food/catalog         — Stand des eigenen Katalogs
-  POST   /api/food/catalog         — Katalogdatei einspielen (nur Admin)
-  GET    /api/food/items           — eigener Lebensmittel-Bestand
-  POST   /api/food/items           — Lebensmittel aufnehmen oder aendern
-  DELETE /api/food/items/{id}      — Lebensmittel entfernen
-  GET    /api/food/dishes          — Gerichte samt Zutaten und Naehrwerten
-  POST   /api/food/dishes          — Gericht anlegen oder aendern
-  DELETE /api/food/dishes/{id}     — Gericht loeschen
-  GET    /api/food/day             — ein Tag: Eintraege und Tagesspanne
-  POST   /api/food/log             — Eintrag hinzufuegen (Gericht + Stufe,
-                                     Lebensmittel + Menge, freier Name + Stufe)
-  PATCH  /api/food/log/{id}        — Stufe, Mahlzeit oder Notiz richtigstellen
-  DELETE /api/food/log/{id}        — Eintrag entfernen
-  GET    /api/food/settings        — Modus und eigene Tagesziele
-  PUT    /api/food/settings        — Modus und Ziele setzen
-  GET    /api/food/history         — ein Zeitraum, Tag fuer Tag
-  GET    /api/food/frequent        — was man oft eintraegt (aus dem Tagebuch)
+  GET    /api/food/barcode/{code}     — Strichcode: Bestand, Katalog, dann OFF
+  GET    /api/food/search             — Textsuche in Katalog bzw. OFF
+  GET    /api/food/catalog            — Stand des eigenen Katalogs
+  POST   /api/food/catalog            — Katalog einspielen (nur Admin)
+  GET    /api/food/items              — eigener Bestand samt eigenen Groessen
+  POST   /api/food/items              — aufnehmen oder aendern
+  DELETE /api/food/items/{id}         — aus dem Bestand entfernen
+  GET    /api/food/dishes             — eigene Gerichte samt Portionswerten
+  POST   /api/food/dishes             — Gericht anlegen oder aendern
+  DELETE /api/food/dishes/{id}        — Gericht loeschen
+  GET    /api/food/track/day          — ein Tag mit Summen je Naehrwert
+  POST   /api/food/track/log          — eintragen (Menge, keine Stufe)
+  PATCH  /api/food/track/log/{id}     — Mahlzeit oder Notiz richtigstellen
+  DELETE /api/food/track/log/{id}     — Eintrag entfernen
+  GET    /api/food/track/targets      — eigene Tagesziele
+  PUT    /api/food/track/targets      — Tagesziele setzen
+  GET    /api/food/track/history      — Zeitraum, Tag fuer Tag
+  GET    /api/food/track/frequent     — was oft eingetragen wird
 
-Das Modul hat zwei Betriebsarten, und sie schreiben in DASSELBE Tagebuch
-(siehe Migration 044): ``locker`` fragt nur nach dem Namen und einer Stufe --
-notfalls einem frei getippten Namen, der in keinem Bestand steht --,
-``ausfuehrlich`` nach Mengen und rechnet gegen eigene Tagesziele. Zwei
-Tabellen dafuer waeren zwei Wahrheiten ueber denselben Tag: der Wechsel
-wuerde Eintraege verschwinden lassen, und ein locker notierter Tag liesse
-sich spaeter nicht genauer machen.
+Seit v1.98.0 ist das ein Modul von zweien. Das Essenstagebuch (/essen/,
+routers/tagebuch_router.py) fragt nach Name und Stufe und schreibt nach
+``food_diary``; hier geht es um Menge und Naehrwerte, und geschrieben wird
+nach ``food_log``. Die Trennung steht in den Spaltenlisten, nicht in einer
+Pruefung: ``food_diary`` hat keine Menge, ``food_log`` keine Stufe.
 
-Der Bestand ist bewusst eine eigene Tabelle und kein Durchreichen zur
-fremden Datenbank: nach ein paar Wochen deckt das, was man selbst einmal
-aufgenommen hat, den Alltag ab -- und es bleibt lesbar, wenn Open Food Facts
-einen Eintrag aendert oder loescht.
+Drei Entscheidungen tragen diesen Teil:
 
-Nachgeschlagen wird nur auf Zuruf. Ein Abruf beim Anzeigen der Liste waere
-eine Abfrage je Zeile bei einer fremden, ehrenamtlich betriebenen Datenbank.
+1. **Es wird gerechnet, nicht geschaetzt.** Ein Lebensmittel wird in einer
+   Menge eingetragen, ein Gericht in Portionen -- beides ergibt eine Zahl.
+   Frueher trug ein Gericht eine Grobstufe, und aus "normal" wurde eine
+   Spanne; das ist jetzt Sache des Tagebuchs, das gar keine Zahlen behauptet.
 
-Nachgeschlagen wird in dieser Reihenfolge:
+2. **Umgerechnet wird beim Speichern.** ``grams`` steht an der Zeile, nicht
+   in der Anzeige -- sonst aendert eine korrigierte Scheibengroesse einen
+   vergangenen Tag.
 
-    1. der eigene Bestand   -- eigene Korrekturen gehen allem vor
-    2. der eigene Katalog   -- der Abzug von Open Food Facts, lokal
-    3. Open Food Facts live -- fuer alles, was seit dem Abzug dazukam
-
-Der Katalog vor der Leitung, weil er in Millisekunden antwortet und immer da
-ist; die Leitung dahinter, weil ein Abzug altert. Woher eine Zahl kam, steht
-in der Antwort (``origin``) -- das gehoert auf den Bildschirm, nicht in eine
-stille Annahme.
+3. **Eine Luecke ist keine Null.** Fehlt einer Zutat die Ballaststoffangabe,
+   ist die Tagessumme unvollstaendig und nicht niedriger. Die Antwort sagt
+   das je Naehrwert (``incomplete``), und der Ring zeigt es als gestrichelte
+   Spur.
 """
 import asyncio
 import gzip
@@ -63,6 +57,7 @@ from deps import (limiter, LIMIT_WRITE_FREQUENT, LIMIT_WRITE_RARE,
                   LIMIT_WRITE_STANDARD)
 from services import food_calc as calc
 from services import food_catalog as katalog
+from services import food_mahlzeit as mz
 from services import openfoodfacts as off
 
 router = APIRouter(tags=["food"])
@@ -93,36 +88,39 @@ class GerichtEingabe(BaseModel):
 
 
 class LogEingabe(BaseModel):
+    """Genau eine Herkunft und eine MENGE.
+
+    Es gibt hier kein ``level`` und kein ``label`` -- beides gehoert ins
+    Essenstagebuch und liegt dort in einer eigenen Tabelle. Die Felder fehlen
+    absichtlich: was das Modell nicht kennt, kann kein Frontend versehentlich
+    hierher schicken, und dieselbe Abwesenheit steht in der Spaltenliste von
+    ``food_log``.
+    """
     dish_id: Optional[int] = None
     item_id: Optional[int] = None
-    # Der dritte Weg: ein frei getippter Name. Er ist der Grund, warum der
-    # lockere Modus ohne Bestand auskommt -- was man auswaerts gegessen hat,
-    # steht in keiner Liste und soll trotzdem im Tag stehen.
-    label: Optional[str] = None
-    # Ein GERICHT wird in Stufen gegessen (normal / uebermaessig), ein
-    # einzelnes LEBENSMITTEL in Mengen, ein freier Name wieder in Stufen.
-    # Deshalb sind die Felder freiwillig und die Pruefung haengt daran, was
-    # eingetragen wird.
-    level: Optional[str] = None
+    # Ein Gericht wird in PORTIONEN eingetragen (unit = "Portion"), ein
+    # Lebensmittel in einer eigenen Groesse oder in g/ml. Ohne Angabe gilt
+    # die Standardgroesse.
     amount: Optional[float] = None
     unit: Optional[str] = None
     meal: Optional[str] = None
     note: Optional[str] = None
     day: Optional[str] = None
+    # Ortszeit des Browsers, "HH:MM": der Server laeuft in UTC und darf aus
+    # seiner eigenen Uhr keine Mahlzeit ableiten.
+    at: Optional[str] = None
 
 
 class EintragAendern(BaseModel):
     """Was sich an einer Zeile nachtraeglich richtigstellen laesst."""
-    level: Optional[str] = None
     meal: Optional[str] = None
     note: Optional[str] = None
 
 
-class EinstellungEingabe(BaseModel):
-    """Modus und Tagesziele. ``targets`` ist nach Naehrwert benannt
-    (``kcal``, ``protein_g`` …); ``None`` darin heisst ausdruecklich
-    "kein eigenes Ziel" und stellt den allgemeinen Richtwert wieder her."""
-    mode: Optional[str] = None
+class ZieleEingabe(BaseModel):
+    """Die eigenen Tagesziele, nach Naehrwert benannt (``kcal``,
+    ``protein_g`` …). ``None`` darin heisst ausdruecklich "kein eigenes Ziel"
+    und stellt den allgemeinen Richtwert wieder her."""
     targets: Optional[dict] = None
 
 
@@ -553,8 +551,10 @@ async def _gerichte(db, user_id: int, dish_id: Optional[int] = None) -> list:
 
 @router.get("/api/food/dishes")
 async def gerichte(db=Depends(get_db), user=Depends(get_current_user)):
+    # Portionen statt Stufen: ein halbes, ein ganzes, anderthalb Gerichte.
+    # Die Liste steht hier, damit die Seite keine eigene erfindet.
     return {"dishes": await _gerichte(db, user["id"]),
-            "levels": [{"key": k, "label": v} for k, v in calc.STUFEN_LABEL.items()]}
+            "portions": [0.5, 1, 1.5, 2]}
 
 
 @router.post("/api/food/dishes")
@@ -630,21 +630,24 @@ async def gericht_loeschen(request: Request, dish_id: int, db=Depends(get_db),
 
 
 # ---------------------------------------------------------------------------
-# Tagebuch
+# Der Tag
 # ---------------------------------------------------------------------------
-# Zwei Betriebsarten, EIN Tagebuch (siehe Migration 044 und food_calc):
-#
-#   locker        Was gab es, und war es normal oder uebermaessig? Ein
-#                 Eintrag darf ein blosser Name sein.
-#   ausfuehrlich  Mengen, Naehrwerte, eigene Tagesziele, Verlauf.
-#
-# Der Modus steht am Nutzer, nicht an der Zeile. Eine Zeile weiss nur, wie
-# genau sie ist -- und die Antwort sagt es dazu. Damit laesst sich ein locker
-# notierter Tag spaeter genauer machen, ohne dass etwas umgeschrieben wird.
+# Seit v1.98.0 zaehlt hier ausschliesslich die MENGE. Ein Lebensmittel wird in
+# Gramm oder einer eigenen Groesse eingetragen, ein Gericht in Portionen --
+# beides ergibt eine Zahl, keine Spanne. Die Grobstufen ("normal" /
+# "uebermaessig") sind Sache des Essenstagebuchs (/api/food/diary/*), und sie
+# liegen dort in einer eigenen Tabelle: ``food_diary`` hat keine Mengenspalte,
+# ``food_log`` keine Stufe. Beides ist damit nicht verboten, sondern unmoeglich.
+
+# Ein Gericht wird in Portionen eingetragen. Die Einheit traegt ihren Namen,
+# damit die Zeile lesbar bleibt ("1,5 x Portion") -- und weil derselbe Text
+# auch in einem alten Eintrag noch stimmt.
+PORTION_EINHEIT = "Portion"
+PORTIONEN_STANDARD = 1.0
 
 
 def _menge_text(zeile) -> str:
-    """Wie die Menge dasteht: „180 g“, „2 × Scheibe (50 g)“.
+    """Wie die Menge dasteht: 180 g, 2 x Scheibe (50 g), 1,5 x Portion.
 
     Die Grammzahl steht dabei, sobald in einer eigenen Einheit eingetragen
     wurde -- sonst haengt der Naehrwert an einer Zahl, die man nicht sieht.
@@ -652,23 +655,24 @@ def _menge_text(zeile) -> str:
     def zahl(v):
         return f"{float(v):g}".replace(".", ",")
 
+    menge = zeile["amount"]
+    einheit = zeile["unit"]
+    if zeile["dish_id"]:
+        return f"{zahl(menge)} × {einheit}"
     basis = zeile["base_unit"] or "g"
-    menge = zeile["amount"] if zeile["amount"] is not None else zeile["grams"]
-    einheit = zeile["unit"] or basis
     if einheit in calc.RESERVIERT:
         return f"{zahl(menge)} {einheit}"
     return f"{zahl(menge)} × {einheit} ({zahl(zeile['grams'])} {basis})"
 
 
 async def _einstellungen(db, user_id: int) -> dict:
-    """Modus und eigene Tagesziele. Kein Eintrag heisst: der Standard gilt."""
+    """Die eigenen Tagesziele. Kein Eintrag heisst: der Richtwert gilt."""
     row = await db.fetchrow(
-        "SELECT mode, kcal_target, protein_target, fiber_target, carbs_target, "
+        "SELECT kcal_target, protein_target, fiber_target, carbs_target, "
         "       fat_target, updated_at FROM food_settings WHERE user_id=$1", user_id)
     if not row:
-        return {"mode": "locker", "kcal_target": None, "protein_target": None,
-                "fiber_target": None, "carbs_target": None, "fat_target": None,
-                "updated_at": None}
+        return {"kcal_target": None, "protein_target": None, "fiber_target": None,
+                "carbs_target": None, "fat_target": None, "updated_at": None}
     return dict(row)
 
 
@@ -679,77 +683,65 @@ def _ziele_raus(einst: dict) -> dict:
 
 
 SPALTEN_TAG = (
-    "l.id, l.level, l.meal, l.note, l.label, l.created_at, l.day, "
+    "l.id, l.meal, l.note, l.created_at, l.day, l.logged_time, l.meal_auto, "
     "l.dish_id, l.item_id, l.amount, l.unit, l.grams, "
     "d.name AS dish_name, i.name AS item_name, i.brand AS item_brand, "
     "i.portion_g, i.base_unit, i.kcal, i.protein_g, i.fiber_g, i.carbs_g, i.fat_g")
 
 
 def _zeile_rechnen(z, portionen: dict):
-    """Aus einer Tagebuchzeile werden Anzeige und Spanne.
+    """Aus einer Zeile werden Anzeige und Naehrwerte.
 
-    Vier Faelle, und sie unterscheiden sich darin, WIE GENAU sie sind:
-    ein Gericht in Stufen, ein Lebensmittel mit Menge, ein Lebensmittel aus
-    der Zeit vor den Mengen -- und ein freier Name, zu dem es gar keine
-    Naehrwerte gibt. Der letzte ist der Grund, warum der lockere Modus ohne
-    Bestand auskommt; er wird gezaehlt und nicht gerechnet.
+    Zwei Faelle, und beide sind genau: ein Gericht in Portionen, ein
+    Lebensmittel in einer Menge. Die dritte und vierte Form von frueher --
+    Stufe statt Menge, freier Name ohne Naehrwerte -- gibt es hier nicht mehr;
+    sie sind das Tagebuch.
     """
-    geschaetzt, menge_text = False, None
+    gramm = float(z["grams"])
     if z["dish_id"]:
+        # Die Naehrwerte EINER Portion stehen schon in ``zutaten_summe``;
+        # ``amount`` ist die Zahl der Portionen.
         basis = portionen.get(z["dish_id"]) or {}
+        anteil = float(z["amount"])
+        werte = {m: (None if basis.get(m) is None else float(basis[m]) * anteil)
+                 for m in calc.MAKROS}
         name, zusatz, art = z["dish_name"], "Gericht", "dish"
-        spanne = calc.eintrag_spanne(basis, z["level"] or "normal")
-    elif z["item_id"] and z["grams"] is not None:
-        # Eine gewogene oder abgezaehlte Menge: kein Schaetzen noetig.
-        name, art = z["item_name"], "item"
-        zusatz = z["item_brand"] or "Lebensmittel"
-        spanne = calc.exakte_spanne(calc.je_menge(dict(z), z["grams"]))
-        menge_text = _menge_text(z)
-    elif z["item_id"]:
-        # Eintrag von vor v1.90.0: damals gab es auch fuer Lebensmittel nur
-        # die Stufe. Er wird weiter so gerechnet, wie er gemeint war --
-        # nachtraeglich eine Grammzahl zu erfinden waere schlimmer.
-        portion = float(z["portion_g"]) if z["portion_g"] else calc.PORTION_FALLBACK
-        basis = calc.je_menge(dict(z), portion)
-        name, art = z["item_name"], "item"
-        zusatz = z["item_brand"] or "Lebensmittel"
-        geschaetzt = not z["portion_g"]
-        spanne = calc.eintrag_spanne(basis, z["level"] or "normal")
     else:
-        # Freier Eintrag: nur ein Name und eine Stufe. Ihm Naehrwerte
-        # anzudichten waere die schlechtere Luecke -- er zaehlt im Tag mit
-        # und fehlt in der Summe, und beides steht da.
-        name, art = z["label"], "free"
-        zusatz = "frei notiert"
-        spanne = {m: None for m in calc.MAKROS}
+        werte = calc.je_menge(dict(z), gramm)
+        name, art = z["item_name"], "item"
+        zusatz = z["item_brand"] or "Lebensmittel"
 
     eintrag = {
-        "id": z["id"], "name": name, "sub": zusatz, "kind": art,
-        "level": z["level"],
-        "level_label": (calc.STUFEN_LABEL.get(z["level"])
-                        if z["level"] and z["grams"] is None else None),
-        "amount_label": menge_text,
-        "meal": z["meal"] or calc.OHNE_MAHLZEIT,
+        "id": z["id"],
+        "name": name,
+        "sub": zusatz,
+        "kind": art,
+        "amount_label": _menge_text(z),
+        "grams": round(gramm, 1),
+        "meal": z["meal"] or mz.OHNE_MAHLZEIT,
+        "meal_auto": bool(z["meal_auto"]),
         "note": z["note"],
-        "assumed_portion": geschaetzt,
-        "has_nutrition": spanne["kcal"] is not None,
-        "kcal_min": None if spanne["kcal"] is None else round(spanne["kcal"][0]),
-        "kcal_max": None if spanne["kcal"] is None else round(spanne["kcal"][1]),
+        "logged_time": (z["logged_time"].strftime("%H:%M")
+                        if z["logged_time"] else None),
+        "has_nutrition": werte.get("kcal") is not None,
+        "kcal": None if werte.get("kcal") is None else round(werte["kcal"]),
     }
-    return eintrag, spanne
+    return eintrag, werte
 
 
-def _zaehlungen(eintraege) -> dict:
-    """Wie viel und wie genau. Der lockere Modus lebt von diesen Zahlen --
-    ihm ist die Verteilung normal/uebermaessig wichtiger als eine Kalorien-
-    summe, die er gar nicht kennen kann."""
-    return {
-        "entries": len(eintraege),
-        "normal": sum(1 for e in eintraege if e["level"] == "normal"),
-        "viel": sum(1 for e in eintraege if e["level"] == "viel"),
-        "exact": sum(1 for e in eintraege if e["amount_label"]),
-        "unknown": sum(1 for e in eintraege if not e["has_nutrition"]),
-    }
+def _mahlzeit_summen(eintraege, werte_liste) -> dict:
+    """Kalorien je Mahlzeit. Ohne sie steht am Block eine Ueberschrift und
+    sonst nichts -- und genau dort will man die Zahl sehen."""
+    raus = {}
+    for eintrag, werte in zip(eintraege, werte_liste):
+        topf = raus.setdefault(eintrag["meal"], {"kcal": 0, "incomplete": False})
+        if werte.get("kcal") is None:
+            topf["incomplete"] = True
+        else:
+            topf["kcal"] += werte["kcal"]
+    for topf in raus.values():
+        topf["kcal"] = round(topf["kcal"])
+    return raus
 
 
 async def _tag(db, user_id: int, tag) -> dict:
@@ -770,32 +762,27 @@ async def _tag(db, user_id: int, tag) -> dict:
                 portionen[g["id"]] = g["portion"]
 
     einst = await _einstellungen(db, user_id)
-    eintraege, spannen = [], []
+    eintraege, werte_liste = [], []
     for z in zeilen:
-        eintrag, spanne = _zeile_rechnen(z, portionen)
+        eintrag, werte = _zeile_rechnen(z, portionen)
         eintraege.append(eintrag)
-        spannen.append(spanne)
+        werte_liste.append(werte)
 
     return {
         "day": str(tag),
-        "mode": einst["mode"],
         "entries": eintraege,
-        "counts": _zaehlungen(eintraege),
-        "meals": [{"key": m, "label": calc.MAHLZEIT_LABEL[m]} for m in calc.MAHLZEITEN]
-                 + [{"key": calc.OHNE_MAHLZEIT, "label": calc.OHNE_MAHLZEIT_LABEL}],
-        "totals": calc.tages_summe(spannen, einst),
+        "counts": {"entries": len(eintraege),
+                   "unknown": sum(1 for e in eintraege if not e["has_nutrition"])},
+        "meals": mz.liste_raus(),
+        "meal_hours": mz.grenzen_raus(),
+        "meal_totals": _mahlzeit_summen(eintraege, werte_liste),
+        "totals": calc.tages_summe_genau(werte_liste, einst),
         "targets": _ziele_raus(einst),
         "macros": list(calc.MAKROS),
         "macro_labels": dict(calc.MAKRO_LABEL),
         "reference_note": calc.RICHTWERT_QUELLE,
         "target_note": calc.ZIEL_QUELLE,
     }
-
-
-@router.get("/api/food/day")
-async def tag(date: Optional[str] = None, db=Depends(get_db),
-              user=Depends(get_current_user)):
-    return await _tag(db, user["id"], _als_tag(date))
 
 
 def _als_tag(wert):
@@ -808,39 +795,52 @@ def _als_tag(wert):
         raise HTTPException(400, "Das ist kein Datum (erwartet: JJJJ-MM-TT).")
 
 
-@router.post("/api/food/log")
+@router.get("/api/food/track/day")
+async def tag(date: Optional[str] = None, db=Depends(get_db),
+              user=Depends(get_current_user)):
+    return await _tag(db, user["id"], _als_tag(date))
+
+
+@router.post("/api/food/track/log")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def eintragen(request: Request, daten: LogEingabe, db=Depends(get_db),
                     user=Depends(get_current_user)):
-    """Traegt ein Gericht, ein Lebensmittel oder einen freien Namen ein."""
-    frei = (daten.label or "").strip()
-    quellen = sum(1 for x in (daten.dish_id, daten.item_id, frei or None) if x)
+    """Traegt ein Gericht (in Portionen) oder ein Lebensmittel (in einer
+    Menge) ein. Eine Stufe gibt es hier nicht -- die gehoert ins Tagebuch."""
+    quellen = sum(1 for x in (daten.dish_id, daten.item_id) if x)
     if quellen != 1:
-        raise HTTPException(
-            400, "Genau eines: ein Gericht, ein Lebensmittel oder ein Name.")
-    if (daten.dish_id or frei) and daten.level not in calc.STUFEN:
-        raise HTTPException(400, "Es gibt nur zwei Stufen: normal oder übermäßig.")
+        raise HTTPException(400, "Genau eines: ein Gericht oder ein Lebensmittel.")
     try:
-        mahlzeit = calc.mahlzeit_sauber(daten.meal)
+        mahlzeit = mz.mahlzeit_sauber(daten.meal)
     except ValueError as e:
         raise HTTPException(400, str(e))
     tag = _als_tag(daten.day)
 
-    menge, einheit, gramm, stufe = None, None, None, None
+    from datetime import date as Datum
+    zeit = mz.uhrzeit_sauber(daten.at)
+    geraten = False
+    # Geraten wird nur fuer heute: "es ist jetzt Abend" ist kein Argument
+    # darueber, was letzten Dienstag auf dem Teller lag.
+    if mahlzeit is None and zeit and tag == Datum.today():
+        mahlzeit = mz.mahlzeit_fuer_uhrzeit(zeit[0])
+        geraten = True
+
     if daten.dish_id:
-        gehoert = await db.fetchval(
-            "SELECT 1 FROM food_dishes WHERE id=$1 AND user_id=$2",
-            daten.dish_id, user["id"])
-        if not gehoert:
+        gericht = None
+        for g in await _gerichte(db, user["id"]):
+            if g["id"] == daten.dish_id:
+                gericht = g
+                break
+        if not gericht:
             raise HTTPException(404, "Das gibt es in deinem Bestand nicht.")
-        stufe = daten.level
-    elif frei:
-        # Ein freier Eintrag ist der ganze Sinn des lockeren Modus: was man
-        # auswaerts gegessen hat, steht in keinem Bestand und soll trotzdem
-        # im Tag stehen.
-        if len(frei) > 120:
-            raise HTTPException(400, "Das ist zu lang für eine Zeile im Tagebuch.")
-        stufe = daten.level
+        menge = PORTIONEN_STANDARD if daten.amount is None else float(daten.amount)
+        if menge <= 0:
+            raise HTTPException(400, "Eine Menge von null ist kein Eintrag.")
+        einheit = PORTION_EINHEIT
+        # Das Gewicht einer Portion kennt das Rezept. Gerechnet wird beim
+        # Speichern -- sonst aendert eine spaeter geaenderte Zutat einen
+        # vergangenen Tag.
+        gramm = round(float(gericht["portion"].get("grams") or 0) * menge, 2)
     else:
         lebensmittel = await db.fetchrow(
             "SELECT id, base_unit, portion_g, portion_label, package_g "
@@ -850,22 +850,8 @@ async def eintragen(request: Request, daten: LogEingabe, db=Depends(get_db),
             raise HTTPException(404, "Das gibt es in deinem Bestand nicht.")
         eigene = await _groessen_eines(db, daten.item_id)
         basis = lebensmittel["base_unit"] or "g"
-
-        if daten.amount is None and daten.level in calc.STUFEN:
-            # Der lockere Weg: ein Lebensmittel mit einer Stufe statt einer
-            # Menge. Im Tagebuch tippt man nicht "wie viel Brot", man tippt
-            # "Brot, normal" -- gerechnet wird daraus die uebliche Portion mal
-            # dem Stufenfaktor, dieselbe ehrliche Schaetzung wie bei einem
-            # Gericht. Waere hier still die Standardgroesse eingetragen
-            # worden, haetten die beiden Knoepfe "normal" und "uebermaessig"
-            # dasselbe getan und nur so ausgesehen, als taeten sie etwas.
-            stufe = daten.level
-            return await _schreiben(db, user["id"], tag, daten, frei, stufe,
-                                    mahlzeit, None, None, None)
-
-        # Sonst eine echte Menge. Ohne Angabe ist es die Standardgroesse --
-        # die erste eigene Groesse, sonst 100 g bzw. 100 ml, der Bezug der
-        # Naehrwerte.
+        # Ohne Angabe die Standardgroesse: die erste eigene Groesse, sonst
+        # 100 g bzw. 100 ml -- der Bezug, in dem die Naehrwerte stehen.
         if daten.amount is None:
             menge = 1.0 if eigene else calc.PORTION_FALLBACK
             einheit = eigene[0]["label"] if eigene else basis
@@ -881,54 +867,41 @@ async def eintragen(request: Request, daten: LogEingabe, db=Depends(get_db),
         gramm, _hinweis = calc.in_basis(menge, einheit, dict(lebensmittel), eigene)
         gramm = round(gramm, 2)
 
-    return await _schreiben(db, user["id"], tag, daten, frei, stufe, mahlzeit,
-                            menge, einheit, gramm)
-
-
-async def _schreiben(db, user_id, tag, daten, frei, stufe, mahlzeit,
-                     menge, einheit, gramm):
-    """Die Zeile wegschreiben und den frischen Tag zurueckgeben."""
     await db.execute(
-        "INSERT INTO food_log (user_id, day, dish_id, item_id, label, level, "
-        "   meal, note, amount, unit, grams) "
+        "INSERT INTO food_log (user_id, day, dish_id, item_id, meal, note, "
+        "   amount, unit, grams, logged_time, meal_auto) "
         "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
-        user_id, tag, daten.dish_id, daten.item_id, frei or None, stufe,
-        mahlzeit, daten.note, menge, einheit, gramm)
-    return await _tag(db, user_id, tag)
+        user["id"], tag, daten.dish_id, daten.item_id, mahlzeit,
+        (daten.note or "").strip() or None, menge, einheit, gramm,
+        f"{zeit[0]:02d}:{zeit[1]:02d}" if zeit else None, geraten)
+    return await _tag(db, user["id"], tag)
 
 
-@router.patch("/api/food/log/{log_id}")
+@router.patch("/api/food/track/log/{log_id}")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def eintrag_aendern(request: Request, log_id: int, daten: EintragAendern,
                           db=Depends(get_db), user=Depends(get_current_user)):
-    """Stufe, Mahlzeit oder Notiz nachtraeglich richtigstellen.
+    """Mahlzeit oder Notiz nachtraeglich richtigstellen.
 
-    Absichtlich nur diese drei: eine Menge nachtraeglich zu aendern hiesse,
+    Absichtlich nur diese zwei: eine Menge nachtraeglich zu aendern hiesse,
     die Umrechnung von damals zu wiederholen -- dafuer gibt es Loeschen und
-    neu eintragen. Aber „das war doch eher uebermaessig" soll kein Loeschen
-    kosten, sonst steht es am Ende gar nicht da.
+    neu eintragen. Eine von Hand gesetzte Mahlzeit ist keine Vermutung mehr,
+    deshalb faellt dabei ``meal_auto`` weg.
     """
     zeile = await db.fetchrow(
-        "SELECT id, day, grams FROM food_log WHERE id=$1 AND user_id=$2",
+        "SELECT id, day FROM food_log WHERE id=$1 AND user_id=$2",
         log_id, user["id"])
     if not zeile:
         raise HTTPException(404, "Diesen Eintrag gibt es nicht.")
 
     felder, werte = [], []
-    if daten.level is not None:
-        if daten.level not in calc.STUFEN:
-            raise HTTPException(400, "Es gibt nur zwei Stufen: normal oder übermäßig.")
-        if zeile["grams"] is not None:
-            raise HTTPException(
-                400, "Dieser Eintrag steht in einer Menge, nicht in einer Stufe.")
-        werte.append(daten.level)
-        felder.append(f"level=${len(werte) + 2}")
     if daten.meal is not None:
         try:
-            werte.append(calc.mahlzeit_sauber(daten.meal))
+            werte.append(mz.mahlzeit_sauber(daten.meal))
         except ValueError as e:
             raise HTTPException(400, str(e))
         felder.append(f"meal=${len(werte) + 2}")
+        felder.append("meal_auto=FALSE")
     if daten.note is not None:
         werte.append(daten.note.strip() or None)
         felder.append(f"note=${len(werte) + 2}")
@@ -941,7 +914,7 @@ async def eintrag_aendern(request: Request, log_id: int, daten: EintragAendern,
     return await _tag(db, user["id"], zeile["day"])
 
 
-@router.delete("/api/food/log/{log_id}")
+@router.delete("/api/food/track/log/{log_id}")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def eintrag_entfernen(request: Request, log_id: int, db=Depends(get_db),
                             user=Depends(get_current_user)):
@@ -954,39 +927,32 @@ async def eintrag_entfernen(request: Request, log_id: int, db=Depends(get_db),
 
 
 # ---------------------------------------------------------------------------
-# Modus und Ziele
+# Tagesziele
 # ---------------------------------------------------------------------------
-@router.get("/api/food/settings")
-async def einstellungen_lesen(db=Depends(get_db), user=Depends(get_current_user)):
+@router.get("/api/food/track/targets")
+async def ziele_lesen(db=Depends(get_db), user=Depends(get_current_user)):
     einst = await _einstellungen(db, user["id"])
     return {
-        "mode": einst["mode"],
-        "modes": [{"key": m, "label": calc.MODUS_LABEL[m]} for m in calc.MODI],
         "targets": _ziele_raus(einst),
         "defaults": {m: float(calc.RICHTWERT[m]) for m in calc.MAKROS},
         "macros": list(calc.MAKROS),
         "macro_labels": dict(calc.MAKRO_LABEL),
         "reference_note": calc.RICHTWERT_QUELLE,
+        "target_note": calc.ZIEL_QUELLE,
     }
 
 
-@router.put("/api/food/settings")
+@router.put("/api/food/track/targets")
 @limiter.limit(LIMIT_WRITE_STANDARD)
-async def einstellungen_setzen(request: Request, daten: EinstellungEingabe,
-                               db=Depends(get_db), user=Depends(get_current_user)):
-    """Modus und Tagesziele. Beides freiwillig, beides einzeln.
+async def ziele_setzen(request: Request, daten: ZieleEingabe,
+                       db=Depends(get_db), user=Depends(get_current_user)):
+    """Tagesziele — freiwillig und einzeln.
 
     Ein Ziel auf ``null`` zu setzen ist kein Fehler, sondern die Rueckkehr
-    zum allgemeinen Richtwert -- wer nur auf Eiweiss achtet, soll nicht fuenf
+    zum allgemeinen Richtwert: wer nur auf Eiweiss achtet, soll nicht fuenf
     Zahlen erfinden muessen.
     """
     einst = await _einstellungen(db, user["id"])
-    modus = einst["mode"]
-    if daten.mode is not None:
-        if daten.mode not in calc.MODI:
-            raise HTTPException(400, "Es gibt zwei Modi: locker oder ausfuehrlich.")
-        modus = daten.mode
-
     ziele = {spalte: einst[spalte] for spalte in calc.ZIEL_SPALTEN.values()}
     for makro, wert in (daten.targets or {}).items():
         spalte = calc.ZIEL_SPALTEN.get(makro)
@@ -1008,43 +974,38 @@ async def einstellungen_setzen(request: Request, daten: EinstellungEingabe,
         ziele[spalte] = round(zahl, 1)
 
     await db.execute(
-        "INSERT INTO food_settings (user_id, mode, kcal_target, protein_target, "
+        "INSERT INTO food_settings (user_id, kcal_target, protein_target, "
         "   fiber_target, carbs_target, fat_target) "
-        "VALUES ($1,$2,$3,$4,$5,$6,$7) "
-        "ON CONFLICT (user_id) DO UPDATE SET mode=EXCLUDED.mode, "
+        "VALUES ($1,$2,$3,$4,$5,$6) "
+        "ON CONFLICT (user_id) DO UPDATE SET "
         "   kcal_target=EXCLUDED.kcal_target, protein_target=EXCLUDED.protein_target, "
         "   fiber_target=EXCLUDED.fiber_target, carbs_target=EXCLUDED.carbs_target, "
         "   fat_target=EXCLUDED.fat_target, updated_at=now()",
-        user["id"], modus, ziele["kcal_target"], ziele["protein_target"],
+        user["id"], ziele["kcal_target"], ziele["protein_target"],
         ziele["fiber_target"], ziele["carbs_target"], ziele["fat_target"])
-    return await einstellungen_lesen(db=db, user=user)
+    return await ziele_lesen(db=db, user=user)
 
 
 # ---------------------------------------------------------------------------
 # Verlauf
 # ---------------------------------------------------------------------------
-@router.get("/api/food/history")
+@router.get("/api/food/track/history")
 async def verlauf(von: Optional[str] = Query(None, alias="from"),
                   bis: Optional[str] = Query(None, alias="to"),
                   db=Depends(get_db), user=Depends(get_current_user)):
-    """Ein Zeitraum, Tag fuer Tag — fuer beide Modi dieselbe Antwort.
-
-    Der lockere Modus liest daraus die Strecke: an welchen Tagen ueberhaupt
-    etwas notiert wurde und wie oft es uebermaessig war. Der ausfuehrliche
-    liest dieselben Zeilen als Kalorien- und Eiweiss-Spanne je Tag.
+    """Ein Zeitraum, Tag fuer Tag — je Naehrwert eine Zahl.
 
     Tage ohne Eintrag stehen mit Nullen drin und fehlen nicht: eine Luecke,
     die man nicht sieht, wird zu einem Tag, den es nie gab.
     """
-    from datetime import date as Datum, timedelta
+    from datetime import timedelta
 
-    heute = Datum.today()
-    ende = _als_tag(bis) if bis else heute
+    ende = _als_tag(bis) if bis else _als_tag(None)
     anfang = _als_tag(von) if von else (ende - timedelta(days=29))
     if anfang > ende:
         anfang = ende
-    # Ein Jahr ist die Grenze, ab der die Tagesliste laenger wird als jede
-    # Darstellung -- darueber schneidet die Antwort zu und sagt es.
+    # Ueber 400 Tage wird die Tagesliste breiter als jede Darstellung --
+    # darueber schneidet die Antwort zu und sagt es.
     gekuerzt = (ende - anfang).days > 400
     if gekuerzt:
         anfang = ende - timedelta(days=400)
@@ -1062,43 +1023,40 @@ async def verlauf(von: Optional[str] = Query(None, alias="from"),
 
     je_tag: dict = {}
     for z in zeilen:
-        eintrag, spanne = _zeile_rechnen(z, portionen)
-        topf = je_tag.setdefault(z["day"], {"eintraege": [], "spannen": []})
+        eintrag, werte = _zeile_rechnen(z, portionen)
+        topf = je_tag.setdefault(z["day"], {"eintraege": [], "werte": []})
         topf["eintraege"].append(eintrag)
-        topf["spannen"].append(spanne)
+        topf["werte"].append(werte)
 
-    tage = []
-    lauf = anfang
+    mass = calc.massstab(einst)
+    tage, lauf = [], anfang
     while lauf <= ende:
         topf = je_tag.get(lauf)
         if topf:
-            summe = calc.tages_summe(topf["spannen"], einst)
-            zaehlung = _zaehlungen(topf["eintraege"])
+            summe = calc.tages_summe_genau(topf["werte"], einst)
             tage.append({
-                "day": str(lauf), **zaehlung,
-                **{makro: {"min": summe[makro]["min"], "max": summe[makro]["max"],
-                           "incomplete": summe[makro]["incomplete"]}
-                   for makro in calc.MAKROS},
+                "day": str(lauf),
+                "entries": len(topf["eintraege"]),
+                "unknown": sum(1 for e in topf["eintraege"] if not e["has_nutrition"]),
+                **{m: {"value": summe[m]["value"], "incomplete": summe[m]["incomplete"]}
+                   for m in calc.MAKROS},
             })
         else:
             tage.append({
-                "day": str(lauf), "entries": 0, "normal": 0, "viel": 0,
-                "exact": 0, "unknown": 0,
-                **{makro: {"min": 0, "max": 0, "incomplete": False}
-                   for makro in calc.MAKROS},
+                "day": str(lauf), "entries": 0, "unknown": 0,
+                **{m: {"value": 0, "incomplete": False} for m in calc.MAKROS},
             })
         lauf += timedelta(days=1)
 
     notiert = [t for t in tage if t["entries"]]
-    eintraege_gesamt = sum(t["entries"] for t in notiert)
-    viel_gesamt = sum(t["viel"] for t in notiert)
-    stufen_gesamt = sum(t["normal"] + t["viel"] for t in notiert)
+    # Der Schnitt zaehlt nur Tage, an denen JEDER Eintrag Naehrwerte hatte.
+    # Ein Tag mit einer Luecke waere sonst ein sehr sparsamer Tag, der es nie war.
     voll = [t for t in notiert if not t["unknown"]]
+    im_ziel = [t for t in voll if t["kcal"]["value"] <= mass["kcal"]["wert"]]
     return {
         "from": str(anfang), "to": str(ende),
         "days": tage,
         "truncated": gekuerzt,
-        "mode": einst["mode"],
         "targets": _ziele_raus(einst),
         "reference": {m: float(calc.RICHTWERT[m]) for m in calc.MAKROS},
         "macros": list(calc.MAKROS),
@@ -1106,22 +1064,13 @@ async def verlauf(von: Optional[str] = Query(None, alias="from"),
         "summary": {
             "days": len(tage),
             "days_logged": len(notiert),
-            "entries": eintraege_gesamt,
-            "viel": viel_gesamt,
-            # Der Anteil rechnet nur ueber Eintraege MIT Stufe -- genau
-            # abgewogene Mengen tragen keine, und sie unter "normal" zu
-            # zaehlen waere eine Behauptung ueber die Portionsgroesse.
-            "viel_share": (round(viel_gesamt / stufen_gesamt, 3)
-                           if stufen_gesamt else None),
-            "leveled": stufen_gesamt,
-            # Der Kalorienschnitt zaehlt nur Tage, an denen JEDER Eintrag
-            # Naehrwerte hatte. Ein Tag mit drei frei notierten Zeilen waere
-            # sonst ein sehr sparsamer Tag, der es nie war.
+            "entries": sum(t["entries"] for t in notiert),
             "complete_days": len(voll),
-            "kcal_avg_min": (round(sum(t["kcal"]["min"] for t in voll) / len(voll))
-                             if voll else None),
-            "kcal_avg_max": (round(sum(t["kcal"]["max"] for t in voll) / len(voll))
-                             if voll else None),
+            "target_hit_days": len(im_ziel),
+            "kcal_avg": (round(sum(t["kcal"]["value"] for t in voll) / len(voll))
+                         if voll else None),
+            "protein_avg": (round(sum(t["protein_g"]["value"] for t in voll) / len(voll))
+                            if voll else None),
         },
     }
 
@@ -1129,33 +1078,32 @@ async def verlauf(von: Optional[str] = Query(None, alias="from"),
 # ---------------------------------------------------------------------------
 # Was man oft eintraegt
 # ---------------------------------------------------------------------------
-@router.get("/api/food/frequent")
-async def haeufig(limit: int = Query(14, le=40), db=Depends(get_db),
+@router.get("/api/food/track/frequent")
+async def haeufig(limit: int = Query(12, le=40), db=Depends(get_db),
                   user=Depends(get_current_user)):
-    """Die Vorschlagsliste des lockeren Modus.
+    """Die Vorschlagsliste des Trackers — aus dem eigenen Bestand.
 
-    Sie kommt aus dem Tagebuch selbst und nicht aus dem Bestand: wer locker
-    notiert, legt nichts an -- er schreibt hin, was es gab. Nach ein paar
-    Tagen steht genau das zur Auswahl, was er wirklich isst, und ein Eintrag
-    ist ein einziger Tipp. Gezaehlt werden die letzten 120 Tage; was man
-    frueher einmal gegessen hat, ist kein Vorschlag mehr.
+    Anders als im Tagebuch stehen hier nur Dinge, die es wirklich gibt:
+    Gerichte und Lebensmittel. Gezaehlt werden die letzten 120 Tage samt der
+    zuletzt eingetragenen Menge, damit ein Vorschlag ein Tipp bleibt und keine
+    Rechenaufgabe.
     """
     zeilen = await db.fetch(
-        "SELECT CASE WHEN l.dish_id IS NOT NULL THEN 'dish' "
-        "            WHEN l.item_id IS NOT NULL THEN 'item' ELSE 'free' END AS kind, "
-        "       l.dish_id, l.item_id, "
-        "       COALESCE(d.name, i.name, l.label) AS name, "
+        "SELECT CASE WHEN l.dish_id IS NOT NULL THEN 'dish' ELSE 'item' END AS kind, "
+        "       l.dish_id, l.item_id, COALESCE(d.name, i.name) AS name, "
         "       COUNT(*)::int AS anzahl, MAX(l.day) AS zuletzt, "
-        "       (ARRAY_AGG(l.level ORDER BY l.day DESC))[1] AS letzte_stufe "
+        "       (ARRAY_AGG(l.amount ORDER BY l.day DESC))[1] AS letzte_menge, "
+        "       (ARRAY_AGG(l.unit ORDER BY l.day DESC))[1] AS letzte_einheit "
         "  FROM food_log l "
         "  LEFT JOIN food_dishes d ON d.id = l.dish_id "
         "  LEFT JOIN food_items  i ON i.id = l.item_id "
         " WHERE l.user_id=$1 AND l.day >= CURRENT_DATE - 120 "
-        "   AND COALESCE(d.name, i.name, l.label) IS NOT NULL "
+        "   AND COALESCE(d.name, i.name) IS NOT NULL "
         " GROUP BY 1, 2, 3, 4 "
         " ORDER BY 5 DESC, 6 DESC LIMIT $2", user["id"], int(limit))
     return {"suggestions": [
         {"kind": z["kind"], "dish_id": z["dish_id"], "item_id": z["item_id"],
          "name": z["name"], "count": z["anzahl"], "last": str(z["zuletzt"]),
-         "last_level": z["letzte_stufe"]}
+         "last_amount": float(z["letzte_menge"]) if z["letzte_menge"] else None,
+         "last_unit": z["letzte_einheit"]}
         for z in zeilen]}

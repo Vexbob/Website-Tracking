@@ -1,0 +1,554 @@
+/* naehrwerte.css — v1.98.0
+ *
+ * Der Ernaehrungs-Tracker. Ringe (.v-ring), Flaechen, Knoepfe, Chips,
+ * Dialoge, Ablegeflaeche und leere Zustaende kommen aus css/style.css und
+ * css/statistics.css; hier steht nur, was es sonst nirgends gibt: der
+ * Tageskopf, die Kalorienkarte, die Mahlzeitenbloecke, der Portionen-Stepper
+ * und die Formulare.
+ *
+ * Farbe: --m-naehrwerte traegt die Identitaet. Der Ueberschuss ueber ein Ziel
+ * ist gelb (--warn) und nicht rot -- "mehr" ist eine Auskunft, keine
+ * Bewertung, und darum hat niemand gebeten.
+ */
+
+:root {
+    --nw-figur: var(--figure, var(--m-naehrwerte));
+}
+
+/* ---------- Ruhezustand ----------
+   Wer die Adresse kennt, kommt hierher, auch wenn das Modul in keiner Leiste
+   steht. Dann sagt die Seite selbst, warum -- statt kommentarlos normal
+   auszusehen. */
+.nw-ruht { border-color: var(--line-strong); }
+
+/* ---------- Der Tageskopf ---------- */
+.nw-tagkopf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: var(--space-4);
+}
+.nw-tagkopf-mitte {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.nw-tagkopf-mitte strong { font-size: 1.0625rem; color: var(--text-1); font-weight: 650; }
+.nw-tagkopf-mitte span {
+    font-size: 0.8125rem;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+.nw-pfeil {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    color: var(--text-2);
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+.nw-pfeil:hover { color: var(--text-1); border-color: var(--line-strong); opacity: 1; }
+.nw-pfeil:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.nw-pfeil[disabled] { opacity: 0.35; cursor: default; }
+.nw-add { margin: 0 0 0 auto; width: auto; flex: none; }
+
+/* ---------- Die Kalorienkarte ----------
+   Der Halbkreis liest sich wie ein Tank: es gibt ein Maximum, und der freie
+   Rest ist die eigentliche Auskunft. Darunter steht, WORAN gemessen wird --
+   eine Zahl ohne Herkunft waere eine Aussage ueber den Nutzer, die niemand
+   getroffen hat. */
+.nw-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+.nw-ziel {
+    margin: 0;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: var(--text-3);
+    line-height: 1.5;
+    max-width: 34rem;
+}
+.nw-ziel strong { color: var(--text-1); font-variant-numeric: tabular-nums; }
+.nw-ziel-link {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--accent);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+.nw-ziel-link:hover { opacity: 1; color: var(--text-1); }
+.nw-ziel-link:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
+
+.v-ring-reihe { margin-top: var(--space-4); }
+
+/* ---------- Mahlzeiten ---------- */
+.nw-mz { margin-top: var(--space-4); }
+.nw-mz-kopf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--line);
+}
+.nw-mz-name {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-4);
+}
+.nw-mz-summe {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+.nw-mz-summe + .nw-mz-plus { margin-left: 0; }
+.nw-mz-plus {
+    margin: 0 0 0 auto;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text-3);
+    font-size: 0.8125rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.nw-mz-plus:hover { color: var(--nw-figur); border-color: var(--nw-figur); opacity: 1; }
+.nw-mz-plus:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.nw-mz.is-leer .nw-mz-kopf { border-bottom-color: transparent; }
+.nw-mz.is-leer .nw-mz-name { color: var(--text-4); opacity: 0.6; }
+
+/* Der Name ist der Knopf zum Verschieben; die Menge steht als Marke daneben
+   und ist bewusst NICHT anklickbar: sie wurde beim Eintragen umgerechnet. */
+.nw-zeile-name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.05rem;
+    width: auto;
+    margin: 0;
+    padding: 0.35rem 0.4rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    text-align: left;
+    color: var(--text-1);
+    font-family: inherit;
+    font-size: 0.9375rem;
+    cursor: pointer;
+}
+.nw-zeile-name:hover { opacity: 1; background: var(--surface-2); }
+.nw-zeile-name:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.nw-zeile-name strong { font-weight: 600; }
+.nw-zeile-meta { font-size: 0.75rem; color: var(--text-4); font-weight: 400; }
+.nw-menge-tag {
+    flex: none;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: 0.6875rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* ---------- Portionen-Stepper ----------
+   Halbe, ganze, anderthalb Portionen sind die Faelle -- dafuer muss niemand
+   eine Tastatur oeffnen. */
+.nw-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: none;
+    background: var(--surface-3);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 0.15rem;
+}
+.nw-stepper button {
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    border-radius: 999px;
+    color: var(--text-2);
+    font-size: 0.9375rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.nw-stepper button:hover { opacity: 1; color: var(--text-1); background: var(--surface-2); }
+.nw-stepper button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.nw-stepper output {
+    min-width: 5.5rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Eine Zeile (Eintrag, Zutat, Bestand) ---------- */
+.ern-zeile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--line);
+}
+.ern-zeile:last-child { border-bottom: 0; }
+.ern-zeile-text { flex: 1; min-width: 0; }
+.ern-zeile-kopf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.ern-zeile-kopf strong { color: var(--text-1); font-weight: 600; }
+
+.ern-note {
+    margin: 0.5rem 0 0;
+    font-size: 0.75rem;
+    color: var(--text-3);
+    line-height: 1.5;
+}
+.ern-note em { font-style: normal; color: var(--text-2); }
+.ern-note:empty { display: none; }
+.ern-fehlt { color: var(--text-4); }
+.ern-marke { font-size: 0.75rem; color: var(--text-3); }
+.ern-herkunft {
+    font-size: 0.6875rem;
+    color: var(--text-4);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 0.05rem 0.45rem;
+}
+
+/* ---------- Suchfeld ---------- */
+.ern-suche {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.7rem;
+    flex: 1 1 220px;
+    min-width: 0;
+}
+.ern-suche-ico { opacity: 0.7; flex: none; }
+.ern-suche input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
+    color: var(--text-1);
+    font-size: 1rem;           /* nicht kleiner: darunter zoomt iOS beim Tippen */
+}
+.ern-suche input:focus { outline: none; }
+.ern-suche:focus-within { box-shadow: var(--focus-ring); }
+
+.ern-suchzeile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.ern-suchzeile .v-btn { width: auto; margin: 0; flex: none; }
+
+.ern-kopf-tasten { display: flex; align-items: center; gap: 0.625rem; }
+.ern-kopf-tasten .v-btn { width: auto; margin: 0; }
+
+/* ---------- Eintragen-Dialog ---------- */
+.ern-dlg-mahlzeiten {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-bottom: 0.75rem;
+}
+.ern-dlg-fuss {
+    position: sticky;
+    bottom: -1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: var(--space-4);
+    padding: 0.625rem 0 0.25rem;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+}
+.ern-dlg-fuss .ern-note { margin: 0; flex: 1 1 140px; min-width: 0; }
+.ern-dlg-fuss .v-btn { width: auto; margin: 0; flex: none; }
+
+.ern-w {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+.ern-w-text {
+    flex: 1 1 200px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+.ern-w-name { font-size: 0.9375rem; font-weight: 600; color: var(--text-1); }
+.ern-w-sub { font-size: 0.75rem; color: var(--text-3); }
+.ern-w .v-btn { width: auto; margin: 0; flex: none; }
+
+.ern-menge {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex: none;
+    flex-wrap: wrap;
+}
+.ern-menge input {
+    width: 4.5rem;
+    margin: 0;
+    padding: 0.4rem 0.5rem;
+    background: var(--surface-3);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text-1);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+}
+.ern-menge select { width: auto; min-width: 5.5rem; margin: 0; }
+.ern-menge .v-btn { width: auto; margin: 0; }
+.v-select--sm { padding: 0.35rem 1.6rem 0.35rem 0.55rem; font-size: 0.8125rem; }
+
+/* ---------- Ziele ---------- */
+.ern-ziele {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 0.75rem;
+    margin-top: var(--space-3);
+}
+
+/* ---------- Formulare ---------- */
+.ern-gitter {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+.ern-feld {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+.ern-feld--breit { grid-column: span 2; }
+.ern-feld input,
+.ern-feld select {
+    margin: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.55rem 0.7rem;
+    color: var(--text-1);
+    font-size: 1rem;
+}
+.ern-feld input:focus-visible,
+.ern-feld select:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+.ern-tasten {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: var(--space-3);
+}
+.ern-tasten .v-btn { width: auto; margin: 0; }
+
+.ern-groessen-kopf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: var(--space-4);
+}
+.ern-groessen-kopf h4 { margin: 0; font-size: 0.875rem; }
+.ern-groessen-kopf .v-btn { width: auto; margin: 0 0 0 auto; }
+.ern-groessen { margin: 0.5rem 0; }
+.ern-groesse {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.375rem;
+}
+.ern-groesse input[type="text"] { flex: 1 1 120px; min-width: 0; }
+.ern-groesse input[type="number"] { width: 5.5rem; flex: none; }
+.ern-groesse input {
+    margin: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.45rem 0.6rem;
+    color: var(--text-1);
+    font-size: 0.875rem;
+}
+.ern-groesse-ist { color: var(--text-4); flex: none; }
+.ern-groesse-basis {
+    color: var(--text-3);
+    font-size: 0.8125rem;
+    flex: none;
+    min-width: 1.5rem;
+}
+
+/* ---------- Nachschlagen ---------- */
+.ern-treffer {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.75rem 0.875rem;
+    margin-top: 0.5rem;
+}
+.ern-kopf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+.ern-kopf strong { color: var(--text-1); }
+.ern-werte {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: 0.5rem;
+}
+.ern-wert {
+    background: var(--surface-3);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.625rem;
+    min-width: 0;
+}
+.ern-wert-lbl { font-size: 0.6875rem; color: var(--text-4); }
+.ern-wert-num {
+    font-size: 0.9375rem;
+    font-weight: 650;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Zugeklapptes (Katalog) ---------- */
+.ern-klapp {
+    background: var(--surface-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 0.75rem 1rem;
+    margin-top: var(--space-4);
+}
+.ern-klapp > summary {
+    display: flex;
+    align-items: baseline;
+    gap: 0.625rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-2);
+    list-style: none;
+}
+.ern-klapp > summary::-webkit-details-marker { display: none; }
+.ern-klapp > summary::before { content: '▸'; color: var(--text-4); font-size: 0.75rem; }
+.ern-klapp[open] > summary::before { content: '▾'; }
+.ern-klapp > summary:hover { color: var(--text-1); }
+
+/* ---------- Kamera ---------- */
+.ern-kamera {
+    margin: 0.75rem 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--surface-2);
+}
+.ern-kamera video {
+    display: block;
+    width: 100%;
+    max-height: 320px;
+    object-fit: cover;
+    background: #000;
+}
+.ern-kamera-leiste {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+}
+.ern-kamera-leiste .ern-note { margin: 0; }
+.ern-kamera-leiste .v-btn { width: auto; margin: 0; }
+
+/* ---------- Verlauf ---------- */
+.nw-verlaufleiste .ern-kopf-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+    margin-right: auto;
+}
+.ern-kopf-text strong { font-size: 0.9375rem; color: var(--text-1); font-weight: 650; }
+.ern-kopf-text span { font-size: 0.75rem; color: var(--text-3); }
+.nw-verlaufleiste .stat-filter-slot { margin-left: 0; }
+
+@media (max-width: 640px) {
+    .ern-feld--breit { grid-column: span 1; }
+    /* Der grosse Knopf bekommt eine eigene Zeile unter dem Datum, statt das
+       Datum auf ein Wort zu quetschen. */
+    .nw-tagkopf { flex-wrap: wrap; }
+    .nw-add { width: 100%; margin: 0.5rem 0 0; order: 9; }
+    .ern-w .ern-menge,
+    .ern-w .nw-stepper { flex: 1 1 auto; }
+    .ern-menge input { flex: 1 1 4rem; width: auto; }
+    .ern-menge select { flex: 1 1 5rem; }
+    .ern-suchzeile .v-btn { flex: 1 1 auto; }
+}

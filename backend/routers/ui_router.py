@@ -47,9 +47,18 @@ NAV_TABS_PREF = "ui_nav_tabs"
 # ``backend/tests/test_navigation.py`` vergleicht beide Listen automatisch.
 ALLOWED_NAV_TABS = [
     "/", "/sparziel/", "/ausgaben/", "/notizen/", "/health/", "/musik/",
-    "/blog/", "/blog/admin/", "/admin/", "/schach/", "/ernaehrung/",
-    "/essen/",
+    "/blog/", "/blog/admin/", "/admin/", "/schach/", "/essen/", "/naehrwerte/",
 ]
+
+# Pfade, die es als Modul nicht mehr gibt, aber noch in gespeicherten
+# Einstellungen stehen koennen. Sie bleiben erlaubt, weil ``_href_list`` sonst
+# die GANZE Liste abweist und damit ein Speichern verhindert, an dem der
+# Nutzer nichts falsch gemacht hat. Beim Zeichnen fallen sie ohnehin weg --
+# das Frontend kennt sie nicht mehr.
+VERALTETE_NAV_TABS = [
+    "/ernaehrung/",     # v1.98.0: aufgeteilt in /essen/ und /naehrwerte/
+]
+ALLOWED_NAV_TABS = ALLOWED_NAV_TABS + VERALTETE_NAV_TABS
 
 # Zwei ist die Untergrenze, ab der eine Leiste ueberhaupt Navigation ist.
 # Sechs passt auf einem schmalen iPhone gerade noch mit lesbarem Label --

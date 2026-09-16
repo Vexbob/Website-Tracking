@@ -69,6 +69,11 @@
        Ton und heisst dann --m-naehrwerte. */
     --m-essen: #a3e635;
     --m-essen-soft: rgba(163,230,53,0.16);
+    /* Der Tracker (v1.98.0). Himmelblau steht zwischen --m-ausgaben
+       (cyan-gruen) und --m-notizen (periwinkle) und ist von beiden am
+       Icon zu unterscheiden. */
+    --m-naehrwerte: #38bdf8;
+    --m-naehrwerte-soft: rgba(56,189,248,0.16);
 
     /* =====================================================================
        Verlaufs-Presets (v1.74.0)
@@ -1768,6 +1773,137 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 .v-tag--info   { background: var(--info-soft);   color: var(--info);   border-color: transparent; }
 
 /* ---------- Modul-Icon-Kachel: eine der vier Stellen mit Verlauf ---------- */
+/* Eine kleine Marke IM Chip: "jetzt" am vorgeschlagenen Eintrag. Man sieht
+   die Vermutung, bevor sie gilt -- und ein anderer Chip ueberstimmt sie mit
+   einem Tipp. (v1.98.0, beide Ernaehrungs-Module) */
+.v-chip-jetzt {
+    margin-left: 0.35rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-4);
+}
+.v-chip.is-active .v-chip-jetzt { color: inherit; opacity: 0.7; }
+
+/* ==========================================================================
+   Ring — Anteil an einem Ziel (v1.98.0)
+   --------------------------------------------------------------------------
+   Eine Komponente, zwei Formen. Der HALBKREIS liest sich wie ein Tank: es
+   gibt ein Maximum, und der freie Rest ist die eigentliche Auskunft ("noch
+   520"). Der VOLLKREIS liest sich als Anteil und vergleicht sich gut mit
+   seinen Nachbarn -- deshalb Halbkreis fuer die eine grosse Zahl, Vollkreis
+   fuer die drei kleinen daneben.
+
+   Gesteuert wird ausschliesslich ueber CSS-Variablen; kein Hex in JS, keine
+   Inline-Farbe:
+
+     --ring-tone   immer in der Form var(--figure, var(--m-modul))
+     --ring-val    0…1, der gefuellte Anteil (ueber 1 deckelt das Skript)
+     --ring-over   0…1, der Ueberschuss ueber 100 % (1 = doppelt)
+     --ring-size   Kantenlaenge
+     --ring-w      Strichbreite
+     --ring-c      Umfang bei r=42; steht hier und wird nie von aussen gesetzt
+
+   Ueber dem Ziel reitet ein zweiter Bogen in --warn von vorn ueber den
+   vollen Ring -- mit butt-Kappe, damit die Stelle sichtbar bleibt, an der er
+   anfaengt. Gelb und nicht rot: "mehr" ist keine Bewertung.
+
+   .is-unvollstaendig macht die SPUR gestrichelt: an diesem Massstab fehlen
+   Stuecke. Ein Wert, zu dem Angaben fehlen, darf nicht aussehen wie einer,
+   zu dem alle da sind.
+   ========================================================================== */
+.v-ring {
+    --ring-size: 140px;
+    --ring-w: 12;
+    --ring-c: 263.894;
+    --ring-tone: var(--accent);
+    --ring-val: 0;
+    --ring-over: 0;
+    position: relative;
+    width: var(--ring-size);
+    height: var(--ring-size);
+    flex: none;
+}
+.v-ring svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+.v-ring circle { fill: none; stroke-width: var(--ring-w); }
+.v-ring-track { stroke: var(--line); }
+.v-ring-fill {
+    stroke: var(--ring-tone);
+    stroke-linecap: round;
+    stroke-dasharray: var(--ring-c);
+    stroke-dashoffset: calc(var(--ring-c) * (1 - var(--ring-val)));
+    transition: stroke-dashoffset 0.6s var(--ease);
+}
+.v-ring-over {
+    stroke: var(--warn);
+    stroke-linecap: butt;
+    stroke-dasharray: var(--ring-c);
+    stroke-dashoffset: calc(var(--ring-c) * (1 - var(--ring-over)));
+    transition: stroke-dashoffset 0.6s var(--ease);
+}
+.v-ring.is-unvollstaendig .v-ring-track { stroke-dasharray: 2 6; }
+.v-ring-txt {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 14%;
+    pointer-events: none;
+}
+.v-ring-val {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+}
+.v-ring-unit { font-size: 0.75rem; color: var(--text-3); margin-top: 2px; }
+.v-ring-lbl {
+    font-size: 0.6875rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+.v-ring.is-drueber .v-ring-lbl { color: var(--warn); }
+/* Ueber dem Ziel ist nicht ueberall dasselbe: mehr gespart als geplant ist
+   ein Erfolg, mehr gegessen als geplant ist eine Auskunft. Der Modifier
+   dreht den Ueberschuss von --warn auf --ok. */
+.v-ring--gut .v-ring-over { stroke: var(--ok); }
+.v-ring--gut.is-drueber .v-ring-lbl { color: var(--ok); }
+
+/* Der Halbkreis: dieselbe Geometrie, nur die halbe zugelassene Bogenlaenge.
+   rotate(180deg) setzt den Anfang auf 9 Uhr, gezeichnet wird ueber 12 nach 3
+   -- und der Kasten schneidet unten ab, damit unter dem Bogen kein leeres
+   Viertel steht. Der Text sitzt in der Mulde. */
+.v-ring--halb { height: calc(var(--ring-size) * 0.6); overflow: hidden; }
+.v-ring--halb svg { height: var(--ring-size); transform: rotate(180deg); }
+.v-ring--halb .v-ring-fill,
+.v-ring--halb .v-ring-over { stroke-dasharray: calc(var(--ring-c) / 2) var(--ring-c); }
+.v-ring--halb .v-ring-fill { stroke-dashoffset: calc(var(--ring-c) / 2 * (1 - var(--ring-val))); }
+.v-ring--halb .v-ring-over { stroke-dashoffset: calc(var(--ring-c) / 2 * (1 - var(--ring-over))); }
+.v-ring--halb .v-ring-txt { inset: 22% 0 0 0; justify-content: center; }
+
+.v-ring--hero { --ring-size: 176px; --ring-w: 13; }
+.v-ring--sm { --ring-size: 78px; --ring-w: 9; }
+.v-ring--sm .v-ring-val { font-size: 0.9375rem; }
+.v-ring--sm .v-ring-unit,
+.v-ring--sm .v-ring-lbl { font-size: 0.625rem; margin-top: 1px; }
+
+/* Mehrere Ringe nebeneinander -- je Ring seine eigene Beschriftung darunter,
+   damit keine Legende noetig ist. */
+.v-ring-reihe {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    justify-content: center;
+}
+
 .v-icon-tile {
     width: 44px; height: 44px; border-radius: 13px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;

@@ -13,6 +13,7 @@
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
+<script src="/js/ring.js"></script>
 <script src="/js/sw-update.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="/js/charts.js"></script>
@@ -47,19 +48,21 @@
                 <button class="he-btn" onclick="startNewGoal()">+ Sparziel anlegen</button>
             </div>
             <div class="hero-top">
-                <div class="hero-radial">
-                    <svg viewBox="0 0 100 100">
-                        <defs><linearGradient id="gradGreen" x1="0" y1="0" x2="1" y2="1">
-                            <!-- Ein Ton, zwei Deckungen: die Farbe kommt aus dem Modulton,
-                                 nicht aus zwei fest verdrahteten Gruens. -->
-                            <stop offset="0%" stop-color="var(--figure, var(--m-sparziel))" stop-opacity="0.6"/><stop offset="100%" stop-color="var(--figure, var(--m-sparziel))"/>
-                        </linearGradient></defs>
-                        <circle class="track" cx="50" cy="50" r="42"/>
-                        <circle class="fill" cx="50" cy="50" r="42" id="radialFill" stroke-dasharray="263.9" stroke-dashoffset="263.9"/>
+                <!-- Der geteilte Ring aus css/style.css (v1.98.0). Vorher stand
+                     hier eine eigene Fassung; zwei Fortschrittsringe nebeneinander
+                     waeren genau die zweite Variante, die das Designsystem
+                     ausschliesst. --gut: mehr gespart als geplant ist ein Erfolg
+                     und traegt deshalb --ok statt --warn. -->
+                <div class="v-ring v-ring--gut hero-radial" id="sgRing"
+                     style="--ring-tone:var(--figure, var(--m-sparziel))">
+                    <svg viewBox="0 0 100 100" aria-hidden="true">
+                        <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                        <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                        <circle class="v-ring-over" cx="50" cy="50" r="42"/>
                     </svg>
-                    <div class="hero-radial-txt">
-                        <div class="hero-radial-pct" id="radialPct">0 %</div>
-                        <div class="hero-radial-lbl">gespart</div>
+                    <div class="v-ring-txt">
+                        <strong class="v-ring-val" id="radialPct">0 %</strong>
+                        <span class="v-ring-lbl">gespart</span>
                     </div>
                 </div>
                 <div class="hero-info">

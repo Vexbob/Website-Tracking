@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.98.0', date: '2026-09-18', title: 'Nährwerte — der Tracker mit Ringen', notes: [
+        'Der Ernährungs-Tracker ist jetzt ein eigenes Modul unter „Nährwerte“ und sieht aus wie das, was man kennt: ein Halbkreis für die Kalorien, drei kleine Ringe für Eiweiß, Kohlenhydrate und Fett, und daneben, was bis zum Ziel noch fehlt.',
+        'Die Tagesziele stehen jetzt in einem eigenen Reiter UND direkt unter dem Ring — wer keines gesetzt hat, liest dort, woran gerade gemessen wird, und kommt mit einem Tipp hin. Vorher lagen sie unter „Verlauf“ und waren im Tagebuch-Modus gar nicht zu sehen.',
+        'Ein Gericht wird nicht mehr in Stufen eingetragen, sondern in Portionen (0,5 / 1 / 1,5). Damit hat jede Zeile eine echte Zahl statt einer geschätzten Spanne — geschätzt wird nur noch im Tagebuch, das gar keine Zahlen behauptet.',
+        'Fehlt einer Zutat eine Angabe, bekommt der Ring eine gestrichelte Spur und die Zahl ein „mind.“ — eine Lücke ist keine Null. Über dem Ziel legt sich ein zweiter Bogen in Gelb über den Ring: mehr ist eine Auskunft, kein Urteil.',
+        'Der Ring ist ein neuer Baustein des Designsystems; das Sparziel benutzt ab jetzt denselben statt einer eigenen Fassung. Die alte Adresse /ernaehrung/ leitet auf das Tagebuch weiter.',
+    ]},
     { v: 'v1.97.0', date: '2026-09-17', title: 'Essenstagebuch — ein eigenes Modul', notes: [
         'Das Tagebuch ist jetzt ein eigenes Modul mit einer eigenen Tabelle. Damit ist der Fehler weg, den du gefunden hattest: ein im Tracker eingetragenes „100 g“ kann im Tagebuch nicht mehr auftauchen — nicht weil es verboten wäre, sondern weil es dort keine Spalte gibt, in die eine Menge passt.',
         'Eine Seite, eine Aufgabe: Datum, Mahlzeiten, fertig. Kein Umschalter, kein Diagramm, keine Einstellungen. Oben steht eine Schnellwahl mit deinen sechs häufigsten Sachen — ein Tipp trägt ein, als „normal“, in die Mahlzeit, die zur Uhrzeit passt.',

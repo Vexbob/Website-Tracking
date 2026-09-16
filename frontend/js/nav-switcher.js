@@ -45,8 +45,8 @@
         { href: '/schach/',     label: '♟️ Schach',          public: false, icon: 'chess', short: 'Schach',
           status: 'neu', tone: '--m-schach',
           sub: 'Rating und Partien von Lichess und Chess.com' },
-        { href: '/ernaehrung/', label: '🥗 Ernährung',       public: false, icon: 'meal',  short: 'Werte',
-          status: 'neu', tone: '--m-ernaehrung',
+        { href: '/naehrwerte/', label: '📊 Nährwerte',       public: false, icon: 'ring',  short: 'Werte',
+          status: 'neu', tone: '--m-naehrwerte',
           sub: 'Mengen, Nährwerte und eigene Tagesziele' },
         // v1.97.0 -- das Tagebuch ist ein eigenes Modul mit eigener Tabelle.
         // Es fragt nur, WAS es gab und ob es normal oder uebermaessig war;
@@ -229,7 +229,7 @@
     // Der Ernaehrungs-Tracker ruht, bis man ihn braucht: das Tagebuch ist
     // der Anfang, der Tracker der Ausbau. Wer ihn einschaltet, findet ihn
     // genau so vor, wie er ihn verlassen hat.
-    const MODULE_OFF_DEFAULT = ['/ernaehrung/'];
+    const MODULE_OFF_DEFAULT = ['/naehrwerte/'];
     let moduleRow = null;
     // Zeigt die Leiste gerade alle erlaubten Module? Steuert, ob der
     // Punkte-Schalter daneben noch gebraucht wird.
@@ -511,6 +511,9 @@
     const NAV_TABS_MIN = 2, NAV_TABS_MAX = 6;
 
     const TAB_ICONS = {
+        // Ein Ring mit dicker Kappe -- buchstaeblich das Gesicht des
+        // Naehrwerte-Moduls, und bei 22 px noch als Ring erkennbar.
+        ring: '<circle cx="12" cy="12" r="7.6"/><path d="M12 4.4a7.6 7.6 0 0 1 6.6 3.9" stroke-width="3.2"/>',
         // Schlichte, konsistente Line-Icons (24er-Grid).
         home:   '<path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-8.5Z"/>',
         coin:   '<circle cx="12" cy="12" r="8"/><path d="M12 7v10M9 9.5c0-1 1.2-1.7 3-1.7s3 .7 3 1.9-1.2 1.6-3 1.8-3 .7-3 1.9 1.2 1.9 3 1.9 3-.8 3-1.8"/>',

@@ -27,51 +27,52 @@ def test_gericht_rechnet_zutaten_auf_die_portion():
     assert summe["incomplete"] == ["fiber_g"]
 
 
-def test_stufe_wird_zur_spanne():
-    basis = {"kcal": 500, "protein_g": 30, "fiber_g": None,
-             "carbs_g": 50, "fat_g": 20}
-    normal = calc.eintrag_spanne(basis, "normal")
-    viel = calc.eintrag_spanne(basis, "viel")
-
-    assert normal["kcal"] == (425.0, 575.0)        # 0,85 bis 1,15
-    assert viel["kcal"] == (700.0, 1000.0)         # 1,4 bis 2,0
-    # "Uebermaessig" ist unschaerfer als "normal" -- die Spanne ist breiter.
-    assert (viel["kcal"][1] - viel["kcal"][0]) > (normal["kcal"][1] - normal["kcal"][0])
-    # Fehlend bleibt fehlend, auch nach der Stufe.
-    assert normal["fiber_g"] is None
-
-
-def test_tag_summiert_spannen_und_merkt_sich_luecken():
+def test_tag_summiert_und_merkt_sich_luecken():
+    """Seit v1.98.0 eine Zahl statt einer Spanne — die Stufen sind Sache des
+    Tagebuchs, und ein Gericht wird in Portionen eingetragen."""
     wraps = calc.zutaten_summe([(60, TORTILLA), (100, HAEHNCHEN)])
-    tag = calc.tages_summe([
-        calc.eintrag_spanne(wraps, "viel"),
-        calc.eintrag_spanne(wraps, "normal"),
-    ])
+    eine = {m: wraps[m] for m in calc.MAKROS}
+    halbe = {m: (None if wraps[m] is None else wraps[m] * 0.5) for m in calc.MAKROS}
+    tag = calc.tages_summe_genau([eine, halbe])
 
-    kcal = tag["kcal"]
-    # 290 kcal je Portion: einmal 1,4-2,0 und einmal 0,85-1,15
-    assert kcal["min"] == round(290 * 1.4 + 290 * 0.85)
-    assert kcal["max"] == round(290 * 2.0 + 290 * 1.15)
-    assert kcal["min"] < kcal["max"]
-    assert kcal["incomplete"] is False
-    # Ballaststoffe fehlten in einer Zutat -- der ganze Tag ist dort unvollstaendig.
+    # 290 kcal je Portion, einmal ganz und einmal halb.
+    assert tag["kcal"]["value"] == round(290 * 1.5)
+    assert tag["kcal"]["incomplete"] is False
+    # Ballaststoffe fehlten in einer Zutat -- der ganze Tag ist dort
+    # unvollstaendig. NICHT niedriger: der Unterschied zwischen "wenig
+    # gegessen" und "wir wissen es nicht" ist der Kern des Moduls.
     assert tag["fiber_g"]["incomplete"] is True
     assert tag["fiber_g"]["label"] == "Ballaststoffe"
 
 
-def test_anteil_am_richtwert_ist_gedeckelt():
-    riesig = {"kcal": 9000, "protein_g": 0, "fiber_g": 0, "carbs_g": 0, "fat_g": 0}
-    tag = calc.tages_summe([calc.eintrag_spanne(riesig, "viel")])
-    # Der Balken laeuft nicht weiter als 150 % -- darueber sagt er nichts mehr.
-    assert tag["kcal"]["share_max"] == 1.5
-    assert tag["kcal"]["max"] == 18000
+def test_anteil_ist_ungedeckelt_und_der_ueberschuss_steht_daneben():
+    """Gedeckelt wird im Ring, nicht in der Rechnung. Wer hier deckelt, kann
+    spaeter nicht mehr sagen, wie weit darueber es war."""
+    tag = calc.tages_summe_genau([{"kcal": 3600}])
+    assert tag["kcal"]["value"] == 3600
+    assert tag["kcal"]["share"] == 1.5            # 3600 von 2400
     assert tag["kcal"]["reference"] == calc.RICHTWERT["kcal"]
+    # Ueberschritten heisst 0 und nicht negativ; wie weit darueber, sagt over.
+    assert tag["kcal"]["remaining"] == 0
+    assert tag["kcal"]["over"] == 1200
+
+
+def test_eigenes_ziel_ersetzt_den_richtwert_nur_wo_eines_steht():
+    tag = calc.tages_summe_genau([{"kcal": 1000, "protein_g": 30}],
+                                 {"kcal_target": 2000})
+    assert tag["kcal"]["reference"] == 2000
+    assert tag["kcal"]["own_target"] is True
+    assert tag["kcal"]["remaining"] == 1000
+    # Wo kein eigenes Ziel steht, gilt weiter der allgemeine Richtwert.
+    assert tag["protein_g"]["reference"] == calc.RICHTWERT["protein_g"]
+    assert tag["protein_g"]["own_target"] is False
 
 
 def test_leerer_tag_ist_null_und_nicht_unvollstaendig():
-    tag = calc.tages_summe([])
-    assert tag["kcal"]["min"] == 0 and tag["kcal"]["max"] == 0
+    tag = calc.tages_summe_genau([])
+    assert tag["kcal"]["value"] == 0
     assert tag["kcal"]["incomplete"] is False
+    assert tag["kcal"]["over"] == 0
 
 
 # --------------------------------------------------------------------------
@@ -119,44 +120,3 @@ def test_alte_schluessel_werden_noch_verstanden():
     alt = {"base_unit": "g", "portion_g": 62, "package_g": 370}
     assert calc.in_basis(2, "portion", alt, []) == (124.0, None)
     assert calc.in_basis(1, "packung", alt, []) == (370.0, None)
-
-
-def test_groessenliste_wird_geprueft():
-    liste, fehler = calc.groessen_sauber([
-        {"label": " Scheibe ", "grams": 45},
-        {"label": "", "grams": None},          # leere Zeile: einfach weg
-        {"label": "Laib", "grams": "750"},
-    ])
-    assert fehler is None
-    assert [g["label"] for g in liste] == ["Scheibe", "Laib"]
-    assert [g["position"] for g in liste] == [0, 1]
-
-    # Die Grundeinheit laesst sich nicht ueberschreiben.
-    assert calc.groessen_sauber([{"label": "g", "grams": 2}])[1]
-    # Eine Bezeichnung ohne Gewicht waere im Auswahlfeld eine Falle.
-    assert calc.groessen_sauber([{"label": "Scheibe"}])[1]
-    # Zweimal dasselbe Wort waere nicht zu unterscheiden.
-    assert calc.groessen_sauber([{"label": "Scheibe", "grams": 45},
-                                 {"label": "scheibe", "grams": 50}])[1]
-
-
-# --------------------------------------------------------------------------
-# Genaue Menge neben geschaetzter Stufe (v1.90.0)
-# --------------------------------------------------------------------------
-def test_gewogene_menge_ist_eine_spanne_der_breite_null():
-    spanne = calc.exakte_spanne(calc.je_menge(HAEHNCHEN, 150))
-    assert spanne["kcal"] == (165.0, 165.0)
-    # Fehlend bleibt fehlend, auch bei einer genauen Menge.
-    assert calc.exakte_spanne(calc.je_menge(TORTILLA, 60))["fiber_g"] is None
-
-
-def test_genauer_eintrag_macht_den_tag_schmaler_nicht_breiter():
-    gericht = calc.eintrag_spanne({"kcal": 500, "protein_g": 30, "fiber_g": 5,
-                                   "carbs_g": 50, "fat_g": 20}, "normal")
-    lebensmittel = calc.exakte_spanne(calc.je_menge(HAEHNCHEN, 200))
-    tag = calc.tages_summe([gericht, lebensmittel])
-    # 425-575 aus dem Gericht, dazu genau 220 aus dem Haehnchen.
-    assert tag["kcal"]["min"] == 645
-    assert tag["kcal"]["max"] == 795
-    # Die Unsicherheit stammt allein aus dem geschaetzten Teil.
-    assert tag["kcal"]["max"] - tag["kcal"]["min"] == 150

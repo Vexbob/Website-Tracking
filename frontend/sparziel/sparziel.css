@@ -2,13 +2,9 @@ body{visibility:hidden}body.ready{visibility:visible}
 /* .tabs / .tab-btn ausgelagert in css/style.css (v1.30.0) */
 .hero{background:var(--surface-1);border:1px solid var(--line);border-radius:16px;padding:1.5rem;margin-bottom:1.5rem;}
 .hero-top{display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap}
-.hero-radial{position:relative;width:140px;height:140px;flex-shrink:0}
-.hero-radial svg{width:100%;height:100%;transform:rotate(-90deg)}
-.hero-radial .track{fill:none;stroke:var(--line);stroke-width:12}
-.hero-radial .fill{fill:none;stroke:url(#gradGreen);stroke-width:12;stroke-linecap:round;transition:stroke-dashoffset .6s ease}
-.hero-radial-txt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.hero-radial-pct{font-size:1.75rem;font-weight:700;color:var(--text-1);line-height:1}
-.hero-radial-lbl{font-size:0.6875rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px}
+/* Der Ring selbst steht in css/style.css (.v-ring). Hier bleibt nur die
+   Groesse -- das Einzige, was an diesem Ring sparziel-eigen ist. */
+.hero-radial{--ring-size:140px}
 .hero-info{flex:1;min-width:200px}
 .hero-name{font-size:1.375rem;font-weight:700;display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem}
 .hero-name button{background:transparent;border:none;color:var(--text-3);font-size:0.95rem;cursor:pointer;padding:2px 4px;width:auto;margin:0}
@@ -473,8 +469,8 @@ body{visibility:hidden}body.ready{visibility:visible}
 @media(max-width:500px){
     main{padding:0 0.75rem}
     .hero-top{gap:1rem}
-    .hero-radial{width:110px;height:110px}
-    .hero-radial-pct{font-size:1.375rem}
+    .hero-radial{--ring-size:110px}
+    .hero-radial .v-ring-val{font-size:1.375rem}
     /* Auf dem Handy behielt der Ring seinen Platz links, und die drei
        Kacheln quetschten sich in die 213px daneben. Als Raster liegt der
        Ring neben dem Namen, die Betraege bekommen die volle Breite --
@@ -484,8 +480,8 @@ body{visibility:hidden}body.ready{visibility:visible}
     .hero-top{display:grid;grid-template-columns:auto 1fr;
         align-items:center;gap:0.75rem 1rem}
     .hero-info{display:contents}
-    .hero-radial{width:104px;height:104px}
-    .hero-radial-pct{font-size:1.375rem}
+    .hero-radial{--ring-size:104px}
+    .hero-radial .v-ring-val{font-size:1.375rem}
     /* Der Zielname darf umbrechen, aber nicht gekuerzt werden: "Reise ..."
        beantwortet die Frage, welches Ziel das ist, nicht mehr. */
     .hero-name{grid-column:2;margin:0;font-size:1.1875rem;min-width:0;

@@ -374,7 +374,7 @@ function zeichneDlgMahlzeiten() {
         const aktiv = (state.dlg.mahlzeit || 'ohne') === m.key;
         // Der Vorschlag traegt sein Wort: man sieht die Entscheidung, bevor
         // man tippt, und ein anderer Chip ueberstimmt sie mit einem Tipp.
-        const jetztHin = m.key === vorschlag ? '<span class="es-chip-jetzt">jetzt</span>' : '';
+        const jetztHin = m.key === vorschlag ? '<span class="v-chip-jetzt">jetzt</span>' : '';
         return `<button type="button" class="v-chip${aktiv ? ' is-active' : ''}"
             data-mahlzeit="${esc(m.key)}">${esc(m.label)}${jetztHin}</button>`;
     }).join('');

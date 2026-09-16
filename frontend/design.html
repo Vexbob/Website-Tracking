@@ -98,6 +98,7 @@
             <div class="sg-swatch"><div class="fill" style="background:var(--m-schach)"></div><div class="lbl"><b>Schach</b><span>--m-schach</span></div></div>
             <div class="sg-swatch"><div class="fill" style="background:var(--m-ernaehrung)"></div><div class="lbl"><b>Ernährung</b><span>--m-ernaehrung</span></div></div>
             <div class="sg-swatch"><div class="fill" style="background:var(--m-essen)"></div><div class="lbl"><b>Essenstagebuch</b><span>--m-essen</span></div></div>
+            <div class="sg-swatch"><div class="fill" style="background:var(--m-naehrwerte)"></div><div class="lbl"><b>Nährwerte</b><span>--m-naehrwerte</span></div></div>
         </div>
         <div class="sg-row" style="margin-top:var(--space-3)">
             <span class="v-tag">neutral</span>
@@ -116,6 +117,7 @@
             <span class="v-icon-tile" style="--tone:var(--m-schach)">♟️</span>
             <span class="v-icon-tile" style="--tone:var(--m-ernaehrung)">🥗</span>
             <span class="v-icon-tile" style="--tone:var(--m-essen)">🍽️</span>
+            <span class="v-icon-tile" style="--tone:var(--m-naehrwerte)">📊</span>
             <span class="sg-label">Icon-Kacheln sind eine der vier Stellen mit Verlauf — sie tragen keinen Text</span>
         </div>
     </section>
@@ -238,6 +240,82 @@
                     </div>
                     <div style="font-weight:700;font-variant-numeric:tabular-nums">6,40 €</div>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Ringe</h2>
+        <p class="sg-note">Ein Anteil an einem Ziel. Der <strong>Halbkreis</strong> liest sich
+        wie ein Tank: es gibt ein Maximum, und der freie Rest ist die eigentliche Auskunft.
+        Der <strong>Vollkreis</strong> liest sich als Anteil und vergleicht sich gut mit
+        seinen Nachbarn — deshalb Halbkreis für die eine grosse Zahl, Vollkreis für die
+        kleinen daneben. Gesteuert wird nur über <code>--ring-val</code> und
+        <code>--ring-over</code>; die Farbe kommt als <code>--ring-tone</code> in der Form
+        <code>var(--figure, var(--m-modul))</code>. Über dem Ziel reitet ein zweiter Bogen in
+        <code>--warn</code> von vorn über den vollen Ring — gelb, nicht rot: mehr ist keine
+        Bewertung. Wo mehr ein Erfolg ist (Sparziel), dreht <code>.v-ring--gut</code> ihn auf
+        <code>--ok</code>. <code>.is-unvollstaendig</code> macht die Spur gestrichelt: an
+        diesem Maßstab fehlen Stücke.</p>
+        <div class="v-card">
+            <div class="v-ring-reihe" style="align-items:flex-end">
+                <div>
+                    <div class="v-ring v-ring--halb v-ring--hero" style="--ring-tone:var(--m-naehrwerte);--ring-val:.74">
+                        <svg viewBox="0 0 100 100" aria-hidden="true">
+                            <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                            <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                            <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                        </svg>
+                        <div class="v-ring-txt"><strong class="v-ring-val">1.480</strong>
+                            <span class="v-ring-unit">kcal</span>
+                            <span class="v-ring-lbl">noch 520</span></div>
+                    </div>
+                    <div class="sg-label" style="text-align:center">Halbkreis, 74 %</div>
+                </div>
+                <div>
+                    <div class="v-ring v-ring--halb v-ring--hero is-drueber" style="--ring-tone:var(--m-naehrwerte);--ring-val:1;--ring-over:.16">
+                        <svg viewBox="0 0 100 100" aria-hidden="true">
+                            <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                            <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                            <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                        </svg>
+                        <div class="v-ring-txt"><strong class="v-ring-val">2.320</strong>
+                            <span class="v-ring-unit">kcal</span>
+                            <span class="v-ring-lbl">320 darüber</span></div>
+                    </div>
+                    <div class="sg-label" style="text-align:center">über dem Ziel</div>
+                </div>
+            </div>
+            <div class="v-ring-reihe" style="margin-top:var(--space-4)">
+                <div class="v-ring v-ring--sm" style="--ring-tone:var(--chart-1);--ring-val:.62">
+                    <svg viewBox="0 0 100 100" aria-hidden="true">
+                        <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                        <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                        <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                    </svg>
+                    <div class="v-ring-txt"><strong class="v-ring-val">74 g</strong>
+                        <span class="v-ring-lbl">Eiweiß</span></div>
+                </div>
+                <div class="v-ring v-ring--sm" style="--ring-tone:var(--chart-2);--ring-val:.41">
+                    <svg viewBox="0 0 100 100" aria-hidden="true">
+                        <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                        <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                        <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                    </svg>
+                    <div class="v-ring-txt"><strong class="v-ring-val">123 g</strong>
+                        <span class="v-ring-lbl">Kohlenh.</span></div>
+                </div>
+                <div class="v-ring v-ring--sm is-unvollstaendig" style="--ring-tone:var(--chart-3);--ring-val:.28">
+                    <svg viewBox="0 0 100 100" aria-hidden="true">
+                        <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                        <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                        <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                    </svg>
+                    <div class="v-ring-txt"><strong class="v-ring-val">22 g</strong>
+                        <span class="v-ring-lbl">Fett</span></div>
+                </div>
+                <span class="sg-label">Vollkreise nebeneinander — der dritte ist unvollständig:
+                    gestrichelte Spur statt einer Zahl, die Vollständigkeit behauptet</span>
             </div>
         </div>
     </section>

@@ -1,50 +1,29 @@
-"""Aus Stufen werden Spannen — die Rechnung des Ernaehrungs-Moduls.
+"""Die Rechnung des Ernaehrungs-Trackers — Mengen, Naehrwerte, Massstab.
 
-Das Modul hat zwei Betriebsarten, die in DASSELBE Tagebuch schreiben:
+Seit v1.98.0 rechnet dieses Modul mit ZAHLEN, nicht mit Spannen. Der Grund
+ist die Aufteilung in zwei Module: die Grobstufen ("normal"/"uebermaessig"),
+aus denen die Spannen kamen, sind Sache des Essenstagebuchs und haben hier
+nichts mehr zu suchen.
 
-    locker        Was gab es, und war es normal oder uebermaessig viel?
-                  Mehr wird nicht gefragt. Ein Eintrag darf ein blosser Name
-                  sein ("Pizza beim Italiener") -- ohne Naehrwerte, und die
-                  Anzeige sagt das.
-    ausfuehrlich  Mengen, Naehrwerte, eigene Tagesziele, Verlauf.
+    Ein LEBENSMITTEL wird in einer Menge eingetragen: 100 g, zwei Scheiben,
+    eine Packung. Was auf der Packung steht, weiss man.
 
-Der Modus schaltet keine zweite Datenhaltung ein, sondern nur, wonach gefragt
-wird. Deshalb kann derselbe Tag locker angefangen und spaeter genauer gemacht
-werden -- und ein Wechsel laesst nichts verschwinden.
+    Ein GERICHT wird in PORTIONEN eingetragen: 0,5 / 1 / 1,5. ``food_dishes``
+    kennt die Naehrwerte einer Portion, also ist auch das eine Zahl und keine
+    Schaetzung. Vorher stand dort eine Stufe -- und aus zwei Grobstufen eine
+    Kalorienzahl zu machen, war die Genauigkeit, die es nie gab.
 
-Bei einem GERICHT wird eine Stufe eingetragen ("normal" oder
-"uebermaessig"), keine Gramm.
-Daraus eine einzelne Zahl zu machen, waere die Genauigkeit, die es nie gab:
-"2.147 kcal" aus zwei Grobstufen ist erfunden. Deshalb rechnet dieses Modul
-grundsaetzlich mit **Spannen** -- von bis.
+Was bleibt, ist die Luecke. Wenn eine Zutat keine Ballaststoffe angibt, ist
+die Ballaststoff-Summe des Tages **unvollstaendig** -- nicht niedriger. Der
+Unterschied ist der zwischen "du hast wenig gegessen" und "wir wissen es
+nicht", und er ist der Grund, warum dieses Modul ueberhaupt Luecken ausweist
+statt sie mit Nullen zu fuellen.
 
-Die Faktoren stehen bewusst hier und nicht in der Datenbank: sie sind eine
-Aussage darueber, was "normal" und "uebermaessig" heissen soll, und die
-gehoert an eine Stelle, an der sie jemand liest.
-
-    normal        0,85 bis 1,15 mal die Portion
-                  Wer eine uebliche Portion isst, trifft sie ungefaehr --
-                  ein Spielraum von gut einem Zehntel nach beiden Seiten.
-    uebermaessig  1,4 bis 2,0 mal die Portion
-                  "Deutlich mehr" heisst irgendetwas zwischen anderthalb und
-                  doppelt. Breiter als die normale Stufe, weil die Erinnerung
-                  daran auch unschaerfer ist.
-
-Bei einem einzelnen LEBENSMITTEL wird dagegen eine echte Menge
-eingetragen: 100 g, zwei Scheiben, eine Packung. Die Stufe ist dort nur
-unnoetig ungenau -- was auf der Packung steht, weiss man. Solche Eintraege
-ergeben eine Spanne der Breite null (``exakte_spanne``); sie laufen durch
-dieselbe Tagessumme wie die geschaetzten und machen sie genauer, statt
-danebenzustehen.
-
-Fehlende Naehrwerte bleiben fehlend. Wenn eine Zutat keine Ballaststoffe
-angibt, ist die Ballaststoff-Summe des Tages **unvollstaendig** -- nicht
-niedriger. Der Unterschied ist der zwischen "du hast wenig gegessen" und
-"wir wissen es nicht".
+Naehrwerte stehen je 100 g bzw. 100 ml. Umgerechnet wird beim SPEICHERN, nie
+beim Anzeigen -- sonst aendert eine korrigierte Scheibengroesse einen
+vergangenen Tag.
 """
 
-MODI = ("locker", "ausfuehrlich")
-MODUS_LABEL = {"locker": "Tagebuch", "ausfuehrlich": "Tracker"}
 
 # Die Mahlzeiten stehen seit v1.97.0 in einem eigenen Dienst: sie sind das
 # Einzige, was sich Tagebuch und Tracker wirklich teilen -- dass um 8 Uhr
@@ -56,11 +35,12 @@ from services.food_mahlzeit import (         # noqa: F401  (Weiterreichen)
 )
 
 
-STUFEN = {
-    "normal": (0.85, 1.15),
-    "viel": (1.4, 2.0),
-}
-STUFEN_LABEL = {"normal": "normal", "viel": "übermäßig"}
+# Die Grobstufen ("normal"/"uebermaessig") sind seit v1.98.0 Sache des
+# Tagebuchs (routers/tagebuch_router.py). Hier wird gerechnet, nicht
+# geschaetzt: ein Gericht wird in Portionen eingetragen, ein Lebensmittel in
+# einer Menge, und beides ergibt eine Zahl. Damit fielen eintrag_spanne(),
+# exakte_spanne() und tages_summe() weg -- eine Spanne, deren beide Enden
+# gleich sind, ist keine.
 
 # Die Naehrwerte, die der Tag zeigt -- in dieser Reihenfolge.
 MAKROS = ("kcal", "protein_g", "fiber_g", "carbs_g", "fat_g")
@@ -255,73 +235,49 @@ def zutaten_summe(zutaten) -> dict:
     }
 
 
-def eintrag_spanne(basis: dict, stufe: str) -> dict:
-    """Aus einer Portion und einer Stufe die Spanne je Makro."""
-    unten, oben = STUFEN.get(stufe, STUFEN["normal"])
-    raus = {}
-    for makro in MAKROS:
-        wert = _zahl(basis.get(makro))
-        if wert is None:
-            raus[makro] = None
-        else:
-            raus[makro] = (round(wert * unten, 1), round(wert * oben, 1))
-    return raus
+def tages_summe_genau(eintraege, ziele=None) -> dict:
+    """Die Tagessumme je Naehrwert, gemessen am eigenen Ziel oder am Richtwert.
 
-
-def exakte_spanne(basis: dict) -> dict:
-    """Eine gewogene Menge als Spanne der Breite null.
-
-    Damit laeuft ein genauer Eintrag durch dieselbe Tagessumme wie ein
-    geschaetzter. Der Unterschied bleibt trotzdem sichtbar: er macht die
-    Spanne des Tages schmaler, statt sie zu verbreitern.
-    """
-    raus = {}
-    for makro in MAKROS:
-        wert = _zahl(basis.get(makro))
-        raus[makro] = None if wert is None else (round(wert, 1), round(wert, 1))
-    return raus
-
-
-def tages_summe(eintraege, ziele=None) -> dict:
-    """Die Spanne des Tages, gemessen am eigenen Ziel oder am Richtwert.
-
-    ``eintraege``: Folge von Spannen aus ``eintrag_spanne``.
+    ``eintraege``: Folge von Dicts {makro: Zahl oder None} -- je Eintrag die
+    Naehrwerte der tatsaechlich gegessenen Menge.
     ``ziele``: die Zeile aus ``food_settings`` oder None.
-    Rueckgabe je Makro: {min, max, incomplete, reference, own_target,
-    share_min, share_max, remaining_min, remaining_max}
+
+    Rueckgabe je Makro: {label, value, incomplete, reference, own_target,
+    share, remaining, over}.
+
+    ``incomplete`` ist der Kern und bleibt: ein Lebensmittel ohne
+    Ballaststoff-Angabe macht die Summe UNVOLLSTAENDIG, nicht niedriger. Der
+    Unterschied zwischen "du hast wenig gegessen" und "wir wissen es nicht"
+    ist der Grund, warum dieses Modul ueberhaupt Luecken ausweist.
     """
-    unten = {m: 0.0 for m in MAKROS}
-    oben = {m: 0.0 for m in MAKROS}
+    summe = {m: 0.0 for m in MAKROS}
     fehlt = set()
-    for spanne in eintraege:
+    for eintrag in eintraege:
         for makro in MAKROS:
-            wert = spanne.get(makro)
+            wert = _zahl(eintrag.get(makro))
             if wert is None:
                 fehlt.add(makro)
             else:
-                unten[makro] += wert[0]
-                oben[makro] += wert[1]
+                summe[makro] += wert
 
     mass = massstab(ziele)
     raus = {}
     for makro in MAKROS:
         richt = mass[makro]["wert"]
+        wert = summe[makro]
         raus[makro] = {
             "label": MAKRO_LABEL[makro],
-            "min": round(unten[makro]),
-            "max": round(oben[makro]),
+            "value": round(wert),
             "incomplete": makro in fehlt,
             "reference": round(richt),
             "own_target": mass[makro]["eigen"],
-            # Anteil am Massstab, gedeckelt bei 150 %: ein Balken, der
-            # weiterlaeuft, sagt nichts mehr -- ab da steht die Zahl daneben.
-            "share_min": min(1.5, round(unten[makro] / richt, 3)),
-            "share_max": min(1.5, round(oben[makro] / richt, 3)),
-            # Was bis zum Massstab noch fehlt. Bei einer Spanne sind das zwei
-            # Zahlen -- "noch 300 bis 700" ist die ehrliche Auskunft, "noch
-            # 500" waere eine erfundene Mitte. Ueberschritten heisst 0 und
-            # nicht negativ: wie weit darueber, sagt die Zahl daneben.
-            "remaining_min": max(0, round(richt - oben[makro])),
-            "remaining_max": max(0, round(richt - unten[makro])),
+            # Ungedeckelt: das Deckeln macht der Ring, nicht die Rechnung.
+            # Wer hier deckelt, kann spaeter nicht mehr sagen, wie weit
+            # darueber es war.
+            "share": round(wert / richt, 3) if richt else 0,
+            # Ueberschritten heisst 0 und nicht negativ; wie weit darueber,
+            # sagt ``over``.
+            "remaining": max(0, round(richt - wert)),
+            "over": max(0, round(wert - richt)),
         }
     return raus

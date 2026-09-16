@@ -58,9 +58,12 @@ def test_keine_karteileichen_in_der_erlaubnisliste():
     """Umgekehrt: ein Pfad, den es nicht mehr gibt, faellt auch auf.
 
     Nicht kritisch, aber eine Liste, die Pfade zu geloeschten Modulen fuehrt,
-    ist eine Liste, der man beim naechsten Mal weniger glaubt.
+    ist eine Liste, der man beim naechsten Mal weniger glaubt. Ausgenommen ist
+    ``VERALTETE_NAV_TABS``: diese Pfade stehen dort mit Absicht, weil sie noch
+    in gespeicherten Einstellungen vorkommen koennen.
     """
-    uebrig = sorted(set(ui_router.ALLOWED_NAV_TABS) - _module_pfade())
+    uebrig = sorted(set(ui_router.ALLOWED_NAV_TABS) - _module_pfade()
+                    - set(ui_router.VERALTETE_NAV_TABS))
     assert not uebrig, (
         "ALLOWED_NAV_TABS kennt Pfade, die in MODULES fehlen: "
         + ", ".join(uebrig))

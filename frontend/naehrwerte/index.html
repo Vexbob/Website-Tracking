@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0c10">
+<meta name="description" content="Nährwerte: Mengen, Kalorien, Makros und eigene Tagesziele — mit Strichcode-Scanner, eigenem Bestand und Gerichten.">
+<title>Nährwerte — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/statistics.css">
+<link rel="stylesheet" href="/naehrwerte/naehrwerte.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav-switcher.js"></script>
+<script src="/js/ring.js"></script>
+<script src="/js/sw-update.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/range-filter.js"></script>
+</head>
+<body>
+<nav class="navbar">
+    <span class="nav-title">Nährwerte</span>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main class="wide">
+
+    <header class="page-head">
+        <h1>📊 Nährwerte</h1>
+    </header>
+
+    <!-- Ruht dieses Modul, steht hier der Grund. Eine Seite, die in keiner
+         Leiste auftaucht und dann kommentarlos normal aussieht, waere die
+         schlechtere Ueberraschung. -->
+    <div class="stat-card nw-ruht" id="nwRuht" hidden>
+        <div class="empty">
+            <span class="empty-mark" aria-hidden="true">💤</span>
+            <p class="empty-text">Dieses Modul ruht. Du siehst es gerade nur, weil du die
+                Adresse kennst — in der Navigation steht es nicht. Deine Gerichte,
+                Lebensmittel und Einträge sind unverändert da.</p>
+            <button type="button" class="v-btn v-btn--primary" id="nwEinschalten">Nährwerte einschalten</button>
+        </div>
+    </div>
+
+    <div class="tabs" id="nwTabs"></div>
+
+    <!-- ====================== Tag ====================== -->
+    <div id="tab-tag">
+        <div id="nwTagFehler" hidden></div>
+
+        <div id="nwTagInhalt">
+            <div class="stat-card">
+                <div class="nw-tagkopf">
+                    <button type="button" class="nw-pfeil" id="nwZurueck"
+                            aria-label="Tag zurück">◀</button>
+                    <div class="nw-tagkopf-mitte">
+                        <strong id="nwTagName">Heute</strong>
+                        <span id="nwTagDatum"></span>
+                    </div>
+                    <button type="button" class="nw-pfeil" id="nwVor"
+                            aria-label="Tag vor">▶</button>
+                    <button type="button" class="v-btn v-btn--primary nw-add" id="nwAdd">
+                        <span aria-hidden="true">＋</span> Eintragen</button>
+                </div>
+
+                <!-- Der Halbkreis: es gibt ein Maximum, und der freie Rest ist
+                     die eigentliche Auskunft. -->
+                <div class="nw-hero">
+                    <div class="v-ring v-ring--halb v-ring--hero" id="nwRingKcal"
+                         style="--ring-tone:var(--figure, var(--m-naehrwerte))">
+                        <svg viewBox="0 0 100 100" aria-hidden="true">
+                            <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                            <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                            <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                        </svg>
+                        <div class="v-ring-txt">
+                            <strong class="v-ring-val">–</strong>
+                            <span class="v-ring-unit">kcal</span>
+                            <span class="v-ring-lbl"></span>
+                        </div>
+                    </div>
+                    <p class="nw-ziel" id="nwZielZeile"></p>
+                </div>
+
+                <div class="v-ring-reihe" id="nwMakros"></div>
+
+                <div id="nwMahlzeiten"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====================== Verlauf ====================== -->
+    <div id="tab-verlauf" hidden>
+        <div class="stat-filterbar nw-verlaufleiste">
+            <div class="ern-kopf-text">
+                <strong id="nwVerlaufZeitraum"></strong>
+                <span id="nwVerlaufSub"></span>
+            </div>
+            <div class="stat-filter-slot" id="nwRange"></div>
+        </div>
+
+        <div class="stat-kpi-grid" id="nwVerlaufKpi"></div>
+
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3 id="nwChart1Titel">Kalorien je Tag</h3>
+                <span class="stat-range-lbl" id="nwChart1Sub"></span>
+            </div>
+            <div id="nwChart1Leer" hidden></div>
+            <div class="chart-wrap" id="nwChart1Box"><canvas id="nwChart1"></canvas></div>
+            <p class="ern-note" id="nwChart1Note"></p>
+        </div>
+
+        <div class="stat-card" id="nwChart2Karte" hidden>
+            <div class="stat-card-head">
+                <h3 id="nwChart2Titel">Eiweiß je Tag</h3>
+                <span class="stat-range-lbl" id="nwChart2Sub"></span>
+            </div>
+            <div class="chart-wrap small"><canvas id="nwChart2"></canvas></div>
+            <p class="ern-note" id="nwChart2Note"></p>
+        </div>
+    </div>
+
+    <!-- ====================== Ziele ======================
+         Ein eigener Reiter, kein Anhängsel unter einem Diagramm: dort hat sie
+         zuletzt niemand gefunden. -->
+    <div id="tab-ziele" hidden>
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>Tagesziele</h3>
+                <span class="stat-range-lbl">freiwillig, einzeln</span>
+            </div>
+            <div class="ern-ziele" id="nwZiele"></div>
+            <div class="ern-tasten">
+                <button type="button" class="v-btn v-btn--primary" id="nwZieleSpeichern">Ziele speichern</button>
+                <button type="button" class="v-btn" id="nwZieleWeg">Alle zurücksetzen</button>
+            </div>
+            <p class="ern-note" id="nwZieleNote"></p>
+        </div>
+    </div>
+
+    <!-- ====================== Gerichte ====================== -->
+    <div id="tab-gerichte" hidden>
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>Meine Gerichte</h3>
+                <div class="ern-kopf-tasten">
+                    <span class="stat-range-lbl" id="ernGerichteZahl"></span>
+                    <button type="button" class="v-btn v-btn--sm v-btn--primary" id="ernGerichtNeu">
+                        <span aria-hidden="true">＋</span> Neues Gericht</button>
+                </div>
+            </div>
+            <div id="ernGerichte"><span class="skel skel-block"></span></div>
+        </div>
+    </div>
+
+    <!-- ====================== Lebensmittel ====================== -->
+    <div id="tab-vorrat" hidden>
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>Lebensmittel finden</h3>
+                <span class="stat-range-lbl" id="ernKatalogStand">eigener Katalog, sonst Open Food Facts</span>
+            </div>
+            <div class="ern-suchzeile">
+                <label class="ern-suche">
+                    <span class="ern-suche-ico" aria-hidden="true">🔎</span>
+                    <input type="search" id="ernSuche" autocomplete="off"
+                           aria-label="Lebensmittel oder Strichcode suchen"
+                           placeholder="Name oder Strichcode">
+                </label>
+                <button type="button" class="v-btn" id="ernKamera">📷 Scannen</button>
+                <button type="button" class="v-btn v-btn--primary" id="ernItemNeu">
+                    <span aria-hidden="true">＋</span> Von Hand</button>
+            </div>
+
+            <div class="ern-kamera" id="ernKameraBereich" hidden>
+                <!-- playsinline: ohne das Attribut spielt iOS das Bild im
+                     Vollbild ab, und der Rest der Seite ist weg. -->
+                <video id="ernVideo" playsinline muted autoplay></video>
+                <div class="ern-kamera-leiste">
+                    <span class="ern-note" id="ernKameraHinweis">Kamera wird geöffnet …</span>
+                    <button type="button" class="v-btn v-btn--sm" id="ernKameraStop">Schließen</button>
+                </div>
+            </div>
+
+            <div id="ernTreffer"></div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>Eigener Bestand</h3>
+                <span class="stat-range-lbl" id="ernBestandZahl"></span>
+            </div>
+            <div id="ernBestand"><span class="skel skel-block"></span></div>
+        </div>
+
+        <details class="ern-klapp" id="ernKatalogKarte" hidden>
+            <summary>
+                <span>Katalog einspielen</span>
+                <span class="stat-range-lbl" id="ernKatalogKarteSub"></span>
+            </summary>
+            <p class="ern-note">
+                Ein Abzug von Open Food Facts, der hier liegt — damit antwortet die Suche
+                sofort. Die Datei entsteht aus dem Tagesabzug und liegt im Projekt unter
+                <strong>backend/data/off-katalog-dach.csv.gz</strong>. Einspielen
+                <strong>ersetzt</strong> den bisherigen Stand vollständig.
+            </p>
+            <div class="dropzone" id="ernKatDrop" role="button" tabindex="0"
+                 aria-label="Katalogdatei auswählen">
+                <div class="dropzone-icon" aria-hidden="true">🗂️</div>
+                <div class="dropzone-title">Katalogdatei hier ablegen oder klicken</div>
+                <div class="dropzone-sub" id="ernKatDropSub">off-katalog-dach.csv.gz</div>
+                <input type="file" id="ernKatFile" accept=".gz,.csv,.tsv" hidden>
+            </div>
+        </details>
+    </div>
+
+    <datalist id="ernGroessenVorschlaege"></datalist>
+    <div class="version-tag"></div>
+</main>
+<script src="/naehrwerte/naehrwerte.js"></script>
+</body>
+</html>

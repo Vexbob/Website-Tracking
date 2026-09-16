@@ -18,21 +18,11 @@ let confettiRaf = null;   // aktuelle rAF-ID für Konfetti (Cleanup)
 // Animiert eine Zahl von `from` nach `to` über `duration` ms.
 // `render(v)` erhält den Zwischenwert und schreibt ihn ins DOM.
 // Läuft nur bei tatsächlichem Delta; respektiert prefers-reduced-motion.
+// Seit v1.98.0 liegt die Rechnung in js/ring.js -- ein Ring animiert seine
+// eigene Zahl mit, und zwei Fassungen davon waeren zwei Kurven. Die
+// Weiterleitung bleibt, damit die uebrigen Aufrufstellen unveraendert sind.
 function animateNumber(from, to, duration, render){
-    if(from==null || !isFinite(from) || from===to){ render(to); return; }
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if(reduce || duration<=0){ render(to); return; }
-    const start = performance.now();
-    const delta = to - from;
-    function step(now){
-        const t = Math.min(1, (now - start) / duration);
-        // easeOutCubic
-        const e = 1 - Math.pow(1 - t, 3);
-        render(from + delta * e);
-        if(t < 1) requestAnimationFrame(step);
-        else render(to);
-    }
-    requestAnimationFrame(step);
+    VexRing.zaehle(from, to, duration, render);
 }
 
 // --- Konfetti (Canvas, keine externe Lib) ---
@@ -319,7 +309,6 @@ async function loadSparziel(){
         const newTarget=Number(g.target_amount||0);
         const newTotal=Number(d.total_saved||0);
         const newPct=pct(newTotal,newTarget);
-        const circ=2*Math.PI*42;
 
         // Bei Ziel-Wechsel (anderes Sparziel aktiviert): keine Animation, hart setzen
         const goalChanged = (glGoalId !== null && newGoalId !== glGoalId);
@@ -342,14 +331,12 @@ async function loadSparziel(){
         const newMissing  = Math.max(0, glTarget - newTotal);
         animateNumber(fromMissing, newMissing, 700, v => { elMissing.textContent = fmtEur(v); });
 
-        // Radial: dashoffset & Prozent-Zahl animieren
-        const radial = document.getElementById('radialFill');
-        radial.setAttribute('stroke-dasharray', circ);
+        // Der Ring bewegt sich von selbst: .v-ring-fill traegt die Ueberblendung
+        // in CSS, hier wird nur der Zielwert gesetzt. Animiert wird nur noch
+        // die Zahl -- sie zaehlt, waehrend der Bogen laeuft.
+        VexRing.set(document.getElementById('sgRing'), { wert: newPct, ziel: 100 });
         const elPct = document.getElementById('radialPct');
-        animateNumber(fromPct, newPct, 800, v => {
-            radial.setAttribute('stroke-dashoffset', circ * (1 - v/100));
-            elPct.textContent = fmtNum(v, 1) + ' %';
-        });
+        animateNumber(fromPct, newPct, 800, v => { elPct.textContent = fmtNum(v, 1) + ' %'; });
 
         // Merken für nächste Aktualisierung
         prevGlTotal = newTotal;
