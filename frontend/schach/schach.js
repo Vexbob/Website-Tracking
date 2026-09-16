@@ -1,4 +1,4 @@
-/* schach.js — v1.93.0
+/* schach.js — v1.93.1
  *
  * Wertungsverlauf, Bilanz und Partien von Lichess und Chess.com.
  *
@@ -276,6 +276,45 @@ function zeichneKopfleiste() {
     }
     const zuletzt = state.konten.map(k => k.ratings_at).filter(Boolean).sort().slice(-1)[0];
     stand.textContent = zuletzt ? 'Wertungen abgerufen ' + datum(zuletzt, true) : '';
+}
+
+/* Wenn die Auswertung nicht kommt, soll die Seite das SAGEN und nicht in
+   Skeletons stehenbleiben. Ein Ladezustand, der nie endet, sieht aus wie ein
+   kaputter Browser -- und man wartet auf etwas, das nicht mehr kommt.
+   Deshalb tritt der ganze Ueberblick beiseite und es steht ein Satz da, der
+   sagt, was los ist, mit einem Knopf, der es noch einmal versucht. */
+function zeigeStatsFehler(text) {
+    const leer = document.getElementById('schLeer');
+    document.getElementById('schUeberblick').hidden = true;
+    leer.hidden = false;
+    leer.innerHTML = `<div class="v-card"><div class="empty is-error">
+        <span class="empty-mark" aria-hidden="true">⚠️</span>
+        <p class="empty-text">${esc(text)}</p>
+        <button type="button" class="v-btn v-btn--primary" id="schNochmal">Erneut versuchen</button>
+    </div></div>`;
+    const knopf = document.getElementById('schNochmal');
+    if (knopf) knopf.addEventListener('click', () => {
+        knopf.classList.add('is-loading');
+        ladeStats();
+    });
+}
+
+/* Aus der Meldung des Servers einen Satz machen, der weiterhilft. Ein
+   fehlender Endpunkt heisst hier fast immer dasselbe: das Frontend liegt
+   schon neu auf dem Server, das Backend laeuft noch in der alten Fassung. */
+function statsFehlerText(err) {
+    const roh = (err && err.message) || '';
+    if (/404|not found/i.test(roh)) {
+        return 'Die Auswertung kennt der Server noch nicht. Auf dem Server läuft '
+            + 'vermutlich noch die vorherige Fassung des Backends — dort fehlt ein '
+            + 'Neustart.';
+    }
+    if (/netzwerkfehler/i.test(roh)) {
+        return 'Keine Verbindung zum Server. Sobald er wieder antwortet, hilft ein '
+            + 'Klick auf „Erneut versuchen".';
+    }
+    return 'Die Auswertung konnte nicht geladen werden'
+        + (roh ? ' (' + roh + ').' : '.');
 }
 
 function zeichneAlles() {
@@ -1540,14 +1579,16 @@ async function ladeStats(still) {
     state.statsLauf = (async () => {
         try {
             state.stats = await API.stats(qs ? '?' + qs : '');
+            document.getElementById('schLeer').hidden = true;
+            document.getElementById('schUeberblick').hidden = false;
             zeichneAlles();
         } catch (e) {
+            // Im stillen Takt bleibt stehen, was dasteht: eine Fehlerseite
+            // ueber gueltigen Zahlen waere ein Rueckschritt.
             if (still) return;
             state.stats = null;
             zerstoereVerlaufCharts();
-            document.getElementById('schVerlauf').innerHTML =
-                `<div class="empty is-error"><span class="empty-mark">⚠️</span>
-                 <p class="empty-text">Die Auswertung konnte nicht geladen werden.</p></div>`;
+            zeigeStatsFehler(statsFehlerText(e));
         } finally {
             state.statsLauf = null;
         }

@@ -605,10 +605,19 @@ async def kennzahlen(db=Depends(get_db), user=Depends(get_current_user)):
 # -- und stellte das Ergebnis neben Kopfzahlen ueber den ganzen Bestand. Zwei
 # Grundgesamtheiten auf einem Bildschirm sind zwei Antworten auf dieselbe
 # Frage, und man sieht ihnen nicht an, welche gerade gilt.
+# Die Klammern um jedes FILTER sind Absicht: ohne sie haengt der Cast am
+# Rand der Aggregat-Grammatik, und ein Zaehler, der nicht als Zahl ankommt,
+# faellt erst auf der Seite auf.
 ZAEHLER = ("COUNT(*)::int AS partien, "
-           "COUNT(*) FILTER (WHERE result='sieg')::int AS siege, "
-           "COUNT(*) FILTER (WHERE result='remis')::int AS remis, "
-           "COUNT(*) FILTER (WHERE result='niederlage')::int AS niederlagen")
+           "(COUNT(*) FILTER (WHERE result='sieg'))::int AS siege, "
+           "(COUNT(*) FILTER (WHERE result='remis'))::int AS remis, "
+           "(COUNT(*) FILTER (WHERE result='niederlage'))::int AS niederlagen")
+
+
+# Die Koernung heisst nach innen deutsch, weil die Antwort sie so ausgibt und
+# die Seite sie so beschriftet. Postgres kennt aber nur seine eigenen Namen --
+# "tag" ist dort keine Einheit, sondern ein Fehler.
+PG_EINHEIT = {"tag": "day", "woche": "week", "monat": "month"}
 
 
 def _koernung(tage: int) -> str:
@@ -660,7 +669,8 @@ async def auswertung(von: Optional[date] = Query(None, alias="from"),
     # Aktivitaet: wie viel gespielt wurde und wie es ausging, je Periode.
     roh_aktivitaet = await db.fetch(
         f"SELECT date_trunc($5, played_at)::date AS eimer, {ZAEHLER} "
-        f"  FROM chess_games WHERE {wo} GROUP BY 1 ORDER BY 1", *basis, koernung)
+        f"  FROM chess_games WHERE {wo} GROUP BY 1 ORDER BY 1",
+        *basis, PG_EINHEIT[koernung])
 
     # Gegnerstaerke: die Frage, die eine Siegquote allein nie beantwortet --
     # 60 % gegen Schwaechere und 60 % gegen Staerkere sind nicht dasselbe.

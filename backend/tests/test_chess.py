@@ -5,10 +5,12 @@ Fokus liegt auf dem, was die beiden Plattformen unterschiedlich machen --
 genau dort entstehen sonst Zahlen, die nebeneinander stehen und nicht
 dasselbe bedeuten.
 """
+import asyncio
 import json
 import os
+import re
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 os.environ.setdefault("SECRET_KEY", "test-only-not-used")
@@ -260,3 +262,131 @@ def test_reihe_ohne_stand_davor_beginnt_leer():
     # leer, statt eine Zahl zu behaupten.
     assert r["werte"] == [None, None, 1800, 1800]
     assert r["start"] is None
+
+
+# --------------------------------------------------------------------------
+# Die Auswertung, gegen eine erfundene Datenbank
+# --------------------------------------------------------------------------
+# Ohne Postgres laesst sich nicht pruefen, ob eine Abfrage RICHTIG rechnet --
+# wohl aber, ob sie ueberhaupt losgeschickt werden kann. Genau daran ist die
+# erste Fassung gescheitert: ``date_trunc`` bekam die deutsche Koernung
+# ("woche") statt der Einheit, die Postgres kennt, und der ganze Ueberblick
+# blieb leer. Diese Attrappe prueft deshalb die drei Dinge, die man ohne
+# Datenbank sehen kann: dass die Parameterzahl stimmt, dass keine deutschen
+# Einheiten in SQL-Funktionen wandern, und dass die Antwort zusammenpasst.
+PG_EINHEITEN = {"day", "week", "month", "year", "quarter", "hour"}
+
+
+class AttrappeDB:
+    """Antwortet auf die Abfragen der Auswertung mit plausiblen Zeilen."""
+
+    def __init__(self):
+        self.einheiten = []
+
+    def _pruefe(self, sql, args):
+        hoechste = max([int(n) for n in re.findall(r"[$](\d+)", sql)] or [0])
+        assert hoechste == len(args), (
+            f"SQL erwartet ${hoechste} Parameter, uebergeben wurden {len(args)}")
+        if "date_trunc(" in sql:
+            einheit = args[-1]
+            assert einheit in PG_EINHEITEN, (
+                f"date_trunc kennt '{einheit}' nicht -- Postgres will "
+                f"{sorted(PG_EINHEITEN)}")
+            self.einheiten.append(einheit)
+
+    async def fetch(self, sql, *args):
+        self._pruefe(sql, args)
+        if "GROUP BY platform" in sql:
+            return [{"platform": "lichess", "partien": 120, "siege": 60, "remis": 10,
+                     "niederlagen": 50,
+                     "von": datetime(2024, 1, 1, tzinfo=timezone.utc),
+                     "bis": datetime(2026, 9, 10, tzinfo=timezone.utc)}]
+        if "date_trunc" in sql:
+            return [{"eimer": date(2026, 9, 14), "partien": 4, "siege": 2,
+                     "remis": 1, "niederlagen": 1}]
+        if "AS stufe" in sql:
+            return [{"stufe": 2, "partien": 40, "siege": 20, "remis": 5,
+                     "niederlagen": 15}]
+        if "GROUP BY perf" in sql:
+            return [{"perf": "blitz", "partien": 90, "siege": 45, "remis": 8,
+                     "niederlagen": 37}]
+        if "GROUP BY color" in sql:
+            return [{"color": "weiss", "partien": 61, "siege": 33, "remis": 5,
+                     "niederlagen": 23}]
+        if "GROUP BY opening" in sql:
+            return [{"opening": "Sicilian Defense: Najdorf Variation", "partien": 8,
+                     "siege": 5, "remis": 1, "niederlagen": 2},
+                    {"opening": "Sicilian Defense Najdorf Variation 6.Be3",
+                     "partien": 3, "siege": 1, "remis": 0, "niederlagen": 2}]
+        if "GROUP BY opponent" in sql:
+            return [{"opponent": "Gegner", "hoechste": 1820, "partien": 5,
+                     "siege": 3, "remis": 0, "niederlagen": 2}]
+        if "LIMIT 60" in sql:
+            return [{"id": i, "platform": "lichess", "perf": "blitz",
+                     "played_at": datetime(2026, 9, 10, tzinfo=timezone.utc)
+                     - timedelta(days=i),
+                     "result": "sieg" if i < 3 else "niederlage",
+                     "opponent": "Gegner", "opponent_rating": 1700, "opening": None,
+                     "rating_diff": 8, "own_rating": 1750} for i in range(10)]
+        if "chess_ratings" in sql:
+            return [{"platform": "lichess", "perf": "puzzle",
+                     "tag": date(2026, 9, 15), "rating": 1986}]
+        if "own_rating + COALESCE" in sql:
+            return [{"platform": "lichess", "perf": "blitz", "tag": tag, "rating": r}
+                    for tag, r in ((date(2026, 7, 1), 1700),
+                                   (date(2026, 9, 2), 1750),
+                                   (date(2026, 9, 10), 1742))]
+        return []
+
+    async def fetchrow(self, sql, *args):
+        self._pruefe(sql, args)
+        if "MIN(played_at)::date" in sql:
+            return {"von": date(2024, 1, 1), "bis": date(2026, 9, 10)}
+        if "result='sieg'" in sql:
+            return {"id": 5, "opponent": "Starker", "opponent_rating": 1980,
+                    "played_at": datetime(2026, 8, 1, tzinfo=timezone.utc),
+                    "platform": "lichess", "perf": "blitz"}
+        return None
+
+    async def fetchval(self, sql, *args):
+        self._pruefe(sql, args)
+        return 1741
+
+
+def _auswertung(von=None, bis=None):
+    db = AttrappeDB()
+    antwort = asyncio.run(cr.auswertung(von=von, bis=bis, db=db, user={"id": 1}))
+    return db, antwort
+
+
+def test_auswertung_schickt_postgres_einheiten_los():
+    # Der Fehler, der den Ueberblick leer liess: "woche" ist keine Einheit,
+    # die date_trunc kennt. Die Attrappe laesst das nicht mehr durch.
+    for von, erwartet in ((date(2026, 9, 1), "day"),
+                          (date(2025, 12, 1), "week"),
+                          (date(2020, 1, 1), "month")):
+        db, _ = _auswertung(von=von, bis=date(2026, 9, 16))
+        assert db.einheiten == [erwartet], (von, db.einheiten)
+
+
+def test_auswertung_legt_verlauf_und_aktivitaet_auf_dieselbe_achse():
+    _, antwort = _auswertung(von=date(2026, 8, 20), bis=date(2026, 9, 16))
+    achse = antwort["verlauf"]["achse"]
+    assert antwort["koernung"] == "tag"
+    assert len(antwort["aktivitaet"]) == len(achse)
+    for reihe in antwort["verlauf"]["reihen"]:
+        # Eine Reihe, die kuerzer ist als die Achse, verschiebt jede Linie
+        # gegen die Saeulen darunter.
+        assert len(reihe["werte"]) == len(achse)
+
+
+def test_auswertung_fasst_eroeffnungen_und_serie_zusammen():
+    _, antwort = _auswertung()
+    assert antwort["eroeffnungen"] == [
+        {"name": "Sicilian Defense", "partien": 11, "siege": 6, "remis": 1,
+         "niederlagen": 4}]
+    assert antwort["serie"] == {"art": "sieg", "n": 3, "offen": False}
+    # Fuenf Stufen, auch wenn nur eine besetzt ist -- sonst wandert die Achse
+    # des Diagramms mit den Daten.
+    assert len(antwort["gegnerstaerke"]) == 5
+    assert [s["partien"] for s in antwort["gegnerstaerke"]] == [0, 0, 40, 0, 0]

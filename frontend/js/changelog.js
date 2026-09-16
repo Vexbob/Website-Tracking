@@ -14,12 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
-    { v: 'v1.93.0', date: '2026-09-16', title: 'Schach: der Verlauf, den es wirklich gibt', notes: [
+    { v: 'v1.93.1', date: '2026-09-16', title: 'Schach: der Verlauf, den es wirklich gibt', notes: [
         'Der Wertungsverlauf kommt jetzt aus den Partien selbst und reicht damit so weit zurück wie deine Historie — bisher begann er am Tag des Verbindens und war deshalb eine gerade Linie, egal welcher Zeitraum eingestellt war.',
         'Statt eines Diagramms mit sechs Umschaltern steht je Disziplin eine eigene kleine Kurve nebeneinander, jede mit ihrer Zahl und der Entwicklung im Zeitraum darüber.',
         'Zwei neue Diagramme beantworten, was eine Siegquote allein nie sagt: wann gespielt wurde und wie es ausging, und wie du gegen stärkere Gegner abschneidest.',
         'Ein Zeitraum gilt für die ganze Seite — Bilanz, Form, Eröffnungen, Zeitkontrollen und Gegner rechnen jetzt alle über denselben Ausschnitt statt teils über den Bestand und teils über die letzten 200 Partien.',
         'Fernschach und Klassisch werden nicht mehr geführt: eine Partie über drei Tage neben einer Bullet-Partie zu zählen, macht aus beidem denselben Mittelwert.',
+        'Nachgezogen: der Überblick blieb leer, weil die Auswertung nach Woche und Monat mit einer Einheit fragte, die die Datenbank nicht kennt; und wenn sie einmal nicht kommt, steht jetzt ein Satz da statt endloser Ladebalken.',
     ]},
     { v: 'v1.92.2', date: '2026-09-14', title: 'Schach: die fertige Fassung', notes: [
         'Der Wertungsverlauf steht endlich als Kurve auf der Seite, samt höchstem Stand im Zeitraum — die Tageszeilen dafür lagen längst im Bestand, zu sehen waren sie nirgends.',
