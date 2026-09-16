@@ -151,7 +151,7 @@ function bindItemHandlers(itemEl) {
     };
 }
 
-// Datums-Trennlinie mit „Heute" / „Gestern" / „<Wochentag>, DD.MM.YYYY" + Tagesumsatz
+// Datums-Trennlinie mit „Heute“ / „Gestern“ / „<Wochentag>, DD.MM.YYYY“ + Tagesumsatz
 function renderDateHeader(g) {
     const iso = g.date;
     const d = new Date(iso + 'T00:00:00');

@@ -6,7 +6,7 @@
 > - Frontend öffentlich: `frontend/blog/`
 > - Frontend Admin-Editor: `frontend/blog/admin/`
 > - Login-Seite mit Teasern der letzten 5 Beiträge
-> - Dashboard-Kachel „Blog verwalten" (nur Admin)
+> - Dashboard-Kachel „Blog verwalten“ (nur Admin)
 >
 > Ziel: Öffentlich lesbarer Blog, der auf der **Login-Seite** angeteasert wird
 > und ohne Login voll konsumierbar ist. Schreib-/Verwaltungsseite bleibt privat.
@@ -15,7 +15,7 @@
 
 ## 1. Idee & Motivation
 
-Bisher ist Vexbob eine reine „Login-Only-App". Alles was hinter `/` liegt,
+Bisher ist Vexbob eine reine „Login-Only-App“. Alles was hinter `/` liegt,
 verlangt einen JWT-Token. Damit hat die Domain nach außen keinerlei Inhalt —
 die Login-Seite ist eine leere Karte mit zwei Feldern.
 
@@ -26,7 +26,7 @@ Der **Blog** soll das ändern:
 - **Auf der Login-Seite prominent** — die letzten 3–5 Posts als Teaser-Liste,
   darüber (oder darunter) das eigentliche Login-Formular.
 - **Persönlich** — Log-artige Einträge über Projekte, Gedanken, Musik, was
-  gerade in der Küche ausprobiert wird. Kein „Corporate-Blog".
+  gerade in der Küche ausprobiert wird. Kein „Corporate-Blog“.
 
 Blog-Inhalte sind unabhängig vom User-Datenmodell (Sparziel, Ausgaben, Notizen).
 Sie leben in einer eigenen Tabelle und sind global sichtbar.
@@ -74,7 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_blog_posts_pub ON blog_posts(published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
 ```
 
-**Entscheidung „ein-Autor vs. mehr-Autor":** Da Vexbob mehrere Admins haben
+**Entscheidung „ein-Autor vs. mehr-Autor“:** Da Vexbob mehrere Admins haben
 kann, speichern wir `author_id` (FK) + `author_name` als Snapshot. Wenn ein
 Admin-Account gelöscht wird, bleiben seine Posts sichtbar.
 
@@ -147,10 +147,10 @@ Website/frontend/blog/
 
 ### 5.3 Blog-Übersicht (`/blog/`)
 
-- Header mit „← Zurück zur Anmeldung" (führt auf `/private/login.html`)
+- Header mit „← Zurück zur Anmeldung“ (führt auf `/private/login.html`)
 - Optional Nav-Bar: **[Alle] [Tag1] [Tag2] …**
 - Kartengrid oder Listen-Layout, jede Karte:
-  - Titel, Untertitel, Datum, Autor, Tag-Chips, „Weiter lesen →"
+  - Titel, Untertitel, Datum, Autor, Tag-Chips, „Weiter lesen →“
   - Cover-Bild (falls gesetzt) klein rechts oder oben
 - Bei Klick: SPA-artig — Hash setzen, Detail-Bereich einblenden.
 
@@ -160,8 +160,8 @@ Website/frontend/blog/
 - Content aus `content_md` per **wiederverwendetem** Markdown-Renderer aus
   Notizen (dort schon vorhanden) — genau derselbe Stil (Überschriften,
   Listen, Code-Blöcke, Links, aber **ohne** interaktive Checkboxen).
-- Optional: „Auf X teilen"-Buttons (Twitter, Mail).
-- „← Zurück zur Übersicht"-Link.
+- Optional: „Auf X teilen“-Buttons (Twitter, Mail).
+- „← Zurück zur Übersicht“-Link.
 
 ### 5.5 Admin-Editor (`/blog/admin.html`)
 
@@ -169,7 +169,7 @@ Website/frontend/blog/
 - Split-Screen: links Markdown-Editor, rechts Live-Preview.
 - Felder: Titel, Slug (auto aus Titel, überschreibbar), Untertitel,
   Cover-URL, Tags (Comma-Chips), Content (Textarea, monospace).
-- Statuszeile: „Entwurf" / „Veröffentlicht am X" + Button
+- Statuszeile: „Entwurf“ / „Veröffentlicht am X“ + Button
   `[Veröffentlichen] / [Zurückziehen]`.
 - Auto-Save wie im Notizen-Modul (Debounce ~800 ms).
 
@@ -241,7 +241,7 @@ für die Übersicht, network-first für Details.
 3. `Website/frontend/blog/index.html` + `blog.js` (Übersicht + Detail)
 4. `Website/frontend/blog/admin.html` + `admin.js` (Editor)
 5. `login.html` umbauen: Zwei-Spalten mit Blog-Teasern
-6. `index.html` (Dashboard) — Kachel „Blog verwalten" für Admins
+6. `index.html` (Dashboard) — Kachel „Blog verwalten“ für Admins
 7. README-Update + Version bump
 
 ---
@@ -276,5 +276,5 @@ Ausbaustufe 2 (RSS, Reaktionen, verwandte Posts): + ~4–5 h
 
 ---
 
-*Nächster Schritt: bei nächster Session „Session 3+" das MVP umsetzen.*
+*Nächster Schritt: bei nächster Session „Session 3+“ das MVP umsetzen.*
 

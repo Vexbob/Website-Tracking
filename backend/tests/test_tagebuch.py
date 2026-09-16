@@ -3,7 +3,7 @@
 Der wichtigste Test hier ist ein negativer: **eine Menge kommt nicht durch.**
 Bis v1.96.0 lagen Tagebuch und Tracker in derselben Tabelle, und der
 Schreibweg hat den eingestellten Modus kein einziges Mal gelesen -- wer im
-Tracker „100 g Haferflocken" eintrug, fand denselben Eintrag anschliessend im
+Tracker „100 g Haferflocken“ eintrug, fand denselben Eintrag anschliessend im
 Tagebuch. Jetzt gibt es im Eingabemodell gar kein Feld dafuer, und in der
 Antwort kein Feld, in dem eine Zahl stehen koennte. Beides wird hier geprueft:
 die Abwesenheit IST die Zusicherung.
@@ -200,7 +200,7 @@ def test_heute_wird_geraten_und_als_vermutung_markiert():
 
 
 def test_an_einem_vergangenen_tag_wird_nicht_geraten():
-    """„Es ist jetzt Abend" sagt nichts darueber, was letzten Dienstag war."""
+    """„Es ist jetzt Abend“ sagt nichts darueber, was letzten Dienstag war."""
     db = AttrappeDB()
     gestern = str(HEUTE - timedelta(days=1))
     asyncio.run(EINTRAGEN(
@@ -211,6 +211,21 @@ def test_an_einem_vergangenen_tag_wird_nicht_geraten():
     _, args = db.geschrieben[0]
     assert None in args, "ohne Zuordnung statt geraten"
     assert args[-1] is False
+    assert "19:30" not in args, (
+        "Die Browser-Uhr sagt, wie spaet es JETZT ist. An einem vergangenen "
+        "Tag ist das die Tippzeit und keine Essenszeit -- sie darf nicht als "
+        "Uhrzeit an der Zeile stehen.")
+
+
+def test_heute_behaelt_die_uhrzeit():
+    """Die Gegenprobe: am selben Tag ist die Uhr genau das, was sie sagt."""
+    db = AttrappeDB()
+    asyncio.run(EINTRAGEN(
+        request=None,
+        daten=tb.EintragEingabe(label="Pasta", level="normal", at="19:30"),
+        db=db, user=NUTZER))
+    _, args = db.geschrieben[0]
+    assert "19:30" in args
 
 
 def test_der_ort_schlaegt_die_uhr():
@@ -284,7 +299,7 @@ def test_die_schnellwahl_fasst_schreibweisen_zusammen():
 
 
 def test_die_schnellwahl_gruppiert_kleingeschrieben():
-    """Sonst stuenden „Müsli" und „müsli" als zwei Knoepfe nebeneinander.
+    """Sonst stuenden „Müsli“ und „müsli“ als zwei Knoepfe nebeneinander.
 
     Ohne echte Datenbank ist die Abfrage selbst die pruefbare Zusicherung:
     gruppiert wird kleingeschrieben, herausgegeben die juengste Schreibweise.

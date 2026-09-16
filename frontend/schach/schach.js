@@ -315,7 +315,7 @@ function statsFehlerText(err) {
     }
     if (/netzwerkfehler/i.test(roh)) {
         return 'Keine Verbindung zum Server. Sobald er wieder antwortet, hilft ein '
-            + 'Klick auf „Erneut versuchen".';
+            + 'Klick auf „Erneut versuchen“.';
     }
     return 'Die Auswertung konnte nicht geladen werden'
         + (roh ? ' (' + roh + ').' : '.');
@@ -841,7 +841,7 @@ function zeichneStaerke() {
 
     state.charts.staerke = new Chart(document.getElementById('schStaerkeChart'), {
         data: {
-            // Zweizeilig: „50–200 stärker" steht auf 60 Pixeln Achsenbreite
+            // Zweizeilig: „50–200 stärker“ steht auf 60 Pixeln Achsenbreite
             // sonst als abgeschnittenes Wort da. Chart.js bricht ein Array.
             labels: stufen.map(x => x.label.split(' ')),
             datasets: [
@@ -1395,7 +1395,7 @@ function zeichneKonten() {
                       + 'aufgehört hat, und läuft weiter, bis nichts mehr kommt. Erst dann '
                       + 'reicht der Wertungsverlauf so weit zurück wie dein Konto.'
                     : 'Die Historie ist vollständig — geholt wird nur noch, was dazukommt. '
-                      + '„Von vorn holen" fängt trotzdem wieder ganz vorn an; doppelte '
+                      + '„Von vorn holen“ fängt trotzdem wieder ganz vorn an; doppelte '
                       + 'Partien fallen dabei weg, verloren geht nichts.')}</p>
         </div>`;
     }).join('');
@@ -1453,7 +1453,7 @@ async function verbinden(e) {
     } catch (err) {
         // Der Server sagt, woran es lag (Name gibt es nicht, Konto
         // geschlossen, Plattform bremst) — das ist die bessere Meldung als
-        // ein allgemeines „hat nicht geklappt".
+        // ein allgemeines „hat nicht geklappt“.
         melde(err.message || 'Das Konto konnte nicht verbunden werden.', 'error');
     } finally {
         knopf.classList.remove('is-loading');

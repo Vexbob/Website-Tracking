@@ -10,7 +10,7 @@
  *
  *   - **Die Aggregationsstufen kommen vom Server** (/api/export/sections).
  *     Sie standen hier ein zweites Mal, also war eine neue Stufe zwei
- *     Änderungen an zwei Orten. Neu dabei: Tag, Jahr und „Automatisch",
+ *     Änderungen an zwei Orten. Neu dabei: Tag, Jahr und „Automatisch“,
  *     das sich nach der Länge des Zeitraums richtet.
  *   - **Eine Höchstgröße stellt sich selbst ein** (v1.68.0): man sagt, wie
  *     groß die Datei höchstens werden darf, und der Server sucht die feinste
@@ -34,7 +34,7 @@
     ];
 
     /* Höchstgrößen als Stufen, die man wirklich meint: eine Mail-Anlage, ein
-       Tabellenblatt, ein Archiv. „Aus" steht bewusst zuerst — der Normalfall
+       Tabellenblatt, ein Archiv. „Aus“ steht bewusst zuerst — der Normalfall
        ist, dass die Größe egal ist. */
     const LIMITS = [
         { key: 0,        label: 'Aus' },
@@ -86,8 +86,8 @@
             chosen: {},
             openCols: new Set(),
             resolved: {},
-            // Höchstgröße in Byte; 0 heißt „egal". `limitPick` ist nur der
-            // gewählte Knopf, damit „Eigene" auch bei gleichem Wert aktiv bleibt.
+            // Höchstgröße in Byte; 0 heißt „egal“. `limitPick` ist nur der
+            // gewählte Knopf, damit „Eigene“ auch bei gleichem Wert aktiv bleibt.
             limit: 0,
             limitPick: 0,
             limitMb: '',
@@ -177,7 +177,7 @@
         ].join('');
     }
 
-    /* Der Hinweis unter einer Gruppe. Bei „Automatisch" nennt er die Stufe,
+    /* Der Hinweis unter einer Gruppe. Bei „Automatisch“ nennt er die Stufe,
        auf die es hinausläuft — sonst wäre die Einstellung eine Blackbox. */
     function aggHint(state, groupKey) {
         const key = state.agg[groupKey];
@@ -329,7 +329,7 @@
 
         /* Was die Vorschau über den Aufbau der Datei verrät, fließt zurück in
            die Auswahl links: die Spaltenlisten und die Stufe, auf die
-           „Automatisch" hinausläuft. */
+           „Automatisch“ hinausläuft. */
         function absorb(data) {
             let changed = false;
             (data.sections || []).forEach(s => {
@@ -369,7 +369,7 @@
             overlay.querySelector('#expLimitCustom').style.display =
                 state.limitPick === -1 ? 'flex' : 'none';
             if (state.fitting) {
-                // Laden heißt Skeleton, nicht „Lade …" als Fließtext.
+                // Laden heißt Skeleton, nicht „Lade …“ als Fließtext.
                 limitNote.innerHTML = '<span class="skel" style="display:inline-block;width:14rem;height:0.85rem"></span>';
             } else {
                 limitNote.textContent = state.fitNote || '';
@@ -459,8 +459,8 @@
             const value = Number(b.dataset.limit);
             state.limitPick = value;
             if (value === -1) {
-                // „Eigene" öffnet nur das Feld -- gerechnet wird erst auf
-                // „Anpassen", sonst liefe die Suche bei jeder getippten Ziffer.
+                // „Eigene“ öffnet nur das Feld -- gerechnet wird erst auf
+                // „Anpassen“, sonst liefe die Suche bei jeder getippten Ziffer.
                 paintLimit();
                 limitMbEl.focus();
                 return;
@@ -493,7 +493,7 @@
             state.from = fromEl.value;
             state.to = toEl.value;
             if (state.from && state.to && state.from > state.to) {
-                if (window.Toast) Toast.error('„Von" liegt nach „Bis"');
+                if (window.Toast) Toast.error('„Von“ liegt nach „Bis“');
                 return;
             }
             refreshPreview();
@@ -572,7 +572,7 @@
             }
             const r = rangeOf(state);
             if (r.from && r.to && r.from > r.to) {
-                if (window.Toast) Toast.error('„Von" liegt nach „Bis"');
+                if (window.Toast) Toast.error('„Von“ liegt nach „Bis“');
                 return;
             }
             close();

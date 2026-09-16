@@ -172,7 +172,7 @@ function activateTab(t){
 /* v1.72.0: Die fünf Anlege-Formulare öffnen sich als Fenster statt in der
  * Seite.
  *
- * Vorher klappte ein „+ Neu" das Formular zwischen Überschrift und Liste auf
+ * Vorher klappte ein „+ Neu“ das Formular zwischen Überschrift und Liste auf
  * und schob alles darunter nach unten — auf dem Handy war die Liste danach
  * ausserhalb des Bildschirms, und beim Zuklappen sprang die Seite zurück.
  * Dasselbe Muster wurde auf der Kategorie-Seite schon durch einen Dialog
@@ -1018,7 +1018,7 @@ async function deleteSavingsGoal(id){
     const name=g?g.name:'Sparziel';
     const saved=Number((g&&g.saved_amount)||0);
     const extra=saved>0.005?`\n\nDie ${fmtEur(saved)} auf diesem Ziel werden dabei entfernt.`:'';
-    if(!await askConfirm({title:`Sparziel „${name}" löschen?`,
+    if(!await askConfirm({title:`Sparziel „${name}“ löschen?`,
         text:saved>0.005?`Die ${fmtEur(saved)} auf diesem Ziel werden dabei entfernt.`:'Auf dem Ziel liegt nichts.',
         ok:'Löschen',danger:true}))return;
     try{

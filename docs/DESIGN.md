@@ -16,7 +16,7 @@ Die Werte selbst stehen als Tokens in `frontend/css/style.css`; hier steht,
 
 Seit v1.55.0 gibt es **nur noch das dunkle Theme**. Der Umschalter, die hellen
 Farbwerte und die Druckansicht sind entfernt — dadurch wird jedes Token genau
-einmal definiert, und die Regeln unten sind eindeutig statt „je nach Theme".
+einmal definiert, und die Regeln unten sind eindeutig statt „je nach Theme“.
 
 ---
 
@@ -39,7 +39,7 @@ Hover-Zustände und Trennlinien, die tragen müssen.
 
 - Eine Fläche liegt nie auf einer Fläche derselben Stufe. Wer verschachtelt,
   geht eine Stufe hoch.
-- Schatten nur ab „schwebend" (`--shadow-float`) — und dort zusätzlich zur
+- Schatten nur ab „schwebend“ (`--shadow-float`) — und dort zusätzlich zur
   Haarlinie, nicht statt ihrer.
 - Kein reines Schwarz und kein reines Weiß im Interface.
 
@@ -85,7 +85,7 @@ Farbe ist Information, nicht Dekoration.
   seine Daten kommen aus dem Spotify-Datenexport, und `--m-musik` sagt das
   schneller als jede Beschriftung. Aufgehellt gegenüber dem Original, damit der
   Ton auch als Text auf dunklem Grund lesbar bleibt (6,4:1). Auch hier gilt die
-  Grenze: Icon-Kachel, erste Diagrammreihe, ein Punkt neben „Quelle: Spotify" —
+  Grenze: Icon-Kachel, erste Diagrammreihe, ein Punkt neben „Quelle: Spotify“ —
   keine grüne Fläche.
 - **Statusfarben** `--ok` `--warn` `--danger` `--info` sind helle Töne für
   **Text und Marken auf dunklem Grund**. Sie tragen **niemals weiße Schrift**
@@ -107,7 +107,7 @@ Diagramme (`--figure`) und die Hintergrundlichter (`--backdrop`). Ein *Thema*
 setzt alle vier auf einmal.
 
 Bei den Zahlen und Diagrammen gilt eine Besonderheit, weil dort die
-Modul-Identität hängt: der Standard heißt **„Modulton"** und definiert
+Modul-Identität hängt: der Standard heißt **„Modulton“** und definiert
 `--figure` bewusst gar nicht. Jedes Modul fällt dann über
 `var(--figure, var(--m-sparziel))` auf seine eigene Farbe zurück — Sparziel
 grün, Ausgaben türkis. Erst wer ausdrücklich ein anderes Preset wählt,
@@ -116,7 +116,7 @@ grün, Ausgaben türkis. Erst wer ausdrücklich ein anderes Preset wählt,
 - Die Presets stehen als Tokens (`--g-…`, `--bd-…`) **ausschließlich** in
   `css/style.css`. Das Frontend setzt nur ein Attribut am `<html>`
   (`data-grad-action` und Geschwister), genau wie beim Theme — dadurch bleibt
-  „keine Hex-Werte in JS" heil und ein Preset ist an einer Stelle definiert.
+  „keine Hex-Werte in JS“ heil und ein Preset ist an einer Stelle definiert.
 - Die Auswahl ist eine **geschlossene Liste**, kein Farbwähler. Jedes Preset
   ist hell genug, um `--accent-ink` zu tragen; bei frei gewählten Farben ließe
   sich der Kontrast der Beschriftung nicht mehr zusichern, und genau das ist
@@ -138,7 +138,7 @@ nicht fertig.
 | Ausgewählt | Akzent trägt die Bedeutung (Fläche `--accent-strong`, Text `--accent-ink`) |
 | Fokus | `--focus-ring`, sichtbar nur bei `:focus-visible` |
 | Deaktiviert | `opacity:.45`, `cursor:default`, keine Transformation |
-| Lädt | Skeleton (`.skel`) statt Text; nie ein „Lade …" als Fließtext |
+| Lädt | Skeleton (`.skel`) statt Text; nie ein „Lade …“ als Fließtext |
 
 Berührungsziele auf Mobilgeräten sind mindestens 44 px hoch.
 
@@ -171,11 +171,11 @@ Handlung.
 
 - Der Satz sagt, **warum** es leer ist, nicht dass es leer ist.
   „Noch keine Kategorien. Beim ersten gescannten Bon legt der Parser sie selbst
-  an." statt „Keine Daten".
+  an." statt „Keine Daten“.
 - Genau eine Handlung, und nur wenn sie hier sinnvoll ist.
 - Gestrichelte Kante, `--surface-2`, `--text-3`. Kein Bild, keine Illustration.
 - Ein **Fehler** ist kein leerer Zustand: `.empty.is-error` zeigt die Meldung
-  und einen „Erneut versuchen"-Knopf.
+  und einen „Erneut versuchen“-Knopf.
 
 ## 6a. Dateien ablegen
 
@@ -184,7 +184,7 @@ Zustand — die Aussage ist dieselbe: hier ist noch nichts, hier könnte etwas h
 
 - Drei Zustände: **bereit**, **eine Datei schwebt darüber** (`.drag`, Akzent),
   **eine Datei liegt drin** (`.has-files`). Der letzte wechselt auf eine
-  durchgezogene Kante in `--ok` — gestrichelt heißt „leer", und das stimmt dann
+  durchgezogene Kante in `--ok` — gestrichelt heißt „leer“, und das stimmt dann
   nicht mehr.
 - Sie ist immer auch mit der Tastatur bedienbar (`tabindex`, Enter/Leertaste)
   und hat ein verstecktes `<input type="file">` dahinter, nie nur Drag & Drop.
@@ -298,7 +298,7 @@ Reduziert, ruhig, dieselbe Farbwelt.
   Platzgründen nur `05.09.` zeigt. Die ausgeschriebene Fassung kommt aus
   `VexCharts.fullDay/fullWeek/fullMonth` (`js/charts.js`).
 - **Der Tooltip verschwindet, wenn man daneben tippt.** Auf dem Handy gibt es
-  kein „Maus verlässt die Fläche"; `js/charts.js` erledigt das global für alle
+  kein „Maus verlässt die Fläche“; `js/charts.js` erledigt das global für alle
   Diagramme. Deshalb gehört die Datei auf jede Seite mit einem Diagramm.
 - **Die Durchschnitts-/Trendlinie liegt über der Wertlinie**: `order`
   `VexCharts.ORDER.TREND` gegen `VexCharts.ORDER.VALUE`. Chart.js zeichnet die
@@ -324,7 +324,7 @@ Eine Komponente, zwei Formen (`.v-ring` in `css/style.css`, Muster in
 - Gesteuert wird ausschliesslich über CSS-Variablen (`--ring-val`,
   `--ring-over`, `--ring-tone`). Kein Hex in JS, keine Inline-Farbe.
 - **Über dem Ziel** reitet ein zweiter Bogen in `--warn` von vorn über den
-  vollen Ring, gedeckelt bei 200 %. Gelb und nicht rot: „mehr" ist keine
+  vollen Ring, gedeckelt bei 200 %. Gelb und nicht rot: „mehr“ ist keine
   Bewertung. Wo mehr ein Erfolg ist, dreht `.v-ring--gut` ihn auf `--ok`.
 - **`.is-unvollstaendig`** macht die Spur gestrichelt. Ein Wert, zu dem
   Angaben fehlen, darf nicht aussehen wie einer, zu dem alle da sind.

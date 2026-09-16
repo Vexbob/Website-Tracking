@@ -51,6 +51,7 @@ Drei Entscheidungen tragen diesen Teil:
 import asyncio
 import gzip
 import io
+from datetime import date as Datum, timedelta
 from typing import Optional
 
 from fastapi import (APIRouter, Depends, File, HTTPException, Query, Request,
@@ -806,7 +807,6 @@ async def _tag(db, user_id: int, tag) -> dict:
 
 
 def _als_tag(wert):
-    from datetime import date as Datum
     if not wert:
         return Datum.today()
     try:
@@ -836,12 +836,16 @@ async def eintragen(request: Request, daten: LogEingabe, db=Depends(get_db),
         raise HTTPException(400, str(e))
     tag = _als_tag(daten.day)
 
-    from datetime import date as Datum
     zeit = mz.uhrzeit_sauber(daten.at)
+    # Die Uhr des Browsers sagt, wie spaet es JETZT ist -- nicht, wann am
+    # letzten Dienstag gegessen wurde. An einem vergangenen Tag traegt sie
+    # deshalb weder die Mahlzeit noch die Uhrzeit an der Zeile: eine Zeit,
+    # die nur sagt, wann jemand getippt hat, stuende dort sonst als
+    # Essenszeit -- und im Export in der Spalte Uhrzeit.
+    if tag != Datum.today():
+        zeit = None
     geraten = False
-    # Geraten wird nur fuer heute: "es ist jetzt Abend" ist kein Argument
-    # darueber, was letzten Dienstag auf dem Teller lag.
-    if mahlzeit is None and zeit and tag == Datum.today():
+    if mahlzeit is None and zeit:
         mahlzeit = mz.mahlzeit_fuer_uhrzeit(zeit[0])
         geraten = True
 
@@ -1018,7 +1022,6 @@ async def verlauf(von: Optional[str] = Query(None, alias="from"),
     Tage ohne Eintrag stehen mit Nullen drin und fehlen nicht: eine Luecke,
     die man nicht sieht, wird zu einem Tag, den es nie gab.
     """
-    from datetime import timedelta
 
     ende = _als_tag(bis) if bis else _als_tag(None)
     anfang = _als_tag(von) if von else (ende - timedelta(days=29))

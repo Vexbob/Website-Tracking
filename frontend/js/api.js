@@ -169,7 +169,7 @@ const BACKDROP_PRESETS = [
  * Ein Thema ist nichts als eine benannte Kombination der drei Plätze oben.
  * Es gibt also keinen zweiten Speicher und keine zweite Wahrheit: wer ein
  * Thema wählt, setzt damit die drei Einstellungen, und wer eine davon
- * einzeln ändert, ist auf „Eigen" — ohne dass irgendwo etwas nachgeführt
+ * einzeln ändert, ist auf „Eigen“ — ohne dass irgendwo etwas nachgeführt
  * werden müsste.
  *
  * Eigene Themen bestehen aus denselben Presets; frei gewählte Farben gibt es

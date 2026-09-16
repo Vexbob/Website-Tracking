@@ -81,7 +81,7 @@ const RING_TON = { protein_g: '--chart-1', carbs_g: '--chart-2',
 
 const state = {
     ziele: null, bestand: [], groessenVorschlaege: [],
-    katalog: null, katalogLaeuft: false,
+    katalog: null, katalogLaeuft: false, katalogGeholt: false,
     formGroessen: [],
     tag: null, datum: null, gerichte: [], haeufig: [],
     dialog: null, dlg: null,
@@ -171,7 +171,7 @@ function fehlerText(err) {
     if (/404|not found|405|method not allowed/i.test(roh)) return VERALTET;
     if (/netzwerkfehler/i.test(roh)) {
         return 'Keine Verbindung zum Server. Sobald er wieder antwortet, hilft ein '
-            + 'Klick auf „Erneut versuchen".';
+            + 'Klick auf „Erneut versuchen“.';
     }
     return 'Das ließ sich nicht laden' + (roh ? ' (' + roh + ').' : '.');
 }
@@ -250,7 +250,19 @@ function activateTab(tab) {
         const el = document.getElementById('tab-' + t);
         if (el) el.hidden = t !== tab;
     });
+    // Der Reiter steht in der Adresse -- dasselbe Muster wie im Schachmodul:
+    // ein Neuladen landet dort, wo man war, und ein Link auf die Ziele ist
+    // ein Link auf die Ziele. Der erste Reiter bleibt ohne Anhaengsel, damit
+    // die blanke Adresse die blanke Adresse bleibt.
+    history.replaceState(null, '', tab === 'tag' ? location.pathname : '#' + tab);
     if (tab === 'verlauf') mountRange();
+    // Der Katalogstand beschriftet nur den Reiter „Lebensmittel“. Ihn beim
+    // Laden der Seite mitzuholen, hiesse: eine Anfrage fuer eine Zeile, die
+    // man am Tag nicht sieht. Einmal, beim ersten Hinsehen, genuegt.
+    if (tab === 'vorrat' && !state.katalog && !state.katalogGeholt) {
+        state.katalogGeholt = true;
+        katalogStand();
+    }
 }
 
 /* ------------------------------------------------------------------ Tag */
@@ -315,10 +327,19 @@ function zeichneRinge() {
     const makros = MAKRO_RINGE.concat(
         t.totals.fiber_g && t.totals.fiber_g.own_target ? ['fiber_g'] : []);
     const ziel = document.getElementById('nwMakros');
-    ziel.innerHTML = makros.map(m => VexRing.html({
-        id: 'nwRing_' + m, klassen: ['v-ring--sm'],
-        ton: `var(--${RING_TON[m].slice(2)})`,
-    })).join('');
+    // Neu aufgebaut wird nur, wenn sich die Reihe wirklich aendert. Sonst
+    // verliert jeder Ring bei jedem Eintrag sein ``dataset.wert``, und die
+    // drei kleinen Ringe zaehlen jedes Mal wieder bei null los -- waehrend
+    // der grosse daneben vom vorherigen Stand weiterlaeuft. Zwei Regeln fuer
+    // dieselbe Bewegung, nebeneinander, in einer Zeile sichtbar.
+    const reihe = makros.join(',');
+    if (ziel.dataset.reihe !== reihe) {
+        ziel.dataset.reihe = reihe;
+        ziel.innerHTML = makros.map(m => VexRing.html({
+            id: 'nwRing_' + m, klassen: ['v-ring--sm'],
+            ton: `var(--${RING_TON[m].slice(2)})`,
+        })).join('');
+    }
     makros.forEach(m => {
         const d = t.totals[m];
         VexRing.set(document.getElementById('nwRing_' + m), {
@@ -487,7 +508,11 @@ async function ladeHaeufig() {
 function eintragDialog(mahlzeit) {
     if (!state.tag) return;
     state.dlg = { mahlzeit: mahlzeit || mahlzeitJetzt(), eingabe: '',
-                  zuletzt: [], tippen: null, liste: [] };
+                  zuletzt: [], tippen: null, liste: [],
+                  // Der Katalog laeuft neben der eigenen Liste her: eigener
+                  // Takt, eigener Zustand, eigene Trefferliste.
+                  katTakt: null, katalog: [], katalogLaeuft: false,
+                  katalogFuer: '' };
 
     const titel = (state.datum || heute()) === heute()
         ? 'Eintragen · heute' : 'Eintragen · ' + datumKurz(state.datum);
@@ -508,7 +533,10 @@ function eintragDialog(mahlzeit) {
     state.dialog = openModal(titel, inhalt, {
         breit: true,
         beimSchliessen: () => {
-            if (state.dlg) clearTimeout(state.dlg.tippen);
+            if (state.dlg) {
+                clearTimeout(state.dlg.tippen);
+                clearTimeout(state.dlg.katTakt);
+            }
             state.dialog = null;
             state.dlg = null;
         },
@@ -520,11 +548,16 @@ function eintragDialog(mahlzeit) {
     const feld = document.getElementById('nwDlgSuche');
     feld.addEventListener('input', (e) => {
         clearTimeout(state.dlg.tippen);
+        clearTimeout(state.dlg.katTakt);
         const wert = e.target.value;
+        // Zwei Takte, weil es zwei verschiedene Dinge sind: die eigene Liste
+        // liegt im Speicher und darf sofort filtern, der Katalog ist eine
+        // Anfrage und wartet, bis das Tippen zur Ruhe kommt.
         state.dlg.tippen = setTimeout(() => {
             state.dlg.eingabe = wert;
             zeichneDlgListe();
         }, 160);
+        state.dlg.katTakt = setTimeout(() => dlgKatalog(wert), 400);
     });
     document.getElementById('nwDlgFertig')
         .addEventListener('click', () => state.dialog && state.dialog.close());
@@ -633,26 +666,93 @@ function dlgZeile(v, i) {
     </div>`;
 }
 
+/* Was der eigene Bestand nicht hat, holt der Katalog -- im selben Feld.
+
+   Ohne das endet der Weg, den man jeden Tag geht, genau dort, wo er anfaengt:
+   man tippt einen Namen, findet nichts, schliesst den Dialog, wechselt in den
+   Reiter "Lebensmittel", sucht dort noch einmal, nimmt auf, wechselt zurueck,
+   oeffnet den Dialog und tippt den Namen ein drittes Mal. Der
+   Gerichte-Dialog hat diesen Reiterwechsel seit v1.99.0 nicht mehr; hier
+   stand er noch. */
+async function dlgKatalog(text) {
+    if (!state.dlg) return;
+    const begriff = (text || '').trim();
+    state.dlg.katalogFuer = begriff;
+    if (begriff.length < 2) {
+        state.dlg.katalog = [];
+        state.dlg.katalogLaeuft = false;
+        zeichneDlgListe();
+        return;
+    }
+    state.dlg.katalogLaeuft = true;
+    zeichneDlgListe();
+
+    let treffer = [];
+    try {
+        const res = await API.suche(begriff);
+        treffer = res.results || [];
+    } catch (e) {
+        treffer = [];
+    }
+    // Eine Antwort auf eine aeltere Eingabe verwerfen: sonst ueberholt die
+    // langsamere Suche die neuere Liste, und unter dem Wort steht das
+    // Ergebnis zum Wort davor.
+    if (!state.dlg || state.dlg.katalogFuer !== begriff) return;
+    const drin = new Set(state.bestand.map(p => String(p.name).toLowerCase()));
+    state.dlg.katalog = treffer
+        .filter(p => !drin.has(String(p.name).toLowerCase())).slice(0, 6);
+    state.dlg.katalogLaeuft = false;
+    zeichneDlgListe();
+}
+
+/* Der Katalogblock unter der eigenen Liste. Dieselbe Zeile wie im
+   Gerichte-Dialog (`.nw-g-treffer`): derselbe Vorgang, dieselbe Gestalt. */
+function dlgKatalogHtml() {
+    const d = state.dlg;
+    if (!d) return '';
+    if (d.katalogLaeuft) {
+        return `<div class="nw-dlg-kat">
+            <p class="ern-note">Im Katalog suchen …</p>
+            <span class="skel skel-block"></span></div>`;
+    }
+    if (!d.katalog.length) return '';
+    return `<div class="nw-dlg-kat">
+        <p class="ern-note">Nicht in deinem Bestand — ein Tipp nimmt es auf:</p>
+        ${d.katalog.map((p, i) => `<button type="button" class="nw-g-treffer" data-kat="${i}">
+            <span class="nw-g-treffer-text">
+                <span class="ern-w-name">${esc(p.name)}</span>
+                <span class="ern-w-sub">${esc((p.brand ? p.brand + ' · ' : '')
+                    + zahl(p.kcal, '') + ' kcal je 100 ' + (p.base_unit || 'g'))}</span>
+            </span>
+            <span class="ern-herkunft">Katalog</span>
+        </button>`).join('')}
+    </div>`;
+}
+
 function zeichneDlgListe() {
     const ziel = document.getElementById('nwDlgListe');
     if (!ziel || !state.dlg) return;
     const liste = dlgVorschlaege();
     state.dlg.liste = liste;
-
-    if (!liste.length) {
-        ziel.innerHTML = leerKarte('🥫', state.dlg.eingabe
-            ? 'Dazu steht nichts in deinem Bestand. Unter <strong>Lebensmittel</strong> '
-              + 'kommt es herein — mit Strichcode geht es am schnellsten.'
-            : 'Noch nichts im Bestand. Über <strong>Lebensmittel</strong> kommt etwas '
-              + 'herein, unter <strong>Gerichte</strong> stellst du daraus eines zusammen.');
-        return;
-    }
+    const katHtml = dlgKatalogHtml();
 
     const MAX = 12;
-    ziel.innerHTML = liste.slice(0, MAX).map(dlgZeile).join('')
+    let html = liste.slice(0, MAX).map(dlgZeile).join('')
         + (liste.length > MAX
             ? `<p class="ern-note">… und ${liste.length - MAX} weitere — tipp oben weiter.</p>`
             : '');
+    if (!liste.length) {
+        // Solange der Katalog laeuft oder etwas hat, waere „nichts da“ falsch:
+        // da kommt gerade etwas. Erst wenn beide Quellen leer sind, ist die
+        // Auskunft eine Auskunft.
+        html = katHtml ? '' : leerKarte('🥫', state.dlg.eingabe
+            ? 'Weder im Bestand noch im Katalog. Bei Losem ohne Strichcode lohnt '
+              + 'ein allgemeinerer Begriff — „Apfel“ statt „Apfel Elstar“. '
+              + 'Unter <strong>Lebensmittel</strong> geht es auch von Hand.'
+            : 'Noch nichts im Bestand. Tipp einfach einen Namen — gesucht wird '
+              + 'auch im Katalog, und ein Tipp nimmt den Treffer auf.');
+    }
+    ziel.innerHTML = html + katHtml;
 
     const nimm = (i) => state.dlg.liste[Number(i)];
     ziel.querySelectorAll('[data-schritt]').forEach(b => b.addEventListener('click', () => {
@@ -683,6 +783,24 @@ function zeichneDlgListe() {
     ziel.querySelectorAll('[data-item-einheit]').forEach(w => w.addEventListener('change', () => {
         const feld = ziel.querySelector(`[data-item-menge="${w.dataset.itemEinheit}"]`);
         if (feld) feld.value = BASIS.includes(w.value) ? 100 : 1;
+    }));
+    ziel.querySelectorAll('[data-kat]').forEach(b => b.addEventListener('click', async () => {
+        const p = (state.dlg.katalog || [])[Number(b.dataset.kat)];
+        if (!p) return;
+        b.classList.add('is-loading');
+        try {
+            await katalogAufnehmen(p);
+            if (!state.dlg) return;
+            // Aufgenommen heisst noch nicht eingetragen — wie viel davon,
+            // weiss nur der Nutzer. Das Lebensmittel steht nach dem Zeichnen
+            // oben in der eigenen Liste, mit Mengenfeld: ein Tipp weiter.
+            state.dlg.katalog = state.dlg.katalog.filter(x => x !== p);
+            zeichneDlgListe();
+            melde('Aufgenommen — jetzt die Menge.', 'success');
+        } catch (err) {
+            b.classList.remove('is-loading');
+            melde(err.message || 'Das ging nicht.', 'error');
+        }
     }));
 }
 
@@ -1360,20 +1478,13 @@ function zutatTreffer(text, katalog) {
         if (p) zutatHinzufuegen(p);
     }));
     ziel.querySelectorAll('[data-katalog]').forEach(b => b.addEventListener('click', async () => {
-        b.classList.add('is-loading');
         const p = (katalog || [])[Number(b.dataset.katalog)];
+        // Erst pruefen, dann den Knopf laden lassen: andersherum bleibt er
+        // haengen, wenn es den Treffer nicht mehr gibt.
         if (!p) return;
+        b.classList.add('is-loading');
         try {
-            const antwort = await API.aufnehmen({
-                name: p.name, brand: p.brand, barcode: p.barcode, source: 'off',
-                kcal: p.kcal, protein_g: p.protein_g, carbs_g: p.carbs_g,
-                sugar_g: p.sugar_g, fat_g: p.fat_g, sat_fat_g: p.sat_fat_g,
-                fiber_g: p.fiber_g, salt_g: p.salt_g, portion_g: p.portion_g,
-                base_unit: p.base_unit || 'g',
-            });
-            await ladeBestand();
-            const neu = (antwort && antwort.item)
-                || state.bestand.find(x => x.name === p.name);
+            const neu = await katalogAufnehmen(p);
             if (neu) zutatHinzufuegen(neu);
         } catch (err) {
             melde(err.message || 'Das ging nicht.', 'error');
@@ -1459,7 +1570,7 @@ async function gerichtLoeschen(id) {
     const g = state.gerichte.find(x => x.id === id);
     const ok = await askConfirm({
         title: 'Gericht löschen?',
-        text: `„${g ? g.name : 'Das Gericht'}" verschwindet samt Rezept. Bereits `
+        text: `„${g ? g.name : 'Das Gericht'}“ verschwindet samt Rezept. Bereits `
             + 'eingetragene Tage verlieren diese Einträge. Dein Essenstagebuch bleibt '
             + 'davon unberührt.',
         confirmText: 'Löschen', danger: true,
@@ -1719,9 +1830,9 @@ async function katalogHochladen(datei) {
         title: 'Katalog ersetzen?',
         text: drin
             ? `Im Katalog stehen ${drin.toLocaleString('de-DE')} Produkte. `
-              + `„${datei.name}" ersetzt sie vollständig — ein Abzug ist ein Stand, `
+              + `„${datei.name}“ ersetzt sie vollständig — ein Abzug ist ein Stand, `
               + 'zwei nebeneinander wären später nicht zu trennen.'
-            : `Der Katalog ist leer. „${datei.name}" legt ihn an.`,
+            : `Der Katalog ist leer. „${datei.name}“ legt ihn an.`,
         confirmText: 'Einspielen',
     });
     document.getElementById('ernKatFile').value = '';
@@ -1807,7 +1918,7 @@ async function suchen(text) {
         if (!res.results.length) {
             ziel.innerHTML = leerKarte('🔎',
                 'Nichts gefunden. Bei Losem ohne Strichcode lohnt sich oft ein '
-                + 'allgemeinerer Begriff — „Apfel" statt „Apfel Elstar".');
+                + 'allgemeinerer Begriff — „Apfel“ statt „Apfel Elstar“.');
             return;
         }
         ziel.innerHTML = `<p class="ern-note">${res.results.length} Treffer aus
@@ -1821,24 +1932,32 @@ async function suchen(text) {
     }
 }
 
+/* Aus einem Katalogtreffer ein eigenes Lebensmittel machen. Die Feldliste
+   stand an zwei Stellen; mit dem Eintragen-Dialog waeren es drei geworden --
+   und ein Feld, das man an einer davon vergisst, fehlt still: das
+   Lebensmittel landet ohne Ballaststoffe im Bestand und der Tag ist
+   unvollstaendig, ohne dass jemand einen Fehler sieht. */
+async function katalogAufnehmen(p) {
+    const antwort = await API.aufnehmen({
+        name: p.name, brand: p.brand, barcode: p.barcode, source: 'off',
+        kcal: p.kcal, protein_g: p.protein_g, carbs_g: p.carbs_g,
+        sugar_g: p.sugar_g, fat_g: p.fat_g, sat_fat_g: p.sat_fat_g,
+        fiber_g: p.fiber_g, salt_g: p.salt_g, portion_g: p.portion_g,
+        base_unit: p.base_unit || 'g',
+    });
+    await ladeBestand();
+    return (antwort && antwort.item)
+        || state.bestand.find(x => x.name === p.name) || null;
+}
+
 async function uebernehmen(produkt) {
     try {
-        const antwort = await API.aufnehmen({
-            name: produkt.name, brand: produkt.brand, barcode: produkt.barcode,
-            source: 'off', kcal: produkt.kcal, protein_g: produkt.protein_g,
-            carbs_g: produkt.carbs_g, sugar_g: produkt.sugar_g,
-            fat_g: produkt.fat_g, sat_fat_g: produkt.sat_fat_g,
-            fiber_g: produkt.fiber_g, salt_g: produkt.salt_g,
-            portion_g: produkt.portion_g,
-            base_unit: produkt.base_unit || 'g',
-        });
-        await ladeBestand();
-        const neu = antwort && antwort.item;
+        const neu = await katalogAufnehmen(produkt);
         // Ohne Portionsgroesse laesst sich spaeter nur "100 g" eintragen.
         if (neu && !(neu.sizes || []).length) {
             itemDialog(neu);
             melde('Aufgenommen. Trag noch ein, was eine Einheit wiegt — dann '
-                + 'kannst du „2 × Scheibe" eintragen statt in Gramm zu rechnen.', 'info');
+                + 'kannst du „2 × Scheibe“ eintragen statt in Gramm zu rechnen.', 'info');
         } else {
             melde('In den Bestand aufgenommen.', 'success');
         }
@@ -1892,7 +2011,7 @@ function itemDialog(p, nameVorgabe) {
             <label class="ern-feld"><span>Fett (g)</span>
                 <input type="number" id="fFat" min="0" step="0.1" inputmode="decimal"></label>
         </div>
-        <p class="ern-note">Leer lassen, was du nicht weißt — leer heißt „keine Angabe" und
+        <p class="ern-note">Leer lassen, was du nicht weißt — leer heißt „keine Angabe“ und
             wird später als Lücke ausgewiesen, nicht als Null verrechnet.</p>
 
         <div class="ern-groessen-kopf">
@@ -1901,7 +2020,7 @@ function itemDialog(p, nameVorgabe) {
         </div>
         <div class="ern-groessen" id="fGroessen"></div>
         <p class="ern-note">Jede Zeile ist eine Einheit, die du beim Eintragen auswählen
-            kannst — „2 × Scheibe" statt „90 g". Die <strong>erste</strong> Zeile ist die
+            kannst — „2 × Scheibe“ statt „90 g“. Die <strong>erste</strong> Zeile ist die
             Standardgröße.</p>
 
         <div class="ern-tasten">
@@ -2057,7 +2176,7 @@ async function entfernenItem(id) {
     const betroffen = state.gerichte.filter(g => g.items.some(z => z.item_id === id));
     const ok = await askConfirm({
         title: 'Entfernen?',
-        text: `„${p ? p.name : 'Das Lebensmittel'}" wird aus dem Bestand gelöscht.`
+        text: `„${p ? p.name : 'Das Lebensmittel'}“ wird aus dem Bestand gelöscht.`
             + (betroffen.length
                 ? ` Es steckt in ${betroffen.length === 1 ? 'einem Gericht' : betroffen.length + ' Gerichten'}`
                   + ` (${betroffen.map(g => g.name).join(', ')}) und fällt dort ersatzlos heraus.`
@@ -2140,9 +2259,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     zeichneReiter();
-    activateTab('tag');
+    activateTab((location.hash || '').replace('#', '') || 'tag');
     await ladeZiele();
     await ladeTag(heute());
     await Promise.all([ladeGerichte(), ladeBestand(), ladeHaeufig(),
-                       ladeBruecke(), katalogStand()]);
+                       ladeBruecke()]);
 });

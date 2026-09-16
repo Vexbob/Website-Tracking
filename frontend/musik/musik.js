@@ -48,10 +48,10 @@ const STEP_LABEL = Object.fromEntries(STEPS.map(s => [s.key, s.label]));
 
 /* ---------------------------------------------------------- Musik ≠ Podcast
  *
- * Der Spotify-Export legt bei Podcasts die SHOW ins Feld „Interpret" und die
- * EPISODE in „Titel", bei Hörbüchern das Buch und das Kapitel. Dieselbe
- * Spalte bedeutet also je nach Art etwas anderes — „610 Titel" über beides
- * gerechnet vermischt zwei Dinge, und „Interpret: Lage der Nation" ist
+ * Der Spotify-Export legt bei Podcasts die SHOW ins Feld „Interpret“ und die
+ * EPISODE in „Titel“, bei Hörbüchern das Buch und das Kapitel. Dieselbe
+ * Spalte bedeutet also je nach Art etwas anderes — „610 Titel“ über beides
+ * gerechnet vermischt zwei Dinge, und „Interpret: Lage der Nation“ ist
  * schlicht falsch.
  *
  * Deshalb wechselt mit der Art das ganze Vokabular: Überschriften, Kennzahlen
@@ -84,7 +84,7 @@ const VOCAB = {
                  countUnit: 'Kapitel',
                  tone: '--chart-5', mark: '📖', whoMark: '📚' },
 };
-// Ohne Spalte „Art" in der CSV lässt sich nichts unterscheiden — dann gilt
+// Ohne Spalte „Art“ in der CSV lässt sich nichts unterscheiden — dann gilt
 // die neutrale Fassung, und die Oberfläche behauptet keine Trennung, die die
 // Daten nicht hergeben.
 const VOCAB_ANY = {
@@ -158,7 +158,7 @@ function fmtDay(iso) {
 }
 
 /* Periodenschlüssel für die Achse: kurz. Im Tooltip steht die lange
-   Fassung — dort ist Platz, und ohne Jahr ist ein „KW 01" wertlos. */
+   Fassung — dort ist Platz, und ohne Jahr ist ein „KW 01“ wertlos. */
 function shortPeriod(key, grain) {
     const s = String(key || '');
     if (grain === 'jahr') return s;
@@ -471,8 +471,8 @@ async function loadOverview() {
 
 /* -------------------------------------------------------------- Register */
 
-/* Die Spalten heißen, was in ihnen steht — bei Podcasts also „Show" und
-   „Episode". Ist eine Art gewählt, fällt die Art-Spalte weg: sie stünde in
+/* Die Spalten heißen, was in ihnen steht — bei Podcasts also „Show“ und
+   „Episode“. Ist eine Art gewählt, fällt die Art-Spalte weg: sie stünde in
    jeder Zeile gleich und kostete nur Breite. */
 function columns() {
     const v = vocab(state.kind);
@@ -857,7 +857,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     moreFilter = mountMoreFilter(document.getElementById('mMoreFilter'));
 
-    // „Gesamt" ist hier der richtige Standard: das Register reicht über zehn
+    // „Gesamt“ ist hier der richtige Standard: das Register reicht über zehn
     // Jahre zurück, und 30 Tage wären bei einem Import alle paar Monate meist
     // eine leere Seite.
     VexRange.mount(document.getElementById('mRange'), {

@@ -87,7 +87,7 @@ function render() {
         const delBtn = row.querySelector('button.del');
         if (delBtn) {
             delBtn.onclick = async () => {
-                const ok = await askConfirm({ title: `Marke „${brand.name}" löschen?`,
+                const ok = await askConfirm({ title: `Marke „${brand.name}“ löschen?`,
                     text: 'Bestehende Artikel verlieren die Verknüpfung, bleiben aber erhalten.',
                     ok: 'Löschen', danger: true });
                 if (!ok) return;

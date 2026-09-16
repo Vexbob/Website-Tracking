@@ -212,7 +212,7 @@ function openEditModal(c) {
                 ${others.map(t => `<option value="${t.id}">${escHtml((t.icon || '') + ' ' + t.name)}</option>`).join('')}
             </select>
             <p class="page-sub" style="margin:0.375rem 0 0;font-size:0.75rem">Alle Positionen und Regeln
-            wandern in die gewählte Kategorie, „${escHtml(c.name)}" wird danach gelöscht.</p>
+            wandern in die gewählte Kategorie, „${escHtml(c.name)}“ wird danach gelöscht.</p>
         </div>` : ''}
         <div class="modal-actions">
             <button class="del danger">Löschen</button>
@@ -245,7 +245,7 @@ function openEditModal(c) {
 
     modal.root.querySelector('.del').onclick = async () => {
         const ok = await askConfirm({
-            title: `„${c.name}" löschen?`,
+            title: `„${c.name}“ löschen?`,
             text: u.count
                 ? `${u.count} Position${u.count === 1 ? ' behält ihren' : 'en behalten ihre'} Wert${u.count === 1 ? '' : 'e'}, verliert nur die Zuordnung.`
                 : 'Die Kategorie wird nirgends verwendet.',

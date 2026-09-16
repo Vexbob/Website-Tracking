@@ -58,15 +58,14 @@
        nebeneinander unterscheidbar bleiben (9,1:1 gegen --surface-1). */
     --m-schach:   #ffa257;
     --m-schach-soft: rgba(255,162,87,0.16);
-    /* Ernaehrung nimmt Blattgruen -- gelber als Sparziel (#5eea92) und Musik
-       (#1ed760), sonst stuenden drei gruene Icons nebeneinander, die man erst
-       beim Lesen auseinanderhaelt (12,0:1 gegen --surface-1). */
-    --m-ernaehrung: #a3e635;
-    --m-ernaehrung-soft: rgba(163,230,53,0.16);
-    /* v1.97.0 -- das Essenstagebuch ist ein eigenes Modul. Es traegt das
-       Gruen des Themas, weil es das Modul ist, das jeder Tag oeffnet; der
-       Tracker bekommt in der naechsten Etappe einen eigenen, kuehleren
-       Ton und heisst dann --m-naehrwerte. */
+    /* Das Essenstagebuch nimmt Blattgruen -- gelber als Sparziel (#5eea92)
+       und Musik (#1ed760), sonst stuenden drei gruene Icons nebeneinander,
+       die man erst beim Lesen auseinanderhaelt (12,0:1 gegen --surface-1).
+       Es ist der Ton des frueheren Ernaehrungs-Moduls: das Tagebuch ist das
+       Modul, das jeder Tag oeffnet, und soll aussehen wie das, was da war.
+       --m-ernaehrung selbst ist mit v2.0.1 weg -- den Pfad /ernaehrung/ gibt
+       es nur noch als Weiterleitung, und ein Ton ohne Modul steht im
+       Styleguide als lebende Farbe da, die niemand mehr waehlen kann. */
     --m-essen: #a3e635;
     --m-essen-soft: rgba(163,230,53,0.16);
     /* Der Tracker (v1.98.0). Himmelblau steht zwischen --m-ausgaben

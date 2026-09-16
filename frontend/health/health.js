@@ -1095,11 +1095,11 @@ async function loadSleepChart() {
 // Die alte Fassung war eine echte Stichproben-Standardabweichung (n-1), hatte
 // aber zwei Schwaechen, die genau bei Zubettgehzeiten zuschlagen:
 //
-//   1. „±" verspricht eine symmetrische Streuung. Zubettgehzeiten sind aber
+//   1. „±“ verspricht eine symmetrische Streuung. Zubettgehzeiten sind aber
 //      rechtsschief -- man geht gelegentlich sehr viel spaeter ins Bett, aber
 //      nie sehr viel frueher. Eine einzige durchgemachte Nacht verschob
 //      Mittelwert UND Streuung sichtbar.
-//   2. Die Naht des 18:00-Fensters. Eine „Nacht", die vor 18:00 beginnt (ein
+//   2. Die Naht des 18:00-Fensters. Eine „Nacht“, die vor 18:00 beginnt (ein
 //      Mittagsschlaf ab einer Stunde zaehlt mit), landete bei Offset 23,x
 //      statt -0,x. Ein solcher Eintrag unter dreissig Naechten verschob den
 //      Schnitt um eine Dreiviertelstunde und blies die Streuung auf.

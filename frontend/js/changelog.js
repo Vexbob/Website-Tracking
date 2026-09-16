@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.0.1', date: '2026-09-18', title: 'Feinschliff an beiden Ernährungs-Modulen', notes: [
+        'Das Suchfeld im Eintragen-Fenster der Nährwerte durchsucht jetzt auch den Katalog — bisher nur deinen eigenen Bestand. Was nicht darin stand, hieß: Fenster schließen, Reiter wechseln, noch einmal suchen, aufnehmen, zurückwechseln, Namen ein drittes Mal tippen. Genau diesen Umweg hatte der Gerichte-Dialog schon nicht mehr; der Weg, den du jeden Tag gehst, hatte ihn noch.',
+        'Der Reiter steht in der Adresse: ein Neuladen landet dort, wo du warst, und ein Link auf die Ziele ist ein Link auf die Ziele.',
+        'Behoben: eine Zeile, die du für einen vergangenen Tag nachträgst, bekam die Uhrzeit von JETZT an die Seite geschrieben — also die Tippzeit als Essenszeit, und dieselbe Zahl im Export. Die Uhr des Browsers zählt jetzt nur noch für heute. In beiden Modulen.',
+        'Behoben: die drei kleinen Makro-Ringe fingen bei jedem Eintrag wieder bei null an zu zählen, während der große daneben vom vorherigen Stand weiterlief. Jetzt bewegen sich alle vier nach derselben Regel.',
+        'Anführungszeichen schließen überall deutsch („so“) statt mit einem geraden Zeichen. 146 Stellen quer durch die Seite, den Changelog eingeschlossen.',
+    ]},
     { v: 'v2.0.0', date: '2026-09-18', title: 'Beide Ernährungs-Module sind fertig', notes: [
         'Essenstagebuch und Nährwerte stehen jetzt als fertige Module auf dem Dashboard statt unter „In Arbeit“ — und ein ruhendes Modul verschwindet auch von dort. Bisher hätte seine Kachel weitergestanden, obwohl die Einstellung verspricht, dass es in keiner Leiste und in keinem Menü steht.',
         'Beide wandern in den Gesamt-Export: das Tagebuch als eigene Sektion (bewusst ohne Kalorienspalte — es kennt keine), die Nährwerte mit Menge und Makros je Zeile, dazu Bestand und Gerichte als Stammdaten. Eine fehlende Angabe bleibt dabei ein leeres Feld statt einer Null.',
@@ -42,26 +49,26 @@ window.VEXBOB_CHANGELOG = [
         'Der Ernährungs-Tracker ruht ab jetzt und lässt sich in den Einstellungen unter „Module“ einschalten. Seine Gerichte und Lebensmittel bleiben erhalten; die Tageseinträge beider Seiten fangen leer an.',
     ]},
     { v: 'v1.96.0', date: '2026-09-17', title: 'Module, die man einschaltet', notes: [
-        'Neue Karte „Module" in den Einstellungen: jedes Modul lässt sich schlafen legen. Ein ruhendes Modul steht in keiner Leiste und in keinem Menü — seine Daten bleiben vollständig erhalten, Export und Backup nehmen sie weiter mit, und über die Adresse ist es weiter erreichbar. Damit lässt sich ein Modul künftig erst freischalten, wenn du es wirklich anfängst.',
-        'Behoben: der Knopf „Leiste speichern" auf der Einstellungsseite schlug seit Wochen jedes Mal fehl. Der Server kannte Schach und Ernährung nicht als Navigationsziele und wies deshalb die ganze Liste ab — auch für alle anderen Module.',
+        'Neue Karte „Module“ in den Einstellungen: jedes Modul lässt sich schlafen legen. Ein ruhendes Modul steht in keiner Leiste und in keinem Menü — seine Daten bleiben vollständig erhalten, Export und Backup nehmen sie weiter mit, und über die Adresse ist es weiter erreichbar. Damit lässt sich ein Modul künftig erst freischalten, wenn du es wirklich anfängst.',
+        'Behoben: der Knopf „Leiste speichern“ auf der Einstellungsseite schlug seit Wochen jedes Mal fehl. Der Server kannte Schach und Ernährung nicht als Navigationsziele und wies deshalb die ganze Liste ab — auch für alle anderen Module.',
         'Behoben: das Backup enthielt kein einziges Datum aus Ernährung, Schach, Notizen und Marken, dazu fehlten Gesundheits-Tageswerte und weggeklickte Dubletten-Vorschläge. Ein Wiederherstellen hätte das alles lautlos verloren.',
         'Zwei neue Prüfungen sorgen dafür, dass beides nicht wiederkommt: eine vergleicht die Modulliste des Frontends mit der des Servers, die andere jede Tabelle in den Migrationen mit dem, was das Backup mitnimmt.',
     ]},
     { v: 'v1.95.0', date: '2026-09-16', title: 'Ernährung: der Tag ist die Seite', notes: [
         'Die Ernährungsseite ist neu gebaut: der Tag steht jetzt als eine Karte da — Datum, was der Tag hergibt, und darunter die Mahlzeiten mit dem, was drinsteht. Vorher lagen Suchfeld, Mahlzeiten-Chips, Vorschlagsliste, Tagesbild und Eintragsliste als fünf Blöcke untereinander, und das, weswegen man die Seite öffnet, begann unter dem Bildschirmrand.',
-        'Eingetragen wird aus der Mahlzeit heraus: ein Plus am Frühstück öffnet den Dialog, und dass es zum Frühstück gehört, muss niemand mehr anklicken. In der Liste ist die ganze Zeile der Knopf für „normal", „übermäßig" steht klein daneben — statt zweier gleich großer Knöpfe in jeder Zeile.',
+        'Eingetragen wird aus der Mahlzeit heraus: ein Plus am Frühstück öffnet den Dialog, und dass es zum Frühstück gehört, muss niemand mehr anklicken. In der Liste ist die ganze Zeile der Knopf für „normal“, „übermäßig“ steht klein daneben — statt zweier gleich großer Knöpfe in jeder Zeile.',
         'Der Modus steht jetzt rechts neben den Reitern statt als eigene Etage darüber, und die vier Nährwerte sind vier schmale Kacheln statt vier Balken über die volle Breite.',
         'Gerichte und Lebensmittel zeigen zuerst die Liste; angelegt und geändert wird im Dialog. Strichcode und Name teilen sich ein Suchfeld — ob das eine oder das andere gemeint ist, sieht man den Zeichen an.',
-        'Schach: die Kurven sagen jetzt, wie weit sie zurückreichen, und die Kontokarte, ob die Historie überhaupt vollständig geholt ist. Solange sie es nicht ist, heißt der Knopf „Historie weiterholen" statt „Neue Partien holen"; ein langer Lauf bricht nicht mehr ab, wenn der Server bremst, und „Von vorn holen" holt nach, was ein abgebrochener erster Lauf übersprungen hat.',
+        'Schach: die Kurven sagen jetzt, wie weit sie zurückreichen, und die Kontokarte, ob die Historie überhaupt vollständig geholt ist. Solange sie es nicht ist, heißt der Knopf „Historie weiterholen“ statt „Neue Partien holen“; ein langer Lauf bricht nicht mehr ab, wenn der Server bremst, und „Von vorn holen“ holt nach, was ein abgebrochener erster Lauf übersprungen hat.',
     ]},
     { v: 'v1.94.1', date: '2026-09-16', title: 'Ernährung: Tagebuch oder Tracker', notes: [
         'Die Seite hat jetzt zwei Modi: ein lockeres Tagebuch, das nur fragt, was es gab und ob es normal oder übermäßig viel war — und einen ausführlichen Tracker mit Mengen, Nährwerten und eigenen Tageszielen.',
-        'Im Tagebuch lässt sich alles hinschreiben, auch was in keiner Liste steht: „Pizza beim Italiener" braucht keinen Bestand und kein Rezept. Nach ein paar Tagen schlägt die Seite von selbst vor, was du wirklich isst.',
+        'Im Tagebuch lässt sich alles hinschreiben, auch was in keiner Liste steht: „Pizza beim Italiener“ braucht keinen Bestand und kein Rezept. Nach ein paar Tagen schlägt die Seite von selbst vor, was du wirklich isst.',
         'Der Tag ist nach Mahlzeiten sortiert, und eine falsch geratene Stufe lässt sich antippen statt löschen und neu eintragen.',
         'Neu ist ein Verlauf über einen frei wählbaren Zeitraum: im Tagebuch, an wie vielen Tagen überhaupt etwas dasteht und wie oft es übermäßig war — im Tracker Kalorien und Eiweiß je Tag als Spanne gegen dein Ziel.',
         'Tagesziele sind freiwillig und einzeln: wer nur auf Eiweiß achtet, muss keine fünf Zahlen erfinden — wo keines steht, gilt weiter der allgemeine Richtwert.',
         'Einen Tag im Verlauf antippen öffnet ihn.',
-        'Nachgezogen: geht beim Laden etwas schief, steht das jetzt als Satz da statt als Ladebalken, der nie endet — auch auf der Schachseite, wo eine Störung vorher wie „noch kein Konto verbunden" aussah. Ein Zeitraum ohne Einträge sagt das ebenfalls, statt ein leeres Diagramm zu zeigen.',
+        'Nachgezogen: geht beim Laden etwas schief, steht das jetzt als Satz da statt als Ladebalken, der nie endet — auch auf der Schachseite, wo eine Störung vorher wie „noch kein Konto verbunden“ aussah. Ein Zeitraum ohne Einträge sagt das ebenfalls, statt ein leeres Diagramm zu zeigen.',
     ]},
     { v: 'v1.93.1', date: '2026-09-16', title: 'Schach: der Verlauf, den es wirklich gibt', notes: [
         'Der Wertungsverlauf kommt jetzt aus den Partien selbst und reicht damit so weit zurück wie deine Historie — bisher begann er am Tag des Verbindens und war deshalb eine gerade Linie, egal welcher Zeitraum eingestellt war.',
@@ -101,16 +108,16 @@ window.VEXBOB_CHANGELOG = [
     { v: 'v1.88.0', date: '2026-09-12', title: 'Ernährung: eigene Einträge und Einheiten', notes: [
         'Lebensmittel lassen sich von Hand anlegen — für alles ohne Strichcode, von Omas Gulasch bis zum losen Obst.',
         'Jeder Eintrag im Bestand ist änderbar: Nährwerte, Marke, und ob sich die Angaben auf 100 g oder 100 ml beziehen.',
-        'Jedes Lebensmittel bekommt eine eigene Einheit mit Namen und Gewicht — „Stück", „Scheibe", „Glas" — dazu optional die ganze Packung.',
-        'In Rezepten wird damit gerechnet: „2 Stück" statt „124 g"; umgerechnet wird beim Speichern, damit ein altes Rezept sich nicht ändert, wenn du später eine Portionsgröße korrigierst.',
-        'Angeboten wird nur, was hinterlegt ist — eine Auswahl „Packung", die dann doch 100 g rechnet, wäre geraten.',
+        'Jedes Lebensmittel bekommt eine eigene Einheit mit Namen und Gewicht — „Stück“, „Scheibe“, „Glas“ — dazu optional die ganze Packung.',
+        'In Rezepten wird damit gerechnet: „2 Stück“ statt „124 g“; umgerechnet wird beim Speichern, damit ein altes Rezept sich nicht ändert, wenn du später eine Portionsgröße korrigierst.',
+        'Angeboten wird nur, was hinterlegt ist — eine Auswahl „Packung“, die dann doch 100 g rechnet, wäre geraten.',
     ]},
     { v: 'v1.87.0', date: '2026-09-12', title: 'Ernährung: Gerichte und der Tag', notes: [
         'Aus dem Bestand lassen sich Gerichte zusammenstellen — Gramm stehen nur dort, im Rezept, einmal geschrieben und hundertmal benutzt.',
-        'Eingetragen wird danach mit einem Tipp: „Wraps, normal" oder „Wraps, übermäßig". Mehr fragt der Tag nicht.',
+        'Eingetragen wird danach mit einem Tipp: „Wraps, normal“ oder „Wraps, übermäßig“. Mehr fragt der Tag nicht.',
         'Der Tag zeigt eine Spanne statt einer Zahl — aus zwei Grobstufen ließe sich keine genaue Summe rechnen, und ein zu 73 % gefüllter Ring wäre eine doppelte Behauptung.',
         'Je Nährwert ein Band: die Breite ist die Unsicherheit, der Strich darin der Richtwert für einen Tag.',
-        'Fehlt einer Zutat eine Angabe, sagt das Band „mindestens" statt stillschweigend zu wenig zu zeigen.',
+        'Fehlt einer Zutat eine Angabe, sagt das Band „mindestens“ statt stillschweigend zu wenig zu zeigen.',
     ]},
     { v: 'v1.86.0', date: '2026-09-12', title: 'Strichcode mit der Kamera', notes: [
         'Der Scanner öffnet jetzt die Kamera: Packung ins Bild halten, der Code wird erkannt und sofort nachgeschlagen.',
@@ -125,7 +132,7 @@ window.VEXBOB_CHANGELOG = [
         'Schach zeigt neben jeder Wertungszahl die Entwicklung der letzten 30 Tage; solange der Verlauf kürzer ist, sagt der Hinweis, wie weit er wirklich reicht.',
     ]},
     { v: 'v1.84.0', date: '2026-09-12', title: 'Schach läuft von selbst', notes: [
-        'Neue Partien holt der Server jetzt einmal täglich von allein — ohne dass eine Seite offen sein muss; Stunde und An/Aus stehen im neuen Reiter „Automatik".',
+        'Neue Partien holt der Server jetzt einmal täglich von allein — ohne dass eine Seite offen sein muss; Stunde und An/Aus stehen im neuen Reiter „Automatik“.',
         'Die Wertungszahlen frischen sich bei offener Seite alle 15 Minuten nach (einstellbar bis stündlich oder aus) — häufiger ergibt nichts, die Zahl bewegt sich nur nach einer Partie.',
         'Der Überblick stellt die Disziplinen gegenüber: eine Zeile je Zeitkontrolle, links Chess.com, rechts Lichess.',
         'Die Partienliste lässt sich nach Plattform, Ergebnis und Zeitkontrolle filtern, nach Gegner oder Eröffnung durchsuchen und nach Datum, Wertungsdifferenz oder Gegnerstärke sortieren.',
@@ -134,14 +141,14 @@ window.VEXBOB_CHANGELOG = [
         'Lichess und Chess.com lassen sich mit dem Benutzernamen verbinden — beide geben Wertung und Partien öffentlich heraus, ein Passwort braucht es nicht.',
         'Die Wertungszahlen für Bullet, Blitz, Rapid, Klassisch, Fernschach und Rätsel stehen im Überblick und lassen sich mit einem Knopf nachholen.',
         'Die ganze Partien-Historie kommt auf einen Knopfdruck herein — stückweise und fortsetzbar, ein Abbruch mittendrin verliert nichts.',
-        'Die Rätsel-Wertung von Chess.com steht als „Bestwert" da: anders als Lichess gibt die Plattform dort keinen aktuellen Stand heraus.',
+        'Die Rätsel-Wertung von Chess.com steht als „Bestwert“ da: anders als Lichess gibt die Plattform dort keinen aktuellen Stand heraus.',
         'Weil beide nur den heutigen Stand liefern, hält Vexbob ab jetzt je Tag eine Zeile fest — daraus wächst der Verlauf, den es dort nicht zu holen gibt.',
     ]},
     { v: 'v1.82.0', date: '2026-09-12', title: 'Schach und Ernährung sind angelegt', notes: [
         'Zwei neue Module haben ihre eigene Seite: Schach (Wertungszahl und Partien von Lichess und Chess.com) und Ernährung (Gerichte, Makros je Tag, Barcode).',
-        'Beide stehen getrennt von den fertigen Modulen — im Modul-Menü unter „In Arbeit", auf dem Dashboard in einem eigenen Abschnitt.',
+        'Beide stehen getrennt von den fertigen Modulen — im Modul-Menü unter „In Arbeit“, auf dem Dashboard in einem eigenen Abschnitt.',
         'Auf jeder der beiden Seiten steht, was dort entstehen soll; die leeren Zustände sagen, woran es noch fehlt, statt Felder zu zeigen, die nichts speichern.',
-        'Der Ernährungstracker legt sich auf zwei Mengenstufen fest — „normal" und „übermäßig" statt Gramm, weil geschätzte Gramm nur eine Grobstufe mit Nachkommastelle sind.',
+        'Der Ernährungstracker legt sich auf zwei Mengenstufen fest — „normal“ und „übermäßig“ statt Gramm, weil geschätzte Gramm nur eine Grobstufe mit Nachkommastelle sind.',
     ]},
     { v: 'v1.81.0', date: '2026-09-10', title: 'Laden-Dubletten und Einordnen per Knopf', notes: [
         'Die Läden-Seite schlägt vor, was dasselbe Geschäft ist — „Lidl“ neben „LIDL PLUS“, „Rewe“ neben „REWE Markt“ — und führt es auf Knopfdruck zusammen; die Buchungen hängen mit um.',

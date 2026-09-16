@@ -321,7 +321,7 @@ async function deleteNote(id) {
     const n = state.notes.find(x => x.id === id);
     if (!n) return;
     const snapshot = { ...n };
-    if (!await askConfirm({ title: `Notiz „${n.title || '(ohne Titel)'}" löschen?`,
+    if (!await askConfirm({ title: `Notiz „${n.title || '(ohne Titel)'}“ löschen?`,
         text: 'Sie landet im Papierkorb der Liste und lässt sich von dort noch zurückholen.',
         ok: 'Löschen', danger: true })) return;
     try {

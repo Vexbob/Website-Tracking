@@ -114,7 +114,7 @@ async def _reward_goal_for(db, user_id: int, preferred_goal_id: Optional[int],
          gehoert, nicht abgeschlossen ist und noch Platz hat.
       2. Aktives Sparziel — sofern es noch nicht ueberzogen wird
          (``saved + reward <= target * 1.001`` mit kleiner Toleranz).
-         Wenn die Belohnung das aktive Ziel „ueberzahlen" wuerde, faellt
+         Wenn die Belohnung das aktive Ziel „ueberzahlen“ wuerde, faellt
          die Auszahlung auf das Allgemein-Konto.
       3. Allgemein-Konto (``is_general=TRUE``) — Puffer, dahin gehen alle
          Belohnungen, die sonst nirgends passen. Wird bei Bedarf angelegt.

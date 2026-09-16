@@ -184,7 +184,7 @@
 }
 .es-punkt.is-viel { background: var(--es-viel); }
 
-/* Die Stufe ist anklickbar: „das war doch eher uebermaessig" soll kein
+/* Die Stufe ist anklickbar: „das war doch eher uebermaessig“ soll kein
    Loeschen und Neueintragen kosten, sonst steht es am Ende gar nicht da. */
 .es-stufe {
     flex: none;
@@ -231,7 +231,7 @@
     gap: 0.375rem;
     margin-bottom: 0.75rem;
 }
-/* Die Marke „jetzt" am vorgeschlagenen Chip steht seit v1.98.0 in
+/* Die Marke „jetzt“ am vorgeschlagenen Chip steht seit v1.98.0 in
    css/style.css (.v-chip-jetzt) -- beide Ernaehrungs-Module benutzen sie. */
 
 .es-suche {

@@ -1,15 +1,15 @@
 """Mahlzeiten — die eine Liste, die beide Ernaehrungs-Module teilen.
 
 Das Tagebuch und der Tracker haben getrennte Tabellen und getrennte Router;
-geteilt wird nur, was wirklich **dieselbe Tatsache** ist. „Wann isst du?" ist
+geteilt wird nur, was wirklich **dieselbe Tatsache** ist. „Wann isst du?“ ist
 so eine: dass um 8 Uhr Fruehstueck ist, gilt nicht je Modul verschieden.
 
 Zwei Listen davon waeren eine, die man beim Ergaenzen vergisst -- dieselbe
 Begruendung, aus der schon die Datenbank bewusst keinen CHECK auf ``meal``
 haelt (Migration 044).
 
-Der Tag wird nach Mahlzeiten gelesen und nicht nach Uhrzeit: „Mittag" ist die
-Auskunft, die man geben kann, „12:47" waere eine, die man erfinden muesste.
+Der Tag wird nach Mahlzeiten gelesen und nicht nach Uhrzeit: „Mittag“ ist die
+Auskunft, die man geben kann, „12:47“ waere eine, die man erfinden muesste.
 Die Uhrzeit taucht hier nur als *Vermutung* auf, wohin ein Eintrag gehoert.
 """
 
@@ -54,7 +54,7 @@ def mahlzeit_fuer_uhrzeit(stunde) -> str:
 
     ``stunde`` ist die ORTSZEIT des Nutzers und kommt deshalb vom Browser.
     Der Server darf hier nicht seine eigene Uhr nehmen: er laeuft in UTC, und
-    ein Snack um 22:30 Ortszeit waere dort 20:30 und landete unter „Abend".
+    ein Snack um 22:30 Ortszeit waere dort 20:30 und landete unter „Abend“.
     """
     try:
         h = int(stunde)
@@ -67,7 +67,7 @@ def mahlzeit_fuer_uhrzeit(stunde) -> str:
 
 
 def uhrzeit_sauber(wert):
-    """„HH:MM" -> (stunde, minute) oder None. Unbrauchbares ist kein Fehler.
+    """„HH:MM“ -> (stunde, minute) oder None. Unbrauchbares ist kein Fehler.
 
     Die Uhrzeit ist Beiwerk: kommt sie kaputt an, wird eben nicht geraten.
     Deswegen einen Eintrag abzuweisen, waere eine Strenge am falschen Ort.

@@ -1609,7 +1609,7 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
             "type": "transfer",
             "date": r["created_at"].isoformat(),
             "title": r["description"] or "Übertrag",
-            "description": f"Auf „{r['goal_name']}\"",
+            "description": f"Auf „{r['goal_name']}“",
             "amount": float(r["amount"]),
             "log_id": r["id"], "source_id": r["source_id"],
             "note": r["note"] or "", "deletable": True,

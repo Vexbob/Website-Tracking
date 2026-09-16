@@ -13,7 +13,7 @@ import asyncio
 import os
 import re
 import sys
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
@@ -269,6 +269,37 @@ def test_der_ort_schlaegt_die_uhr():
     _, args = db.geschrieben[0]
     assert "snack" in args and "fruehstueck" not in args
     assert args[-1] is False
+
+
+def test_an_einem_vergangenen_tag_zaehlt_die_browser_uhr_nicht():
+    """Die Uhr sagt, wie spaet es JETZT ist -- nicht, wann gegessen wurde.
+
+    Weder die Mahlzeit noch die Uhrzeit darf daraus entstehen: sonst steht an
+    einer abends nachgetragenen Zeile "21:47" als Essenszeit, und dieselbe
+    Zahl landet im Export in der Spalte "Uhrzeit".
+    """
+    db = AttrappeDB()
+    gestern = str(HEUTE - timedelta(days=1))
+    asyncio.run(EINTRAGEN(
+        request=None,
+        daten=fr.LogEingabe(item_id=3, amount=2, unit="Scheibe",
+                            at="19:30", day=gestern),
+        db=db, user=NUTZER))
+    _, args = db.geschrieben[0]
+    assert "19:30" not in args
+    assert "abend" not in args
+    assert args[-1] is False
+
+
+def test_heute_behaelt_die_uhrzeit():
+    """Die Gegenprobe: am selben Tag ist die Uhr genau das, was sie sagt."""
+    db = AttrappeDB()
+    asyncio.run(EINTRAGEN(
+        request=None,
+        daten=fr.LogEingabe(item_id=3, amount=2, unit="Scheibe", at="19:30"),
+        db=db, user=NUTZER))
+    _, args = db.geschrieben[0]
+    assert "19:30" in args
 
 
 def test_eine_gesetzte_mahlzeit_ist_keine_vermutung_mehr():

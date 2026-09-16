@@ -134,7 +134,7 @@ async def _schnellwahl(db, user_id: int, tage: int, zahl: int) -> list:
     """Was oft eingetragen wird — je Schreibweise EINE Zeile.
 
     Gruppiert wird ueber ``lower(label)``; herausgegeben wird die haeufigste
-    Schreibweise. Sonst stuenden „Müsli" und „müsli" zweimal nebeneinander,
+    Schreibweise. Sonst stuenden „Müsli“ und „müsli“ zweimal nebeneinander,
     und die Schnellwahl waere genau dort unbrauchbar, wo sie gebraucht wird.
     """
     rows = await db.fetch(
@@ -203,10 +203,15 @@ async def eintragen(request: Request, daten: EintragEingabe,
     mahlzeit = _mahlzeit_sauber(daten.meal)
 
     zeit = mz.uhrzeit_sauber(daten.at)
+    # Die Uhr des Browsers sagt, wie spaet es JETZT ist -- nicht, wann am
+    # letzten Dienstag gegessen wurde. An einem vergangenen Tag traegt sie
+    # deshalb weder die Mahlzeit noch die Uhrzeit an der Zeile: eine Zeit,
+    # die nur sagt, wann jemand getippt hat, stuende dort sonst als
+    # Essenszeit -- und im Export in der Spalte Uhrzeit.
+    if tag != date.today():
+        zeit = None
     geraten = False
-    # Geraten wird nur fuer heute: „es ist jetzt Abend" ist kein Argument
-    # darueber, was letzten Dienstag auf dem Teller lag.
-    if mahlzeit is None and zeit and tag == date.today():
+    if mahlzeit is None and zeit:
         mahlzeit = mz.mahlzeit_fuer_uhrzeit(zeit[0])
         geraten = True
 

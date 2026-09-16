@@ -37,7 +37,7 @@
 /* ---------- Kopfleiste ----------
    Ein Zeitraum gilt fuer die ganze Seite. Links steht in Worten, worueber
    gerade gerechnet wird -- ohne diesen Satz waeren dieselben Karten mit
-   „30 Tage" und mit „Gesamt" nicht zu unterscheiden. */
+   „30 Tage“ und mit „Gesamt“ nicht zu unterscheiden. */
 .sch-kopfleiste .sch-kopf-text {
     display: flex;
     flex-direction: column;

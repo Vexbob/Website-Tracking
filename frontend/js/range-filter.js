@@ -14,12 +14,12 @@
  *   rf.get();          // aktueller Zeitraum
  *   rf.set('90');      // von außen setzen (löst onChange aus)
  *
- * `from`/`to` sind ISO-Tage oder null (offener Anfang bei „Gesamt"). `days`
+ * `from`/`to` sind ISO-Tage oder null (offener Anfang bei „Gesamt“). `days`
  * ist die Länge des Fensters — für Beschriftung und Auflösung. `fetchDays`
  * ist die Spanne von heute bis `from`, für Endpunkte, die nur eine Tageszahl
  * kennen; wer damit lädt, schneidet danach mit VexRange.clip() auf `from`/`to`
  * zu — bei einem zurückliegenden Fenster hätte er sonst zu viel geholt.
- * Beide sind 0 bei „Gesamt", was dort „keine Begrenzung“ heißt.
+ * Beide sind 0 bei „Gesamt“, was dort „keine Begrenzung“ heißt.
  */
 (function () {
     if (window.VexRange) return;
@@ -161,7 +161,7 @@
             const f = fromEl.value || '';
             const t = toEl.value || '';
             if (f && t && f > t) {
-                if (window.Toast) Toast.error('„Von" liegt nach „Bis"');
+                if (window.Toast) Toast.error('„Von“ liegt nach „Bis“');
                 return;
             }
             if (!f && !t) { close(); return; }

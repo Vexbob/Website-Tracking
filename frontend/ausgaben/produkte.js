@@ -146,7 +146,7 @@ function renderMergeSuggestions() {
             <div class="merge-head">
                 <span class="merge-icon">🔗</span>
                 <div>
-                    <div class="merge-title">${s.variants.length} Schreibweisen von „${escHtml(s.suggested_title)}"?</div>
+                    <div class="merge-title">${s.variants.length} Schreibweisen von „${escHtml(s.suggested_title)}“?</div>
                     <div class="merge-sub">Wird eine Produktzeile — auch für künftige Käufe. Name änderbar, einzelne Schreibweisen kannst du abwählen.</div>
                 </div>
             </div>
@@ -332,7 +332,7 @@ function renderProducts() {
  * Liste aus der Kaufhistorie und wird hier nach Basisnamen verdichtet. */
 async function openMergeEditor(product) {
     const title = product.title || product.key;
-    const modal = openModal(`🔗 „${escHtml(title)}" bearbeiten`, `
+    const modal = openModal(`🔗 „${escHtml(title)}“ bearbeiten`, `
         <p class="me-hint">Angehakt bleibt in der Gruppe. Was du abwählst, steht danach wieder als eigenes Produkt in der Liste.</p>
         <div id="mePicks" class="me-list"><span class="skel skel-line long"></span><span class="skel skel-line"></span></div>
         <label class="me-name-lbl">Name der Gruppe
@@ -405,7 +405,7 @@ async function openMergeEditor(product) {
 }
 
 async function splitProduct(product) {
-    const ok = await askConfirm({ title: `„${product.title}" auftrennen?`,
+    const ok = await askConfirm({ title: `„${product.title}“ auftrennen?`,
         text: 'Die Artikel fallen auf ihre einzelnen Namen zurück und stehen danach wieder als getrennte Produkte in der Liste.',
         ok: 'Auftrennen' });
     if (!ok) return;
@@ -566,11 +566,11 @@ async function openProductDetail(key, product) {
 
 /* Zwei Produkte von Hand zusammenführen — unabhängig davon, ob der Server sie
  * als Schreibvarianten erkannt hat. Die Vorschläge oben auf der Seite finden
- * nur ähnliche Namen; „Klopapier" und „Toilettenpapier" muss man selbst
+ * nur ähnliche Namen; „Klopapier“ und „Toilettenpapier“ muss man selbst
  * zusammenlegen können. */
 function openMergePicker(product) {
     const others = allProducts.filter(p => p.key !== product.key);
-    const modal = openModal(`🔗 „${escHtml(product.title || product.key)}" zusammenführen`, `
+    const modal = openModal(`🔗 „${escHtml(product.title || product.key)}“ zusammenführen`, `
         <p class="me-hint">Wähle die Produkte, die dasselbe meinen. Sie werden zu einer Zeile —
         auch für künftige Käufe.</p>
         <input type="search" class="me-search" id="mpSearch" placeholder="🔍 Produkt suchen …">

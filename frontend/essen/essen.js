@@ -84,7 +84,7 @@ function fehlerText(err) {
     if (/404|not found|405|method not allowed/i.test(roh)) return VERALTET;
     if (/netzwerkfehler/i.test(roh)) {
         return 'Keine Verbindung zum Server. Sobald er wieder antwortet, hilft ein '
-            + 'Klick auf „Erneut versuchen".';
+            + 'Klick auf „Erneut versuchen“.';
     }
     return 'Das ließ sich nicht laden' + (roh ? ' (' + roh + ').' : '.');
 }
@@ -416,7 +416,7 @@ function zeichneDlgListe() {
     if (!liste.length) {
         ziel.innerHTML = `<div class="empty">
             <span class="empty-mark" aria-hidden="true">✏️</span>
-            <p class="empty-text">Tipp oben hin, was es gab — „Pizza", „Müsli", „Kaffee".
+            <p class="empty-text">Tipp oben hin, was es gab — „Pizza“, „Müsli“, „Kaffee“.
             Es muss in keiner Liste stehen, und ab dem zweiten Mal schlägt die Seite es
             dir selbst vor.</p></div>`;
         return;

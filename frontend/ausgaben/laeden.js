@@ -282,7 +282,7 @@ function openEditModal(s) {
     };
     modal.root.querySelector('.del').onclick = async () => {
         const ok = await askConfirm({
-            title: `„${s.name}" löschen?`,
+            title: `„${s.name}“ löschen?`,
             text: u.count
                 ? `${u.count} Einkäufe behalten ihre Beträge, verlieren aber die Zuordnung zum Laden.`
                 : 'Der Laden wird nirgends verwendet.',
