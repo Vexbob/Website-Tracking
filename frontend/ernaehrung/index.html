@@ -40,10 +40,10 @@
          ändert er auch, welche Reiter es gibt. -->
     <div class="ern-moduswahl">
         <div class="ern-modus" role="group" aria-label="Modus">
-            <button type="button" data-modus="locker">
+            <button type="button" data-modus="locker" aria-pressed="false">
                 <span aria-hidden="true">📓</span> Tagebuch
             </button>
-            <button type="button" data-modus="ausfuehrlich">
+            <button type="button" data-modus="ausfuehrlich" aria-pressed="false">
                 <span aria-hidden="true">📊</span> Tracker
             </button>
         </div>
@@ -54,6 +54,12 @@
 
     <!-- ====================== Tag ====================== -->
     <div id="tab-tag">
+        <!-- Ein Ladefehler tritt vor den Tag, statt ihn in Ladebalken stehen
+             zu lassen: ein Ladezustand, der nie endet, sieht aus wie ein
+             kaputter Browser — man wartet auf etwas, das nicht mehr kommt. -->
+        <div id="ernTagFehler" hidden></div>
+
+        <div id="ernTagInhalt">
         <div class="ern-tagleiste">
             <button type="button" class="v-btn v-btn--icon" id="ernTagZurueck"
                     aria-label="Tag zurück">◀</button>
@@ -102,6 +108,7 @@
                 <span class="stat-range-lbl" id="ernEintraegeZahl"></span>
             </div>
             <div id="ernEintraege"></div>
+        </div>
         </div>
     </div>
 

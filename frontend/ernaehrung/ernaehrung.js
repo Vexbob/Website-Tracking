@@ -1,4 +1,4 @@
-/* ernaehrung.js — v1.94.0
+/* ernaehrung.js — v1.94.1
  *
  * Das Ernaehrungs-Modul, in zwei Betriebsarten auf EINEM Tagebuch.
  *
@@ -97,7 +97,7 @@ const state = {
     katalog: null, katalogLaeuft: false,
     formGroessen: [],
     tag: null, datum: null, gerichte: [], haeufig: [],
-    eingabe: '', mahlzeit: null,
+    eingabe: '', mahlzeit: null, tippen: null,
     verlauf: null, range: null, rangeMount: null,
     charts: { eins: null, zwei: null },
     entwurf: { id: null, name: '', items: [] },
@@ -178,13 +178,52 @@ function leerKarte(mark, text, knopf) {
     </div>`;
 }
 
+/* Aus der Meldung des Servers einen Satz machen, der weiterhilft. Ein
+   fehlender Endpunkt heisst hier fast immer dasselbe: das Frontend liegt
+   schon neu auf dem Server, das Backend laeuft noch in der alten Fassung. */
+function fehlerText(err) {
+    const roh = (err && err.message) || '';
+    if (/404|not found|405|method not allowed/i.test(roh)) return VERALTET;
+    if (/netzwerkfehler/i.test(roh)) {
+        return 'Keine Verbindung zum Server. Sobald er wieder antwortet, hilft ein '
+            + 'Klick auf „Erneut versuchen".';
+    }
+    return 'Das ließ sich nicht laden' + (roh ? ' (' + roh + ').' : '.');
+}
+
+const VERALTET = 'Diesen Teil kennt der Server noch nicht. Auf dem Server läuft '
+    + 'vermutlich noch die vorherige Fassung des Backends — dort fehlt ein Neustart.';
+
+/* Ein Ladezustand, der nie endet, sieht aus wie ein kaputter Browser: man
+   wartet auf etwas, das nicht mehr kommt. Deshalb tritt der Tag beiseite und
+   es steht ein Satz da, der sagt was los ist, mit einem Knopf, der es noch
+   einmal versucht. */
+function zeigeTagFehler(text) {
+    document.getElementById('ernTagInhalt').hidden = true;
+    const el = document.getElementById('ernTagFehler');
+    el.hidden = false;
+    el.innerHTML = `<div class="stat-card"><div class="empty is-error">
+        <span class="empty-mark" aria-hidden="true">⚠️</span>
+        <p class="empty-text">${esc(text)}</p>
+        <button type="button" class="v-btn v-btn--primary" id="ernNochmal">Erneut versuchen</button>
+    </div></div>`;
+    const knopf = document.getElementById('ernNochmal');
+    if (knopf) knopf.addEventListener('click', () => {
+        knopf.classList.add('is-loading');
+        ladeTag(state.datum);
+    });
+}
+
 /* ---------------------------------------------------------------- Modus */
 
 const istLocker = () => state.modus === 'locker';
 
 function zeichneModus() {
-    document.querySelectorAll('[data-modus]').forEach(b =>
-        b.classList.toggle('is-active', b.dataset.modus === state.modus));
+    document.querySelectorAll('[data-modus]').forEach(b => {
+        const aktiv = b.dataset.modus === state.modus;
+        b.classList.toggle('is-active', aktiv);
+        b.setAttribute('aria-pressed', aktiv ? 'true' : 'false');
+    });
     document.getElementById('ernModusSatz').textContent = MODUS_SATZ[state.modus];
 
     const reiter = REITER[state.modus];
@@ -601,6 +640,9 @@ async function eintragen(daten, knopf) {
             { day: state.datum || heute(), meal: state.mahlzeit }, daten));
         // Das Feld leeren: der naechste Eintrag faengt bei null an, und ein
         // stehengebliebener Text sieht aus, als waere nichts passiert.
+        // Auch den laufenden Tipp-Takt: er wuerde sonst 180 ms spaeter den
+        // gerade eingetragenen Text wieder als Vorschlag hinstellen.
+        clearTimeout(state.tippen);
         state.eingabe = '';
         document.getElementById('ernEingabe').value = '';
         zeichneTag();
@@ -643,12 +685,24 @@ function zeichneTag() {
 
 async function ladeTag(datum) {
     state.datum = datum || state.datum || heute();
+    let tag;
     try {
-        state.tag = await API.tag(state.datum);
+        tag = await API.tag(state.datum);
     } catch (err) {
-        melde(err.message || 'Der Tag konnte nicht geladen werden.', 'error');
+        zeigeTagFehler(fehlerText(err));
         return;
     }
+    // Eine Antwort ohne ``counts`` und ``meals`` kommt aus einer aelteren
+    // Fassung des Backends. Sie hier durchzulassen hiesse, die Seite mitten
+    // im Zeichnen an einem fehlenden Feld abbrechen zu lassen -- und was man
+    // dann saehe, waere eine halbe Seite ohne Grund.
+    if (!tag || !tag.counts || !tag.meals) {
+        zeigeTagFehler(VERALTET);
+        return;
+    }
+    state.tag = tag;
+    document.getElementById('ernTagFehler').hidden = true;
+    document.getElementById('ernTagInhalt').hidden = false;
     zeichneTag();
 }
 
@@ -686,9 +740,10 @@ async function ladeVerlauf() {
         document.getElementById('ernVerlaufKpi').innerHTML = '';
         document.getElementById('ernChart1Box').hidden = true;
         document.getElementById('ernChart1Leer').hidden = false;
+        document.getElementById('ernChart2Karte').hidden = true;
         document.getElementById('ernChart1Leer').innerHTML =
             `<div class="empty is-error"><span class="empty-mark">⚠️</span>
-             <p class="empty-text">${esc(err.message || 'Der Verlauf konnte nicht geladen werden.')}</p></div>`;
+             <p class="empty-text">${esc(fehlerText(err))}</p></div>`;
         return;
     }
     zeichneVerlauf();
@@ -749,6 +804,25 @@ function zeichneVerlauf() {
             : 'kein Tag, an dem zu allem Nährwerte standen'));
     document.getElementById('ernVerlaufKpi').innerHTML = kpi.join('');
 
+    // Ein leeres Diagramm sagt nicht, warum es leer ist. Ein Satz schon --
+    // und er nennt den Grund, der hier fast immer zutrifft.
+    if (!z.days_logged) {
+        document.getElementById('ernChart2Karte').hidden = true;
+        document.getElementById('ernChart1Box').hidden = true;
+        document.getElementById('ernChart1Titel').textContent = 'Verlauf';
+        document.getElementById('ernChart1Sub').textContent = '';
+        document.getElementById('ernChart1Note').textContent = '';
+        const leer = document.getElementById('ernChart1Leer');
+        leer.hidden = false;
+        leer.innerHTML = leerKarte('📈',
+            `Zwischen ${datumKurz(v.from)} und ${datumKurz(v.to)} steht kein einziger
+             Eintrag. Ein anderer Zeitraum oben zeigt mehr — oder du trägst unter
+             <strong>${istLocker() ? 'Tagebuch' : 'Tag'}</strong> etwas ein.`);
+        document.getElementById('ernZieleKarte').hidden = istLocker();
+        if (!istLocker()) zeichneZiele();
+        return;
+    }
+
     document.getElementById('ernChart1Leer').hidden = true;
     document.getElementById('ernChart1Box').hidden = false;
     if (istLocker()) zeichneStreifen();
@@ -765,10 +839,27 @@ function achsenTexte(tage) {
     };
 }
 
+/* Ein Tag im Diagramm ist auch ein Weg zu diesem Tag: wer sieht, dass am
+   Dienstag dreimal „uebermaessig" steht, will nachsehen, was es war -- und
+   nicht erst mit dem Pfeil vier Tage zurueckklicken. */
+function tagOeffnen(index) {
+    const tag = state.verlauf && state.verlauf.days[index];
+    if (!tag) return;
+    activateTab('tag');
+    ladeTag(tag.day);
+}
+
 const BASIS_OPTIONEN = (texte, extra) => VexCharts.applyFullDates(Object.assign({
     maintainAspectRatio: false,
     animation: { duration: 200 },
     interaction: { mode: 'index', intersect: false },
+    onClick: (evt, treffer, chart) => {
+        // Auch neben einer Saeule: getroffen wird der Tag unter dem Finger,
+        // nicht nur der Balken selbst -- sonst muss man zielen.
+        const punkte = chart.getElementsAtEventForMode(
+            evt, 'index', { intersect: false }, true);
+        if (punkte && punkte.length) tagOeffnen(punkte[0].index);
+    },
 }, extra || {}), texte.voll);
 
 const TOOLTIP = (extra) => Object.assign({
@@ -793,7 +884,8 @@ function zeichneStreifen() {
     document.getElementById('ernChart1Sub').textContent = 'nach Stufe';
     document.getElementById('ernChart1Note').textContent =
         'Ein leerer Tag heißt: nichts notiert. Er heißt nicht, dass nichts gegessen wurde — '
-        + 'das ist der Unterschied, den ein Tagebuch machen kann und eine Waage nicht.';
+        + 'das ist der Unterschied, den ein Tagebuch machen kann und eine Waage nicht. '
+        + 'Einen Tag antippen öffnet ihn.';
     document.getElementById('ernChart2Karte').hidden = true;
 
     const reihe = (name, feld, farbe) => ({
@@ -858,7 +950,7 @@ function spannenChart(canvasId, makro, farbe, texte, titelEl, subEl, noteEl) {
     document.getElementById(noteEl).textContent =
         'Jeder Balken reicht von der unteren zur oberen Schätzung des Tages — seine Höhe '
         + 'ist die Unsicherheit. Tage ohne Eintrag bleiben leer: nichts notiert ist nicht '
-        + 'nichts gegessen.';
+        + 'nichts gegessen. Einen Tag antippen öffnet ihn.';
 
     return new Chart(document.getElementById(canvasId), {
         data: {
@@ -1682,11 +1774,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('ernTagZurueck').addEventListener('click', () => tagVerschieben(-1));
     document.getElementById('ernTagVor').addEventListener('click', () => tagVerschieben(1));
 
-    let tippen = null;
     document.getElementById('ernEingabe').addEventListener('input', (e) => {
-        clearTimeout(tippen);
+        clearTimeout(state.tippen);
         const wert = e.target.value;
-        tippen = setTimeout(() => { state.eingabe = wert; zeichneVorschlaege(); }, 180);
+        state.tippen = setTimeout(
+            () => { state.eingabe = wert; zeichneVorschlaege(); }, 180);
     });
     // Enter traegt den ersten Vorschlag normal ein -- der haeufigste Fall,
     // und er soll ohne Maus gehen.

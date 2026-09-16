@@ -1,4 +1,4 @@
-/* schach.js — v1.93.1
+/* schach.js — v1.94.1
  *
  * Wertungsverlauf, Bilanz und Partien von Lichess und Chess.com.
  *
@@ -293,9 +293,12 @@ function zeigeStatsFehler(text) {
         <button type="button" class="v-btn v-btn--primary" id="schNochmal">Erneut versuchen</button>
     </div></div>`;
     const knopf = document.getElementById('schNochmal');
-    if (knopf) knopf.addEventListener('click', () => {
+    if (knopf) knopf.addEventListener('click', async () => {
         knopf.classList.add('is-loading');
-        ladeStats();
+        // Ohne Konten ist die Auswertung gar nicht angelaufen -- dann muss
+        // der Knopf von vorn anfangen und nicht nur nachladen.
+        if (!state.konten.length) await ladeSummary();
+        else await ladeStats();
     });
 }
 
@@ -1545,7 +1548,13 @@ async function ladeSummary() {
         state.arten = res.time_controls || [];
         if (res.settings) state.einstellungen = res.settings;
     } catch (e) {
+        // Ein fehlgeschlagener Abruf ist NICHT dasselbe wie "kein Konto
+        // verbunden". Vorher sah beides gleich aus: eine Stoerung erschien
+        // als Einladung, ein Konto zu verbinden, das laengst verbunden ist.
         state.konten = []; state.arten = [];
+        zeigeStatsFehler(statsFehlerText(e));
+        zeichneKonten();
+        return;
     }
     zeichneUeberblick();
     zeichneKonten();
