@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0a0c10">
-<meta name="description" content="Schach: Wertungszahl, Verlauf und Partien von Lichess und Chess.com an einer Stelle.">
+<meta name="description" content="Schach: Wertungsverlauf, Bilanz und Partien von Lichess und Chess.com an einer Stelle.">
 <title>Schach — Vexbob</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -33,7 +33,7 @@
     <header class="page-head">
         <h1>♟️ Schach</h1>
         <p class="page-sub">
-            Wertungszahl, Verlauf und Partien von <strong>Lichess</strong> und
+            Wertungsverlauf, Bilanz und Partien von <strong>Lichess</strong> und
             <strong>Chess.com</strong> an einer Stelle — abgeholt statt abgetippt.
         </p>
     </header>
@@ -45,12 +45,12 @@
     </div>
 
     <!-- ====================== Überblick ======================
-         Aufbau: erst der Stand samt Verlauf (die Frage, wegen der man die
-         Seite aufmacht), dann zwei klar getrennte Auswertungsebenen —
-         „Insgesamt" aus den Kopfzahlen des Servers und „der Ausschnitt" aus
-         den zuletzt geladenen Partien. Die Trennung steht als Überschrift da,
-         weil sonst auf einem Bildschirm zwei verschiedene Grundgesamtheiten
-         nebeneinander stünden, ohne dass man es sieht. -->
+         EIN Zeitraum gilt für die ganze Seite, und jede Zahl darauf rechnet
+         über ihn. Vorher standen hier zwei Grundgesamtheiten nebeneinander —
+         Kopfzahlen über den ganzen Bestand und eine Auswertung über die
+         zuletzt geladenen 200 Partien — und man sah ihnen nicht an, welche
+         gerade galt. Und statt eines Diagramms mit sechs Umschaltern liegen
+         die Disziplinen jetzt nebeneinander: man wechselt nicht, man sieht. -->
     <div id="tab-ueberblick">
 
         <!-- Ohne verbundenes Konto steht hier nur dieser eine Satz: eine Seite
@@ -59,58 +59,70 @@
 
         <div id="schUeberblick" hidden>
 
-            <!-- Kopfkarte: die Wertungszahl steht neben ihrer eigenen Kurve.
-                 Vorher waren das drei Blöcke (große Zahl, Vergleichsraster,
-                 Diagramm), die alle dasselbe gesagt haben. -->
-            <div class="stat-card sch-wertung">
-                <div class="stat-card-head">
-                    <h3>🏅 Wertung</h3>
-                    <div class="sch-card-tools">
-                        <span class="stat-range-lbl" id="schStand"></span>
-                        <button type="button" class="v-btn v-btn--sm" id="schRefresh">Aktualisieren</button>
-                        <div class="stat-filter-slot" id="schVerlaufRange"></div>
-                    </div>
+            <div class="stat-filterbar sch-kopfleiste">
+                <div class="sch-kopf-text">
+                    <strong id="schZeitraum"></strong>
+                    <span id="schStand"></span>
                 </div>
+                <button type="button" class="v-btn v-btn--sm" id="schRefresh">Aktualisieren</button>
+                <div class="stat-filter-slot" id="schRange"></div>
+            </div>
 
-                <!-- Der Umschalter ist zugleich die Übersicht: jede Disziplin
-                     trägt ihre Zahl, sonst müsste man fünfmal klicken, um zu
-                     sehen, wo man steht. -->
-                <div class="stat-preset-chips sch-disziplinen" id="schDisziplinen"></div>
+            <div class="stat-kpi-grid" id="schKpi"></div>
 
-                <div class="sch-wertung-koerper">
-                    <div class="sch-staende" id="schStaende"></div>
-                    <div class="sch-kurve">
-                        <div id="schVerlaufLeer" hidden></div>
-                        <div class="chart-wrap" id="schVerlaufBox"><canvas id="schVerlaufChart"></canvas></div>
-                    </div>
+            <!-- Wertungsverlauf: alle Disziplinen auf einen Blick.
+                 Je Disziplin eine kleine Kurve mit beiden Plattformen darin —
+                 der Vergleich, den man sehen will, liegt nebeneinander statt
+                 hinter einem Umschalter. -->
+            <div class="stat-card">
+                <div class="stat-card-head">
+                    <h3>📈 Wertungsverlauf</h3>
+                    <div class="sch-legende" id="schLegende"></div>
+                </div>
+                <div class="sch-verlauf-gitter" id="schVerlauf">
+                    <span class="skel skel-block"></span>
                 </div>
                 <p class="sch-note" id="schVerlaufNote"></p>
             </div>
 
-            <div class="section-header">
-                <span class="eyebrow">Insgesamt</span>
-                <h2>Bilanz</h2>
-                <div class="sub" id="schBilanzSub">alle Partien, die im Bestand liegen</div>
-            </div>
-            <div class="stat-card">
-                <div id="schBilanz"><span class="skel skel-block"></span></div>
-            </div>
-
-            <div class="section-header">
-                <span class="eyebrow" id="schAusschnittMarke">Ausschnitt</span>
-                <h2 id="schAusschnittTitel">Die letzten Partien</h2>
-                <div class="sub">Diese vier Karten rechnen über die zuletzt geladenen Partien —
-                    weiter zurück gibt der Bestand ohne einen eigenen Zeitraum nichts her.
-                    Ein Klick auf eine Zeile zeigt sie in den Partien.</div>
-            </div>
-
-            <div class="split-2">
+            <div class="split-3-2">
+                <div class="stat-card">
+                    <div class="stat-card-head">
+                        <h3>⚖️ Bilanz</h3>
+                        <span class="stat-range-lbl" id="schBilanzSub"></span>
+                    </div>
+                    <div id="schBilanz"><span class="skel skel-block"></span></div>
+                </div>
                 <div class="stat-card">
                     <div class="stat-card-head"><h3>🔥 Form</h3></div>
                     <div id="schForm"><span class="skel skel-block"></span></div>
                 </div>
+            </div>
+
+            <!-- Wie viel gespielt wurde und wie es ausging. Die Frage, die
+                 eine Siegquote allein nie beantwortet: wann lief es. -->
+            <div class="stat-card">
+                <div class="stat-card-head">
+                    <h3>📊 Aktivität</h3>
+                    <span class="stat-range-lbl" id="schAktivitaetSub"></span>
+                </div>
+                <div id="schAktivitaetLeer" hidden></div>
+                <div class="chart-wrap" id="schAktivitaetBox">
+                    <canvas id="schAktivitaetChart"></canvas>
+                </div>
+            </div>
+
+            <div class="split-2">
                 <div class="stat-card">
-                    <div class="stat-card-head"><h3>⏱️ Zeitkontrollen</h3></div>
+                    <div class="stat-card-head"><h3>🎯 Gegnerstärke</h3></div>
+                    <div id="schStaerkeLeer" hidden></div>
+                    <div class="chart-wrap small" id="schStaerkeBox">
+                        <canvas id="schStaerkeChart"></canvas>
+                    </div>
+                    <p class="sch-note" id="schStaerkeNote"></p>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-head"><h3>⏱️ Zeitkontrolle und Farbe</h3></div>
                     <div id="schArten"><span class="skel skel-block"></span></div>
                 </div>
             </div>
@@ -235,8 +247,8 @@
             </div>
             <p class="sch-hinweis sch-hinweis--klein">Häufiger als alle fünf Minuten geht bewusst
                 nicht: eine Wertungszahl bewegt sich nur nach einer Partie, und beide Plattformen
-                bremsen Abfragen im Minutentakt. Der Verlauf selbst entsteht dabei: jeder Abruf
-                hält eine Tageszeile fest, die es bei keiner der beiden Plattformen gibt.</p>
+                bremsen Abfragen im Minutentakt. Der Verlauf selbst hängt nicht daran — er kommt
+                aus den Partien und reicht deshalb so weit zurück wie deine Historie.</p>
 
             <div class="sch-konto-tasten">
                 <button type="button" class="v-btn v-btn--primary" id="schAutoSpeichern">Speichern</button>

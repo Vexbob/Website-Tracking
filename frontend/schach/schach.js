@@ -1,23 +1,21 @@
-/* schach.js — v1.92.1
+/* schach.js — v1.93.0
  *
- * Wertungszahlen, Verlauf und Partien von Lichess und Chess.com.
+ * Wertungsverlauf, Bilanz und Partien von Lichess und Chess.com.
  *
- * Der Aufbau der Seite folgt den drei Fragen, die man an dieses Modul hat:
+ * Der Ueberblick beantwortet vier Fragen, und zwar alle vier ueber DENSELBEN
+ * Zeitraum -- der Knopf oben gilt fuer die ganze Seite:
  *
- *   1. **Wo stehe ich, und wohin geht es?** Das ist die Kopfkarte: je
- *      Plattform die aktuelle Zahl, daneben ihre Kurve, darueber die
- *      Disziplinen als Umschalter, der seine Zahlen mittraegt. Vorher waren
- *      das drei Bloecke -- eine grosse Zahl, ein Raster aller Disziplinen,
- *      ein Diagramm -- die im Kern dasselbe gesagt haben.
- *   2. **Wie steht es insgesamt?** Die Bilanz aus den Kopfzahlen des Servers,
- *      ueber den ganzen Bestand.
- *   3. **Wie lief es zuletzt?** Form, Eroeffnungen, Zeitkontrollen, Gegner --
- *      alle vier aus den zuletzt geladenen Partien. Dass das eine andere
- *      Grundgesamtheit ist als die Bilanz, steht als Ueberschrift ueber dem
- *      Abschnitt: zwei Gesamtheiten auf einem Bildschirm muessen als solche
- *      zu erkennen sein.
+ *   1. **Wo stehe ich, und wohin geht es?** Der Wertungsverlauf, je Disziplin
+ *      eine eigene kleine Kurve, beide Plattformen darin. Vorher war das ein
+ *      Diagramm mit einem Umschalter aus sechs Disziplinen: man musste
+ *      fuenfmal klicken, um zu sehen, was jetzt nebeneinander steht.
+ *   2. **Wie steht es?** Bilanz und Form.
+ *   3. **Wann lief es?** Die Aktivitaet je Tag, Woche oder Monat, nach
+ *      Ergebnis gestapelt -- eine Siegquote allein sagt nie, wann sie entstand.
+ *   4. **Gegen wen?** Die Gegnerstaerke: 60 % gegen Schwaechere und 60 %
+ *      gegen Staerkere sind nicht dasselbe. Dazu die Ranglisten.
  *
- * Vier Eigenheiten, die dieses Modul von den anderen unterscheiden:
+ * Fuenf Eigenheiten, die dieses Modul von den anderen unterscheiden:
  *
  *   - **Die Daten liegen woanders.** Beide Plattformen geben sie oeffentlich
  *     heraus; hinterlegt wird nur ein Benutzername. Deshalb gibt es hier kein
@@ -26,17 +24,18 @@
  *     und sagt, ob noch mehr kommt; diese Seite ruft in einer Schleife, zeigt
  *     den Stand mit und laesst sich jederzeit anhalten.
  *   - **Den Verlauf gibt es nur hier.** Beide Plattformen kennen nur den
- *     aktuellen Stand. Vexbob haelt je Abruf eine Tageszeile fest -- das
- *     Diagramm ist damit der einzige Ort, an dem die Entwicklung steht, und
- *     es sagt selbst, wie weit es zurueckreicht.
+ *     aktuellen Stand. Der Verlauf entsteht aus den Partien selbst: jede
+ *     gewertete Partie traegt die eigene Wertung, und daraus wird eine Kurve
+ *     ueber die ganze Spielzeit. Die Tageszeilen je Abruf fuellen, was keine
+ *     Partie hergibt -- Tage ohne Spiel und die Raetsel-Wertung.
+ *   - **Gerechnet wird im Server.** Die Seite bekommt eine fertige Auswertung
+ *     ueber den ganzen Bestand (``/api/chess/stats``) statt selbst ueber die
+ *     zuletzt geladenen Partien zu rechnen. Vorher standen auf einem
+ *     Bildschirm zwei Grundgesamtheiten nebeneinander.
  *   - **Nicht jede Zahl bedeutet dasselbe.** Chess.com gibt zur
  *     Raetsel-Wertung nur den Bestwert heraus und zu keiner Partie eine
  *     Wertungsdifferenz. Beides steht dabei, statt dass eine Luecke wie eine
  *     Null aussieht.
- *
- * Die Auswertung rechnet ueber die juengsten ANALYSE_STUECK Partien: der
- * Endpunkt kennt keinen Zeitraum, und mehrere Seiten nachzuladen waere bei
- * zehn Jahren Historie ein Dutzend Abfragen fuer eine Randzahl.
  */
 
 const API = {
@@ -50,7 +49,7 @@ const API = {
     aktualisieren: () => apiCall('/api/chess/refresh', { method: 'POST' }),
     holen:     (id)   => apiCall('/api/chess/import?account_id=' + id, { method: 'POST' }),
     partien:   (qs)   => apiCall('/api/chess/games' + qs),
-    verlauf:   (qs)   => apiCall('/api/chess/ratings' + qs),
+    stats:     (qs)   => apiCall('/api/chess/stats' + qs),
     summary:   ()     => apiCall('/api/chess/summary'),
     setzen:    (d)    => apiCall('/api/chess/settings', { method: 'PUT', body: d }),
 };
@@ -63,19 +62,16 @@ const LABEL = { lichess: 'Lichess', chesscom: 'Chess.com' };
 
 const TABS = ['ueberblick', 'partien', 'konten'];
 const SEITE = 50;
-// Der Ausschnitt fuer die Auswertung. 200 ist die Obergrenze des Endpunkts
-// und reicht fuer Form, Eroeffnungen und Zeitkontrollen aus.
-const ANALYSE_STUECK = 200;
 
 const state = {
-    konten: [], bilanz: [], einstellungen: null,
-    analyse: null,                 // { games, total } -- der Ausschnitt
+    konten: [], arten: [], einstellungen: null,
+    stats: null,                   // die Auswertung des gewaehlten Zeitraums
     gezeigt: [],                   // die Partien, die gerade in der Liste stehen
     offset: 0,
     laeuft: false, stopp: false,
-    perf: null,                    // Disziplin des Verlaufs
     range: null, rangeMount: null, filterFeldZu: null,
-    chart: null,
+    statsLauf: null, statsQs: null,
+    charts: { verlauf: [], aktivitaet: null, staerke: null },
     filter: { platform: '', result: '', perf: '', rated: '', q: '',
               sort: 'datum', direction: 'desc' },
     takt: null,
@@ -92,6 +88,7 @@ const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValu
 // Modulton zurueck (DESIGN.md 3).
 const figurFarbe = () => cssVar('--figure') || cssVar('--m-schach');
 const plattformFarbe = (p) => p === 'chesscom' ? cssVar('--chart-6') : figurFarbe();
+const plattformTon = (p) => p === 'chesscom' ? 'var(--sch-chesscom)' : 'var(--sch-lichess)';
 
 const melde = (text, art) => { if (window.Toast) Toast[art || 'info'](text); };
 
@@ -100,6 +97,9 @@ const zahl = (n) => Number(n || 0).toLocaleString('de-DE');
 // niemand, der Schach spielt.
 const wertung = (n) => String(n == null ? '–' : n);
 const anteil = (teil, ganz) => ganz ? Math.round((teil / ganz) * 100) : 0;
+// So zaehlt es die Schachwelt: ein Remis ist ein halber Punkt.
+const punktequote = (t) => t.partien
+    ? Math.round(((t.siege + t.remis / 2) / t.partien) * 100) : 0;
 
 function datum(iso, mitZeit) {
     if (!iso) return '–';
@@ -114,10 +114,14 @@ const ERGEBNIS_KURZ  = { sieg: 'S', remis: 'R', niederlage: 'N' };
 const ergebnisTon = (r) => r === 'sieg' ? 'var(--ok)'
     : (r === 'niederlage' ? 'var(--danger)' : 'var(--text-3)');
 
-/* Die Beschriftung einer Disziplin steht am Server (PERF_LABEL); hier wird
-   sie nur aus den geladenen Wertungen gesucht, damit keine zweite Liste
-   entsteht, die auseinanderlaufen kann. */
+/* Die Beschriftung einer Disziplin steht am Server. Hier wird sie nur
+   nachgeschlagen, damit keine zweite Liste entsteht, die auseinanderlaufen
+   kann. */
 function perfLabel(perf) {
+    const karte = (state.stats && state.stats.perf_labels) || {};
+    if (karte[perf]) return karte[perf];
+    const art = state.arten.find(a => a.perf === perf);
+    if (art) return art.label;
     for (const k of state.konten) {
         const r = (k.ratings || []).find(x => x.perf === perf);
         if (r && r.label) return r.label;
@@ -125,59 +129,13 @@ function perfLabel(perf) {
     return perf || '–';
 }
 
-/* Die Disziplin, um die es geht: die mit den meisten gespielten Partien.
-   Raetsel und Bestwerte zaehlen nicht -- sie sind keine Spielstaerke im
-   selben Sinn und haben keinen Tagesverlauf. */
-function fuehrendeDisziplin() {
-    const zaehler = {};
-    state.konten.forEach(k => (k.ratings || []).forEach(r => {
-        if (r.is_best || r.perf === 'puzzle') return;
-        zaehler[r.perf] = (zaehler[r.perf] || 0) + (r.games || 1);
-    }));
-    const beste = Object.keys(zaehler).sort((a, b) => zaehler[b] - zaehler[a])[0];
-    return beste || null;
-}
-
-/* Die Reihenfolge der Disziplinen kommt vom Server (dort steht PERFS) und
-   soll erhalten bleiben, auch wenn jede Plattform nur einen Teil kennt. Ein
-   zweiter Ordnungsbegriff im Frontend waere eine Liste, die mit der des
-   Servers auseinanderlaufen kann; stattdessen werden die vorhandenen Listen
-   so verschmolzen, dass keine ihre eigene Ordnung verliert. */
-function verschmelze(listen) {
-    const rest = listen.map(l => l.slice());
-    const raus = [];
-    const weg = (wert) => rest.forEach(l => {
-        const i = l.indexOf(wert);
-        if (i >= 0) l.splice(i, 1);
-    });
-    while (rest.some(l => l.length)) {
-        // Genommen wird nur ein Kopf, den keine andere Liste erst spaeter
-        // erwartet -- sonst stuende Rapid vor Blitz, weil eine Plattform
-        // kein Blitz kennt.
-        let kopf = null;
-        for (const l of rest) {
-            if (!l.length) continue;
-            if (rest.some(a => a.indexOf(l[0]) > 0)) continue;
-            kopf = l[0];
-            break;
-        }
-        // Widersprechen sich die Listen, gilt die erste -- besser eine
-        // Reihenfolge als eine Schleife.
-        if (kopf == null) kopf = rest.find(l => l.length)[0];
-        raus.push(kopf);
-        weg(kopf);
-    }
-    return raus;
-}
-
-/* Alle Disziplinen, die irgendein Konto kennt -- in der Reihenfolge des
-   Servers. Bestwerte bleiben dabei: die Raetsel-Wertung von Chess.com ist
-   eine Zahl, die man sehen will, sie hat nur keinen Tagesverlauf. */
-function disziplinen() {
-    const label = {};
-    state.konten.forEach(k => (k.ratings || []).forEach(r => { label[r.perf] = r.label; }));
-    return verschmelze(state.konten.map(k => (k.ratings || []).map(r => r.perf)))
-        .map(perf => ({ perf, label: label[perf] || perf }));
+function vorTagen(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const tage = Math.floor((Date.now() - d.getTime()) / 86400000);
+    if (tage <= 0) return 'heute';
+    if (tage === 1) return 'gestern';
+    return 'vor ' + tage + ' Tagen';
 }
 
 /* -------------------------------------------------------- Leerer Zustand */
@@ -190,328 +148,87 @@ function leerKarte(mark, text, knopf) {
     </div>`;
 }
 
-/* ------------------------------------------------------------- Überblick */
-
-function zeichneUeberblick() {
-    const leer = document.getElementById('schLeer');
-    const box = document.getElementById('schUeberblick');
-
-    if (!state.konten.length) {
-        box.hidden = true;
-        leer.hidden = false;
-        leer.innerHTML = `<div class="v-card">${leerKarte('♟️',
-            'Noch ist nichts verbunden. Vexbob holt Wertungszahl und Partien bei Lichess und '
-            + 'Chess.com ab — dafür reicht der Benutzername, ein Passwort braucht es nicht.',
-            '<button type="button" class="v-btn v-btn--primary" id="schZuKonten">Konto verbinden</button>')}</div>`;
-        const zu = document.getElementById('schZuKonten');
-        if (zu) zu.addEventListener('click', () => activateTab('konten'));
-        return;
+/* Ein leerer Zeitraum ist etwas anderes als ein leerer Bestand: der eine
+   loest sich mit einem anderen Zeitraum, der andere mit einem Import. Die
+   beiden Saetze auseinanderzuhalten ist der Unterschied zwischen "hier ist
+   nichts" und "hier ist nichts, und deshalb". */
+function leerImZeitraum(mark, was) {
+    const s = state.stats;
+    if (s && s.erste_partie) {
+        return leerKarte(mark, `Zwischen ${datum(s.von)} und ${datum(s.bis)} liegt keine
+            Partie — ${was} braucht welche. Die erste im Bestand ist vom
+            ${datum(s.erste_partie)}; ein anderer Zeitraum oben zeigt mehr.`);
     }
-    leer.hidden = true;
-    box.hidden = false;
-
-    zeichneDisziplinen();
-    zeichneStaende();
-    zeichneBilanz();
-    zeichneAnalyse();
-    mountRange();
+    return leerKarte(mark,
+        'Noch keine Partien im Bestand. Sie werden nicht von Hand erfasst, sondern unter '
+        + '<strong>Konten</strong> von der Plattform geholt.',
+        '<button type="button" class="v-btn v-btn--sm" data-zu-konten>Zu den Konten</button>');
 }
 
-/* Der Umschalter traegt die Zahlen mit. Er ist damit zugleich die Uebersicht
-   ueber alle Disziplinen -- ohne ihn muesste man fuenfmal klicken, um zu
-   sehen, wo man steht, und genau dafuer stand hier vorher ein eigenes
-   Raster, das dasselbe noch einmal sagte. */
-function zeichneDisziplinen() {
-    const ziel = document.getElementById('schDisziplinen');
-    const liste = disziplinen();
-    if (liste.length < 2) { ziel.innerHTML = ''; return; }
-
-    ziel.innerHTML = liste.map(d => {
-        // Gezeigt wird der aktuelle Stand, und davon der der Plattform mit
-        // mehr Partien. Ein Bestwert kommt nur dran, wenn es sonst keinen
-        // gibt -- er steht sonst als "Zahl von heute" da, ohne eine zu sein.
-        let beste = null;
-        state.konten.forEach(k => (k.ratings || []).forEach(r => {
-            if (r.perf !== d.perf) return;
-            if (!beste) { beste = r; return; }
-            if (beste.is_best && !r.is_best) { beste = r; return; }
-            if (!r.is_best && (r.games || 0) > (beste.games || 0)) beste = r;
-        }));
-        return `<button type="button" class="v-chip${state.perf === d.perf ? ' is-active' : ''}"
-            data-perf="${esc(d.perf)}">${esc(d.label)}${beste
-                ? ` <b>${wertung(beste.rating)}</b>${beste.is_best ? ' <i>Bestwert</i>' : ''}` : ''}</button>`;
-    }).join('');
-
-    ziel.querySelectorAll('.v-chip').forEach(b => b.addEventListener('click', () => {
-        state.perf = b.dataset.perf;
-        zeichneDisziplinen();
-        zeichneStaende();
-        ladeVerlauf();
-    }));
-}
-
-/* Je Plattform ein Block: Zahl, Entwicklung, Anzahl Partien. Die Zahl traegt
-   die Farbe ihrer Linie im Diagramm daneben -- deshalb braucht die Karte
-   keine eigene Legende. */
-function zeichneStaende() {
-    const ziel = document.getElementById('schStaende');
-    const stand = document.getElementById('schStand');
-    const perf = state.perf || fuehrendeDisziplin();
-
-    // Die Plattform mit den meisten Partien in dieser Disziplin steht oben --
-    // ihre Zahl ist auch die, die der Umschalter oben mittraegt.
-    const bloecke = [];
-    PLATTFORMEN.forEach(pl => {
-        const konto = state.konten.find(k => k.platform === pl.key);
-        if (!konto) return;
-        const r = (konto.ratings || []).find(x => x.perf === perf);
-        bloecke.push({ pl, konto, r });
+/* Ein Klick auf "Zu den Konten" gibt es in mehreren leeren Karten -- gebunden
+   wird er an einer Stelle, nach jedem Zeichnen. */
+function bindeKontenKnoepfe(wurzel) {
+    (wurzel || document).querySelectorAll('[data-zu-konten]').forEach(b => {
+        if (b.dataset.gebunden) return;
+        b.dataset.gebunden = '1';
+        b.addEventListener('click', () => activateTab('konten'));
     });
-    bloecke.sort((a, b) => ((b.r && b.r.games) || 0) - ((a.r && a.r.games) || 0));
+}
 
-    const zuletzt = state.konten.map(k => k.ratings_at).filter(Boolean).sort().slice(-1)[0];
-    stand.textContent = zuletzt ? 'Stand: ' + datum(zuletzt, true) : '';
+/* --------------------------------------------------------- Diagramm-Basis */
 
-    if (!bloecke.some(b => b.r)) {
-        ziel.innerHTML = leerKarte('♟️', perf
-            ? 'In dieser Disziplin gibt es noch keine gewertete Partie — ohne die gibt die '
-              + 'Plattform auch keine Zahl heraus.'
-            : 'Das Konto ist verbunden, hat dort aber noch keine gewertete Partie.');
-        return;
-    }
+/* Tooltip und Achsen sehen in jedem Diagramm dieser Seite gleich aus
+   (DESIGN.md 7). Zwei Fassungen davon waeren zwei Diagrammsprachen in einer
+   Karte. */
+function tooltipStil(extra) {
+    return Object.assign({
+        backgroundColor: cssVar('--surface-3'),
+        borderColor: cssVar('--line-strong'), borderWidth: 1,
+        titleColor: cssVar('--text-1'), bodyColor: cssVar('--text-2'),
+        cornerRadius: 12, padding: 10, displayColors: true,
+    }, extra || {});
+}
 
-    ziel.innerHTML = bloecke.map(b => {
-        const farbe = b.pl.key === 'chesscom' ? 'var(--sch-chesscom)' : 'var(--sch-lichess)';
-        if (!b.r) {
-            return `<div class="sch-stand" style="--ton:var(--text-4)">
-                <div class="sch-stand-kopf">
-                    <span class="sch-dot" data-platform="${b.pl.key}" aria-hidden="true"></span>
-                    ${b.pl.label}</div>
-                <div class="sch-stand-zahl">–</div>
-                <div class="sch-stand-sub">dort nicht gespielt</div>
-            </div>`;
+function achseX(extra) {
+    return Object.assign({
+        ticks: { color: cssVar('--chart-axis'), font: { size: 11 }, maxRotation: 0,
+                 autoSkipPadding: 16 },
+        grid: { display: false }, border: { display: false },
+    }, extra || {});
+}
+
+function achseY(extra) {
+    return Object.assign({
+        ticks: { color: cssVar('--chart-axis'), font: { size: 11 }, maxTicksLimit: 6 },
+        grid: { color: cssVar('--chart-grid') }, border: { display: false },
+    }, extra || {});
+}
+
+/* Kurze Beschriftung fuer die Achse, ausgeschriebene fuer den Tooltip
+   (DESIGN.md 7: im Tooltip steht immer die Jahreszahl). Bei Wochen und
+   Monaten sagt die lange Fassung auch, dass eine Periode gemeint ist und
+   nicht ein Tag. */
+function achsenTexte(achse, koernung) {
+    const kurz = [], voll = [];
+    (achse || []).forEach(iso => {
+        const tag = iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.';
+        if (koernung === 'monat') {
+            const d = new Date(iso + 'T00:00:00');
+            kurz.push(isNaN(d.getTime()) ? iso
+                : d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' }));
+            voll.push(VexCharts.fullMonth(iso.slice(0, 7)));
+        } else if (koernung === 'woche') {
+            kurz.push(tag);
+            voll.push('Woche ab ' + VexCharts.fullDay(iso));
+        } else {
+            kurz.push(tag);
+            voll.push(VexCharts.fullDay(iso));
         }
-        return `<div class="sch-stand" style="--ton:${farbe}">
-            <div class="sch-stand-kopf">
-                <span class="sch-dot" data-platform="${b.pl.key}" aria-hidden="true"></span>
-                ${b.pl.label}</div>
-            <div class="sch-stand-zahl">${wertung(b.r.rating)}</div>
-            <div class="sch-stand-sub">${trendSatz(b.r)}</div>
-            <div class="sch-stand-meta">${b.r.games ? zahl(b.r.games) + ' Partien' : ''}</div>
-        </div>`;
-    }).join('');
-}
-
-/* Die Entwicklung in kurzen Worten. Sie steht erst da, wenn es einen zweiten
-   Tag zum Vergleichen gibt -- ein Pfeil mit 0 daneben saehe aus wie
-   "unveraendert", waehrend in Wahrheit noch nichts zu vergleichen ist.
-   Bestwerte bekommen gar keinen: sie koennen nur steigen. */
-function trendSatz(r) {
-    if (r.is_best) return 'Bestwert, kein Tagesstand';
-    if (r.trend == null) return 'Entwicklung ab dem zweiten Abruf';
-    const tage = r.trend_days;
-    return trendMarke(r) + ' ' + (tage >= 28 ? 'in 30 Tagen' : 'in ' + tage + (tage === 1 ? ' Tag' : ' Tagen'));
-}
-
-function trendMarke(r) {
-    if (r.trend == null) return '';
-    const richtung = r.trend > 0 ? 'hoch' : (r.trend < 0 ? 'runter' : 'gleich');
-    const pfeil = r.trend > 0 ? '▲' : (r.trend < 0 ? '▼' : '•');
-    return `<span class="sch-trend is-${richtung}">${pfeil} ${r.trend > 0 ? '+' : ''}${r.trend}</span>`;
-}
-
-/* Der hoechstbewertete Gegner, den man geschlagen hat -- im Ausschnitt, wie
-   alles aus den geladenen Partien. Es ist die Zahl, die man erzaehlt. */
-function staerksterSieg() {
-    const spiele = state.analyse ? state.analyse.games : [];
-    let beste = null;
-    spiele.forEach(g => {
-        if (g.result !== 'sieg' || !g.opponent_rating) return;
-        if (!beste || g.opponent_rating > beste.opponent_rating) beste = g;
     });
-    return beste;
+    return { kurz, voll };
 }
 
-function vorTagen(iso) {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return '';
-    const tage = Math.floor((Date.now() - d.getTime()) / 86400000);
-    if (tage <= 0) return 'heute';
-    if (tage === 1) return 'gestern';
-    return 'vor ' + tage + ' Tagen';
-}
-
-/* --------------------------------------------------------------- Verlauf */
-
-function mountRange() {
-    if (state.rangeMount) return;
-    const host = document.getElementById('schVerlaufRange');
-    if (!host) return;
-    if (!state.perf) state.perf = fuehrendeDisziplin();
-    // Der Zeitraum-Knopf meldet beim Einhaengen einmal -- das ist die erste
-    // Ladung des Verlaufs.
-    // Kein eigenes Preset: ohne ausdruecklichen Wunsch gilt die Einstellung
-    // des Kontos (ui_default_range), so wie in jedem anderen Modul.
-    state.rangeMount = VexRange.mount(host, {
-        onChange: (r) => { state.range = r; ladeVerlauf(); },
-    });
-}
-
-async function ladeVerlauf() {
-    const leer = document.getElementById('schVerlaufLeer');
-    const box = document.getElementById('schVerlaufBox');
-    const note = document.getElementById('schVerlaufNote');
-    const range = state.range || VexRange.resolve('30');
-    if (!state.perf) state.perf = fuehrendeDisziplin();
-    if (!state.perf) return;
-
-    const abfrage = new URLSearchParams({ perf: state.perf });
-    if (range.fetchDays) abfrage.set('days', String(range.fetchDays));
-
-    let punkte;
-    try {
-        const res = await API.verlauf('?' + abfrage.toString());
-        // Bestwerte sind keine Tagesform: sie gehoeren nicht in eine Kurve,
-        // die von Tag zu Tag laeuft.
-        punkte = VexRange.clip((res.points || []).filter(p => !p.is_best), 'taken_on', range);
-    } catch (e) {
-        box.hidden = true;
-        leer.hidden = false;
-        leer.innerHTML = `<div class="empty is-error"><span class="empty-mark">⚠️</span>
-            <p class="empty-text">Der Verlauf konnte nicht geladen werden.</p></div>`;
-        note.textContent = '';
-        return;
-    }
-
-    const tage = [...new Set(punkte.map(p => p.taken_on))].sort();
-    if (tage.length < 2) {
-        if (state.chart) { state.chart.destroy(); state.chart = null; }
-        box.hidden = true;
-        leer.hidden = false;
-        // Drei verschiedene Gruende, drei verschiedene Saetze. Der haeufigste
-        // Fehler waere, den Bestwert-Fall wie "noch keine Daten" aussehen zu
-        // lassen: dort wird nie eine Kurve entstehen.
-        // "Nur ein Bestwert" gilt erst, wenn KEINE Plattform zu dieser
-        // Disziplin einen Tagesstand fuehrt. Sonst stuende der Satz auch
-        // dort, wo eine Kurve entstehen wird -- sie ist nur noch leer.
-        const zahlen = state.konten.flatMap(k =>
-            (k.ratings || []).filter(r => r.perf === state.perf));
-        const nurBestwert = !tage.length && zahlen.length > 0 && zahlen.every(r => r.is_best);
-        leer.innerHTML = leerKarte('📈', nurBestwert
-            ? 'Zu dieser Zahl gibt es keinen Verlauf: Chess.com gibt hier nur den Bestwert '
-              + 'heraus, keinen Tagesstand — und ein Bestwert kann sich nur nach oben bewegen.'
-            : tage.length
-            ? `Bisher steht genau ein Tag im Verlauf (${datum(tage[0])}). Eine Linie braucht zwei —
-               der zweite kommt beim nächsten Abruf.`
-            : 'Für diesen Zeitraum steht noch kein Stand fest. Der Verlauf entsteht hier und nicht '
-              + 'bei den Plattformen: er beginnt mit dem ersten Abruf und wächst mit jedem Tag, an '
-              + 'dem du vorbeischaust.');
-        note.textContent = '';
-        return;
-    }
-    leer.hidden = true;
-    box.hidden = false;
-    zeichneVerlauf(punkte, tage);
-}
-
-/* Die Kurve. Eine Wertungszahl aendert sich nur nach einer Partie -- an
-   Tagen ohne Abruf wird deshalb der letzte bekannte Stand fortgeschrieben
-   und nicht interpoliert oder auf null gesetzt (DESIGN.md 7: lueckenlos
-   zeichnen). Vor dem ersten bekannten Tag bleibt die Reihe leer: dort gab es
-   die Zahl nicht, sie war nur noch nicht abgeholt. */
-function zeichneVerlauf(punkte, tage) {
-    const canvas = document.getElementById('schVerlaufChart');
-    if (state.chart) { state.chart.destroy(); state.chart = null; }
-
-    const von = tage[0];
-    const bis = tage[tage.length - 1];
-    const achse = [];
-    // Der Tag wird aus den lokalen Feldern gebaut, nicht mit toISOString:
-    // das rechnet nach UTC um, und oestlich von Greenwich waere damit jeder
-    // Tag des Rasters um einen verschoben.
-    const tagText = (d) => d.getFullYear() + '-'
-        + String(d.getMonth() + 1).padStart(2, '0') + '-'
-        + String(d.getDate()).padStart(2, '0');
-    for (let d = new Date(von + 'T00:00:00'), i = 0; i < 4000; d.setDate(d.getDate() + 1), i++) {
-        const iso = tagText(d);
-        achse.push(iso);
-        if (iso >= bis) break;
-    }
-
-    const plattformen = [...new Set(punkte.map(p => p.platform))]
-        .sort((a, b) => a === 'lichess' ? -1 : (b === 'lichess' ? 1 : 0));
-
-    const reihen = plattformen.map(pf => {
-        const jeTag = {};
-        punkte.filter(p => p.platform === pf).forEach(p => { jeTag[p.taken_on] = p.rating; });
-        let zuletzt = null;
-        const werte = achse.map(t => {
-            if (jeTag[t] != null) zuletzt = jeTag[t];
-            return zuletzt;
-        });
-        return { platform: pf, farbe: plattformFarbe(pf), werte };
-    });
-
-    const voll = achse.map(t => VexCharts.fullDay(t));
-    const kurz = achse.map(t => t.slice(8, 10) + '.' + t.slice(5, 7) + '.');
-    const einzeln = reihen.length === 1;
-
-    const datasets = reihen.map(r => ({
-        label: LABEL[r.platform] || r.platform,
-        data: r.werte,
-        borderColor: r.farbe,
-        // Flaeche unter der Linie nur bei einer einzigen Reihe -- zwei sich
-        // ueberlagernde Fuellungen ergeben eine dritte Farbe, die nichts
-        // bedeutet.
-        fill: einzeln,
-        backgroundColor: einzeln ? (ctx) => flaeche(ctx, r.farbe) : undefined,
-        tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
-        spanGaps: false,
-        order: VexCharts.ORDER.VALUE,
-    }));
-
-    const opts = VexCharts.applyFullDates({
-        maintainAspectRatio: false,
-        animation: { duration: 200 },
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                backgroundColor: cssVar('--surface-3'),
-                borderColor: cssVar('--line-strong'), borderWidth: 1,
-                titleColor: cssVar('--text-1'), bodyColor: cssVar('--text-2'),
-                cornerRadius: 12, padding: 10, displayColors: true,
-                callbacks: {
-                    title: VexCharts.titleFrom(voll),
-                    label: (item) => item.parsed.y == null ? null
-                        : ' ' + item.dataset.label + ': ' + item.parsed.y,
-                },
-            },
-        },
-        scales: {
-            x: { ticks: { color: cssVar('--chart-axis'), font: { size: 11 }, maxRotation: 0,
-                          autoSkipPadding: 16 },
-                 grid: { display: false }, border: { display: false } },
-            y: { ticks: { color: cssVar('--chart-axis'), font: { size: 11 }, maxTicksLimit: 6,
-                          callback: (v) => String(v) },
-                 grid: { color: cssVar('--chart-grid') }, border: { display: false },
-                 beginAtZero: false },
-        },
-    }, voll);
-
-    state.chart = new Chart(canvas, { type: 'line', data: { labels: kurz, datasets }, options: opts });
-
-    // Der hoechste Stand im Fenster ist die Zahl, nach der man sucht, wenn
-    // man auf eine Kurve schaut. Sie steht in den geladenen Punkten -- sie
-    // extra zu holen waere eine Abfrage fuer eine Zeile Text.
-    let hoch = null;
-    punkte.forEach(pt => { if (!hoch || pt.rating > hoch.rating) hoch = pt; });
-    document.getElementById('schVerlaufNote').textContent =
-        `${perfLabel(state.perf)}, ${datum(von)} bis ${datum(bis)}`
-        + (hoch ? ` · höchster Stand ${hoch.rating} am ${datum(hoch.taken_on)}` : '')
-        + '. An Tagen ohne Abruf gilt der letzte bekannte Stand — eine Wertungszahl '
-        + 'bewegt sich nur nach einer Partie.';
-}
+const KOERNUNG_WORT = { tag: 'je Tag', woche: 'je Woche', monat: 'je Monat' };
 
 /* Verlauf von 18 % auf 0 % derselben Farbe (DESIGN.md 7). */
 function flaeche(ctx, farbe) {
@@ -523,74 +240,368 @@ function flaeche(ctx, farbe) {
     return g;
 }
 
-/* ---------------------------------------------------------------- Bilanz */
+/* ------------------------------------------------------------- Überblick */
 
-/* Alles, was der Server ueber den ganzen Bestand weiss: Anzahl, Quote,
-   Verteilung, Zeitraum. Getrennt von der Auswertung darunter, die nur den
-   geladenen Ausschnitt kennt -- zwei Grundgesamtheiten auf einem Bildschirm
-   muessen als solche zu erkennen sein. */
-function zeichneBilanz() {
-    const ziel = document.getElementById('schBilanz');
-    const sub = document.getElementById('schBilanzSub');
+function zeichneUeberblick() {
+    const leer = document.getElementById('schLeer');
+    const box = document.getElementById('schUeberblick');
 
-    if (!state.bilanz.length) {
-        sub.textContent = '';
-        ziel.innerHTML = leerKarte('⚖️',
-            'Noch keine Partien im Bestand. Sie werden nicht von Hand erfasst, sondern unter '
-            + '<strong>Konten</strong> von der Plattform geholt.',
-            '<button type="button" class="v-btn v-btn--sm" id="schBilanzKonten">Zu den Konten</button>');
-        const zu = document.getElementById('schBilanzKonten');
-        if (zu) zu.addEventListener('click', () => activateTab('konten'));
+    if (!state.konten.length) {
+        box.hidden = true;
+        leer.hidden = false;
+        leer.innerHTML = `<div class="v-card">${leerKarte('♟️',
+            'Noch ist nichts verbunden. Vexbob holt Wertungszahlen und Partien bei Lichess und '
+            + 'Chess.com ab — dafür reicht der Benutzername, ein Passwort braucht es nicht.',
+            '<button type="button" class="v-btn v-btn--primary" data-zu-konten>Konto verbinden</button>')}</div>`;
+        bindeKontenKnoepfe(leer);
         return;
     }
+    leer.hidden = true;
+    box.hidden = false;
+    zeichneKopfleiste();
+    mountRange();
+}
 
-    const summe = state.bilanz.reduce((a, b) => ({
+/* Die Kopfleiste sagt, worueber die Seite gerade rechnet. Ohne diesen Satz
+   waeren dieselben Karten mit "30 Tage" und mit "Gesamt" nicht zu
+   unterscheiden. */
+function zeichneKopfleiste() {
+    const s = state.stats;
+    const zeitraum = document.getElementById('schZeitraum');
+    const stand = document.getElementById('schStand');
+    if (s) {
+        zeitraum.textContent = s.ganzer_bestand
+            ? `Alle Partien seit ${datum(s.erste_partie)}`
+            : `${datum(s.von)} bis ${datum(s.bis)}`;
+    }
+    const zuletzt = state.konten.map(k => k.ratings_at).filter(Boolean).sort().slice(-1)[0];
+    stand.textContent = zuletzt ? 'Wertungen abgerufen ' + datum(zuletzt, true) : '';
+}
+
+function zeichneAlles() {
+    zeichneKopfleiste();
+    zeichneKpi();
+    zeichneVerlauf();
+    zeichneBilanz();
+    zeichneForm();
+    zeichneAktivitaet();
+    zeichneStaerke();
+    zeichneArten();
+    zeichneEroeffnungen();
+    zeichneGegner();
+}
+
+/* Die Summe ueber alle Plattformen -- an mehreren Stellen gebraucht, deshalb
+   einmal gerechnet. */
+function gesamtBilanz() {
+    return (state.stats ? state.stats.plattformen : []).reduce((a, b) => ({
         partien: a.partien + (b.partien || 0), siege: a.siege + (b.siege || 0),
         remis: a.remis + (b.remis || 0), niederlagen: a.niederlagen + (b.niederlagen || 0),
     }), { partien: 0, siege: 0, remis: 0, niederlagen: 0 });
+}
 
-    const von = state.bilanz.map(b => b.von).filter(Boolean).sort()[0];
-    const bis = state.bilanz.map(b => b.bis).filter(Boolean).sort().slice(-1)[0];
-    sub.textContent = von
-        ? `${zahl(summe.partien)} Partien von ${datum(von)} bis ${datum(bis)}`
-        : `${zahl(summe.partien)} Partien im Bestand`;
+/* Die fuehrende Reihe: die Disziplin und Plattform mit den meisten Punkten im
+   Zeitraum. Sie traegt die Kopfzahl "Wertung" -- eine Zahl aus einer
+   Disziplin, in der drei Partien liegen, waere die falsche Antwort auf "wie
+   hat sich meine Wertung entwickelt". */
+function fuehrendeReihe() {
+    const reihen = (state.stats && state.stats.verlauf) ? state.stats.verlauf.reihen : [];
+    let beste = null;
+    reihen.forEach(r => {
+        if (!r.punkte) return;
+        if (!beste || r.punkte > beste.punkte) beste = r;
+    });
+    return beste;
+}
 
-    // Zwei Masse, weil sie zwei Fragen beantworten: die Siegquote zaehlt
-    // gewonnene Partien, die Punktequote rechnet ein Remis als halben Punkt
-    // -- so zaehlt es die Schachwelt.
-    const punkte = summe.partien
-        ? Math.round(((summe.siege + summe.remis / 2) / summe.partien) * 100) : 0;
+/* ----------------------------------------------------------- Kopfzahlen */
 
-    ziel.innerHTML = `<div class="sch-bilanz-grid">
-        <div>
-            <div class="sch-quote">
-                <span class="sch-quote-num">${anteil(summe.siege, summe.partien)} %</span>
-                <span class="sch-quote-lbl">gewonnen<br>
-                    <span style="color:var(--text-4)">Punktequote ${punkte} %, Remis zählt halb</span></span>
-            </div>
-            ${balken(summe, 'gross')}
-            <div class="sch-bilanz-zahlen">
-                <span class="is-sieg">${zahl(summe.siege)} Siege</span>
-                <span class="is-remis">${zahl(summe.remis)} Remis</span>
-                <span class="is-verlust">${zahl(summe.niederlagen)} Niederlagen</span>
-            </div>
-        </div>
-        <div>
-            ${state.bilanz.map(b => `
-                <div class="sch-bilanz">
-                    <div class="sch-bilanz-kopf">
-                        <span class="sch-dot" data-platform="${esc(b.platform)}" aria-hidden="true"></span>
-                        <strong>${esc(LABEL[b.platform] || b.platform)}</strong>
-                        <span class="sch-bilanz-zeit">${zahl(b.partien)} Partien</span>
-                    </div>
-                    ${balken(b)}
-                    <div class="sch-bilanz-zahlen">
-                        <span class="is-sieg">${anteil(b.siege, b.partien)} % gewonnen</span>
-                        <span>${datum(b.von)} – ${datum(b.bis)}</span>
-                    </div>
-                </div>`).join('')}
-        </div>
+function kpiKarte(icon, label, wert, sub, ton) {
+    return `<div class="stat-kpi">
+        <div class="stat-kpi-icon" aria-hidden="true">${icon}</div>
+        <div class="stat-kpi-label">${label}</div>
+        <div class="stat-kpi-value"${ton ? ` style="color:${ton}"` : ''}>${wert}</div>
+        <div class="stat-kpi-sub">${sub || ''}</div>
     </div>`;
+}
+
+function zeichneKpi() {
+    const ziel = document.getElementById('schKpi');
+    const s = state.stats;
+    if (!s) { ziel.innerHTML = ''; return; }
+
+    const g = gesamtBilanz();
+    const wochen = Math.max(1, s.tage / 7);
+    const karten = [];
+
+    karten.push(kpiKarte('♟️', 'Partien', zahl(g.partien),
+        g.partien ? `Ø ${(g.partien / wochen).toFixed(1)} pro Woche` : 'in diesem Zeitraum'));
+
+    karten.push(kpiKarte('⚖️', 'Punktequote', g.partien ? punktequote(g) + ' %' : '–',
+        g.partien ? `${anteil(g.siege, g.partien)} % gewonnen · Remis zählt halb`
+                  : 'Remis zählt halb'));
+
+    // Die Wertungsentwicklung im Zeitraum, aus der fuehrenden Reihe.
+    const f = fuehrendeReihe();
+    if (f) {
+        const basis = f.start != null ? f.start : f.erste;
+        const delta = (f.letzte != null && basis != null) ? f.letzte - basis : null;
+        karten.push(kpiKarte('📈', 'Wertung',
+            delta == null ? wertung(f.letzte)
+                : (delta > 0 ? '+' + delta : (delta < 0 ? '−' + Math.abs(delta) : '±0')),
+            `${esc(f.label)} auf ${esc(LABEL[f.platform] || f.platform)}`
+                + (basis != null && f.letzte != null ? ` · ${basis} → ${f.letzte}` : ''),
+            delta == null || delta === 0 ? '' : (delta > 0 ? 'var(--ok)' : 'var(--danger)')));
+    } else {
+        karten.push(kpiKarte('📈', 'Wertung', '–', 'in diesem Zeitraum keine gewertete Partie'));
+    }
+
+    const stark = s.staerkster_sieg;
+    karten.push(kpiKarte('👥', 'Ø Gegner', s.gegner_schnitt ? wertung(s.gegner_schnitt) : '–',
+        stark ? `Stärkster Sieg: ${wertung(stark.opponent_rating)} gegen ${esc(stark.opponent)}`
+              : 'noch kein Sieg mit bekannter Gegnerwertung'));
+
+    ziel.innerHTML = karten.join('');
+}
+
+/* --------------------------------------------------------------- Verlauf */
+
+function mountRange() {
+    if (state.rangeMount) return;
+    const host = document.getElementById('schRange');
+    if (!host) return;
+    // Der Zeitraum-Knopf meldet beim Einhaengen einmal -- das ist die erste
+    // Ladung der Auswertung. Kein eigenes Preset: ohne ausdruecklichen Wunsch
+    // gilt die Einstellung des Kontos (ui_default_range), wie in jedem
+    // anderen Modul.
+    state.rangeMount = VexRange.mount(host, {
+        onChange: (r) => { state.range = r; ladeStats(); },
+    });
+}
+
+function zerstoereVerlaufCharts() {
+    state.charts.verlauf.forEach(c => { try { c.destroy(); } catch (e) { /* weg */ } });
+    state.charts.verlauf = [];
+}
+
+/* Die Bestwerte -- bei Chess.com ist die Raetsel-Wertung nur als Hoechstwert
+   zu haben. Sie gehoert nicht in eine Kurve, aber sie ist eine Zahl, die man
+   sehen will. */
+function bestwertZeilen() {
+    const raus = [];
+    state.konten.forEach(k => (k.ratings || []).forEach(r => {
+        if (r.is_best) raus.push({ platform: k.platform, perf: r.perf,
+                                   label: r.label, rating: r.rating });
+    }));
+    return raus;
+}
+
+function zeichneVerlauf() {
+    const ziel = document.getElementById('schVerlauf');
+    const note = document.getElementById('schVerlaufNote');
+    const legende = document.getElementById('schLegende');
+    zerstoereVerlaufCharts();
+
+    const s = state.stats;
+    if (!s) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
+
+    const verlauf = s.verlauf || { achse: [], reihen: [] };
+    const reihen = verlauf.reihen || [];
+    const bestwerte = bestwertZeilen();
+
+    // Welche Plattformen ueberhaupt vorkommen -- die Legende steht einmal
+    // oben statt in jeder der kleinen Kurven.
+    const plattformen = [...new Set(reihen.map(r => r.platform))];
+    legende.innerHTML = plattformen.length < 2 ? '' : plattformen.map(p =>
+        `<span class="sch-leg"><span class="sch-dot" data-platform="${esc(p)}"
+            aria-hidden="true"></span>${esc(LABEL[p] || p)}</span>`).join('');
+
+    if (!reihen.length && !bestwerte.length) {
+        ziel.innerHTML = leerKarte('📈',
+            'Für den Verlauf fehlen gewertete Partien. Er entsteht aus ihnen: jede Partie '
+            + 'trägt die Wertung, die danach galt — geholt werden sie unter '
+            + '<strong>Konten</strong>.',
+            '<button type="button" class="v-btn v-btn--sm" data-zu-konten>Zu den Konten</button>');
+        bindeKontenKnoepfe(ziel);
+        note.textContent = '';
+        return;
+    }
+
+    // Je Disziplin ein Kaestchen, in der Reihenfolge des Servers.
+    const ordnung = s.perfs || [];
+    const rang = (p) => { const i = ordnung.indexOf(p); return i < 0 ? 99 : i; };
+    const arten = [...new Set(reihen.map(r => r.perf))].sort((a, b) => rang(a) - rang(b));
+
+    const kaesten = arten.map(perf => kastenHtml(perf, reihen.filter(r => r.perf === perf)));
+    // Bestwerte bekommen ein eigenes Kaestchen, auch wenn dieselbe Disziplin
+    // auf der anderen Plattform eine Kurve hat: eine Zahl, die "jemals"
+    // bedeutet, darf nicht als Punkt in einer Kurve landen, die "heute"
+    // bedeutet — verschweigen will man sie deswegen trotzdem nicht.
+    bestwerte.forEach(b => {
+        kaesten.push(`<div class="sch-vk">
+            <div class="sch-vk-kopf">
+                <span class="sch-vk-name">${esc(b.label || perfLabel(b.perf))} · Bestwert</span>
+                <span class="sch-vk-zahlen">
+                    <span class="sch-vk-zahl" style="--ton:${plattformTon(b.platform)}"
+                        >${wertung(b.rating)}</span>
+                </span>
+            </div>
+            <p class="sch-vk-satz">Bestwert auf ${esc(LABEL[b.platform] || b.platform)}.
+                Den heutigen Stand gibt die Plattform hier nicht heraus — und ein Bestwert
+                kann sich nur nach oben bewegen.</p>
+        </div>`);
+    });
+
+    ziel.innerHTML = kaesten.join('');
+
+    // Erst nach dem Einhaengen zeichnen: vorher hat das Canvas keine Groesse.
+    const texte = achsenTexte(verlauf.achse, s.koernung);
+    arten.forEach(perf => {
+        const eigene = reihen.filter(r => r.perf === perf);
+        if (!eigene.some(r => r.punkte > 1)) return;
+        const canvas = document.getElementById('schVk_' + perf);
+        if (canvas) state.charts.verlauf.push(miniVerlauf(canvas, eigene, texte));
+    });
+
+    const wort = s.koernung === 'tag' ? ''
+        : ` Bei diesem Zeitraum steht ${KOERNUNG_WORT[s.koernung]} der letzte Stand.`;
+    note.innerHTML = 'Gerechnet aus jeder gewerteten Partie — gezeigt wird die Wertung '
+        + '<em>nach</em> der Partie. An Tagen ohne Partie gilt der letzte bekannte Stand '
+        + 'weiter: eine Wertungszahl bewegt sich nur, wenn gespielt wurde.' + wort;
+}
+
+/* Ein Kaestchen je Disziplin: Name, aktuelle Zahl je Plattform, Entwicklung,
+   darunter die Kurve. Ohne Kurve, wenn es nichts zu zeichnen gibt -- eine
+   waagerechte Linie ueber einen Zeitraum ohne Partie sieht aus wie ein
+   kaputtes Diagramm, und genau das war sie vorher auch. */
+function kastenHtml(perf, eigene) {
+    const label = eigene[0].label || perfLabel(perf);
+    const fuehrend = eigene.slice().sort((a, b) => b.punkte - a.punkte)[0];
+    const basis = fuehrend.start != null ? fuehrend.start : fuehrend.erste;
+    const delta = (fuehrend.punkte && fuehrend.letzte != null && basis != null)
+        ? fuehrend.letzte - basis : null;
+
+    const zahlen = eigene.map(r => `<span class="sch-vk-zahl"
+        style="--ton:${plattformTon(r.platform)}"
+        title="${esc(LABEL[r.platform] || r.platform)}">${wertung(r.letzte)}</span>`).join('');
+
+    const marke = delta == null || delta === 0 ? ''
+        : `<span class="sch-trend is-${delta > 0 ? 'hoch' : 'runter'}">${
+            delta > 0 ? '▲ +' : '▼ −'}${Math.abs(delta)}</span>`;
+
+    const kopf = `<div class="sch-vk-kopf">
+        <span class="sch-vk-name">${esc(label)}</span>
+        <span class="sch-vk-zahlen">${zahlen}</span>
+        ${marke}
+    </div>`;
+
+    const gespielt = eigene.reduce((a, r) => a + r.punkte, 0);
+    if (!eigene.some(r => r.punkte > 1)) {
+        // Zwei Gruende, zwei Saetze. Sie saehen sonst beide aus wie "keine Daten".
+        const satz = !gespielt
+            ? `In diesem Zeitraum nicht gespielt — die Zahl steht seitdem unverändert.`
+            : `Genau eine gewertete Partie in diesem Zeitraum. Eine Kurve braucht zwei Punkte.`;
+        return `<div class="sch-vk">${kopf}<p class="sch-vk-satz">${satz}</p></div>`;
+    }
+
+    const hoch = eigene.map(r => r.hoch).filter(Boolean)
+        .sort((a, b) => b.rating - a.rating)[0];
+    return `<div class="sch-vk">${kopf}
+        <div class="sch-vk-kurve"><canvas id="schVk_${esc(perf)}"></canvas></div>
+        <div class="sch-vk-fuss">${zahl(gespielt)} ${gespielt === 1 ? 'Tag' : 'Tage'} mit Partie${
+            hoch ? ` · höchster Stand ${hoch.rating} am ${datum(hoch.tag)}` : ''}</div>
+    </div>`;
+}
+
+function miniVerlauf(canvas, eigene, texte) {
+    const einzeln = eigene.length === 1;
+    const datasets = eigene.map(r => {
+        const farbe = plattformFarbe(r.platform);
+        return {
+            label: LABEL[r.platform] || r.platform,
+            data: r.werte,
+            borderColor: farbe,
+            // Flaeche unter der Linie nur bei einer einzigen Reihe -- zwei
+            // sich ueberlagernde Fuellungen ergeben eine dritte Farbe, die
+            // nichts bedeutet.
+            fill: einzeln,
+            backgroundColor: einzeln ? (ctx) => flaeche(ctx, farbe) : undefined,
+            tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
+            spanGaps: false,
+            order: VexCharts.ORDER.VALUE,
+        };
+    });
+
+    return new Chart(canvas, {
+        type: 'line',
+        data: { labels: texte.kurz, datasets },
+        options: VexCharts.applyFullDates({
+            maintainAspectRatio: false,
+            animation: { duration: 200 },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: tooltipStil({
+                    callbacks: {
+                        title: VexCharts.titleFrom(texte.voll),
+                        label: (item) => item.parsed.y == null ? null
+                            : ' ' + item.dataset.label + ': ' + item.parsed.y,
+                    },
+                }),
+            },
+            scales: {
+                x: achseX({ ticks: { color: cssVar('--chart-axis'), font: { size: 10 },
+                                     maxRotation: 0, autoSkipPadding: 24, maxTicksLimit: 6 } }),
+                y: achseY({ ticks: { color: cssVar('--chart-axis'), font: { size: 10 },
+                                     maxTicksLimit: 4 }, beginAtZero: false }),
+            },
+        }, texte.voll),
+    });
+}
+
+/* ---------------------------------------------------------------- Bilanz */
+
+function zeichneBilanz() {
+    const ziel = document.getElementById('schBilanz');
+    const sub = document.getElementById('schBilanzSub');
+    const s = state.stats;
+    if (!s) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
+
+    const g = gesamtBilanz();
+    if (!g.partien) {
+        sub.textContent = '';
+        ziel.innerHTML = leerImZeitraum('⚖️', 'eine Bilanz');
+        bindeKontenKnoepfe(ziel);
+        return;
+    }
+
+    sub.textContent = `${zahl(g.partien)} Partien`;
+    ziel.innerHTML = `
+        <div class="sch-quote">
+            <span class="sch-quote-num">${punktequote(g)} %</span>
+            <span class="sch-quote-lbl">Punktequote<br>
+                <span style="color:var(--text-4)">${anteil(g.siege, g.partien)} % gewonnen,
+                    Remis zählt halb</span></span>
+        </div>
+        ${balken(g, 'gross')}
+        <div class="sch-bilanz-zahlen">
+            <span class="is-sieg">${zahl(g.siege)} Siege</span>
+            <span class="is-remis">${zahl(g.remis)} Remis</span>
+            <span class="is-verlust">${zahl(g.niederlagen)} Niederlagen</span>
+        </div>
+        ${s.plattformen.length < 2 ? '' : s.plattformen.map(b => `
+            <div class="sch-bilanz">
+                <div class="sch-bilanz-kopf">
+                    <span class="sch-dot" data-platform="${esc(b.platform)}" aria-hidden="true"></span>
+                    <strong>${esc(LABEL[b.platform] || b.platform)}</strong>
+                    <span class="sch-bilanz-zeit">${zahl(b.partien)} Partien</span>
+                </div>
+                ${balken(b)}
+                <div class="sch-bilanz-zahlen">
+                    <span class="is-sieg">${anteil(b.siege, b.partien)} % gewonnen</span>
+                    <span>Punktequote ${punktequote(b)} %</span>
+                </div>
+            </div>`).join('')}`;
 }
 
 function balken(b, gross) {
@@ -604,227 +615,338 @@ function balken(b, gross) {
     </div>`;
 }
 
-/* ------------------------------------------------------------ Auswertung */
+/* ------------------------------------------------------------------ Form */
 
-/* Der Ausschnitt, ueber den Form, Eroeffnungen und Zeitkontrollen rechnen.
-   Er sagt selbst, wie weit er reicht -- eine Auswertung ohne diese Angabe
-   waere eine Behauptung ueber den ganzen Bestand. */
-function zeichneAusschnittKopf() {
-    const titel = document.getElementById('schAusschnittTitel');
-    const marke = document.getElementById('schAusschnittMarke');
-    if (!state.analyse) return;
-    const n = state.analyse.games.length;
-    titel.textContent = !n ? 'Die letzten Partien'
-        : (state.analyse.total > n ? `Die letzten ${zahl(n)} Partien`
-                                   : `Alle ${zahl(n)} Partien`);
-    marke.textContent = state.analyse.total > n ? 'Ausschnitt' : 'Gesamter Bestand';
-}
-
-function leerRechnung() { return { n: 0, s: 0, r: 0, v: 0 }; }
-
-function zaehle(topf, g) {
-    topf.n++;
-    if (g.result === 'sieg') topf.s++;
-    else if (g.result === 'remis') topf.r++;
-    else topf.v++;
-}
-
-function aktuelleSerie() {
-    const spiele = state.analyse ? state.analyse.games : [];
-    if (!spiele.length) return null;
-    const art = spiele[0].result;
-    let n = 0;
-    for (const g of spiele) { if (g.result !== art) break; n++; }
-    const wort = { sieg: n === 1 ? 'Sieg' : 'Siege', remis: n === 1 ? 'Remis' : 'Remis',
-                   niederlage: n === 1 ? 'Niederlage' : 'Niederlagen' }[art] || '';
-    return { art, n, kurz: n + ' ' + wort };
-}
-
-function zeichneAnalyse() {
-    zeichneAusschnittKopf();
-    zeichneForm();
-    zeichneEroeffnungen();
-    zeichneArten();
-    zeichneGegner();
-}
-
-/* Die Form: die Strecke, nicht die Summe. Eine Reihe aus zwanzig Marken
-   liest sich schneller als "13 Siege, 3 Remis, 4 Niederlagen" -- und darunter
-   stehen die beiden Zahlen, die man danach erzaehlt: die laufende Serie und
-   der staerkste geschlagene Gegner. */
+/* Die Form: die Strecke, nicht die Summe. Eine Reihe aus Marken liest sich
+   schneller als "13 Siege, 3 Remis, 4 Niederlagen" -- und darunter steht die
+   Zahl, die man danach erzaehlt: die laufende Serie. */
 function zeichneForm() {
     const ziel = document.getElementById('schForm');
-    if (!state.analyse) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
-    const spiele = state.analyse.games;
+    const s = state.stats;
+    if (!s) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
 
+    const spiele = s.form || [];
     if (!spiele.length) {
-        ziel.innerHTML = leerKarte('🔥',
-            'Für die Form fehlen die Partien — geholt werden sie unter <strong>Konten</strong>.');
+        ziel.innerHTML = leerImZeitraum('🔥', 'die Form');
+        bindeKontenKnoepfe(ziel);
         return;
     }
 
-    const letzte = spiele.slice(0, 20);
-    const serie = aktuelleSerie();
-    const stark = staerksterSieg();
-    const farben = { weiss: leerRechnung(), schwarz: leerRechnung() };
-    spiele.forEach(g => { if (farben[g.color]) zaehle(farben[g.color], g); });
+    const serie = s.serie;
+    const wort = serie && (serie.art === 'sieg' ? 'gewonnen'
+        : serie.art === 'remis' ? 'remis' : 'verloren');
 
-    const reihen = [
-        { label: 'Mit Weiß', mark: '◻', tone: 'var(--text-1)', topf: farben.weiss },
-        { label: 'Mit Schwarz', mark: '◼', tone: 'var(--text-3)', topf: farben.schwarz },
-    ].filter(r => r.topf.n);
-    const maxFarbe = Math.max(1, ...reihen.map(r => r.topf.n));
-
+    // Jede Marke traegt ihre eigene Beschriftung: ein role="img" mit einer
+    // Sammelbeschriftung waere hier falsch, weil die Marken anklickbar sind
+    // -- Vorlesehilfen verstecken alles, was in einem Bild liegt.
+    const marke = (g) => `${ERGEBNIS_LABEL[g.result] || 'Partie'} gegen `
+        + `${g.opponent || 'Unbekannt'} · ${datum(g.played_at)}`;
     ziel.innerHTML = `
-        <div class="sch-pips" role="img" aria-label="Die letzten ${letzte.length} Partien,
-             neueste zuerst: ${letzte.map(g => ERGEBNIS_LABEL[g.result]).join(', ')}">
-            ${letzte.map(g => `<span class="sch-pip is-${esc(g.result)}"></span>`).join('')}
+        <div class="sch-pips">
+            ${spiele.map(g => `<button type="button" class="sch-pip is-${esc(g.result)}"
+                data-pip="${esc(g.opponent || '')}"
+                aria-label="${esc(marke(g))}" title="${esc(marke(g))}"></button>`).join('')}
         </div>
         <p class="sch-serie">${serie
-            ? `Gerade <strong>${serie.n} ${serie.n === 1 ? 'Partie' : 'Partien'}</strong> in Folge
-               ${serie.art === 'sieg' ? 'gewonnen' : serie.art === 'remis' ? 'remis' : 'verloren'},
-               zuletzt ${esc(vorTagen(spiele[0].played_at))}.` : ''}
-            ${stark ? `Stärkster Sieg: <strong>${wertung(stark.opponent_rating)}</strong>
-               gegen ${esc(stark.opponent)}.` : ''}</p>
-        <div class="rank-list">${reihen.map(r => `
-            <div class="rank-row" style="--tone:${r.tone}">
-                <span class="rank-mark sch-farbe-mark">${r.mark}</span>
-                <span class="rank-name">${r.label}</span>
-                <span class="rank-val">${anteil(r.topf.s, r.topf.n)} %</span>
-                <span class="rank-bar"><i style="width:${anteil(r.topf.n, maxFarbe)}%"></i></span>
-                <span class="rank-sub">${zahl(r.topf.n)} Partien · ${r.topf.s} Siege,
-                    ${r.topf.r} Remis, ${r.topf.v} Niederlagen</span>
-            </div>`).join('')}</div>
-        <p class="sch-note">Die Reihe oben zeigt die letzten ${letzte.length} Partien,
-            neueste links.</p>`;
+            ? `Zuletzt <strong>${serie.n}${serie.offen ? '+' : ''}
+               ${serie.n === 1 ? 'Partie' : 'Partien'}</strong> in Folge ${wort},
+               die letzte ${esc(vorTagen(spiele[0].played_at))}.` : ''}</p>
+        <p class="sch-note">Die Reihe zeigt die letzten ${spiele.length} Partien des Zeitraums,
+            neueste links. Ein Tippen sucht den Gegner in den Partien.</p>`;
+
+    ziel.querySelectorAll('[data-pip]').forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.pip) sucheInPartien(b.dataset.pip);
+    }));
 }
 
-/* Aus "Sicilian Defense: Najdorf Variation" und "Sicilian Defense Najdorf
-   Variation 6.Be3" wird dieselbe Familie. Lichess trennt mit Doppelpunkt,
-   Chess.com haengt Variante und Zugfolge einfach an -- ohne das Zusammenlegen
-   stuende dieselbe Eroeffnung zwanzigmal in der Liste, jedes Mal mit einer
-   Partie. */
-function eroeffnungsFamilie(name) {
-    let s = String(name || '').trim();
-    if (!s) return null;
-    s = s.split(':')[0];
-    s = s.replace(/\s+\d+\..*$/, '');
-    const m = s.match(/^(.*?\b(?:Defense|Defence|Opening|Game|Gambit|Attack|System|Variation)\b)/);
-    if (m) s = m[1];
-    return s.trim() || null;
+/* ------------------------------------------------------------ Aktivität */
+
+/* Wie viel gespielt wurde und wie es ausging -- gestapelt, weil beides
+   dieselbe Saeule ist: die Hoehe ist die Menge, die Aufteilung das Ergebnis. */
+function zeichneAktivitaet() {
+    const box = document.getElementById('schAktivitaetBox');
+    const leer = document.getElementById('schAktivitaetLeer');
+    const sub = document.getElementById('schAktivitaetSub');
+    if (state.charts.aktivitaet) { state.charts.aktivitaet.destroy(); state.charts.aktivitaet = null; }
+
+    const s = state.stats;
+    if (!s) return;
+    const liste = s.aktivitaet || [];
+    const g = gesamtBilanz();
+
+    if (!g.partien) {
+        box.hidden = true;
+        leer.hidden = false;
+        leer.innerHTML = leerImZeitraum('📊', 'dieses Diagramm');
+        bindeKontenKnoepfe(leer);
+        sub.textContent = '';
+        return;
+    }
+    leer.hidden = true;
+    box.hidden = false;
+
+    const beste = liste.reduce((a, b) => (b.partien > (a ? a.partien : -1) ? b : a), null);
+    sub.textContent = KOERNUNG_WORT[s.koernung]
+        + (beste && beste.partien ? ` · am meisten: ${zahl(beste.partien)} Partien` : '');
+
+    const texte = achsenTexte(liste.map(p => p.eimer), s.koernung);
+    const reihe = (name, feld, farbe) => ({
+        label: name, data: liste.map(p => p[feld]),
+        backgroundColor: farbe, borderRadius: 6, borderSkipped: false,
+        maxBarThickness: 48, order: VexCharts.ORDER.VALUE,
+    });
+
+    state.charts.aktivitaet = new Chart(document.getElementById('schAktivitaetChart'), {
+        type: 'bar',
+        data: {
+            labels: texte.kurz,
+            datasets: [
+                reihe('Siege', 'siege', cssVar('--ok')),
+                reihe('Remis', 'remis', cssVar('--text-4')),
+                reihe('Niederlagen', 'niederlagen', cssVar('--danger')),
+            ],
+        },
+        options: VexCharts.applyFullDates({
+            maintainAspectRatio: false,
+            animation: { duration: 200 },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                // Drei Reihen, die man nicht am Punkt beschriften kann
+                // (DESIGN.md 7) -- hier gehoert eine Legende hin.
+                legend: { display: true, position: 'top',
+                          labels: { color: cssVar('--text-3'), font: { size: 11 },
+                                    boxWidth: 10, boxHeight: 10, usePointStyle: true,
+                                    pointStyle: 'circle' } },
+                tooltip: tooltipStil({
+                    callbacks: {
+                        title: VexCharts.titleFrom(texte.voll),
+                        label: (i) => ' ' + i.dataset.label + ': ' + i.parsed.y,
+                        footer: (items) => {
+                            const i = items[0].dataIndex;
+                            const p = liste[i];
+                            return p.partien
+                                ? `${p.partien} Partien · Punktequote ${punktequote(p)} %` : '';
+                        },
+                    },
+                }),
+            },
+            scales: {
+                x: achseX({ stacked: true }),
+                y: achseY({ stacked: true, beginAtZero: true,
+                            ticks: { color: cssVar('--chart-axis'), font: { size: 11 },
+                                     maxTicksLimit: 5, precision: 0 } }),
+            },
+        }, texte.voll),
+    });
+}
+
+/* ------------------------------------------------------- Gegnerstärke */
+
+/* Die Frage, die eine Siegquote allein nie beantwortet. Die Saeulen sind die
+   Menge, die Linie darueber die Punktequote je Stufe -- sie liegt mit
+   ORDER.TREND obenauf (DESIGN.md 7). */
+function zeichneStaerke() {
+    const box = document.getElementById('schStaerkeBox');
+    const leer = document.getElementById('schStaerkeLeer');
+    const note = document.getElementById('schStaerkeNote');
+    if (state.charts.staerke) { state.charts.staerke.destroy(); state.charts.staerke = null; }
+
+    const s = state.stats;
+    if (!s) return;
+    const stufen = s.gegnerstaerke || [];
+    const gesamt = stufen.reduce((a, b) => a + b.partien, 0);
+
+    if (!gesamt) {
+        box.hidden = true;
+        leer.hidden = false;
+        leer.innerHTML = leerImZeitraum('🎯', 'der Vergleich nach Gegnerstärke');
+        bindeKontenKnoepfe(leer);
+        note.textContent = '';
+        return;
+    }
+    leer.hidden = true;
+    box.hidden = false;
+
+    const quote = stufen.map(x => x.partien ? punktequote(x) : null);
+    const reihe = (name, feld, farbe) => ({
+        type: 'bar', label: name, data: stufen.map(x => x[feld]),
+        backgroundColor: farbe, borderRadius: 6, borderSkipped: false,
+        maxBarThickness: 56, yAxisID: 'y', order: VexCharts.ORDER.VALUE,
+    });
+
+    state.charts.staerke = new Chart(document.getElementById('schStaerkeChart'), {
+        data: {
+            // Zweizeilig: „50–200 stärker" steht auf 60 Pixeln Achsenbreite
+            // sonst als abgeschnittenes Wort da. Chart.js bricht ein Array.
+            labels: stufen.map(x => x.label.split(' ')),
+            datasets: [
+                reihe('Siege', 'siege', cssVar('--ok')),
+                reihe('Remis', 'remis', cssVar('--text-4')),
+                reihe('Niederlagen', 'niederlagen', cssVar('--danger')),
+                {
+                    type: 'line', label: 'Punktequote', data: quote, yAxisID: 'quote',
+                    borderColor: cssVar('--text-2'), borderWidth: 2, borderDash: [5, 4],
+                    pointRadius: 3, pointBackgroundColor: cssVar('--text-2'),
+                    tension: 0.3, fill: false, spanGaps: true,
+                    order: VexCharts.ORDER.TREND,
+                },
+            ],
+        },
+        options: {
+            maintainAspectRatio: false,
+            animation: { duration: 200 },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'top',
+                          labels: { color: cssVar('--text-3'), font: { size: 11 },
+                                    boxWidth: 10, boxHeight: 10, usePointStyle: true,
+                                    pointStyle: 'circle' } },
+                tooltip: tooltipStil({
+                    callbacks: {
+                        title: (items) => stufen[items[0].dataIndex].label,
+                        label: (i) => i.parsed.y == null ? null
+                            : ' ' + i.dataset.label + ': ' + i.parsed.y
+                              + (i.dataset.yAxisID === 'quote' ? ' %' : ''),
+                        footer: (items) => {
+                            const x = stufen[items[0].dataIndex];
+                            return x.partien ? `${x.partien} Partien` : '';
+                        },
+                    },
+                }),
+            },
+            scales: {
+                x: achseX({ stacked: true,
+                            ticks: { color: cssVar('--chart-axis'), font: { size: 10 },
+                                     maxRotation: 0, autoSkip: false } }),
+                y: achseY({ stacked: true, beginAtZero: true,
+                            ticks: { color: cssVar('--chart-axis'), font: { size: 11 },
+                                     maxTicksLimit: 5, precision: 0 } }),
+                quote: { position: 'right', min: 0, max: 100,
+                         ticks: { color: cssVar('--chart-axis'), font: { size: 10 },
+                                  maxTicksLimit: 3, callback: (v) => v + ' %' },
+                         grid: { display: false }, border: { display: false } },
+            },
+        },
+    });
+
+    // Die Zahl, wegen der man hinschaut: wie es gegen Staerkere lief.
+    const hoch = stufen.filter(x => x.key === 'ueber' || x.key === 'weit_ueber')
+        .reduce((a, b) => ({ partien: a.partien + b.partien, siege: a.siege + b.siege,
+                             remis: a.remis + b.remis, niederlagen: a.niederlagen + b.niederlagen }),
+                { partien: 0, siege: 0, remis: 0, niederlagen: 0 });
+    note.innerHTML = (hoch.partien
+        ? `Gegen höher bewertete Gegner: <strong>${punktequote(hoch)} %</strong> aus
+           ${zahl(hoch.partien)} Partien. ` : '')
+        + 'Gerechnet wird über die Partien, bei denen beide Wertungen bekannt sind.';
+}
+
+/* ------------------------------------------- Zeitkontrollen, Farbe, Listen */
+
+function rangListe(zeilen) {
+    const max = Math.max(1, ...zeilen.map(z => z.partien));
+    return `<div class="rank-list">${zeilen.map((z, i) => `
+        <${z.wert ? 'button type="button"' : 'div'} class="rank-row"
+                style="--tone:${z.ton || 'var(--figure, var(--m-schach))'}"
+                ${z.wert ? `data-suche="${esc(z.wert)}" data-art="${esc(z.art || '')}"` : ''}
+                ${z.titel ? `title="${esc(z.titel)}"` : ''}>
+            <span class="rank-mark${z.mark ? ' sch-farbe-mark' : ''}">${esc(z.mark || (i + 1))}</span>
+            <span class="rank-name">${esc(z.name)}</span>
+            <span class="rank-val">${zahl(z.partien)}</span>
+            <span class="rank-bar"><i style="width:${anteil(z.partien, max)}%"></i></span>
+            <span class="rank-sub">${punktequote(z)} % Punkte · ${z.siege} S, ${z.remis} R,
+                ${z.niederlagen} N${z.extra ? ' · ' + esc(z.extra) : ''}</span>
+        </${z.wert ? 'button' : 'div'}>`).join('')}</div>`;
+}
+
+function bindeRang(ziel) {
+    ziel.querySelectorAll('[data-suche]').forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.art) {
+            state.filter.perf = b.dataset.art;
+            const feld = document.getElementById('schArt');
+            if (feld) feld.value = b.dataset.art;
+            activateTab('partien');
+            zeichneFilterStand();
+            ladePartien(true);
+            return;
+        }
+        sucheInPartien(b.dataset.suche);
+    }));
+}
+
+const FARB_LABEL = { weiss: 'Mit Weiß', schwarz: 'Mit Schwarz' };
+
+function zeichneArten() {
+    const ziel = document.getElementById('schArten');
+    const s = state.stats;
+    if (!s) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
+
+    const arten = (s.zeitkontrollen || []).filter(a => a.partien);
+    const farben = (s.farben || []).filter(f => f.partien && FARB_LABEL[f.color]);
+
+    if (!arten.length && !farben.length) {
+        ziel.innerHTML = leerImZeitraum('⏱️', 'eine Aufteilung');
+        bindeKontenKnoepfe(ziel);
+        return;
+    }
+
+    // Zwei kleine Ranglisten in einer Karte: beides sind Aufteilungen
+    // derselben Partien, und beide haben zwei bis vier Posten. Zwei Karten
+    // dafuer waeren zwei halbleere Karten.
+    ziel.innerHTML = (arten.length ? `<div class="sch-unterteil">Zeitkontrolle</div>`
+        + rangListe(arten.map(a => ({
+            ...a, name: a.label || perfLabel(a.perf), wert: a.perf, art: a.perf,
+            titel: 'Nur diese Zeitkontrolle in den Partien zeigen',
+        }))) : '')
+        + (farben.length ? `<div class="sch-unterteil">Farbe</div>`
+        + rangListe(farben.map(f => ({
+            ...f, name: FARB_LABEL[f.color], mark: f.color === 'weiss' ? '◻' : '◼',
+            ton: f.color === 'weiss' ? 'var(--text-1)' : 'var(--text-3)',
+        }))) : '');
+
+    bindeRang(ziel);
 }
 
 function zeichneEroeffnungen() {
     const ziel = document.getElementById('schEroeffnungen');
-    if (!state.analyse) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
+    const s = state.stats;
+    if (!s) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
 
-    const topf = {};
-    state.analyse.games.forEach(g => {
-        const fam = eroeffnungsFamilie(g.opening);
-        if (!fam) return;
-        if (!topf[fam]) topf[fam] = leerRechnung();
-        zaehle(topf[fam], g);
-    });
-    const liste = Object.keys(topf).map(k => ({ name: k, ...topf[k] }))
-        .sort((a, b) => b.n - a.n).slice(0, 6);
-
+    const liste = s.eroeffnungen || [];
     if (!liste.length) {
-        ziel.innerHTML = leerKarte('📖',
-            'Zu diesen Partien hat keine der beiden Plattformen eine Eröffnung mitgeliefert — '
-            + 'bei sehr kurzen Partien lassen sie das Feld leer.');
+        ziel.innerHTML = gesamtBilanz().partien
+            ? leerKarte('📖', 'Zu diesen Partien hat keine der beiden Plattformen eine '
+                + 'Eröffnung mitgeliefert — bei sehr kurzen Partien lassen sie das Feld leer.')
+            : leerImZeitraum('📖', 'eine Eröffnungsliste');
+        bindeKontenKnoepfe(ziel);
         return;
     }
-    const max = liste[0].n;
-    ziel.innerHTML = `<div class="rank-list">${liste.map((e, i) => `
-        <button type="button" class="rank-row" style="--tone:var(--figure, var(--m-schach))"
-                data-eroeffnung="${esc(e.name)}" title="Diese Eröffnung in den Partien suchen">
-            <span class="rank-mark">${i + 1}</span>
-            <span class="rank-name">${esc(e.name)}</span>
-            <span class="rank-val">${zahl(e.n)}</span>
-            <span class="rank-bar"><i style="width:${anteil(e.n, max)}%"></i></span>
-            <span class="rank-sub">${anteil(e.s, e.n)} % gewonnen · ${e.s} S, ${e.r} R, ${e.v} N</span>
-        </button>`).join('')}</div>`;
-
-    ziel.querySelectorAll('[data-eroeffnung]').forEach(b =>
-        b.addEventListener('click', () => sucheInPartien(b.dataset.eroeffnung)));
+    ziel.innerHTML = rangListe(liste.map(e => ({
+        ...e, name: e.name, wert: e.name,
+        titel: 'Diese Eröffnung in den Partien suchen',
+    })));
+    bindeRang(ziel);
 }
 
-function zeichneArten() {
-    const ziel = document.getElementById('schArten');
-    if (!state.analyse) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
-
-    const topf = {};
-    state.analyse.games.forEach(g => {
-        const k = g.perf || 'unbekannt';
-        if (!topf[k]) topf[k] = leerRechnung();
-        zaehle(topf[k], g);
-    });
-    const liste = Object.keys(topf).map(k => ({ perf: k, ...topf[k] })).sort((a, b) => b.n - a.n);
-
-    if (!liste.length) {
-        ziel.innerHTML = leerKarte('⏱️',
-            'Ohne Partien im Bestand gibt es hier nichts zu verteilen.');
-        return;
-    }
-    const max = liste[0].n;
-    ziel.innerHTML = `<div class="rank-list">${liste.map((a, i) => `
-        <button type="button" class="rank-row" style="--tone:var(--figure, var(--m-schach))"
-                data-art="${esc(a.perf)}" title="Nur diese Zeitkontrolle in den Partien zeigen">
-            <span class="rank-mark">${i + 1}</span>
-            <span class="rank-name">${esc(perfLabel(a.perf))}</span>
-            <span class="rank-val">${zahl(a.n)}</span>
-            <span class="rank-bar"><i style="width:${anteil(a.n, max)}%"></i></span>
-            <span class="rank-sub">${anteil(a.s, a.n)} % gewonnen · ${a.s} S, ${a.r} R, ${a.v} N</span>
-        </button>`).join('')}</div>`;
-
-    ziel.querySelectorAll('[data-art]').forEach(b => b.addEventListener('click', () => {
-        state.filter.perf = b.dataset.art;
-        const feld = document.getElementById('schArt');
-        if (feld) feld.value = b.dataset.art;
-        activateTab('partien');
-        zeichneFilterStand();
-        ladePartien(true);
-    }));
-}
-
-/* Gegen wen man wirklich spielt. Im Netz sind das oft dieselben Namen --
-   und die Bilanz gegen einen wiederkehrenden Gegner ist die Zahl, die man
-   wissen will. Unter zwei Partien steht niemand in der Liste: eine einzelne
-   Begegnung ist keine Bilanz. */
 function zeichneGegner() {
     const ziel = document.getElementById('schGegner');
-    if (!state.analyse) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
+    const s = state.stats;
+    if (!s) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
 
-    const topf = {};
-    state.analyse.games.forEach(g => {
-        const name = (g.opponent || '').trim();
-        if (!name) return;
-        if (!topf[name]) topf[name] = leerRechnung();
-        zaehle(topf[name], g);
-    });
-    const liste = Object.keys(topf).map(k => ({ name: k, ...topf[k] }))
-        .filter(g => g.n > 1).sort((a, b) => b.n - a.n).slice(0, 6);
-
+    const liste = s.gegner || [];
     if (!liste.length) {
-        ziel.innerHTML = leerKarte('👥',
-            'In diesem Ausschnitt ist dir niemand zweimal begegnet — gegen einen einzelnen '
-            + 'Gegner gibt es noch keine Bilanz.');
+        ziel.innerHTML = gesamtBilanz().partien
+            ? leerKarte('👥', 'In diesem Zeitraum ist dir niemand zweimal begegnet — gegen '
+                + 'einen einzelnen Gegner gibt es noch keine Bilanz.')
+            : leerImZeitraum('👥', 'eine Gegnerliste');
+        bindeKontenKnoepfe(ziel);
         return;
     }
-    const max = liste[0].n;
-    ziel.innerHTML = `<div class="rank-list">${liste.map((g, i) => `
-        <button type="button" class="rank-row" style="--tone:var(--figure, var(--m-schach))"
-                data-gegner="${esc(g.name)}" title="Partien gegen ${esc(g.name)} suchen">
-            <span class="rank-mark">${i + 1}</span>
-            <span class="rank-name">${esc(g.name)}</span>
-            <span class="rank-val">${zahl(g.n)}</span>
-            <span class="rank-bar"><i style="width:${anteil(g.n, max)}%"></i></span>
-            <span class="rank-sub">${g.s} S, ${g.r} R, ${g.v} N · ${anteil(g.s, g.n)} % gewonnen</span>
-        </button>`).join('')}</div>`;
-
-    ziel.querySelectorAll('[data-gegner]').forEach(b => b.addEventListener('click', () => {
-        sucheInPartien(b.dataset.gegner);
-    }));
+    ziel.innerHTML = rangListe(liste.map(g => ({
+        ...g, name: g.opponent, wert: g.opponent,
+        extra: g.hoechste ? 'bis ' + g.hoechste : '',
+        titel: 'Partien gegen ' + g.opponent + ' suchen',
+    })));
+    bindeRang(ziel);
 }
 
 /* Ein Klick in einer Auswertung landet im selben Zustand, den man von Hand
@@ -877,11 +999,10 @@ async function ladePartien(vonVorn) {
             : leerKarte('♟️',
                 'Noch keine Partien im Bestand. Sie werden nicht von Hand erfasst, sondern unter '
                 + '<strong>Konten</strong> von der Plattform geholt.',
-                '<button type="button" class="v-btn v-btn--sm" id="schLeerKonten">Zu den Konten</button>');
+                '<button type="button" class="v-btn v-btn--sm" data-zu-konten>Zu den Konten</button>');
         const weg = document.getElementById('schLeerWeg');
         if (weg) weg.addEventListener('click', filterZuruecksetzen);
-        const zu = document.getElementById('schLeerKonten');
-        if (zu) zu.addEventListener('click', () => activateTab('konten'));
+        bindeKontenKnoepfe(ziel);
         return;
     }
 
@@ -935,9 +1056,11 @@ function partieZeile(g) {
         `<span class="sch-dot" data-platform="${esc(g.platform)}" aria-hidden="true"></span>`
             + esc(LABEL[g.platform] || g.platform),
         esc(datum(g.played_at, true)),
-        esc(perfLabel(g.perf)),
+        esc(g.perf_label || perfLabel(g.perf)),
         g.color === 'weiss' ? '◻ Weiß' : '◼ Schwarz',
-        g.opening ? esc(eroeffnungsFamilie(g.opening) || g.opening) : '',
+        // Die Eroeffnungsfamilie kommt vom Server -- dieselbe, nach der die
+        // Rangliste im Ueberblick gruppiert.
+        g.opening_family ? esc(g.opening_family) : (g.opening ? esc(g.opening) : ''),
         g.rated === false ? 'ungewertet' : '',
     ].filter(Boolean);
 
@@ -973,7 +1096,8 @@ function zeigePartie(g) {
         ${zeile('Gespielt', esc(datum(g.played_at, true)))}
         ${zeile('Plattform', `<span class="sch-dot" data-platform="${esc(g.platform)}"
             aria-hidden="true"></span> ${esc(LABEL[g.platform] || g.platform)}`)}
-        ${zeile('Art', esc(perfLabel(g.perf)) + (g.rated === false ? ' · ungewertet' : ' · gewertet'))}
+        ${zeile('Art', esc(g.perf_label || perfLabel(g.perf))
+            + (g.rated === false ? ' · ungewertet' : ' · gewertet'))}
         ${zeile('Farbe', g.color === 'weiss' ? '◻ Weiß' : '◼ Schwarz')}
         ${zeile('Gegner', esc(g.opponent || 'Unbekannt')
             + (g.opponent_rating ? ` <span style="color:var(--text-3)">${g.opponent_rating}</span>` : ''))}
@@ -988,14 +1112,15 @@ function zeigePartie(g) {
     <div class="sch-detail-fuss">
         ${g.url ? `<a class="v-btn v-btn--primary" href="${esc(g.url)}" target="_blank"
             rel="noopener">Auf ${esc(LABEL[g.platform] || 'der Plattform')} ansehen</a>` : ''}
-        ${g.opening ? `<button type="button" class="v-btn" id="schDetailEroeffnung">Eröffnung suchen</button>` : ''}
+        ${g.opening_family || g.opening
+            ? `<button type="button" class="v-btn" id="schDetailEroeffnung">Eröffnung suchen</button>` : ''}
         ${g.opponent ? `<button type="button" class="v-btn" id="schDetailGegner">Partien gegen ${esc(g.opponent)}</button>` : ''}
     </div>`;
 
     const modal = openModal(esc(g.opponent || 'Partie'), inhalt);
     const such = (wert) => { modal.close(); sucheInPartien(wert); };
     const e1 = document.getElementById('schDetailEroeffnung');
-    if (e1) e1.addEventListener('click', () => such(eroeffnungsFamilie(g.opening) || g.opening));
+    if (e1) e1.addEventListener('click', () => such(g.opening_family || g.opening));
     const e2 = document.getElementById('schDetailGegner');
     if (e2) e2.addEventListener('click', () => such(g.opponent));
 }
@@ -1064,17 +1189,14 @@ function zeichnePlattformAuswahl() {
 }
 
 function zeichneArtAuswahl() {
-    // Nur die Zeitkontrollen anbieten, die im eigenen Bestand vorkommen --
-    // eine Auswahl, die nichts trifft, ist eine Falle. Raetsel sind keine
-    // Partien und stehen deshalb nicht dabei.
-    const bekannt = state.konten.flatMap(k => k.ratings || []);
-    const arten = [...new Set(bekannt.map(r => r.perf))].filter(a => a !== 'puzzle');
+    // Angeboten wird, was im Bestand wirklich vorkommt -- der Server zaehlt
+    // das aus den Partien (summary.time_controls). Aus den Wertungszahlen
+    // liesse es sich nicht bilden: eine Zeitkontrolle ohne gewertete Partie
+    // hat dort keine Zeile, steht aber in den Partien.
     const feld = document.getElementById('schArt');
     feld.innerHTML = '<option value="">Alle Arten</option>'
-        + arten.map(a => {
-            const label = (bekannt.find(r => r.perf === a) || {}).label || a;
-            return `<option value="${esc(a)}">${esc(label)}</option>`;
-        }).join('');
+        + state.arten.map(a =>
+            `<option value="${esc(a.perf)}">${esc(a.label)}</option>`).join('');
     feld.value = state.filter.perf;
 }
 
@@ -1143,8 +1265,7 @@ function filterZuruecksetzen() {
 
 /* Die Kontokarte traegt den Satz zum Import selbst -- und zwar den, der
    gerade gilt: vor dem ersten Lauf die Warnung, dass es dauert, danach den
-   Hinweis, dass nur noch Neues kommt. Vorher stand beides in einer eigenen
-   Erklaerkarte am Ende der Seite, weit weg vom Knopf, den es erklaert. */
+   Hinweis, dass nur noch Neues kommt. */
 function zeichneKonten() {
     const ziel = document.getElementById('schKonten');
     ziel.innerHTML = PLATTFORMEN.map(p => {
@@ -1192,7 +1313,8 @@ function zeichneKonten() {
             <p class="sch-hinweis sch-hinweis--klein">${k.games_count
                 ? 'Holt nur, was seit dem letzten Lauf dazugekommen ist.'
                 : 'Beim ersten Mal dauert das bei langer Historie ein paar Minuten. Geholt wird '
-                  + 'stückweise — Anhalten verliert nichts, der nächste Lauf setzt dort fort.'}</p>
+                  + 'stückweise — Anhalten verliert nichts, der nächste Lauf setzt dort fort. '
+                  + 'Der Wertungsverlauf entsteht dabei mit: er steckt in den Partien.'}</p>
         </div>`;
     }).join('');
 
@@ -1215,12 +1337,10 @@ async function verbinden(e) {
     try {
         const res = await API.verbinden(form.dataset.platform, name);
         state.konten = res.accounts;
-        state.perf = state.perf || fuehrendeDisziplin();
         zeichneKonten();
         zeichnePlattformAuswahl();
-        zeichneArtAuswahl();
         zeichneUeberblick();
-        if (state.rangeMount) ladeVerlauf();
+        await ladeStats();
         melde('Konto verbunden.', 'success');
     } catch (err) {
         // Der Server sagt, woran es lag (Name gibt es nicht, Konto
@@ -1238,14 +1358,14 @@ async function loesen(id) {
         title: 'Konto lösen?',
         text: `Die ${konto && konto.games_count ? zahl(konto.games_count) + ' gespeicherten ' : ''}`
             + 'Partien und der bisherige Wertungsverlauf werden dabei gelöscht. '
-            + 'Erneut verbinden holt die Partien wieder, den Verlauf nicht.',
+            + 'Erneut verbinden holt beides wieder — der Verlauf steckt in den Partien.',
         confirmText: 'Lösen', danger: true,
     });
     if (!ok) return;
     try {
         await API.loesen(id);
         await ladeSummary();
-        await Promise.all([ladeAnalyse(), ladePartien(true)]);
+        await Promise.all([ladeStats(), ladePartien(true)]);
         melde('Konto gelöst.', 'success');
     } catch (err) {
         melde(err.message || 'Das Konto konnte nicht gelöst werden.', 'error');
@@ -1282,8 +1402,7 @@ async function importieren(id, knopf) {
         state.konten = res.accounts;
         zeichneKonten();
         zeichnePlattformAuswahl();
-        zeichneArtAuswahl();
-        await Promise.all([ladeSummary(), ladeAnalyse(), ladePartien(true)]);
+        await Promise.all([ladeSummary(), ladeStats(), ladePartien(true)]);
         if (state.stopp) {
             melde(`Angehalten. ${zahl(neu)} Partien sind da, der nächste Lauf setzt dort fort.`, 'info');
         } else {
@@ -1356,8 +1475,7 @@ function starteTakt() {
         try {
             const res = await API.aktualisieren();
             state.konten = res.accounts;
-            zeichneDisziplinen();
-            zeichneStaende();
+            await ladeStats(true);
         } catch (e) { /* beim naechsten Takt wieder */ }
     }, minuten * 60 * 1000);
 }
@@ -1368,10 +1486,8 @@ async function aktualisieren() {
     try {
         const res = await API.aktualisieren();
         state.konten = res.accounts;
-        zeichneDisziplinen();
-        zeichneStaende();
         zeichneKonten();
-        if (state.rangeMount) ladeVerlauf();
+        await ladeStats(true);
         if (res.problems && res.problems.length) melde(res.problems.join(' · '), 'error');
         else melde('Wertungszahlen sind auf dem neuesten Stand.', 'success');
     } catch (err) {
@@ -1387,32 +1503,56 @@ async function ladeSummary() {
     try {
         const res = await API.summary();
         state.konten = res.accounts;
-        state.bilanz = res.per_platform;
+        state.arten = res.time_controls || [];
         if (res.settings) state.einstellungen = res.settings;
     } catch (e) {
-        state.konten = []; state.bilanz = [];
-    }
-    // Nach dem Loesen eines Kontos kann die gewaehlte Disziplin verschwunden
-    // sein -- dann stuende der Umschalter auf nichts und das Diagramm fragte
-    // eine Zahl ab, die es nicht mehr gibt.
-    if (!state.perf || !disziplinen().some(d => d.perf === state.perf)) {
-        state.perf = fuehrendeDisziplin();
+        state.konten = []; state.arten = [];
     }
     zeichneUeberblick();
     zeichneKonten();
     zeichnePlattformAuswahl();
+    zeichneArtAuswahl();
     zeichneAutomatik();
 }
 
-async function ladeAnalyse() {
-    try {
-        const res = await API.partien(
-            '?limit=' + ANALYSE_STUECK + '&offset=0&sort=datum&direction=desc');
-        state.analyse = { games: res.games || [], total: res.total || 0 };
-    } catch (e) {
-        state.analyse = { games: [], total: 0 };
+/* Die ganze Auswertung in einer Abfrage. ``still`` heisst: kein Skeleton --
+   der Takt im Hintergrund soll die Seite nicht flackern lassen. */
+async function ladeStats(still) {
+    if (!state.konten.length) { state.stats = null; zerstoereVerlaufCharts(); return; }
+    const range = state.range || (state.rangeMount ? state.rangeMount.get() : null);
+    const abfrage = new URLSearchParams();
+    if (range && range.from) abfrage.set('from', range.from);
+    if (range && range.to) abfrage.set('to', range.to);
+    const qs = abfrage.toString();
+
+    // Zwei Anstoesse zur selben Zeit -- der Zeitraum-Knopf meldet sich beim
+    // Einhaengen, und ein frisch verbundenes Konto laedt ebenfalls -- sollen
+    // EINE Abfrage sein und nicht zwei, die sich gegenseitig ueberzeichnen.
+    if (state.statsLauf && state.statsQs === qs) return state.statsLauf;
+    state.statsQs = qs;
+
+    if (!still && !state.stats) {
+        // Nur beim ersten Mal: ein Skeleton ueber bereits gezeichnete Karten
+        // waere ein Rueckschritt, kein Ladezustand.
+        document.getElementById('schVerlauf').innerHTML = '<span class="skel skel-block"></span>';
     }
-    if (state.konten.length) zeichneAnalyse();
+
+    state.statsLauf = (async () => {
+        try {
+            state.stats = await API.stats(qs ? '?' + qs : '');
+            zeichneAlles();
+        } catch (e) {
+            if (still) return;
+            state.stats = null;
+            zerstoereVerlaufCharts();
+            document.getElementById('schVerlauf').innerHTML =
+                `<div class="empty is-error"><span class="empty-mark">⚠️</span>
+                 <p class="empty-text">Die Auswertung konnte nicht geladen werden.</p></div>`;
+        } finally {
+            state.statsLauf = null;
+        }
+    })();
+    return state.statsLauf;
 }
 
 /* -------------------------------------------------------------- Reiter */
@@ -1488,8 +1628,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     activateTab((location.hash || '').replace('#', '') || TABS[0], true);
 
+    // Erst die Konten: ohne sie steht auf dem Ueberblick nur der eine Satz,
+    // und der Zeitraum-Knopf (der die Auswertung anstoesst) haengt daran.
     await ladeSummary();
-    zeichneArtAuswahl();
     starteTakt();
-    await Promise.all([ladeAnalyse(), ladePartien(true)]);
+    await ladePartien(true);
 });

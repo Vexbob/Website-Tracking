@@ -74,6 +74,13 @@ async def partien_stueck(conn, user_id: int, konto, hoechstens: int = STUECK) ->
     for p in partien:
         if not p.get("ext_id") or not p.get("played_at"):
             continue
+        # Der Zeiger wandert ueber JEDE gesehene Partie, auch ueber eine, die
+        # nicht gefuehrt wird (Fernschach). Sonst holte der naechste Lauf
+        # denselben Monat noch einmal und kaeme nie voran.
+        if juengste is None or p["played_at"] > juengste:
+            juengste = p["played_at"]
+        if not plattform.wird_gefuehrt(p.get("perf")):
+            continue
         treffer = await conn.fetchrow(
             "INSERT INTO chess_games (user_id, account_id, platform, ext_id, "
             "   played_at, perf, variant, rated, color, result, end_reason, "
@@ -90,8 +97,6 @@ async def partien_stueck(conn, user_id: int, konto, hoechstens: int = STUECK) ->
             p.get("moves"), p.get("url"), p.get("pgn"))
         if treffer:
             neu += 1
-        if juengste is None or p["played_at"] > juengste:
-            juengste = p["played_at"]
 
     await conn.execute(
         "UPDATE chess_accounts SET games_at=now(), games_through=$2 WHERE id=$1",

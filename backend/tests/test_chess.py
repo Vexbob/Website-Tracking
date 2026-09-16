@@ -8,10 +8,14 @@ dasselbe bedeuten.
 import json
 import os
 import sys
+from datetime import date
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+os.environ.setdefault("SECRET_KEY", "test-only-not-used")
+os.environ.setdefault("DATABASE_URL", "postgres://test:test@localhost/test")
 
 from services import chess_platforms as cp  # noqa: E402
+from routers import chess_router as cr      # noqa: E402
 
 
 # --------------------------------------------------------------------------
@@ -163,3 +167,96 @@ def test_chesscom_deckel_haelt(monkeypatch):
     _antworten(monkeypatch, {"/games/archives": CHESSCOM_ARCHIVE,
                              "/games/2024/01": CHESSCOM_MONAT})
     assert len(list(cp.hole_partien("chesscom", "Spieler", hoechstens=1))) == 1
+
+
+# --------------------------------------------------------------------------
+# Was nicht gefuehrt wird
+# --------------------------------------------------------------------------
+def test_fernschach_und_turnierbedenkzeit_bleiben_draussen():
+    # Fernschach heisst bei Chess.com "daily" und bei Lichess
+    # "correspondence" -- beide Schreibweisen muessen fallen, sonst haengt es
+    # an der Plattform, ob eine Partie ueber drei Tage mitgezaehlt wird.
+    assert not cp.wird_gefuehrt("daily")
+    assert not cp.wird_gefuehrt("correspondence")
+    assert not cp.wird_gefuehrt("classical")
+    assert cp.wird_gefuehrt("blitz")
+    assert cp.wird_gefuehrt("ultraBullet")
+    # Eine unbekannte Zeitkontrolle soll auftauchen und nicht still fehlen.
+    assert cp.wird_gefuehrt("irgendwasNeues")
+    assert "daily" not in cp.PERFS and "classical" not in cp.PERFS
+
+
+def test_chesscom_liefert_keine_fernschach_wertung_mehr(monkeypatch):
+    stats = dict(CHESSCOM_STATS)
+    stats["chess_daily"] = {"last": {"rating": 1400},
+                            "record": {"win": 2, "loss": 0, "draw": 0}}
+    _antworten(monkeypatch, {"/stats": stats, "pub/player/spieler": CHESSCOM_PROFIL})
+    perfs = {w["perf"] for w in cp.hole_profil("chesscom", "Spieler")["ratings"]}
+    assert "daily" not in perfs
+    assert "bullet" in perfs
+
+
+# --------------------------------------------------------------------------
+# Eroeffnungsfamilien
+# --------------------------------------------------------------------------
+def test_varianten_derselben_eroeffnung_landen_in_einer_familie():
+    # Lichess trennt mit Doppelpunkt, Chess.com haengt Variante und Zugfolge
+    # an. Ohne Zusammenlegen stuende dieselbe Eroeffnung zwanzigmal in der
+    # Rangliste, jedes Mal mit einer Partie.
+    assert (cp.eroeffnungs_familie("Sicilian Defense: Najdorf Variation")
+            == "Sicilian Defense")
+    assert (cp.eroeffnungs_familie("Sicilian Defense Najdorf Variation 6.Be3")
+            == "Sicilian Defense")
+    assert cp.eroeffnungs_familie("Pirc Defense Classical") == "Pirc Defense"
+    assert cp.eroeffnungs_familie("") is None
+    assert cp.eroeffnungs_familie(None) is None
+
+
+# --------------------------------------------------------------------------
+# Die Achse des Verlaufs
+# --------------------------------------------------------------------------
+def test_koernung_waechst_mit_dem_zeitraum():
+    assert cr._koernung(30) == "tag"
+    assert cr._koernung(365) == "woche"
+    assert cr._koernung(3650) == "monat"
+
+
+def test_achse_ist_lueckenlos_und_trifft_date_trunc():
+    # Wochen beginnen am Montag, Monate am Ersten -- dieselbe Rechnung wie
+    # date_trunc in der Aktivitaets-Abfrage. Zwei Fassungen davon waeren zwei
+    # Achsen, die sich um einen Tag unterscheiden.
+    assert cr._eimer(date(2026, 9, 16), "woche") == date(2026, 9, 14)
+    assert cr._eimer(date(2026, 9, 16), "monat") == date(2026, 9, 1)
+
+    tage = cr._achse(date(2026, 9, 1), date(2026, 9, 5), "tag")
+    assert tage == [date(2026, 9, d) for d in range(1, 6)]
+
+    monate = cr._achse(date(2025, 11, 20), date(2026, 2, 3), "monat")
+    assert monate == [date(2025, 11, 1), date(2025, 12, 1),
+                      date(2026, 1, 1), date(2026, 2, 1)]
+
+
+def test_reihe_schreibt_den_letzten_stand_fort():
+    # Eine Wertungszahl bewegt sich nur nach einer Partie: Tage ohne Partie
+    # tragen den letzten bekannten Stand, nicht null und nichts Interpoliertes.
+    tage = {date(2026, 8, 20): 1700, date(2026, 9, 2): 1750,
+            date(2026, 9, 4): 1742}
+    achse = cr._achse(date(2026, 9, 1), date(2026, 9, 5), "tag")
+    r = cr._reihe(tage, achse, date(2026, 9, 1), date(2026, 9, 5), "tag")
+
+    # Der Stand VOR dem Fenster ist der Startwert -- ohne ihn begaenne eine
+    # kurze Ansicht leer, bis zur ersten Partie darin.
+    assert r["start"] == 1700
+    assert r["werte"] == [1700, 1750, 1750, 1742, 1742]
+    assert r["hoch"] == {"rating": 1750, "tag": date(2026, 9, 2)}
+    assert r["punkte"] == 2
+
+
+def test_reihe_ohne_stand_davor_beginnt_leer():
+    tage = {date(2026, 9, 3): 1800}
+    achse = cr._achse(date(2026, 9, 1), date(2026, 9, 4), "tag")
+    r = cr._reihe(tage, achse, date(2026, 9, 1), date(2026, 9, 4), "tag")
+    # Vor der ersten bekannten Zahl gab es sie nicht -- dort bleibt die Reihe
+    # leer, statt eine Zahl zu behaupten.
+    assert r["werte"] == [None, None, 1800, 1800]
+    assert r["start"] is None

@@ -1,9 +1,10 @@
-/* schach.css — v1.92.0
+/* schach.css — v1.93.0
  *
- * Das Schach-Modul. Flaechen, Knoepfe, Listen (.rec-list), Tabelle und leere
- * Zustaende kommen aus css/style.css und css/statistics.css; hier steht nur,
- * was es sonst nirgends gibt: die Plattformfarben, der Wertungsvergleich, die
- * Bilanzleiste, die Formreihe und die Kontokarten.
+ * Das Schach-Modul. Flaechen, Knoepfe, Kopfzahlen (.stat-kpi), Listen
+ * (.rec-list, .rank-list), Diagrammrahmen (.chart-wrap) und leere Zustaende
+ * kommen aus css/style.css und css/statistics.css; hier steht nur, was es
+ * sonst nirgends gibt: die Plattformfarben, das Gitter der Wertungskurven,
+ * die Bilanzleiste, die Formreihe und die Kontokarten.
  *
  * Farbe: der Modulton --m-schach traegt die Identitaet (Icon-Kachel, Zahlen,
  * erste Diagrammreihe), die Statusfarben tragen Sieg/Remis/Niederlage. Beides
@@ -12,11 +13,9 @@
 
 /* ---------- Die beiden Plattformen ----------
    Zwei Plattformen brauchen ueberall DIESELBEN zwei Farben: der Punkt in der
-   Liste, die Linie im Verlauf, die Marke in der Bilanz. Vorher war der
-   Lichess-Punkt --text-1 -- als Diagrammlinie waere das die hellste Linie im
-   Bild gewesen und damit die Farbe, die in dieser App sonst die Trendlinie
-   traegt. Lichess bekommt deshalb den Modulton (DESIGN.md 7: die erste Reihe
-   traegt ihn, und Lichess liefert die vollstaendigeren Partien: Differenz und
+   Liste, die Linie im Verlauf, die Zahl im Kaestchen, die Marke in der
+   Bilanz. Lichess bekommt den Modulton (DESIGN.md 7: die erste Reihe traegt
+   ihn, und Lichess liefert die vollstaendigeren Partien: Differenz und
    Eroeffnung), Chess.com das Gruen seiner Marke -- hier als Diagrammfarbe
    --chart-6 genommen, nicht als fremder Modulton. */
 :root {
@@ -35,16 +34,44 @@
 .sch-dot[data-platform="lichess"]  { background: var(--sch-lichess); }
 .sch-dot[data-platform="chesscom"] { background: var(--sch-chesscom); }
 
-/* ---------- Kopfzeilen-Werkzeug ---------- */
-/* Chips, Zeitraum und Knopf in der Kopfzeile einer Karte. Auf dem Handy
-   rutschen sie unter die Ueberschrift, statt sie zu quetschen. */
-.sch-card-tools {
+/* ---------- Kopfleiste ----------
+   Ein Zeitraum gilt fuer die ganze Seite. Links steht in Worten, worueber
+   gerade gerechnet wird -- ohne diesen Satz waeren dieselben Karten mit
+   „30 Tage" und mit „Gesamt" nicht zu unterscheiden. */
+.sch-kopfleiste .sch-kopf-text {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+    margin-right: auto;
+}
+.sch-kopf-text strong {
+    font-size: 0.9375rem;
+    color: var(--text-1);
+    font-weight: 650;
+}
+.sch-kopf-text span {
+    font-size: 0.75rem;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+.sch-kopfleiste .stat-filter-slot { margin-left: 0; }
+
+/* ---------- Legende ----------
+   Die beiden Plattformen stehen einmal oben statt in jeder der kleinen
+   Kurven. Bei nur einer Plattform faellt sie ganz weg. */
+.sch-legende {
+    display: flex;
+    gap: 0.875rem;
     flex-wrap: wrap;
 }
-.sch-card-tools .stat-filter-slot { margin-left: 0; }
+.sch-leg {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
 
 .sch-note {
     margin: var(--space-3) 0 0;
@@ -52,86 +79,78 @@
     color: var(--text-3);
     line-height: 1.5;
 }
-/* Leere Huellen nehmen sonst trotzdem Abstand mit: die Chipreihe der
-   Plattformen gibt es nur bei zwei Konten, die Legende nur bei zwei Reihen. */
+.sch-note em { font-style: normal; color: var(--text-2); }
+/* Leere Huellen nehmen sonst trotzdem Abstand mit. */
 .sch-note:empty,
-.sch-disziplinen:empty,
-.sch-card-tools .stat-preset-chips:empty,
+.sch-legende:empty,
 .sch-filterbar .stat-preset-chips:empty { display: none; }
 
-/* ---------- Kopfkarte: Wertung neben ihrer Kurve ----------
-   Die Zahl und ihre Entwicklung gehoeren zusammen. Vorher standen dafuer
-   drei Bloecke untereinander -- eine grosse Zahl, ein Raster aller
-   Disziplinen und darunter das Diagramm -- und alle drei sagten im Kern
-   dasselbe. Jetzt ist die Zahl je Plattform die Legende der Kurve daneben:
-   gleiche Farbe, gleiche Bedeutung. */
-.sch-wertung-koerper {
+/* ---------- Wertungsverlauf: ein Kaestchen je Disziplin ----------
+   Vorher stand hier ein Diagramm mit einem Umschalter aus sechs Disziplinen.
+   Man musste fuenfmal klicken, um zu sehen, was jetzt nebeneinander liegt --
+   und beim Klicken vergisst man, was vorher dastand. Die Kaestchen sind
+   absichtlich klein: es geht um die Richtung, nicht um den einzelnen Tag. */
+.sch-verlauf-gitter {
     display: grid;
-    grid-template-columns: minmax(150px, 210px) minmax(0, 1fr);
-    gap: var(--space-4);
-    align-items: stretch;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--space-3);
 }
-.sch-kurve { min-width: 0; }
 
-.sch-staende {
-    display: flex;
-    flex-direction: column;
-    /* Mittig, nicht oben: die Kurve daneben ist hoeher, und zwei Bloecke am
-       oberen Rand lassen darunter ein Loch. */
-    justify-content: center;
-    gap: var(--space-2);
-    min-width: 0;
-}
-.sch-stand {
+.sch-vk {
     background: var(--surface-2);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 0.625rem 0.75rem;
+    padding: 0.75rem 0.875rem 0.625rem;
     min-width: 0;
-}
-.sch-stand-kopf {
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-3);
+    flex-direction: column;
 }
-/* Die Zahl traegt die Farbe ihrer Linie im Diagramm -- das ist der Grund,
-   warum die Karte keine eigene Legende braucht. */
-.sch-stand-zahl {
-    font-size: 1.75rem;
-    line-height: 1.1;
+.sch-vk-kopf {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.375rem;
+}
+.sch-vk-name {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--text-2);
+    margin-right: auto;
+}
+.sch-vk-zahlen {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+/* Die Zahl traegt die Farbe ihrer Linie darunter -- das ist der Grund, warum
+   das Kaestchen keine eigene Legende braucht. */
+.sch-vk-zahl {
+    font-size: 1.375rem;
+    line-height: 1.05;
     font-weight: 700;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
     color: var(--ton, var(--text-1));
-    margin-top: 0.125rem;
 }
-.sch-stand-sub {
-    font-size: 0.75rem;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
+.sch-vk-kurve {
+    position: relative;
+    height: 104px;
+    margin: 0 -0.25rem;
 }
-.sch-stand-meta {
-    margin-top: 0.125rem;
+.sch-vk-fuss {
+    margin-top: 0.375rem;
     font-size: 0.6875rem;
     color: var(--text-4);
     font-variant-numeric: tabular-nums;
 }
-
-/* ---------- Disziplinen als Umschalter ----------
-   Jeder Chip traegt seine Zahl mit: der Umschalter ist damit zugleich die
-   Uebersicht ueber alle Wertungen, und niemand muss fuenfmal klicken, um zu
-   sehen, wo er steht. */
-.sch-disziplinen { margin-bottom: var(--space-4); }
-.sch-disziplinen .v-chip b {
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-.sch-disziplinen .v-chip i {
-    font-style: normal;
-    opacity: 0.7;
+/* Kein Diagramm, sondern ein Satz: eine waagerechte Linie ueber einen
+   Zeitraum ohne Partie sieht aus wie ein kaputtes Diagramm. */
+.sch-vk-satz {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: var(--text-3);
+    line-height: 1.5;
 }
 
 /* Die Entwicklung als kleine Marke -- gruen hoch, rot runter. Statusfarben
@@ -142,6 +161,7 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--text-3);
+    flex: none;
 }
 .sch-trend.is-hoch   { color: var(--ok); }
 .sch-trend.is-runter { color: var(--danger); }
@@ -167,17 +187,7 @@
     color: var(--text-3);
 }
 
-/* Die Bilanz liegt ueber die volle Breite: links die Quote, rechts die
-   Plattformen. Untereinander waere die Karte doppelt so hoch und haette
-   rechts nichts stehen. */
-.sch-bilanz-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: var(--space-5);
-    align-items: start;
-}
-
-.sch-bilanz + .sch-bilanz { margin-top: var(--space-3); }
+.sch-bilanz { margin-top: var(--space-4); }
 
 .sch-bilanz-kopf {
     display: flex;
@@ -223,8 +233,9 @@
 
 /* ---------- Form ----------
    Die letzten Partien als Reihe von Marken, neueste links. Eine Reihe aus
-   zwanzig Quadraten liest sich schneller als "13 Siege, 3 Remis, 4
-   Niederlagen" -- man sieht die Strecke, nicht die Summe. */
+   Quadraten liest sich schneller als "13 Siege, 3 Remis, 4 Niederlagen" --
+   man sieht die Strecke, nicht die Summe. Jede Marke ist anklickbar: sie
+   sucht ihren Gegner in den Partien. */
 .sch-pips {
     display: flex;
     flex-wrap: wrap;
@@ -234,10 +245,18 @@
 .sch-pip {
     width: 16px;
     height: 16px;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
     border-radius: 5px;
     flex: none;
+    cursor: pointer;
     background: var(--text-4);
+    transition: transform var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
 }
+.sch-pip:hover { transform: scale(1.18); }
+.sch-pip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .sch-pip.is-sieg       { background: var(--ok); }
 .sch-pip.is-remis      { background: var(--text-4); }
 .sch-pip.is-niederlage { background: var(--danger); }
@@ -249,6 +268,20 @@
     margin: 0 0 var(--space-3);
 }
 .sch-serie strong { color: var(--text-1); font-weight: 650; }
+.sch-serie:empty { display: none; }
+
+/* Zwei Ranglisten in einer Karte (Zeitkontrolle, Farbe): beides sind
+   Aufteilungen derselben Partien mit zwei bis vier Posten. Zwei Karten dafuer
+   waeren zwei halbleere Karten. */
+.sch-unterteil {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-4);
+    margin: var(--space-4) 0 0.5rem;
+}
+.sch-unterteil:first-child { margin-top: 0; }
 
 /* Zwei Zeilen fuer Weiss und Schwarz. Kein eigenes Bauteil: dieselbe
    Rangliste wie ueberall, nur mit zwei Posten. */
@@ -442,17 +475,14 @@
 
 .sch-feld--eng { flex: 0 1 280px; }
 
-/* Schmal: erst die Staende nebeneinander ueber die Kurve, dann alles
-   untereinander. Die Zahl bleibt oben -- sie ist die Antwort, die Kurve die
-   Begruendung. */
 @media (max-width: 860px) {
-    .sch-wertung-koerper { grid-template-columns: minmax(0, 1fr); }
-    .sch-staende { flex-direction: row; flex-wrap: wrap; }
-    .sch-stand { flex: 1 1 140px; }
-    .sch-bilanz-grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+    .sch-verlauf-gitter { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 }
 
 @media (max-width: 560px) {
     .sch-quote-num { font-size: 1.75rem; }
-    .sch-stand-zahl { font-size: 1.5rem; }
+    .sch-vk-zahl { font-size: 1.25rem; }
+    /* Schmal steht je Disziplin eine Kurve untereinander -- zwei nebeneinander
+       waeren 130 Pixel breit und damit keine Kurve mehr. */
+    .sch-verlauf-gitter { grid-template-columns: minmax(0, 1fr); }
 }

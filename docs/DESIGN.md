@@ -258,6 +258,14 @@ Reduziert, ruhig, dieselbe Farbwelt.
 - Balken bekommen `borderRadius: 6`, keine Trennlinien zwischen Segmenten.
 - Legende nur, wenn mehr als zwei Reihen und keine direkte Beschriftung möglich
   ist. Sonst beschriften wir am Punkt.
+- **Zeigen statt umschalten.** Ein Umschalter vor einem Diagramm, der nur
+  bestimmt, welcher Ausschnitt derselben Daten gerade sichtbar ist, wird zu
+  mehreren kleinen Diagrammen nebeneinander — je Disziplin, je Kennzahl, je
+  Konto. Beim Klicken vergisst man, was vorher dastand; ein Vergleich, der
+  nebeneinander liegt, ist keiner, den man sich merken muss. Ein kleines
+  Diagramm braucht dafür keine eigene Legende: die Zahl über der Kurve trägt
+  die Farbe ihrer Linie. Nicht gemeint ist der **Zeitraum** — der gilt für die
+  ganze Seite und filtert nicht, er verschiebt.
 - Tooltip sieht aus wie ein schwebendes Element der App: `--surface-3`,
   Haarlinie, 12 px Radius — nicht wie Chart.js-Standard.
 - **Ein Datum im Tooltip trägt immer die Jahreszahl**, auch wenn die Achse aus

@@ -22,6 +22,7 @@ wenige Abfragen, sie laufen ueber ``asyncio.to_thread``, und das Backend
 kommt damit ohne eine weitere Abhaengigkeit aus.
 """
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -34,14 +35,23 @@ USER_AGENT = "Vexbob/1.0 (persoenlicher Tracker, Einzelnutzer)"
 PLATTFORMEN = ("lichess", "chesscom")
 PLATTFORM_LABEL = {"lichess": "Lichess", "chesscom": "Chess.com"}
 
-# Die Disziplinen in der Reihenfolge, in der sie angezeigt werden. "daily"
-# (Chess.com) und "classical" (Lichess) sind nicht dasselbe, bleiben aber
-# beide erhalten -- sie einer gemeinsamen Zeile zuzuschlagen waere eine
-# Gleichsetzung, die keine der beiden Plattformen macht.
-PERFS = ("bullet", "blitz", "rapid", "classical", "daily", "puzzle")
+# Die Disziplinen in der Reihenfolge, in der sie angezeigt werden.
+PERFS = ("bullet", "blitz", "rapid", "puzzle")
+
+# Was ueber die Bedenkzeit hinaus eine andere Sportart ist und deshalb nicht
+# gefuehrt wird: Fernschach heisst bei Chess.com "daily", bei Lichess
+# "correspondence"; "classical" ist die Turnierbedenkzeit, die online
+# praktisch nicht vorkommt. Eine Partie ueber mehrere Tage neben einer
+# Bullet-Partie zu zaehlen, macht aus beidem denselben Mittelwert -- und
+# gezaehlt wurde dabei fast nichts. Gesperrt wird als LISTE des Ausgelassenen
+# und nicht als Liste des Erlaubten: taucht bei einer Plattform eine neue
+# Zeitkontrolle auf, soll sie auftauchen und nicht stillschweigend fehlen.
+NICHT_GEFUEHRT = ("classical", "daily", "correspondence")
+
 PERF_LABEL = {
+    "ultraBullet": "Ultra-Bullet",
     "bullet": "Bullet", "blitz": "Blitz", "rapid": "Rapid",
-    "classical": "Klassisch", "daily": "Fernschach", "puzzle": "Rätsel",
+    "puzzle": "Rätsel",
 }
 
 ZEITLIMIT = 30
@@ -136,7 +146,7 @@ def _profil_chesscom(name: str) -> dict:
     profil = _json(f"https://api.chess.com/pub/player/{kurz}")
     stats = _json(f"https://api.chess.com/pub/player/{kurz}/stats")
     ratings = []
-    for perf in ("bullet", "blitz", "rapid", "daily"):
+    for perf in ("bullet", "blitz", "rapid"):
         block = stats.get(f"chess_{perf}") or {}
         letzte = block.get("last") or {}
         if letzte.get("rating"):
@@ -169,6 +179,37 @@ def _profil_chesscom(name: str) -> dict:
         "profile_url": profil.get("url") or f"https://www.chess.com/member/{name}",
         "ratings": ratings,
     }
+
+
+# ---------------------------------------------------------------------------
+# Eroeffnungen
+# ---------------------------------------------------------------------------
+# Aus "Sicilian Defense: Najdorf Variation" und "Sicilian Defense Najdorf
+# Variation 6.Be3" wird dieselbe Familie. Lichess trennt mit Doppelpunkt,
+# Chess.com haengt Variante und Zugfolge einfach an -- ohne das Zusammenlegen
+# stuende dieselbe Eroeffnung zwanzigmal in der Liste, jedes Mal mit einer
+# Partie. Die Regel steht hier und nicht im Frontend: die Auswertung rechnet
+# im Server damit, und zwei Fassungen davon waeren zwei Ranglisten, die sich
+# unterscheiden koennen.
+_FAMILIE = re.compile(
+    r"^(.*?\b(?:Defense|Defence|Opening|Game|Gambit|Attack|System|Variation)\b)")
+
+
+def eroeffnungs_familie(name):
+    s = (name or "").strip()
+    if not s:
+        return None
+    s = s.split(":")[0]
+    s = re.sub(r"\s+\d+\..*$", "", s)
+    treffer = _FAMILIE.match(s)
+    if treffer:
+        s = treffer.group(1)
+    return s.strip() or None
+
+
+def wird_gefuehrt(perf) -> bool:
+    """Ob eine Zeitkontrolle ueberhaupt in dieses Modul gehoert."""
+    return (perf or "") not in NICHT_GEFUEHRT
 
 
 # ---------------------------------------------------------------------------
