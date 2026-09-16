@@ -77,11 +77,19 @@ TABLES_ORDERED = [
     "food_item_sizes",
     "food_dishes",
     "food_dish_items",
+    # Das Foto eines Gerichts (v1.99.0). Es hat keine eigene user_id und
+    # haengt ueber dish_id am Gericht -- siehe PARENT_SCOPE. Die Rohbytes
+    # selbst bleiben aus dem Snapshot draussen (BYTEA_COLUMNS), die
+    # Metazeile bleibt drin, damit ein Restore konsistent ist.
+    "food_dish_images",
     "food_log",
     "food_settings",
     # Essenstagebuch (v1.97.0) -- eigene Tabelle, eigenes Modul. Sie haengt
     # an nichts ausser users: ein Tagebucheintrag ist ein Name und eine Stufe.
     "food_diary",
+    # Welche Bruecken-Vorschlaege abgelehnt wurden (v1.99.0). Ohne sie kaeme
+    # jeder einmal weggeklickte Vorschlag nach einem Restore wieder.
+    "food_bridge_dismissed",
     # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
     # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
     "user_prefs",
@@ -90,6 +98,7 @@ TABLES_ORDERED = [
 # Tabellen mit binären BYTEA-Feldern, die im Backup base64-serialisiert werden
 BYTEA_COLUMNS = {
     "receipt_images": ["image_data", "thumbnail_data"],
+    "food_dish_images": ["image_data", "thumbnail_data"],
 }
 
 # Tabellen, die eine user_id haben (users selber nicht)
@@ -109,6 +118,7 @@ PARENT_SCOPE = {
     "chess_ratings":             ("account_id", "chess_accounts"),
     "food_item_sizes":           ("item_id", "food_items"),
     "food_dish_items":           ("dish_id", "food_dishes"),
+    "food_dish_images":          ("dish_id", "food_dishes"),
 }
 
 def _ser_value(v):

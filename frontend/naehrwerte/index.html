@@ -16,6 +16,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/ring.js"></script>
+<script src="/js/bild.js"></script>
 <script src="/js/sw-update.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="/js/charts.js"></script>
@@ -91,6 +92,21 @@
                 <div class="v-ring-reihe" id="nwMakros"></div>
 
                 <div id="nwMahlzeiten"></div>
+            </div>
+
+            <!-- Die Brücke ins Essenstagebuch. Sie steht nur da, wenn es
+                 etwas zu brücken gibt — eine Karte über nichts ist eine
+                 Karte zu viel. -->
+            <div class="stat-card" id="nwBruecke" hidden>
+                <div class="stat-card-head">
+                    <h3>Aus deinem Tagebuch</h3>
+                    <span class="stat-range-lbl" id="nwBrueckeSub"></span>
+                </div>
+                <p class="ern-note" style="margin-top:0">Das notierst du oft, und hier
+                    gibt es noch nichts dazu. Einmal Nährwerte hinterlegen — danach lässt
+                    es sich mit Menge eintragen. Deine Tagebuch-Einträge bleiben, wie sie
+                    sind; nachträglich wird nichts umgerechnet.</p>
+                <div id="nwBrueckeListe"></div>
             </div>
         </div>
     </div>

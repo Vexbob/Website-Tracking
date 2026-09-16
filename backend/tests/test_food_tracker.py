@@ -289,3 +289,165 @@ def test_migration_047_raeumt_nur_auf_was_leer_ist():
     assert "DROP TABLE" not in text
     assert "DROP COLUMN IF EXISTS LEVEL" in text
     assert "SET NOT NULL" in text
+
+
+# ==========================================================================
+# Fotos fuer Gerichte (v1.99.0)
+# ==========================================================================
+class AttrappeDatei:
+    """Ein hochgeladenes Bild, so weit der Router es anfasst."""
+
+    def __init__(self, daten=b"nicht-wirklich-ein-bild"):
+        self.daten = daten
+
+    async def read(self):
+        return self.daten
+
+
+class AttrappeFoto:
+    def __init__(self, gehoert=True):
+        self.gehoert = gehoert
+        self.geschrieben = []
+
+    def _pruefe(self, sql, args):
+        hoechste = max([int(n) for n in re.findall(r"[$](\d+)", sql)] or [0])
+        assert hoechste == len(args)
+
+    async def fetchval(self, sql, *args):
+        self._pruefe(sql, args)
+        return 1 if self.gehoert else None
+
+    async def fetchrow(self, sql, *args):
+        self._pruefe(sql, args)
+        return None
+
+    async def execute(self, sql, *args):
+        self._pruefe(sql, args)
+        self.geschrieben.append((sql, args))
+        return "OK"
+
+    async def fetch(self, sql, *args):
+        self._pruefe(sql, args)
+        return []
+
+
+HOCHLADEN = fr.foto_hochladen.__wrapped__
+
+
+def test_ein_fremdes_gericht_bekommt_kein_foto():
+    with pytest.raises(HTTPException) as fehler:
+        asyncio.run(HOCHLADEN(request=None, dish_id=99, file=AttrappeDatei(),
+                              db=AttrappeFoto(gehoert=False), user=NUTZER))
+    assert fehler.value.status_code == 404
+
+
+def test_ein_zu_grosses_bild_wird_abgewiesen():
+    gross = AttrappeDatei(b"x" * (fr.FOTO_MAX_BYTES + 1))
+    with pytest.raises(HTTPException) as fehler:
+        asyncio.run(HOCHLADEN(request=None, dish_id=1, file=gross,
+                              db=AttrappeFoto(), user=NUTZER))
+    assert fehler.value.status_code == 413
+
+
+def test_was_kein_bild_ist_faellt_auf_statt_still_zu_landen(monkeypatch):
+    """Der Fehler von v1.66.0: die weiche Fassung speichert einen Byte-Haufen
+    als ``application/octet-stream``, liefert HTTP 200 -- und das Bild
+    erscheint nie. Hier muss es 400 sein."""
+    def wirft(roh):
+        raise ValueError("Das Format konnte nicht gelesen werden.")
+    monkeypatch.setattr(fr.bilder, "process_image_strict", wirft)
+    with pytest.raises(HTTPException) as fehler:
+        asyncio.run(HOCHLADEN(request=None, dish_id=1, file=AttrappeDatei(),
+                              db=AttrappeFoto(), user=NUTZER))
+    assert fehler.value.status_code == 400
+
+
+def test_ein_zweiter_upload_ersetzt_statt_anzuhaeufen(monkeypatch):
+    monkeypatch.setattr(fr.bilder, "process_image_strict",
+                        lambda roh: (b"gross", b"klein", "image/jpeg", 5))
+    db = AttrappeFoto()
+    asyncio.run(HOCHLADEN(request=None, dish_id=1, file=AttrappeDatei(),
+                          db=db, user=NUTZER))
+    sql, _ = db.geschrieben[0]
+    assert "ON CONFLICT (dish_id) DO UPDATE" in sql
+
+
+def test_das_foto_haengt_im_backup_am_gericht():
+    """Ohne PARENT_SCOPE faellt eine Tabelle ohne user_id in den
+    'alles lesen'-Zweig -- das Leck von v1.65.0."""
+    from services import backup
+    assert backup.PARENT_SCOPE["food_dish_images"] == ("dish_id", "food_dishes")
+    assert "food_dish_images" in backup.BYTEA_COLUMNS
+    assert "food_dish_images" in backup.TABLES_ORDERED
+
+
+# ==========================================================================
+# Die Bruecke ins Essenstagebuch
+# ==========================================================================
+class AttrappeBruecke:
+    def __init__(self, zeilen=()):
+        self.zeilen = list(zeilen)
+        self.sql = None
+        self.geschrieben = []
+
+    def _pruefe(self, sql, args):
+        hoechste = max([int(n) for n in re.findall(r"[$](\d+)", sql)] or [0])
+        assert hoechste == len(args), sql
+
+    async def fetch(self, sql, *args):
+        self._pruefe(sql, args)
+        self.sql = sql
+        return self.zeilen
+
+    async def fetchval(self, sql, *args):
+        self._pruefe(sql, args)
+        return 61
+
+    async def execute(self, sql, *args):
+        self._pruefe(sql, args)
+        self.geschrieben.append((sql, args))
+        return "OK"
+
+
+def test_die_bruecke_laesst_weg_was_es_schon_gibt():
+    db = AttrappeBruecke([{"name": "Müsli", "anzahl": 43, "zuletzt": HEUTE}])
+    antwort = asyncio.run(fr.bruecke(db=db, user=NUTZER))
+    assert antwort["suggestions"][0]["count"] == 43
+    assert antwort["diary_days"] == 61
+    # Drei Ausschluesse tragen die Abfrage: was schon Lebensmittel ist, was
+    # schon Gericht ist, und was einmal abgelehnt wurde.
+    assert "FROM food_items" in db.sql
+    assert "FROM food_dishes" in db.sql
+    assert "food_bridge_dismissed" in db.sql
+    # Gruppiert wird kleingeschrieben -- sonst waeren "Müsli" und "müsli" zwei.
+    assert "GROUP BY lower(d.label)" in db.sql
+    # Was zweimal dastand, ist kein Muster, sondern Zufall.
+    assert "HAVING COUNT(*) >= $3" in db.sql
+
+
+def test_die_bruecke_liest_nur():
+    """Ein Tagebuch-Eintrag von damals bleibt einer -- aus einer Stufe
+    nachtraeglich eine Grammzahl zu erfinden, waere die falsche
+    Genauigkeit (dieselbe Regel wie in Migration 042)."""
+    db = AttrappeBruecke()
+    asyncio.run(fr.bruecke(db=db, user=NUTZER))
+    for wort in ("UPDATE", "INSERT", "DELETE"):
+        assert wort not in db.sql.upper()
+
+
+def test_abgelehnt_wird_kleingeschrieben_gemerkt():
+    db = AttrappeBruecke()
+    asyncio.run(fr.bruecke_ablehnen.__wrapped__(
+        request=None, daten=fr.BrueckeAblehnen(label="Müsli"),
+        db=db, user=NUTZER))
+    sql, args = db.geschrieben[0]
+    assert "INSERT INTO food_bridge_dismissed" in sql
+    assert "müsli" in args
+
+
+def test_ein_leerer_name_wird_nicht_abgelehnt():
+    with pytest.raises(HTTPException) as fehler:
+        asyncio.run(fr.bruecke_ablehnen.__wrapped__(
+            request=None, daten=fr.BrueckeAblehnen(label="   "),
+            db=AttrappeBruecke(), user=NUTZER))
+    assert fehler.value.status_code == 400

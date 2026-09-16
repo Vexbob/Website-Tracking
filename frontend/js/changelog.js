@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.99.0', date: '2026-09-18', title: 'Gerichte am Handy — und mit Foto', notes: [
+        'Ein Gericht anzulegen ist jetzt ein Blatt, das auf dem Handy das ganze Bild einnimmt: erst der Name (und gleich das Foto, weil das Telefon dann ohnehin in der Hand ist), dann die Zutaten. Das Suchfeld klebt oben und sucht in einem Rutsch über deinen Bestand UND den Katalog — ein Treffer von dort wird beim Antippen still aufgenommen. Damit fällt der Reiterwechsel weg, an dem der alte Ablauf gescheitert ist.',
+        'Mengen tippt man nicht mehr, man tippt darauf: ein Stepper, bei Gramm in Zehnerschritten, bei eigenen Größen in ganzen Einheiten. Die Einheit öffnet ein Blatt mit genau dem, was am Lebensmittel hinterlegt ist.',
+        'Unten läuft die Summe mit: „1 Portion ≈ 620 kcal · 31 g Eiweiß“, und die Zahl wächst mit jeder Zutat. Fehlt einer Zutat eine Angabe, steht „mind.“ davor statt einer Zahl, die Vollständigkeit behauptet.',
+        'Eigene Gerichte können ein Foto bekommen — die Gerichteliste wird damit zu einer, die man überfliegt statt liest. Lebensmittel aus Open Food Facts bleiben ohne: ein fremdes Produktfoto wäre weder dein Essen noch deine Daten.',
+        'Neu ist die Brücke: schaltest du die Nährwerte ein, schlägt der Tracker dir vor, was du im Tagebuch oft notiert hast („Müsli, 43× notiert“). Einmal Nährwerte hinterlegen, und es lässt sich mit Menge eintragen. Deine Tagebuch-Einträge bleiben dabei, wie sie sind.',
+    ]},
     { v: 'v1.98.0', date: '2026-09-18', title: 'Nährwerte — der Tracker mit Ringen', notes: [
         'Der Ernährungs-Tracker ist jetzt ein eigenes Modul unter „Nährwerte“ und sieht aus wie das, was man kennt: ein Halbkreis für die Kalorien, drei kleine Ringe für Eiweiß, Kohlenhydrate und Fett, und daneben, was bis zum Ziel noch fehlt.',
         'Die Tagesziele stehen jetzt in einem eigenen Reiter UND direkt unter dem Ring — wer keines gesetzt hat, liest dort, woran gerade gemessen wird, und kommt mit einem Tipp hin. Vorher lagen sie unter „Verlauf“ und waren im Tagebuch-Modus gar nicht zu sehen.',

@@ -362,6 +362,118 @@
 .ern-menge .v-btn { width: auto; margin: 0; }
 .v-select--sm { padding: 0.35rem 1.6rem 0.35rem 0.55rem; font-size: 0.8125rem; }
 
+/* ---------- Gericht anlegen ----------
+   Zwei Schritte in einem Blatt. Das Suchfeld klebt OBEN und sucht ueber
+   Bestand und Katalog zugleich -- damit faellt der Reiterwechsel weg, der
+   den alten Ablauf auf dem Handy unbrauchbar gemacht hat. Unten laeuft die
+   Summe mit: man sieht das Rezept entstehen, und das ist der Teil, der
+   Freude macht. */
+.nw-g-name { font-size: 1.25rem !important; }  /* darunter zoomt iOS beim Tippen */
+.nw-g-foto {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: var(--space-3);
+}
+.nw-g-foto .v-bild { width: 140px; }
+.nw-g-foto .ern-tasten { margin: 0; }
+
+.nw-g-suche {
+    position: sticky;
+    top: -1rem;
+    z-index: 2;
+    margin-top: var(--space-3);
+    /* Ein klebendes Feld ueber einer scrollenden Liste braucht einen eigenen
+       Grund, sonst scheint die Liste hindurch. */
+    background: var(--surface-2);
+    box-shadow: 0 6px 12px -8px rgba(0,0,0,0.5);
+}
+
+.nw-g-zutat {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--line);
+}
+.nw-g-zutat:last-child { border-bottom: 0; }
+.nw-g-zutat-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nw-g-einheit {
+    flex: none;
+    width: auto;
+    min-width: 34px;
+    height: 34px;
+    margin: 0;
+    padding: 0 0.5rem;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text-3);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+.nw-g-einheit:hover { opacity: 1; color: var(--text-1); border-color: var(--line-strong); }
+.nw-g-einheit:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.nw-g-treffer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    margin: 0.375rem 0 0;
+    padding: 0.55rem 0.75rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+}
+.nw-g-treffer:hover {
+    opacity: 1;
+    border-color: var(--nw-figur);
+    background: color-mix(in srgb, var(--nw-figur) 8%, var(--surface-2));
+}
+.nw-g-treffer:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.nw-g-treffer-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.nw-g-austag { margin-top: var(--space-3); display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.nw-g-austag .ern-note { width: 100%; margin: 0; }
+
+/* Die Fussleiste klebt unten und traegt die mitlaufende Summe. */
+.nw-g-fuss {
+    position: sticky;
+    bottom: -1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: var(--space-4);
+    padding: 0.625rem 0 calc(0.25rem + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+}
+.nw-g-summe {
+    flex: 1 1 160px;
+    min-width: 0;
+    font-size: 0.8125rem;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+.nw-g-summe strong { color: var(--text-1); }
+.nw-g-gramm { margin-left: 0.4rem; color: var(--text-4); }
+.nw-g-fuss .v-btn { width: auto; margin: 0; flex: none; }
+
 /* ---------- Ziele ---------- */
 .ern-ziele {
     display: grid;

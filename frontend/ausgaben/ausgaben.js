@@ -213,18 +213,11 @@ function showUndoToast(msg, onUndo, ms=3000) {
     haptic('tap');
 }
 
-/* ---------- Fullscreen-Image-Viewer ---------- */
-function openImageFullscreen(src) {
-    const overlay = document.createElement('div');
-    overlay.className = 'img-fullscreen';
-    overlay.innerHTML = `<button class="img-close" aria-label="Schließen">✕</button><img src="${src}" alt="Bon">`;
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add('show'));
-    const close = () => { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 200); };
-    overlay.onclick = (e) => { if (e.target === overlay || e.target.classList.contains('img-close')) close(); };
-    const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
-    document.addEventListener('keydown', onKey);
-}
+/* ---------- Fullscreen-Image-Viewer ----------
+   Seit v1.99.0 in js/bild.js, damit das Ernaehrungs-Modul denselben Viewer
+   benutzt statt eines zweiten. Die Weiterleitung bleibt, damit die rund
+   zwanzig Aufrufstellen unveraendert sind. */
+function openImageFullscreen(src) { return VexBild.vollbild(src, 'Bon'); }
 
 /* ---------- Modal (generisch) ---------- */
 function openModal(title, contentHtml, opts={}) {
@@ -246,26 +239,7 @@ function openModal(title, contentHtml, opts={}) {
 
 /* ---------- Bild-Kompression ---------- */
 async function compressImage(file, maxDim = 1600, quality = 0.85) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-        img.onload = () => {
-            const w = img.naturalWidth, h = img.naturalHeight;
-            const scale = Math.min(1, maxDim / Math.max(w, h));
-            const cw = Math.round(w * scale), ch = Math.round(h * scale);
-            const canvas = document.createElement('canvas');
-            canvas.width = cw; canvas.height = ch;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, cw, ch);
-            URL.revokeObjectURL(url);
-            canvas.toBlob(
-                (blob) => blob ? resolve(new File([blob], (file.name || 'bon.jpg').replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })) : reject(new Error('Kompression fehlgeschlagen')),
-                'image/jpeg', quality
-            );
-        };
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Bild kann nicht geladen werden')); };
-        img.src = url;
-    });
+    return VexBild.komprimieren(file, maxDim, quality);
 }
 
 /* ---------- Formatter ---------- */
@@ -279,13 +253,7 @@ function todayISO() {
 }
 
 /* ---------- Bild mit Auth laden -> Blob-URL ---------- */
-async function fetchImageAsBlobUrl(url) {
-    const token = getToken();
-    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!res.ok) throw new Error('Bild laden fehlgeschlagen');
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-}
+async function fetchImageAsBlobUrl(url) { return VexBild.alsBlobUrl(url); }
 
 /* ---------- Datei mit Auth-Header herunterladen (für CSV-Export) ---------- */
 async function downloadFile(url, filename) {

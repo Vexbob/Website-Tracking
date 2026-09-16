@@ -47,6 +47,16 @@ const API = {
     zieleSetzen: (d) => apiCall('/api/food/track/targets', { method: 'PUT', body: d }),
     verlauf:  (qs) => apiCall('/api/food/track/history' + qs),
     haeufig:  ()   => apiCall('/api/food/track/frequent'),
+    bruecke:  ()   => apiCall('/api/food/track/bridge'),
+    brueckeWeg: (label) => apiCall('/api/food/track/bridge/dismiss',
+                                    { method: 'POST', body: { label } }),
+    fotoHochladen: (id, datei) => {
+        const fd = new FormData();
+        fd.append('file', datei);
+        return apiCall('/api/food/dishes/' + id + '/photo',
+                       { method: 'POST', body: fd });
+    },
+    fotoWeg: (id) => apiCall('/api/food/dishes/' + id + '/photo', { method: 'DELETE' }),
 };
 
 const REITER = [
@@ -75,6 +85,7 @@ const state = {
     formGroessen: [],
     tag: null, datum: null, gerichte: [], haeufig: [],
     dialog: null, dlg: null,
+    bruecke: null,
     verlauf: null, range: null, rangeMount: null,
     charts: { eins: null, zwei: null },
     entwurf: { id: null, name: '', items: [] },
@@ -185,7 +196,8 @@ function openModal(titel, inhalt, opts) {
     const o = opts || {};
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal-box${o.breit ? ' wide' : ''}">
+    overlay.innerHTML = `<div class="modal-box${o.breit ? ' wide' : ''}${
+        o.voll ? ' modal-box--voll' : ''}">
         <div class="modal-head"><h3>${titel}</h3>
             <button class="modal-close" aria-label="Schließen">✕</button></div>
         <div class="modal-body">${inhalt}</div>
@@ -375,6 +387,70 @@ function zeichneTag() {
     zeichneKopf();
     zeichneRinge();
     zeichneMahlzeiten();
+}
+
+/* Die Bruecke: wer den Tracker einschaltet, hat oft schon Wochen im
+   Essenstagebuch stehen. Diese Namen sind die beste Vorlage fuer einen
+   Bestand, den es noch nicht gibt.
+
+   Sie schreibt nichts um. Der Tagebuch-Eintrag von damals bleibt ein
+   Tagebuch-Eintrag und wird nicht nachtraeglich zu einer Menge -- aus einer
+   Stufe eine Grammzahl zu erfinden, waere die falsche Genauigkeit. Nur der
+   NAECHSTE Eintrag hier profitiert. Und sie fuehrt nicht in die andere
+   Richtung: beide Module laufen nebeneinander weiter. */
+function zeichneBruecke() {
+    const karte = document.getElementById('nwBruecke');
+    if (!karte) return;
+    const liste = (state.bruecke && state.bruecke.suggestions) || [];
+    // Ohne Vorschlaege gar keine Karte: eine Karte ueber nichts ist eine
+    // Karte zu viel.
+    karte.hidden = !liste.length;
+    if (!liste.length) return;
+
+    document.getElementById('nwBrueckeSub').textContent =
+        `${state.bruecke.diary_days} Tage notiert`;
+    document.getElementById('nwBrueckeListe').innerHTML = liste.map((v, i) => `
+        <div class="ern-zeile">
+            <div class="ern-zeile-text">
+                <strong>${esc(v.name)}</strong>
+                <div class="ern-note">${v.count}× notiert · zuletzt ${datumKurz(v.last)}</div>
+            </div>
+            <div class="ern-tasten">
+                <button type="button" class="v-btn v-btn--sm v-btn--primary"
+                        data-bruecke-an="${i}">Nährwerte hinterlegen</button>
+                <button type="button" class="v-btn v-btn--sm"
+                        data-bruecke-weg="${i}">Nicht nötig</button>
+            </div>
+        </div>`).join('');
+
+    karte.querySelectorAll('[data-bruecke-an]').forEach(b =>
+        b.addEventListener('click', () => {
+            const v = liste[Number(b.dataset.brueckeAn)];
+            activateTab('vorrat');
+            // Mit vorausgefuelltem Namen: was man 43-mal notiert hat, soll
+            // man nicht noch einmal tippen muessen.
+            itemDialog(null, v.name);
+        }));
+    karte.querySelectorAll('[data-bruecke-weg]').forEach(b =>
+        b.addEventListener('click', async () => {
+            const v = liste[Number(b.dataset.brueckeWeg)];
+            b.classList.add('is-loading');
+            try {
+                state.bruecke = await API.brueckeWeg(v.name);
+                zeichneBruecke();
+            } catch (err) {
+                melde(err.message || 'Das ging nicht.', 'error');
+            }
+        }));
+}
+
+async function ladeBruecke() {
+    try {
+        state.bruecke = await API.bruecke();
+    } catch (e) {
+        state.bruecke = null;
+    }
+    zeichneBruecke();
 }
 
 async function ladeTag(datum) {
@@ -961,120 +1037,394 @@ async function zieleZuruecksetzen() {
     await zieleSpeichern();
 }
 
-/* ------------------------------------------------------------- Gerichte */
+/* ------------------------------------------------------------- Gerichte
+ *
+ * Ein Rezept anzulegen war der unbequemste Teil dieses Moduls, und auf dem
+ * Handy scheiterte es an vier Dingen: das Suchfeld stand UNTER der
+ * Zutatenliste, jede Zutat war eine Zeile aus drei Bedienelementen, die
+ * Einheit ein natives Auswahlrad -- und eine Zutat, die nicht im Bestand
+ * stand, zwang in einen anderen Reiter, also aus dem Dialog heraus, also von
+ * vorn.
+ *
+ * Jetzt: zwei Schritte in einem Blatt, das auf dem Handy das ganze Bild
+ * einnimmt. Das Suchfeld klebt OBEN und sucht in einem Rutsch ueber Bestand
+ * UND Katalog -- damit faellt der Reiterwechsel weg, und das ist die groesste
+ * einzelne Vereinfachung. Unten laeuft die Summe mit: man sieht das Rezept
+ * entstehen.
+ */
+
+function entwurfSumme() {
+    let gramm = 0, kcal = 0, eiweiss = 0, luecke = false;
+    state.entwurf.items.forEach(z => {
+        const p = state.bestand.find(x => x.id === z.item_id);
+        const e = (z.units || []).find(u => u.key === z.unit);
+        const g = Number(z.amount) * (e && e.grams ? Number(e.grams) : 1);
+        gramm += g;
+        if (!p || p.kcal == null) luecke = true;
+        else {
+            kcal += Number(p.kcal) * g / 100;
+            if (p.protein_g != null) eiweiss += Number(p.protein_g) * g / 100;
+        }
+    });
+    return { gramm, kcal, eiweiss, luecke };
+}
+
+function zeichneEntwurfFuss() {
+    const el = document.getElementById('nwGSumme');
+    if (!el) return;
+    if (!state.entwurf.items.length) {
+        el.textContent = 'Noch keine Zutat';
+        return;
+    }
+    const s = entwurfSumme();
+    // "mind." statt einer Zahl, die Vollstaendigkeit behauptet: fehlt einer
+    // Zutat die Angabe, ist die Summe unvollstaendig und nicht niedriger.
+    el.innerHTML = `<strong>1 Portion</strong> ≈ ${s.luecke ? 'mind. ' : ''}`
+        + `${zahlKurz(s.kcal)} kcal · ${zahlKurz(s.eiweiss)} g Eiweiß`
+        + `<span class="nw-g-gramm">${zahlKurz(s.gramm)} g</span>`;
+}
 
 function gerichtDialog(g) {
     state.entwurf = g
-        ? { id: g.id, name: g.name,
+        ? { id: g.id, name: g.name, foto: null, hatFoto: !!g.has_photo,
             items: g.items.map(z => ({ item_id: z.item_id, name: z.name,
                                        amount: z.amount, unit: z.unit, units: z.units })) }
-        : { id: null, name: '', items: [] };
+        : { id: null, name: '', foto: null, hatFoto: false, items: [] };
 
     const inhalt = `
-        <label class="ern-feld">
-            <span>Name</span>
-            <input type="text" id="ernGerichtName" autocomplete="off"
-                   placeholder="z. B. Wraps" value="${esc(state.entwurf.name)}">
-        </label>
-        <div id="ernZutaten"></div>
-        <label class="ern-suche">
-            <span class="ern-suche-ico" aria-hidden="true">➕</span>
-            <input type="search" id="ernZutatSuche" autocomplete="off"
-                   aria-label="Zutat aus dem Bestand suchen"
-                   placeholder="Zutat aus dem Bestand suchen">
-        </label>
-        <div id="ernZutatTreffer"></div>
-        <p class="ern-note">Gramm stehen nur hier im Rezept. Beim Eintragen sagst du danach
-            nur noch, wie viele <em>Portionen</em> es waren.</p>
-        <div class="ern-tasten">
-            <button type="button" class="v-btn v-btn--primary" id="ernGerichtSpeichern">${
-                state.entwurf.id ? 'Änderung speichern' : 'Gericht speichern'}</button>
+        <div id="nwG1">
+            <label class="ern-feld">
+                <span>Was gab es?</span>
+                <input type="text" id="nwGName" class="nw-g-name" autocomplete="off"
+                       placeholder="z. B. Wraps" value="${esc(state.entwurf.name)}">
+            </label>
+            <div class="nw-g-foto" id="nwGFoto"></div>
+            <p class="ern-note">Das Foto steht am Anfang, weil das Telefon genau dann in
+                der Hand ist, wenn das Essen noch auf dem Teller liegt.</p>
+        </div>
+
+        <div id="nwG2" hidden>
+            <div id="nwGZutaten"></div>
+            <label class="ern-suche nw-g-suche">
+                <span class="ern-suche-ico" aria-hidden="true">🔎</span>
+                <input type="search" id="nwGSuche" autocomplete="off"
+                       aria-label="Zutat suchen"
+                       placeholder="Zutat suchen — Bestand und Katalog">
+            </label>
+            <div id="nwGTreffer"></div>
+        </div>
+
+        <div class="nw-g-fuss">
+            <span class="nw-g-summe" id="nwGSumme"></span>
+            <button type="button" class="v-btn" id="nwGZurueck" hidden>Zurück</button>
+            <button type="button" class="v-btn v-btn--primary" id="nwGWeiter">Weiter</button>
         </div>`;
 
     state.dialog = openModal(state.entwurf.id ? 'Gericht ändern' : 'Neues Gericht', inhalt, {
-        breit: true,
+        breit: true, voll: true,
         beimSchliessen: () => { state.dialog = null; },
     });
 
+    zeichneEntwurfFoto();
     zeichneEntwurf();
-    document.getElementById('ernZutatSuche')
-        .addEventListener('input', (e) => zutatSuchen(e.target.value));
-    document.getElementById('ernGerichtSpeichern')
-        .addEventListener('click', gerichtSpeichern);
+    zeichneEntwurfFuss();
+
+    const weiter = document.getElementById('nwGWeiter');
+    const zurueck = document.getElementById('nwGZurueck');
+    const schritt = (nr) => {
+        document.getElementById('nwG1').hidden = nr !== 1;
+        document.getElementById('nwG2').hidden = nr !== 2;
+        zurueck.hidden = nr === 1;
+        weiter.textContent = nr === 1 ? 'Weiter'
+            : (state.entwurf.id ? 'Änderung speichern' : 'Gericht speichern');
+        weiter.dataset.schritt = String(nr);
+        document.getElementById('nwGSumme').hidden = nr === 1;
+    };
+    schritt(state.entwurf.items.length ? 2 : 1);
+
+    weiter.addEventListener('click', () => {
+        if (weiter.dataset.schritt === '1') {
+            const name = document.getElementById('nwGName').value.trim();
+            if (!name) { melde('Das Gericht braucht einen Namen.', 'error'); return; }
+            state.entwurf.name = name;
+            schritt(2);
+            if (window.matchMedia('(min-width: 720px)').matches) {
+                document.getElementById('nwGSuche').focus();
+            }
+            return;
+        }
+        gerichtSpeichern(weiter);
+    });
+    zurueck.addEventListener('click', () => schritt(1));
+
+    let takt = null;
+    document.getElementById('nwGSuche').addEventListener('input', (e) => {
+        clearTimeout(takt);
+        const wert = e.target.value;
+        // Der Bestand ist sofort da, der Katalog braucht eine Anfrage --
+        // deshalb erst das Eigene zeigen und das Fremde nachreichen.
+        zutatTreffer(wert, null);
+        takt = setTimeout(() => zutatKatalog(wert), 320);
+    });
 }
 
+/* Das Foto: ein Knopf, ein Bild, ein Weg es wieder loszuwerden. Aufgenommen
+   wird mit ``capture`` -- auf dem Handy oeffnet das direkt die Kamera. */
+function zeichneEntwurfFoto() {
+    const ziel = document.getElementById('nwGFoto');
+    if (!ziel) return;
+    const e = state.entwurf;
+    const url = e.foto ? URL.createObjectURL(e.foto) : null;
+
+    ziel.innerHTML = (url
+        ? `<img class="v-bild" id="nwGBild" src="${url}" alt="Foto des Gerichts">`
+        : (e.hatFoto && e.id
+            ? `<img class="v-bild" id="nwGBild" alt="Foto des Gerichts">`
+            : `<div class="v-bild-leer" aria-hidden="true">🍽️</div>`))
+        + `<div class="ern-tasten">
+               <button type="button" class="v-btn v-btn--sm" id="nwGFotoWahl">
+                   📷 ${url || e.hatFoto ? 'Anderes Foto' : 'Foto'}</button>
+               ${url || e.hatFoto
+                   ? '<button type="button" class="v-btn v-btn--sm" id="nwGFotoWeg">Ohne Foto</button>'
+                   : ''}
+               <input type="file" id="nwGFotoDatei" accept="image/*"
+                      capture="environment" hidden>
+           </div>`;
+
+    if (!url && e.hatFoto && e.id) {
+        // Das gespeicherte Foto braucht den Anmelde-Kopf -- ein nacktes
+        // <img src> schickt keinen mit.
+        VexBild.alsBlobUrl('/api/food/dishes/' + e.id + '/thumb')
+            .then(u => { const b = document.getElementById('nwGBild'); if (b) b.src = u; })
+            .catch(() => {});
+    }
+
+    const datei = document.getElementById('nwGFotoDatei');
+    document.getElementById('nwGFotoWahl').addEventListener('click', () => datei.click());
+    datei.addEventListener('change', async () => {
+        const f = datei.files && datei.files[0];
+        if (!f) return;
+        try {
+            state.entwurf.foto = await VexBild.komprimieren(f);
+            state.entwurf.hatFoto = true;
+            zeichneEntwurfFoto();
+        } catch (err) {
+            melde(err.message || 'Das Bild ließ sich nicht lesen.', 'error');
+        }
+    });
+    const weg = document.getElementById('nwGFotoWeg');
+    if (weg) weg.addEventListener('click', async () => {
+        state.entwurf.foto = null;
+        state.entwurf.hatFoto = false;
+        if (state.entwurf.id) {
+            try { await API.fotoWeg(state.entwurf.id); } catch (e) { /* war keins da */ }
+        }
+        zeichneEntwurfFoto();
+    });
+}
+
+/* Die Zutaten stehen UEBER dem Suchfeld: was man gerade hinzugefuegt hat,
+   soll man sehen, ohne zu scrollen. Die Menge ist ein Stepper -- eine Zahl
+   zu tippen kostet auf dem Handy eine Tastatur. */
 function zeichneEntwurf() {
     const e = state.entwurf;
-    const ziel = document.getElementById('ernZutaten');
+    const ziel = document.getElementById('nwGZutaten');
     if (!ziel) return;
     ziel.innerHTML = !e.items.length
-        ? '<p class="ern-note">Noch keine Zutat. Such unten etwas aus deinem Bestand.</p>'
-        : e.items.map((z, i) => `
-            <div class="ern-zeile">
-                <div class="ern-zeile-text"><strong>${esc(z.name)}</strong></div>
-                <div class="ern-menge">
-                    <input type="number" min="0.25" step="0.25" value="${z.amount}"
-                           data-zmenge="${i}" aria-label="Menge für ${esc(z.name)}">
-                    <select class="v-select v-select--sm" data-zeinheit="${i}"
-                            aria-label="Einheit für ${esc(z.name)}">
-                        ${(z.units || [{ key: 'g', label: 'g' }]).map(u =>
-                            `<option value="${esc(u.key)}"${u.key === z.unit ? ' selected' : ''}>${esc(u.label)}</option>`).join('')}
-                    </select>
+        ? '<p class="ern-note">Noch keine Zutat — such unten danach. Was nicht in deinem '
+          + 'Bestand steht, wird beim Antippen aufgenommen.</p>'
+        : e.items.map((z, i) => {
+            const eh = (z.units || []).find(u => u.key === z.unit);
+            const basis = BASIS.includes(z.unit);
+            return `<div class="nw-g-zutat">
+                <span class="nw-g-zutat-name">${esc(z.name)}</span>
+                <div class="nw-stepper">
+                    <button type="button" data-zschritt="${i}" data-um="-1"
+                            aria-label="Weniger">−</button>
+                    <output data-zmenge="${i}">${mengeKurz(z.amount)} ${esc(
+                        eh ? eh.label : z.unit)}</output>
+                    <button type="button" data-zschritt="${i}" data-um="1"
+                            aria-label="Mehr">＋</button>
                 </div>
+                <button type="button" class="nw-g-einheit" data-zeinheit="${i}"
+                        title="Einheit wechseln">${basis ? esc(z.unit) : '⇄'}</button>
                 <button type="button" class="v-btn v-btn--icon" data-zutat-weg="${i}"
-                        aria-label="Zutat entfernen" title="Entfernen">🗑️</button>
-            </div>`).join('');
-    ziel.querySelectorAll('[data-zmenge]').forEach(f => f.addEventListener('change', () => {
-        const wert = Number(String(f.value).replace(',', '.'));
-        if (wert > 0) state.entwurf.items[Number(f.dataset.zmenge)].amount = wert;
+                        aria-label="Zutat entfernen" title="Entfernen">✕</button>
+            </div>`;
+        }).join('');
+
+    ziel.querySelectorAll('[data-zschritt]').forEach(b => b.addEventListener('click', () => {
+        const i = Number(b.dataset.zschritt);
+        const z = state.entwurf.items[i];
+        // Bei g/ml in Zehnerschritten, bei benannten Groessen in ganzen
+        // Einheiten: "105 g" tippt niemand, "1 Scheibe mehr" schon.
+        const um = Number(b.dataset.um) * (BASIS.includes(z.unit) ? 10 : 1);
+        z.amount = Math.max(BASIS.includes(z.unit) ? 10 : 1, Number(z.amount) + um);
+        zeichneEntwurf();
+        zeichneEntwurfFuss();
     }));
-    ziel.querySelectorAll('[data-zeinheit]').forEach(f => f.addEventListener('change', () => {
-        state.entwurf.items[Number(f.dataset.zeinheit)].unit = f.value;
+    ziel.querySelectorAll('[data-zeinheit]').forEach(b => b.addEventListener('click', () => {
+        einheitBlatt(Number(b.dataset.zeinheit));
     }));
     ziel.querySelectorAll('[data-zutat-weg]').forEach(b => b.addEventListener('click', () => {
         state.entwurf.items.splice(Number(b.dataset.zutatWeg), 1);
         zeichneEntwurf();
+        zeichneEntwurfFuss();
     }));
 }
 
-function zutatSuchen(text) {
-    const ziel = document.getElementById('ernZutatTreffer');
-    if (!ziel) return;
-    const begriff = text.trim().toLowerCase();
-    if (!begriff) { ziel.innerHTML = ''; return; }
-    const treffer = state.bestand.filter(p =>
-        p.name.toLowerCase().includes(begriff)
-        || (p.brand || '').toLowerCase().includes(begriff)).slice(0, 6);
-    ziel.innerHTML = !treffer.length
-        ? `<p class="ern-note">Nichts im Bestand. Über <strong>Lebensmittel</strong> kommt es hinein.</p>`
-        : treffer.map(p => `
-            <button type="button" class="v-chip" data-zutat="${p.id}">
-                ${esc(p.name)}${p.brand ? ' · ' + esc(p.brand) : ''}
-            </button>`).join('');
-    ziel.querySelectorAll('[data-zutat]').forEach(b => b.addEventListener('click', () => {
-        const p = state.bestand.find(x => x.id === Number(b.dataset.zutat));
-        if (!p) return;
-        // Die erste eigene Groesse als Vorschlag, wenn es eine gibt:
-        // "1 Stueck" trifft haeufiger als "62 g" und ist schneller zu pruefen.
-        const einheiten = p.units || [{ key: p.base_unit || 'g', label: p.base_unit || 'g', grams: 1 }];
-        const eigene = einheiten.find(u => !BASIS.includes(u.key));
-        state.entwurf.items.push({
-            item_id: p.id, name: p.name,
-            amount: eigene ? 1 : 100,
-            unit: eigene ? eigene.key : (p.base_unit || 'g'),
-            units: einheiten,
-        });
-        document.getElementById('ernZutatSuche').value = '';
-        ziel.innerHTML = '';
+/* Die Einheit als Blatt statt als Auswahlrad: angeboten wird nur, was am
+   Lebensmittel hinterlegt ist -- ein Feld mit "Packung", das dann 100 g
+   rechnet, waere geraten. */
+function einheitBlatt(index) {
+    const z = state.entwurf.items[index];
+    if (!z) return;
+    const liste = z.units || [];
+    const dlg = openModal('Einheit für ' + esc(z.name),
+        `<div class="ern-dlg-mahlzeiten">${liste.map(u =>
+            `<button type="button" class="v-chip${u.key === z.unit ? ' is-active' : ''}"
+                data-einheit="${esc(u.key)}">${esc(u.label)}${
+                BASIS.includes(u.key) ? '' : ` <span class="nw-g-gramm">${u.grams} g</span>`
+            }</button>`).join('')}</div>`);
+    dlg.el.querySelectorAll('[data-einheit]').forEach(b => b.addEventListener('click', () => {
+        const neu = b.dataset.einheit;
+        // Die Zahl passt sich der Einheit an: 100 g, aber 1 Scheibe.
+        z.amount = BASIS.includes(neu) ? 100 : 1;
+        z.unit = neu;
+        dlg.close();
         zeichneEntwurf();
+        zeichneEntwurfFuss();
     }));
 }
 
-async function gerichtSpeichern() {
-    const name = document.getElementById('ernGerichtName').value.trim();
+function zutatHinzufuegen(p) {
+    const einheiten = p.units
+        || [{ key: p.base_unit || 'g', label: p.base_unit || 'g', grams: 1 }];
+    const eigene = einheiten.find(u => !BASIS.includes(u.key));
+    state.entwurf.items.push({
+        item_id: p.id, name: p.name,
+        amount: eigene ? 1 : 100,
+        unit: eigene ? eigene.key : (p.base_unit || 'g'),
+        units: einheiten,
+    });
+    const feld = document.getElementById('nwGSuche');
+    if (feld) feld.value = '';
+    const treffer = document.getElementById('nwGTreffer');
+    if (treffer) treffer.innerHTML = '';
+    zeichneEntwurf();
+    zeichneEntwurfFuss();
+}
+
+/* Erst der eigene Bestand, dann der Katalog. Ein Katalog-Treffer wird beim
+   Antippen still aufgenommen und ist danach eine ganz normale Zutat -- das
+   ist der Reiterwechsel, der hier wegfaellt. */
+function zutatTreffer(text, katalog) {
+    const ziel = document.getElementById('nwGTreffer');
+    if (!ziel) return;
+    const begriff = (text || '').trim().toLowerCase();
+    if (!begriff) { ziel.innerHTML = ausTagHtml(); bindeAusTag(ziel); return; }
+
+    const eigen = state.bestand.filter(p =>
+        p.name.toLowerCase().includes(begriff)
+        || (p.brand || '').toLowerCase().includes(begriff)).slice(0, 8);
+
+    const zeile = (name, sub, marke, attr) =>
+        `<button type="button" class="nw-g-treffer" ${attr}>
+            <span class="nw-g-treffer-text">
+                <span class="ern-w-name">${esc(name)}</span>
+                <span class="ern-w-sub">${esc(sub || '')}</span>
+            </span>
+            <span class="ern-herkunft">${esc(marke)}</span>
+        </button>`;
+
+    let html = eigen.map(p => zeile(
+        p.name,
+        (p.brand ? p.brand + ' · ' : '') + zahl(p.kcal, '') + ' kcal je 100 '
+            + (p.base_unit || 'g'),
+        'Bestand', `data-eigen="${p.id}"`)).join('');
+
+    if (katalog === null) {
+        html += '<p class="ern-note">Suche im Katalog läuft …</p>';
+    } else if (katalog && katalog.length) {
+        html += katalog.map((p, i) => zeile(
+            p.name, (p.brand ? p.brand + ' · ' : '') + zahl(p.kcal, '') + ' kcal je 100 g',
+            'Katalog', `data-katalog="${i}"`)).join('');
+    } else if (!eigen.length) {
+        html = leerKarte('🔎', 'Nichts gefunden — weder im Bestand noch im Katalog. '
+            + 'Unter <strong>Lebensmittel</strong> lässt es sich von Hand anlegen.');
+    }
+    ziel.innerHTML = html;
+
+    ziel.querySelectorAll('[data-eigen]').forEach(b => b.addEventListener('click', () => {
+        const p = state.bestand.find(x => x.id === Number(b.dataset.eigen));
+        if (p) zutatHinzufuegen(p);
+    }));
+    ziel.querySelectorAll('[data-katalog]').forEach(b => b.addEventListener('click', async () => {
+        b.classList.add('is-loading');
+        const p = (katalog || [])[Number(b.dataset.katalog)];
+        if (!p) return;
+        try {
+            const antwort = await API.aufnehmen({
+                name: p.name, brand: p.brand, barcode: p.barcode, source: 'off',
+                kcal: p.kcal, protein_g: p.protein_g, carbs_g: p.carbs_g,
+                sugar_g: p.sugar_g, fat_g: p.fat_g, sat_fat_g: p.sat_fat_g,
+                fiber_g: p.fiber_g, salt_g: p.salt_g, portion_g: p.portion_g,
+                base_unit: p.base_unit || 'g',
+            });
+            await ladeBestand();
+            const neu = (antwort && antwort.item)
+                || state.bestand.find(x => x.name === p.name);
+            if (neu) zutatHinzufuegen(neu);
+        } catch (err) {
+            melde(err.message || 'Das ging nicht.', 'error');
+        } finally {
+            b.classList.remove('is-loading');
+        }
+    }));
+}
+
+async function zutatKatalog(text) {
+    const begriff = (text || '').trim();
+    if (begriff.length < 2) { zutatTreffer(begriff, []); return; }
+    try {
+        const res = await API.suche(begriff);
+        // Was schon im Bestand steht, nicht zweimal anbieten.
+        const drin = new Set(state.bestand.map(p => p.name.toLowerCase()));
+        zutatTreffer(begriff, (res.results || [])
+            .filter(p => !drin.has(String(p.name).toLowerCase())).slice(0, 6));
+    } catch (e) {
+        zutatTreffer(begriff, []);
+    }
+}
+
+/* Der schnellste Weg zu einem Rezept ist das, was ohnehin schon eingetragen
+   ist: wer gerade gekocht und die Zutaten einzeln notiert hat, baut daraus in
+   fuenf Sekunden ein Gericht. */
+function ausTagHtml() {
+    const heutige = ((state.tag && state.tag.entries) || [])
+        .filter(e => e.kind === 'item');
+    if (!heutige.length) return '';
+    return `<div class="nw-g-austag">
+        <p class="ern-note">Aus dem heutigen Tag übernehmen:</p>
+        ${heutige.map((e, i) => `<button type="button" class="v-chip"
+            data-austag="${i}">${esc(e.name)} · ${esc(e.amount_label)}</button>`).join('')}
+    </div>`;
+}
+
+function bindeAusTag(ziel) {
+    const heutige = ((state.tag && state.tag.entries) || [])
+        .filter(e => e.kind === 'item');
+    ziel.querySelectorAll('[data-austag]').forEach(b => b.addEventListener('click', () => {
+        const e = heutige[Number(b.dataset.austag)];
+        const p = e && state.bestand.find(x => x.name === e.name);
+        if (p) zutatHinzufuegen(p);
+    }));
+}
+
+async function gerichtSpeichern(knopf) {
+    const name = (state.entwurf.name || '').trim();
     if (!name) { melde('Das Gericht braucht einen Namen.', 'error'); return; }
     if (!state.entwurf.items.length) { melde('Mindestens eine Zutat.', 'error'); return; }
-    const knopf = document.getElementById('ernGerichtSpeichern');
     knopf.classList.add('is-loading');
     try {
         const res = await API.gericht({
@@ -1083,6 +1433,17 @@ async function gerichtSpeichern() {
                 item_id: z.item_id, amount: z.amount, unit: z.unit })),
         });
         state.gerichte = res.dishes;
+        // Das Foto erst danach: vorher gibt es noch keine ID, an die es
+        // gehoeren koennte.
+        if (state.entwurf.foto && res.dish_id) {
+            try {
+                await API.fotoHochladen(res.dish_id, state.entwurf.foto);
+                await ladeGerichte();
+            } catch (err) {
+                melde('Das Gericht ist gespeichert, das Foto nicht: '
+                      + (err.message || ''), 'error');
+            }
+        }
         if (state.dialog) state.dialog.close();
         zeichneGerichte();
         melde('Gericht gespeichert.', 'success');
@@ -1092,6 +1453,7 @@ async function gerichtSpeichern() {
         knopf.classList.remove('is-loading');
     }
 }
+
 
 async function gerichtLoeschen(id) {
     const g = state.gerichte.find(x => x.id === id);
@@ -1121,6 +1483,10 @@ function zeichneGerichte() {
             + 'danach reicht ein Tipp am Tag.')
         : state.gerichte.map(g => `
             <div class="ern-zeile">
+                ${g.has_photo
+                    ? `<img class="v-bild v-bild--klein" data-foto="${g.id}"
+                           alt="Foto von ${esc(g.name)}">`
+                    : '<span class="v-bild-leer" aria-hidden="true">🍽️</span>'}
                 <div class="ern-zeile-text">
                     <strong>${esc(g.name)}</strong>
                     <div class="ern-note">${g.items.map(z => {
@@ -1145,6 +1511,21 @@ function zeichneGerichte() {
         }));
     ziel.querySelectorAll('[data-gericht-weg]').forEach(b =>
         b.addEventListener('click', () => gerichtLoeschen(Number(b.dataset.gerichtWeg))));
+    // Die Bilder brauchen den Anmelde-Kopf, ein nacktes <img src> schickt
+    // keinen mit. Deshalb einzeln nachladen -- und nur das kleine: zwanzig
+    // Vollbilder waeren zwanzig Anfragen fuer eine Liste, die man ueberfliegt.
+    ziel.querySelectorAll('[data-foto]').forEach(bild => {
+        const id = Number(bild.dataset.foto);
+        VexBild.alsBlobUrl('/api/food/dishes/' + id + '/thumb')
+            .then(u => { bild.src = u; })
+            .catch(() => { bild.replaceWith(Object.assign(document.createElement('span'), {
+                className: 'v-bild-leer', textContent: '🍽️' })); });
+        bild.addEventListener('click', () => {
+            VexBild.alsBlobUrl('/api/food/dishes/' + id + '/photo')
+                .then(u => VexBild.vollbild(u, bild.alt))
+                .catch(() => melde('Das Foto ließ sich nicht laden.', 'error'));
+        });
+    });
 }
 
 async function ladeGerichte() {
@@ -1477,7 +1858,7 @@ const ZAHLENFELDER = ['fKcal', 'fProtein', 'fFiber', 'fCarbs', 'fFat'];
 
 let bearbeitet = null;   // id des Lebensmittels, das gerade geaendert wird
 
-function itemDialog(p) {
+function itemDialog(p, nameVorgabe) {
     bearbeitet = p ? p.id : null;
     state.formGroessen = p ? (p.sizes || []).map(g => ({ label: g.label, grams: g.grams })) : [];
 
@@ -1538,6 +1919,7 @@ function itemDialog(p) {
         if (el) el.value = p && p[feld] != null ? p[feld] : (id === 'fBase' ? 'g' : '');
     });
     document.getElementById('fBase').value = (p && p.base_unit) || 'g';
+    if (!p && nameVorgabe) document.getElementById('fName').value = nameVorgabe;
     zeichneGroessen();
 
     document.getElementById('fGroesseNeu').addEventListener('click', () => {
@@ -1604,6 +1986,9 @@ async function formSpeichern() {
         if (state.dialog) state.dialog.close();
         await ladeBestand();
         await ladeGerichte();
+        // Der Vorschlag faellt von selbst weg, sobald es das Lebensmittel
+        // gibt -- dafuer muss niemand ein Haekchen setzen.
+        ladeBruecke();
         melde('Gespeichert.', 'success');
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
@@ -1758,5 +2143,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     activateTab('tag');
     await ladeZiele();
     await ladeTag(heute());
-    await Promise.all([ladeGerichte(), ladeBestand(), ladeHaeufig(), katalogStand()]);
+    await Promise.all([ladeGerichte(), ladeBestand(), ladeHaeufig(),
+                       ladeBruecke(), katalogStand()]);
 });

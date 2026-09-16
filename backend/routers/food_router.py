@@ -19,6 +19,12 @@ Endpoints:
   PUT    /api/food/track/targets      — Tagesziele setzen
   GET    /api/food/track/history      — Zeitraum, Tag fuer Tag
   GET    /api/food/track/frequent     — was oft eingetragen wird
+  POST   /api/food/dishes/{id}/photo  — Foto eines Gerichts (ersetzt)
+  GET    /api/food/dishes/{id}/photo  — das Foto
+  GET    /api/food/dishes/{id}/thumb  — das Foto, klein
+  DELETE /api/food/dishes/{id}/photo  — Foto entfernen
+  GET    /api/food/track/bridge       — haeufige Tagebuch-Namen ohne Bestand
+  POST   /api/food/track/bridge/dismiss — einen davon nicht mehr vorschlagen
 
 Seit v1.98.0 ist das ein Modul von zweien. Das Essenstagebuch (/essen/,
 routers/tagebuch_router.py) fragt nach Name und Stufe und schreibt nach
@@ -48,13 +54,14 @@ import io
 from typing import Optional
 
 from fastapi import (APIRouter, Depends, File, HTTPException, Query, Request,
-                     UploadFile)
+                     Response, UploadFile)
 from pydantic import BaseModel
 
 from auth import get_current_user, require_admin
 from database import get_db
 from deps import (limiter, LIMIT_WRITE_FREQUENT, LIMIT_WRITE_RARE,
                   LIMIT_WRITE_STANDARD)
+from services import expenses as bilder   # process_image_strict — eine Fassung
 from services import food_calc as calc
 from services import food_catalog as katalog
 from services import food_mahlzeit as mz
@@ -289,6 +296,9 @@ async def katalog_stand(db=Depends(get_db), user=Depends(get_current_user)):
 # damit ein spaeter etwas groesserer Schnitt nicht am Limit scheitert -- und
 # tief genug, dass eine versehentlich abgelegte Urlaubsvideodatei nicht erst
 # durch die Leitung muss.
+# Ein Gerichtsfoto darf so gross sein wie ein Bon -- dieselbe Grenze, und
+# nach der Verarbeitung ist es ohnehin ein JPEG von 1600 px.
+FOTO_MAX_BYTES = 8 * 1024 * 1024
 KATALOG_MAX_BYTES = 32 * 1024 * 1024
 KATALOG_SPALTEN = 14
 
@@ -518,6 +528,9 @@ async def _gerichte(db, user_id: int, dish_id: Optional[int] = None) -> list:
     # Tabellen haben eine Spalte "id"), und die Zutat haette dann die ID des
     # Lebensmittels getragen.
     groessen = await _groessen(db, user_id)
+    mit_foto = {z["dish_id"] for z in await db.fetch(
+        "SELECT b.dish_id FROM food_dish_images b "
+        "  JOIN food_dishes d ON d.id = b.dish_id WHERE d.user_id=$1", user_id)}
     zutaten = await db.fetch(
         "SELECT z.dish_id, z.id AS link_id, z.grams, z.position, "
         "       z.amount, z.unit, "
@@ -545,6 +558,9 @@ async def _gerichte(db, user_id: int, dish_id: Optional[int] = None) -> list:
                            dict(z), groessen.get(z["item_id"], []))}
                       for z in eigene],
             "portion": summe,
+            # Nur ob es eines gibt -- die Bytes selbst haetten in einer Liste
+            # nichts zu suchen (siehe Migration 048).
+            "has_photo": g["id"] in mit_foto,
         })
     return raus
 
@@ -614,7 +630,11 @@ async def gericht_speichern(request: Request, daten: GerichtEingabe,
                 zeile["id"], zutat.item_id, round(gramm, 2), platz,
                 zutat.amount, zutat.unit)
 
-    return {"ok": True, "dishes": await _gerichte(db, user["id"])}
+    # Die ID kommt mit heraus: wer gerade ein Gericht angelegt hat, will
+    # danach womoeglich sein Foto dazulegen -- und muesste es sonst in der
+    # zurueckgegebenen Liste am Namen wiedersuchen.
+    return {"ok": True, "dish_id": zeile["id"],
+            "dishes": await _gerichte(db, user["id"])}
 
 
 @router.delete("/api/food/dishes/{dish_id}")
@@ -1107,3 +1127,148 @@ async def haeufig(limit: int = Query(12, le=40), db=Depends(get_db),
          "last_amount": float(z["letzte_menge"]) if z["letzte_menge"] else None,
          "last_unit": z["letzte_einheit"]}
         for z in zeilen]}
+
+
+# ---------------------------------------------------------------------------
+# Fotos fuer eigene Gerichte
+# ---------------------------------------------------------------------------
+# Nur fuer Rezepte, nicht fuer Lebensmittel aus Open Food Facts: ein fremdes
+# Produktfoto waere weder mein Essen noch meine Daten. Ein selbst gekochtes
+# Gericht erkennt man dagegen am Bild -- und eine Gerichteliste mit Bildern
+# ist der sichtbarste Teil davon, dass man die Seite gern benutzt.
+#
+# Verarbeitet wird mit ``process_image_strict`` aus dem Ausgaben-Modul: EXIF
+# gedreht, laengste Kante 1600 px, JPEG q82, Thumbnail 320 px. Bewusst die
+# strenge Fassung -- die weiche speichert bei unlesbarem Format
+# ``application/octet-stream``, liefert HTTP 200 und ein Bild, das nie
+# erscheint (der Fehler von v1.66.0).
+
+
+async def _gericht_gehoert(db, dish_id: int, user_id: int) -> bool:
+    return bool(await db.fetchval(
+        "SELECT 1 FROM food_dishes WHERE id=$1 AND user_id=$2", dish_id, user_id))
+
+
+@router.post("/api/food/dishes/{dish_id}/photo")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def foto_hochladen(request: Request, dish_id: int,
+                         file: UploadFile = File(...),
+                         db=Depends(get_db), user=Depends(get_current_user)):
+    """Ein Foto je Gericht. Ein zweiter Upload ersetzt das erste."""
+    if not await _gericht_gehoert(db, dish_id, user["id"]):
+        raise HTTPException(404, "Dieses Gericht gibt es nicht.")
+    roh = await file.read()
+    if len(roh) > FOTO_MAX_BYTES:
+        raise HTTPException(
+            413, f"Das Bild ist größer als {FOTO_MAX_BYTES // (1024 * 1024)} MB.")
+    try:
+        gross, klein, mime, groesse = bilder.process_image_strict(roh)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    await db.execute(
+        "INSERT INTO food_dish_images (dish_id, mime_type, size_bytes, "
+        "   image_data, thumbnail_data) VALUES ($1,$2,$3,$4,$5) "
+        "ON CONFLICT (dish_id) DO UPDATE SET mime_type=EXCLUDED.mime_type, "
+        "   size_bytes=EXCLUDED.size_bytes, image_data=EXCLUDED.image_data, "
+        "   thumbnail_data=EXCLUDED.thumbnail_data, uploaded_at=now()",
+        dish_id, mime, groesse, gross, klein)
+    return {"ok": True, "size": groesse}
+
+
+@router.get("/api/food/dishes/{dish_id}/photo")
+async def foto_lesen(dish_id: int, db=Depends(get_db),
+                     user=Depends(get_current_user)):
+    zeile = await db.fetchrow(
+        "SELECT b.image_data, b.mime_type FROM food_dish_images b "
+        "  JOIN food_dishes d ON d.id = b.dish_id "
+        " WHERE b.dish_id=$1 AND d.user_id=$2", dish_id, user["id"])
+    if not zeile or not zeile["image_data"]:
+        raise HTTPException(404, "Zu diesem Gericht gibt es kein Foto.")
+    return Response(content=bytes(zeile["image_data"]),
+                    media_type=zeile["mime_type"] or "image/jpeg")
+
+
+@router.get("/api/food/dishes/{dish_id}/thumb")
+async def foto_klein(dish_id: int, db=Depends(get_db),
+                     user=Depends(get_current_user)):
+    zeile = await db.fetchrow(
+        "SELECT b.thumbnail_data, b.image_data FROM food_dish_images b "
+        "  JOIN food_dishes d ON d.id = b.dish_id "
+        " WHERE b.dish_id=$1 AND d.user_id=$2", dish_id, user["id"])
+    if not zeile:
+        raise HTTPException(404, "Zu diesem Gericht gibt es kein Foto.")
+    daten = zeile["thumbnail_data"] or zeile["image_data"]
+    if not daten:
+        raise HTTPException(404, "Die Bilddaten fehlen.")
+    return Response(content=bytes(daten), media_type="image/jpeg")
+
+
+@router.delete("/api/food/dishes/{dish_id}/photo")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def foto_entfernen(request: Request, dish_id: int, db=Depends(get_db),
+                         user=Depends(get_current_user)):
+    if not await _gericht_gehoert(db, dish_id, user["id"]):
+        raise HTTPException(404, "Dieses Gericht gibt es nicht.")
+    await db.execute("DELETE FROM food_dish_images WHERE dish_id=$1", dish_id)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Die Bruecke: aus dem Tagebuch wird ein Bestand
+# ---------------------------------------------------------------------------
+# Wer den Tracker einschaltet, hat oft schon Wochen im Essenstagebuch stehen.
+# Diese Namen sind die beste Vorlage fuer einen Bestand, den es noch nicht
+# gibt -- und der einzige Punkt, an dem die beiden Module einander kennen.
+#
+# Sie LIEST nur. Ein Tagebuch-Eintrag von damals bleibt ein Tagebuch-Eintrag
+# und wird nicht nachtraeglich zu einer Menge; aus einer Stufe eine Grammzahl
+# zu erfinden, waere die falsche Genauigkeit (dieselbe Regel wie in Migration
+# 042). Nur der NAECHSTE Eintrag im Tracker profitiert.
+
+# Was zweimal dastand, ist kein Muster, sondern Zufall -- und eine Karte mit
+# zwoelf Einmalnennungen waere Arbeit statt Angebot.
+BRUECKE_MINDESTENS = 3
+BRUECKE_TAGE = 120
+
+
+class BrueckeAblehnen(BaseModel):
+    label: str
+
+
+@router.get("/api/food/track/bridge")
+async def bruecke(db=Depends(get_db), user=Depends(get_current_user)):
+    """Haeufige Tagebuch-Namen, die es hier noch nicht gibt."""
+    zeilen = await db.fetch(
+        "SELECT (ARRAY_AGG(d.label ORDER BY d.day DESC))[1] AS name, "
+        "       COUNT(*)::int AS anzahl, MAX(d.day) AS zuletzt "
+        "  FROM food_diary d "
+        " WHERE d.user_id=$1 AND d.day >= CURRENT_DATE - $2::int "
+        "   AND NOT EXISTS (SELECT 1 FROM food_items i "
+        "                    WHERE i.user_id=$1 AND lower(i.name)=lower(d.label)) "
+        "   AND NOT EXISTS (SELECT 1 FROM food_dishes g "
+        "                    WHERE g.user_id=$1 AND lower(g.name)=lower(d.label)) "
+        "   AND NOT EXISTS (SELECT 1 FROM food_bridge_dismissed b "
+        "                    WHERE b.user_id=$1 AND b.label_lower=lower(d.label)) "
+        " GROUP BY lower(d.label) HAVING COUNT(*) >= $3 "
+        " ORDER BY 2 DESC, 3 DESC LIMIT 8",
+        user["id"], BRUECKE_TAGE, BRUECKE_MINDESTENS)
+    tage = await db.fetchval(
+        "SELECT COUNT(DISTINCT day)::int FROM food_diary WHERE user_id=$1", user["id"])
+    return {"suggestions": [{"name": z["name"], "count": z["anzahl"],
+                             "last": str(z["zuletzt"])} for z in zeilen],
+            "diary_days": tage or 0}
+
+
+@router.post("/api/food/track/bridge/dismiss")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def bruecke_ablehnen(request: Request, daten: BrueckeAblehnen,
+                           db=Depends(get_db), user=Depends(get_current_user)):
+    """Diesen Namen nicht mehr vorschlagen."""
+    name = (daten.label or "").strip()
+    if not name:
+        raise HTTPException(400, "Welcher Name?")
+    await db.execute(
+        "INSERT INTO food_bridge_dismissed (user_id, label_lower) VALUES ($1,$2) "
+        "ON CONFLICT DO NOTHING", user["id"], name.lower())
+    return await bruecke(db=db, user=user)

@@ -321,6 +321,22 @@
     </section>
 
     <section class="sg-sec">
+        <h2>Bilder</h2>
+        <p class="sg-note">Ein Foto, das für einen Datensatz steht — Gerichtsfoto, Beleg.
+        Festes Seitenverhältnis (<code>.v-bild</code>), damit eine Liste nicht bei jedem
+        Bild springt; <code>.v-bild--klein</code> als Quadrat für Zeilen,
+        <code>.v-bild-leer</code> als Platzhalter. Geladen und im Vollbild gezeigt wird
+        über <code>VexBild</code> (<code>js/bild.js</code>) — die Endpunkte verlangen eine
+        Anmeldung, ein nacktes <code>&lt;img src&gt;</code> schickt keinen Token mit.</p>
+        <div class="v-card">
+            <div class="sg-row" style="align-items:center">
+                <span class="v-bild-leer" aria-hidden="true">🍽️</span>
+                <span class="sg-label">.v-bild-leer — noch kein Foto</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
         <h2>Rangliste</h2>
         <p class="sg-note">Name, Anteil als Balken, Betrag — und darunter die Veränderung.
         Sie ersetzt das Paar aus Ringdiagramm und Tabelle: beide sagten dasselbe, der Ring

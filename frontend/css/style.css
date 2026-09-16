@@ -845,6 +845,51 @@ input[type="checkbox"] { display: inline; width: auto; }
 }
 
 .modal-box.wide { max-width: 680px; }
+/* Ein Dialog, in dem man ARBEITET (ein Rezept zusammenstellen), gehoert auf
+   dem Handy aufs ganze Bild: eine Maske mit Rand und Schatten in einem
+   scrollenden Kasten laesst zu wenig Platz fuer eine Liste, die waechst.
+   Am Rechner bleibt es ein Dialog -- dort ist Platz genug. (v1.99.0) */
+@media (max-width: 720px) {
+    .modal-box--voll {
+        position: fixed;
+        inset: 0;
+        max-width: none;
+        max-height: none;
+        height: 100dvh;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .modal-box--voll .modal-body { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+}
+
+/* ---------- Bild in einer Liste ----------
+   Ein Foto, das fuer einen Datensatz steht: Gerichtsfoto, Beleg. Festes
+   Seitenverhaeltnis, damit eine Liste nicht bei jedem Bild springt. */
+.v-bild {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    cursor: zoom-in;
+}
+.v-bild--klein { width: 64px; aspect-ratio: 1; flex: none; }
+.v-bild-leer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    aspect-ratio: 1;
+    flex: none;
+    border-radius: var(--radius);
+    border: 1px dashed var(--line);
+    background: var(--surface-2);
+    color: var(--text-4);
+    font-size: 1.25rem;
+}
 .modal-head {
     display: flex; align-items: center; justify-content: space-between; gap: 1rem;
     padding: 0.875rem 1rem; border-bottom: 1px solid var(--border);
