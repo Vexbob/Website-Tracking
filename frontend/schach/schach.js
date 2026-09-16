@@ -1,4 +1,4 @@
-/* schach.js — v1.94.1
+/* schach.js — v1.95.0
  *
  * Wertungsverlauf, Bilanz und Partien von Lichess und Chess.com.
  *
@@ -48,6 +48,7 @@ const API = {
     loesen:    (id)   => apiCall('/api/chess/accounts/' + id, { method: 'DELETE' }),
     aktualisieren: () => apiCall('/api/chess/refresh', { method: 'POST' }),
     holen:     (id)   => apiCall('/api/chess/import?account_id=' + id, { method: 'POST' }),
+    vonVorn:   (id)   => apiCall('/api/chess/import/reset?account_id=' + id, { method: 'POST' }),
     partien:   (qs)   => apiCall('/api/chess/games' + qs),
     stats:     (qs)   => apiCall('/api/chess/stats' + qs),
     summary:   ()     => apiCall('/api/chess/summary'),
@@ -509,7 +510,29 @@ function zeichneVerlauf() {
         : ` Bei diesem Zeitraum steht ${KOERNUNG_WORT[s.koernung]} der letzte Stand.`;
     note.innerHTML = 'Gerechnet aus jeder gewerteten Partie — gezeigt wird die Wertung '
         + '<em>nach</em> der Partie. An Tagen ohne Partie gilt der letzte bekannte Stand '
-        + 'weiter: eine Wertungszahl bewegt sich nur, wenn gespielt wurde.' + wort;
+        + 'weiter: eine Wertungszahl bewegt sich nur, wenn gespielt wurde.' + wort
+        + reichweiteSatz();
+}
+
+/* Wie weit die Kurven zurueckreichen -- und warum nicht weiter.
+   Der Verlauf steht auf den geholten Partien: er beginnt, wo die aelteste
+   von ihnen liegt, nicht wo das Konto beginnt. Solange die Historie noch
+   nicht ganz da ist, ist das der wichtigste Satz auf der Seite: sonst sieht
+   ein halb geholter Bestand aus wie ein Nutzer, der erst seit vorgestern
+   spielt. */
+function reichweiteSatz() {
+    const s = state.stats;
+    const ab = s && s.erste_partie ? datum(s.erste_partie) : null;
+    const offen = (state.konten || []).filter(k => k.games_count && !k.backfill_done);
+    let text = ab
+        ? ` Die Kurven beginnen mit der ältesten geholten Partie (${ab}).`
+        : '';
+    if (offen.length) {
+        text += ` <strong>Von ${offen.map(k => esc(LABEL[k.platform] || k.platform)).join(' und ')}`
+            + ' ist die Historie noch nicht vollständig geholt</strong> — bis dahin ist die Kurve'
+            + ' kürzer als deine Spielzeit. Unter <em>Konten</em> weiterholen.';
+    }
+    return text;
 }
 
 /* Ein Kaestchen je Disziplin: Name, aktuelle Zahl je Plattform, Entwicklung,
@@ -1336,6 +1359,14 @@ function zeichneKonten() {
             ? `${zahl(k.games_count)} Partien · ${datum(k.games_from)} – ${datum(k.games_to)}`
             : 'noch keine Partien geholt';
         const geholt = k.games_at ? 'zuletzt geholt ' + vorTagen(k.games_at) : '';
+        // Der Zeiger allein sieht nach dem ersten Stueck aus wie nach dem
+        // letzten. Ob davor noch Jahre fehlen, steht deshalb als eigener
+        // Satz da -- und der Knopf heisst danach.
+        const offen = k.games_count && !k.backfill_done;
+        const stand = !k.games_count ? ''
+            : (offen
+                ? '<span class="v-tag v-tag--warn">Historie noch nicht vollständig</span>'
+                : '<span class="v-tag">Historie vollständig geholt</span>');
         return `<div class="v-card">${kopf}
             <div class="sch-konto">
                 <span class="v-icon-tile sch-konto-tile" style="--tone:var(--m-schach)" aria-hidden="true">♟️</span>
@@ -1343,20 +1374,29 @@ function zeichneKonten() {
                     <a href="${esc(k.profile_url)}" target="_blank" rel="noopener">${esc(k.username)}</a>
                     <div class="sch-konto-sub">${bestand}</div>
                     ${geholt ? `<div class="sch-konto-sub">${geholt}</div>` : ''}
+                    ${stand ? `<div class="sch-konto-sub">${stand}</div>` : ''}
                 </div>
             </div>
             <div class="sch-lauf" data-rolle="lauf-${k.id}" role="status" aria-live="polite" hidden></div>
             <div class="sch-konto-tasten">
                 <button type="button" class="v-btn v-btn--primary" data-holen="${k.id}">
-                    ${k.games_count ? 'Neue Partien holen' : 'Alle Partien holen'}</button>
+                    ${!k.games_count ? 'Alle Partien holen'
+                      : (offen ? 'Historie weiterholen' : 'Neue Partien holen')}</button>
                 <button type="button" class="v-btn" data-stopp="${k.id}" hidden>Anhalten</button>
+                ${k.games_count ? `<button type="button" class="v-btn" data-vorn="${k.id}">Von vorn holen</button>` : ''}
                 <button type="button" class="v-btn v-btn--danger" data-loesen="${k.id}">Konto lösen</button>
             </div>
-            <p class="sch-hinweis sch-hinweis--klein">${k.games_count
-                ? 'Holt nur, was seit dem letzten Lauf dazugekommen ist.'
-                : 'Beim ersten Mal dauert das bei langer Historie ein paar Minuten. Geholt wird '
+            <p class="sch-hinweis sch-hinweis--klein">${!k.games_count
+                ? 'Beim ersten Mal dauert das bei langer Historie ein paar Minuten. Geholt wird '
                   + 'stückweise — Anhalten verliert nichts, der nächste Lauf setzt dort fort. '
-                  + 'Der Wertungsverlauf entsteht dabei mit: er steckt in den Partien.'}</p>
+                  + 'Der Wertungsverlauf entsteht dabei mit: er steckt in den Partien.'
+                : (offen
+                    ? 'Es ist noch Historie offen: der Lauf setzt dort fort, wo er zuletzt '
+                      + 'aufgehört hat, und läuft weiter, bis nichts mehr kommt. Erst dann '
+                      + 'reicht der Wertungsverlauf so weit zurück wie dein Konto.'
+                    : 'Die Historie ist vollständig — geholt wird nur noch, was dazukommt. '
+                      + '„Von vorn holen" fängt trotzdem wieder ganz vorn an; doppelte '
+                      + 'Partien fallen dabei weg, verloren geht nichts.')}</p>
         </div>`;
     }).join('');
 
@@ -1367,6 +1407,32 @@ function zeichneKonten() {
         b.addEventListener('click', () => { state.stopp = true; b.disabled = true; }));
     ziel.querySelectorAll('[data-loesen]').forEach(b =>
         b.addEventListener('click', () => loesen(Number(b.dataset.loesen))));
+    ziel.querySelectorAll('[data-vorn]').forEach(b =>
+        b.addEventListener('click', () => vonVorn(Number(b.dataset.vorn), b)));
+}
+
+/* Den Zeiger zuruecksetzen und gleich weiterholen. Gebraucht wird das, wenn
+   der Zeiger zu weit vorn steht -- dann ist alles davor mit dem normalen
+   Knopf nicht mehr erreichbar, weil der ab dem Zeiger fragt. */
+async function vonVorn(id, knopf) {
+    if (state.laeuft) return;
+    const ok = await askConfirm({
+        title: 'Historie von vorn holen?',
+        text: 'Der Lauf fängt wieder bei der ältesten Partie an. Das dauert bei langer '
+            + 'Historie ein paar Minuten; schon gespeicherte Partien werden dabei nicht '
+            + 'doppelt angelegt, verloren geht nichts.',
+        confirmText: 'Von vorn holen',
+    });
+    if (!ok) return;
+    try {
+        const res = await API.vonVorn(id);
+        state.konten = res.accounts;
+        zeichneKonten();
+        const neuerKnopf = document.querySelector('[data-holen="' + id + '"]');
+        if (neuerKnopf) importieren(id, neuerKnopf);
+    } catch (err) {
+        melde(err.message || 'Das ging nicht.', 'error');
+    }
 }
 
 async function verbinden(e) {
@@ -1416,6 +1482,16 @@ async function loesen(id) {
 
 /* ----------------------------------------------------------- Importieren */
 
+/* Warten, ohne den Anhalten-Knopf taub zu machen: ein schlichtes setTimeout
+   ueber 20 Sekunden liesse den Lauf erst danach merken, dass jemand gedrückt
+   hat -- und so lange sieht ein Knopf, der nichts tut, aus wie ein Fehler. */
+const warte = (ms) => new Promise(r => {
+    const ende = Date.now() + ms;
+    const takt = setInterval(() => {
+        if (state.stopp || Date.now() >= ende) { clearInterval(takt); r(); }
+    }, 200);
+});
+
 async function importieren(id, knopf) {
     if (state.laeuft) return;
     state.laeuft = true;
@@ -1433,12 +1509,29 @@ async function importieren(id, knopf) {
         // Der Server deckelt jeden Lauf; hier wird gerufen, solange er sagt,
         // dass noch Historie offen ist. Die Obergrenze ist nur ein Riegel
         // gegen eine Schleife, die sich selbst nicht beendet.
-        while (runden < 400 && !state.stopp) {
-            const res = await API.holen(id);
+        while (runden < 1000 && !state.stopp) {
+            let res;
+            try {
+                res = await API.holen(id);
+            } catch (err) {
+                // Zu schnell gefragt ist kein Abbruchgrund: der Zeiger steht,
+                // es fehlt nur eine Minute Geduld. Vorher endete eine lange
+                // Historie hier mit einer Fehlermeldung -- und der Bestand
+                // blieb auf halbem Weg stehen, ohne dass das jemand sah.
+                if (!/429|rate limit|zu viele/i.test(err.message || '')) throw err;
+                zeige(`<span class="sch-lauf-zahl">${zahl(neu)}</span> neue Partien geholt`
+                    + ' · kurze Pause, der Server bremst — es läuft von selbst weiter');
+                await warte(20000);
+                continue;
+            }
             neu += res.new; runden++;
             zeige(`<span class="sch-lauf-zahl">${zahl(neu)}</span> neue Partien geholt`
+                + (res.through ? ` · bis ${datum(res.through)}` : '')
                 + (res.more ? ' · läuft weiter, Anhalten verliert nichts' : ''));
             if (!res.more) break;
+            // Takt halten: der Server laesst 30 Laeufe je Minute zu, und die
+            // Plattformen bitten selbst um hoechstens eine Abfrage je Sekunde.
+            await warte(2200);
         }
         const res = await API.konten();
         state.konten = res.accounts;

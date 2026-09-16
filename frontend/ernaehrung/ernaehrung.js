@@ -1,4 +1,4 @@
-/* ernaehrung.js — v1.94.1
+/* ernaehrung.js — v1.95.0
  *
  * Das Ernaehrungs-Modul, in zwei Betriebsarten auf EINEM Tagebuch.
  *
@@ -6,29 +6,34 @@
  *      Was gab es, und war es normal oder uebermaessig viel? Mehr wird nicht
  *      gefragt. Ein Eintrag darf ein frei getippter Name sein -- "Pizza beim
  *      Italiener" steht in keinem Bestand und soll trotzdem im Tag stehen.
- *      Die Vorschlagsliste kommt aus dem Tagebuch selbst: nach ein paar
- *      Tagen steht genau das zur Auswahl, was man wirklich isst.
  *
  *   📊 Tracker (ausfuehrlich)
  *      Mengen in eigenen Einheiten, Naehrwerte als Spanne, eigene Tagesziele
  *      und ein Verlauf ueber den Zeitraum. Dazu die Werkstatt: Gerichte,
  *      Bestand, Scanner.
  *
- * Vier Entscheidungen, die das Modul tragen:
+ * Der Aufbau der Seite (v1.95.0, nach dem zweiten Anlauf):
  *
- *   1. **Der Modus ist die Frage, nicht die Ansicht.** Er bestimmt, wonach
- *      gefragt wird -- Stufe oder Menge -- und deshalb auch, welche Reiter
- *      es gibt. Beide schreiben in dasselbe Tagebuch: ein locker notierter
- *      Tag laesst sich spaeter genauer machen, und ein Wechsel laesst nie
- *      etwas verschwinden.
- *   2. **Was geschaetzt ist, bleibt eine Spanne.** Aus zwei Grobstufen eine
- *      Zahl zu machen waere eine Genauigkeit, die es nie gab. Ein gewogener
- *      Eintrag ist eine Spanne der Breite null und macht den Tag schmaler.
- *   3. **Eine Luecke ist keine Null.** Ein freier Eintrag hat keine
- *      Naehrwerte; die Tagessumme sagt, dass sie ihn nicht enthaelt, statt
- *      ihn stillschweigend mit null zu verrechnen.
- *   4. **Fremde Daten bleiben fremd.** Was von Open Food Facts kommt, ist
- *      ein Vorschlag: aenderbar, als Herkunft erkennbar, mit Luecken.
+ *   1. **Der Tag IST die Seite.** Eine Karte, oben der Tag, darunter die
+ *      Mahlzeiten mit dem, was darin steht. Vorher lagen Eingabefeld,
+ *      Vorschlagsliste, Tagesbild und Eintragsliste als vier Kloetze
+ *      untereinander -- das Wichtigste, naemlich was man heute gegessen hat,
+ *      stand damit unter dem Bildschirmrand.
+ *   2. **Eingetragen wird aus der Mahlzeit heraus**, im Dialog. Dadurch
+ *      faellt die Chipreihe weg, die fragte, wohin der naechste Eintrag
+ *      gehoert: wo man getippt hat, sagt das schon.
+ *   3. **Eine Zeile, eine Hauptsache.** In der Vorschlagsliste ist die ganze
+ *      Zeile der Knopf fuer "normal"; "uebermaessig" steht klein daneben.
+ *      Zwei gleich grosse Knoepfe je Zeile waren bei acht Vorschlaegen
+ *      sechzehn gleichberechtigte Ziele.
+ *   4. **Formulare, die man selten braucht, stehen nicht offen.** Gericht
+ *      anlegen und Lebensmittel von Hand anlegen sind Dialoge; der Reiter
+ *      zeigt die Liste, um die es geht.
+ *
+ * Drei Regeln zu den Zahlen, die davon unberuehrt bleiben:
+ *   * Was geschaetzt ist, bleibt eine Spanne.
+ *   * Eine Luecke ist keine Null.
+ *   * Fremde Daten (Open Food Facts) bleiben als fremd erkennbar.
  */
 
 const API = {
@@ -74,30 +79,18 @@ const REITER = {
 };
 const ALLE_REITER = ['tag', 'verlauf', 'gerichte', 'vorrat'];
 
-const MODUS_SATZ = {
-    locker: 'Hinschreiben, was es gab, und ob es normal oder übermäßig viel war. '
-        + 'Mehr wird nicht gefragt — auch Dinge, die in keiner Liste stehen.',
-    ausfuehrlich: 'Mengen, Nährwerte und eigene Tagesziele. Dazu die Werkstatt: '
-        + 'Gerichte, Bestand und Scanner.',
-};
-
 // Die beiden Einheiten, in denen die Naehrwerte stehen. Alles andere ist
 // eine eigene Groesse des Lebensmittels und traegt ihren Namen als
 // Schluessel -- "Scheibe", "Laib", "Becher".
 const BASIS = ['g', 'ml'];
 
-const STUFEN = [
-    { key: 'normal', label: 'normal' },
-    { key: 'viel', label: 'übermäßig' },
-];
-
 const state = {
     modus: 'locker', einstellungen: null,
-    bestand: [], vorschlag: null, groessenVorschlaege: [],
+    bestand: [], groessenVorschlaege: [],
     katalog: null, katalogLaeuft: false,
     formGroessen: [],
     tag: null, datum: null, gerichte: [], haeufig: [],
-    eingabe: '', mahlzeit: null, tippen: null,
+    dialog: null, dlg: null,
     verlauf: null, range: null, rangeMount: null,
     charts: { eins: null, zwei: null },
     entwurf: { id: null, name: '', items: [] },
@@ -214,6 +207,37 @@ function zeigeTagFehler(text) {
     });
 }
 
+/* --------------------------------------------------------------- Dialog
+ *
+ * Dasselbe Muster wie im Schach- und Ausgaben-Modul: Overlay, Kopf, Koerper,
+ * Escape und Klick daneben schliessen. Alles, was man selten tut -- ein
+ * Gericht anlegen, ein Lebensmittel von Hand pflegen, etwas eintragen --
+ * liegt hier drin, statt dauerhaft Platz auf der Seite zu nehmen.
+ */
+function openModal(titel, inhalt, opts) {
+    const o = opts || {};
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal-box${o.breit ? ' wide' : ''}">
+        <div class="modal-head"><h3>${titel}</h3>
+            <button class="modal-close" aria-label="Schließen">✕</button></div>
+        <div class="modal-body">${inhalt}</div>
+    </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('show'));
+    const close = () => {
+        overlay.classList.remove('show');
+        setTimeout(() => overlay.remove(), 200);
+        document.removeEventListener('keydown', onKey);
+        if (typeof o.beimSchliessen === 'function') o.beimSchliessen();
+    };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    overlay.querySelector('.modal-close').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', onKey);
+    return { close, el: overlay };
+}
+
 /* ---------------------------------------------------------------- Modus */
 
 const istLocker = () => state.modus === 'locker';
@@ -224,7 +248,6 @@ function zeichneModus() {
         b.classList.toggle('is-active', aktiv);
         b.setAttribute('aria-pressed', aktiv ? 'true' : 'false');
     });
-    document.getElementById('ernModusSatz').textContent = MODUS_SATZ[state.modus];
 
     const reiter = REITER[state.modus];
     const leiste = document.getElementById('ernTabs');
@@ -240,8 +263,6 @@ function zeichneModus() {
     else activateTab(state.reiter);
 
     document.getElementById('ernZieleKarte').hidden = istLocker();
-    document.getElementById('ernEingabeTitel').textContent =
-        istLocker() ? 'Was gab es?' : 'Eintragen';
 }
 
 async function modusWechseln(modus) {
@@ -249,7 +270,6 @@ async function modusWechseln(modus) {
     state.modus = modus;
     zeichneModus();
     zeichneTag();
-    zeichneVorschlaege();
     if (state.verlauf) zeichneVerlauf();
     try {
         state.einstellungen = await API.setzen({ mode: modus });
@@ -299,146 +319,132 @@ function zeichneTagKopf() {
     document.getElementById('ernTagVor').disabled = istHeute;
 }
 
-/* Das Tagesbild. Im Tagebuch ist die Zahl der Eintraege und ihre Verteilung
-   die Auskunft -- eine Kalorienzahl kann es dort gar nicht geben. Im Tracker
-   steht die Spanne oben und daneben, was bis zum Ziel noch fehlt. */
+/* Das Tagesbild steht im Kopf der Tageskarte, nicht in einer eigenen:
+   im Tagebuch als eine Zeile aus Zahl und Stufen, im Tracker als
+   Kalorienspanne mit vier schmalen Makro-Kacheln daneben. Vorher waren das
+   zwei Karten und fuenf Balken ueber die ganze Breite -- viel Flaeche fuer
+   eine Auskunft, die man im Vorbeigehen liest. */
 function zeichneTagBild() {
     const ziel = document.getElementById('ernTagBild');
-    const sub = document.getElementById('ernTagSub');
     const t = state.tag;
     if (!t) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
 
     const c = t.counts;
     if (!c.entries) {
-        sub.textContent = '';
-        ziel.innerHTML = leerKarte('🍽️', istLocker()
-            ? 'Für diesen Tag steht noch nichts da. Oben hinschreiben, was es gab — '
-              + 'ein Wort reicht.'
-            : 'Für diesen Tag ist noch nichts eingetragen.');
+        ziel.innerHTML = `<p class="ern-tagleer">${istLocker()
+            ? 'Für diesen Tag steht noch nichts da — ein Wort reicht.'
+            : 'Für diesen Tag ist noch nichts eingetragen.'}</p>`;
         return;
     }
 
-    sub.textContent = `${c.entries} ${c.entries === 1 ? 'Eintrag' : 'Einträge'}`;
+    const stufen = `<span class="ern-stufenzeile">
+        <span class="ern-punkt is-normal" aria-hidden="true"></span> ${c.normal} normal
+        <span class="ern-punkt is-viel" aria-hidden="true"></span> ${c.viel} übermäßig
+        ${c.exact ? `<span class="ern-punkt is-exakt" aria-hidden="true"></span> ${c.exact} abgewogen` : ''}
+        ${c.unknown ? `<span class="v-tag v-tag--warn">${c.unknown} ohne Nährwerte</span>` : ''}
+    </span>`;
+
     const kcal = t.totals.kcal;
     const bekannt = c.entries - c.unknown;
 
-    // Die Kalorienzeile steht nur da, wenn wenigstens ein Eintrag Naehrwerte
-    // hat -- sonst waere "0 kcal" eine Behauptung ueber einen Tag, von dem
-    // wir nur die Namen kennen.
-    const kcalZeile = !bekannt ? ''
-        : `<div class="ern-gross">
-               <span>${zahlKurz(kcal.min)}</span>
-               ${kcal.min === kcal.max ? '' : `<span class="ern-bis">bis</span>
-               <span>${zahlKurz(kcal.max)}</span>`}
-               <span class="ern-einheit">kcal</span>
-           </div>`;
-
-    const luecke = c.unknown
-        ? `<span class="v-tag v-tag--warn">${c.unknown} ohne Nährwerte</span>` : '';
-    const stufen = `<span class="ern-punkt is-normal" aria-hidden="true"></span> ${c.normal} normal`
-        + ` <span class="ern-punkt is-viel" aria-hidden="true"></span> ${c.viel} übermäßig`
-        + (c.exact ? ` <span class="ern-punkt is-exakt" aria-hidden="true"></span> ${c.exact} abgewogen` : '');
-
     if (istLocker()) {
-        ziel.innerHTML = `
+        // Eine Kalorienzahl kann es im Tagebuch gar nicht geben -- die
+        // Auskunft ist die Zahl der Eintraege und ihre Verteilung. Wenn zu
+        // einigen doch Naehrwerte bekannt sind, steht das als Nebensatz da.
+        ziel.innerHTML = `<div class="ern-tagzeile">
             <div class="ern-gross"><span>${c.entries}</span>
                 <span class="ern-einheit">${c.entries === 1 ? 'Eintrag' : 'Einträge'}</span></div>
-            <p class="ern-stufenzeile">${stufen}</p>
-            ${bekannt ? `<p class="ern-note">Grob gerechnet ${zahlKurz(kcal.min)}–${zahlKurz(kcal.max)} kcal
-                aus ${bekannt} von ${c.entries} Einträgen. ${luecke}</p>`
-              : `<p class="ern-note">Zu keinem dieser Einträge sind Nährwerte hinterlegt —
-                 im Tagebuch ist das kein Mangel, sondern der Punkt.</p>`}`;
+            ${stufen}
+        </div>
+        ${bekannt ? `<p class="ern-note">Grob gerechnet ${zahlKurz(kcal.min)}–${zahlKurz(kcal.max)} kcal
+            aus ${bekannt} von ${c.entries} Einträgen.</p>` : ''}`;
         return;
     }
 
     const rest = kcal.remaining_max > 0
         ? (kcal.remaining_min === kcal.remaining_max
-            ? `Noch ${zahlKurz(kcal.remaining_min)} kcal bis zum ${kcal.own_target ? 'Ziel' : 'Richtwert'}.`
-            : `Noch ${zahlKurz(kcal.remaining_min)}–${zahlKurz(kcal.remaining_max)} kcal bis zum ${kcal.own_target ? 'Ziel' : 'Richtwert'}.`)
-        : `Der ${kcal.own_target ? 'Zielwert' : 'Richtwert'} von ${zahlKurz(kcal.reference)} kcal ist erreicht.`;
+            ? `noch ${zahlKurz(kcal.remaining_min)} kcal bis zum ${kcal.own_target ? 'Ziel' : 'Richtwert'}`
+            : `noch ${zahlKurz(kcal.remaining_min)}–${zahlKurz(kcal.remaining_max)} kcal bis zum ${kcal.own_target ? 'Ziel' : 'Richtwert'}`)
+        : `${kcal.own_target ? 'Zielwert' : 'Richtwert'} von ${zahlKurz(kcal.reference)} kcal erreicht`;
 
-    ziel.innerHTML = `${kcalZeile}
-        <p class="ern-stufenzeile">${stufen}</p>
-        <p class="ern-note">${rest} ${kcal.incomplete
-            ? 'Die Spanne ist eine Untergrenze — zu manchen Einträgen fehlen Angaben. ' : ''}${luecke}</p>`;
+    ziel.innerHTML = `<div class="ern-tagzeile">
+            <div class="ern-gross">
+                <span>${zahlKurz(kcal.min)}</span>
+                ${kcal.min === kcal.max ? '' : `<span class="ern-bis">bis</span>
+                <span>${zahlKurz(kcal.max)}</span>`}
+                <span class="ern-einheit">kcal</span>
+            </div>
+            ${stufen}
+        </div>
+        <p class="ern-note">${rest}${kcal.incomplete
+            ? ' · die Spanne ist eine Untergrenze, zu manchen Einträgen fehlen Angaben' : ''}</p>
+        <div class="ern-makros">${t.macros.filter(m => m !== 'kcal')
+            .map(m => makroKachel(m, t.totals[m])).join('')}</div>`;
 }
 
-/* Ein Band je Naehrwert: die Spur reicht bis zum Anderthalbfachen des
-   Massstabs, der Massstab selbst steht als Strich darin. Gefuellt ist genau
-   der Bereich zwischen der unteren und der oberen Schaetzung -- die Breite
-   des Balkens IST die Unsicherheit. Nur im Tracker: im Tagebuch waere ein
-   Balken gegen ein Ziel eine Bewertung von Zahlen, die es nicht gibt. */
-function band(makro, d) {
+/* Eine schmale Kachel je Naehrwert. Die Spur reicht bis zum Anderthalbfachen
+   des Massstabs, der Massstab selbst steht als Strich darin; gefuellt ist
+   genau der Bereich zwischen unterer und oberer Schaetzung -- die Breite des
+   Balkens IST die Unsicherheit. */
+function makroKachel(makro, d) {
     const links = Math.min(100, (d.share_min / 1.5) * 100);
     const breite = Math.max(2, Math.min(100 - links, ((d.share_max - d.share_min) / 1.5) * 100));
     const e = EINHEIT[makro] || '';
-    return `<div class="ern-band${d.incomplete ? ' is-unvollstaendig' : ''}">
-        <div class="ern-band-kopf">
-            <span class="ern-band-lbl">${esc(d.label)}</span>
-            <span class="ern-band-wert">${d.incomplete ? 'mind. ' : ''}${zahlKurz(d.min)}–${zahlKurz(d.max)}${e}</span>
+    return `<div class="ern-makro${d.incomplete ? ' is-unvollstaendig' : ''}">
+        <div class="ern-makro-kopf">
+            <span class="ern-makro-lbl">${esc(d.label)}</span>
+            <span class="ern-makro-wert">${d.incomplete ? 'mind. ' : ''}${zahlKurz(d.min)}${
+                d.min === d.max ? '' : '–' + zahlKurz(d.max)}${e}</span>
         </div>
-        <div class="ern-band-spur" role="img"
+        <div class="ern-makro-spur" role="img"
              aria-label="${esc(d.label)}: ${zahlKurz(d.min)} bis ${zahlKurz(d.max)}${e}, ${
                 d.own_target ? 'Ziel' : 'Richtwert'} ${zahlKurz(d.reference)}${e}">
-            <span class="ern-band-marke" style="left:66.7%"></span>
-            <span class="ern-band-fuell" style="left:${links.toFixed(1)}%;width:${breite.toFixed(1)}%"></span>
+            <span class="ern-makro-marke" style="left:66.7%"></span>
+            <span class="ern-makro-fuell" style="left:${links.toFixed(1)}%;width:${breite.toFixed(1)}%"></span>
         </div>
-        <div class="ern-band-fuss">${d.own_target ? 'Ziel' : 'Richtwert'} ${zahlKurz(d.reference)}${e}${
-            d.incomplete ? ' · eine Zutat macht dazu keine Angabe, der Wert ist mindestens so hoch' : ''}</div>
+        <div class="ern-makro-fuss">${d.own_target ? 'Ziel' : 'Richtwert'} ${zahlKurz(d.reference)}${e}</div>
     </div>`;
 }
 
-function zeichneBaender() {
-    const ziel = document.getElementById('ernBaender');
-    const t = state.tag;
-    if (!t || istLocker() || !t.counts.entries) { ziel.innerHTML = ''; return; }
-    const eigene = t.macros.some(m => t.totals[m].own_target);
-    ziel.innerHTML = t.macros.filter(m => m !== 'kcal').map(m => band(m, t.totals[m])).join('')
-        + `<p class="ern-note">Der Strich im Balken ist der Maßstab. ${
-            eigene ? t.target_note + ' Wo keines gesetzt ist, gilt der allgemeine Richtwert.'
-                   : t.reference_note + ' Eigene Ziele setzt du unter Verlauf.'}</p>`;
-}
-
-/* Der Tag nach Mahlzeiten. "Mittag" ist die Auskunft, die man geben kann --
-   eine Uhrzeit waere eine, die man erfinden muesste. */
-function zeichneEintraege() {
-    const ziel = document.getElementById('ernEintraege');
+/* Der Tag nach Mahlzeiten -- und jede Mahlzeit traegt ihr eigenes Plus.
+   "Mittag" ist die Auskunft, die man geben kann; eine Uhrzeit waere eine,
+   die man erfinden muesste. Leere Mahlzeiten bleiben als schmale Zeile
+   stehen: sie sind der kuerzeste Weg zum naechsten Eintrag. */
+function zeichneMahlzeitenBloecke() {
+    const ziel = document.getElementById('ernTagMahlzeiten');
     const t = state.tag;
     if (!t) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
 
-    document.getElementById('ernEintraegeZahl').textContent =
-        t.entries.length ? t.entries.length + ' an diesem Tag' : '';
-
-    if (!t.entries.length) {
-        ziel.innerHTML = leerKarte('🍽️', istLocker()
-            ? 'Noch nichts notiert. Oben tippen, was es gab, dann <strong>normal</strong> '
-              + 'oder <strong>übermäßig</strong> — fertig.'
-            : 'Noch nichts eingetragen. Ein Gericht oben antippen — normal oder übermäßig. '
-              + 'Bei einem einzelnen Lebensmittel sagst du, wie viel: 100 g, zwei Scheiben, '
-              + 'eine Packung.');
-        return;
-    }
-
-    const bloecke = t.meals.map(m => {
+    ziel.innerHTML = t.meals.map(m => {
         const eigene = t.entries.filter(e => e.meal === m.key);
-        if (!eigene.length) return '';
-        const kcalSumme = eigene.reduce((a, e) => ({
+        // "Ohne Zuordnung" steht nur da, wenn wirklich etwas darin liegt --
+        // sonst waere es eine fuenfte Mahlzeit, die niemand hat.
+        if (m.key === 'ohne' && !eigene.length) return '';
+
+        const summe = eigene.reduce((a, e) => ({
             min: a.min + (e.kcal_min || 0), max: a.max + (e.kcal_max || 0),
             offen: a.offen || !e.has_nutrition,
         }), { min: 0, max: 0, offen: false });
-        const summe = istLocker() || !(kcalSumme.max > 0) ? ''
-            : `<span class="ern-mahlzeit-summe">${kcalSumme.offen ? 'mind. ' : ''}${
-                zahlKurz(kcalSumme.min)}–${zahlKurz(kcalSumme.max)} kcal</span>`;
-        return `<div class="ern-mahlzeit">
-            <div class="ern-mahlzeit-kopf">
-                <span class="ern-mahlzeit-name">${esc(m.label)}</span>${summe}
+        const kcalText = istLocker() || !(summe.max > 0) ? ''
+            : `<span class="ern-mz-summe">${summe.offen ? 'mind. ' : ''}${
+                zahlKurz(summe.min)}${summe.min === summe.max ? '' : '–' + zahlKurz(summe.max)} kcal</span>`;
+
+        const plus = m.key === 'ohne' ? ''
+            : `<button type="button" class="ern-mz-plus" data-add="${esc(m.key)}"
+                   aria-label="Zu ${esc(m.label)} eintragen" title="Zu ${esc(m.label)} eintragen">＋</button>`;
+
+        return `<div class="ern-mz${eigene.length ? '' : ' is-leer'}">
+            <div class="ern-mz-kopf">
+                <span class="ern-mz-name">${esc(m.label)}</span>
+                ${kcalText}
+                ${plus}
             </div>
-            ${eigene.map(eintragZeile).join('')}
+            ${eigene.length ? eigene.map(eintragZeile).join('') : ''}
         </div>`;
     }).join('');
 
-    ziel.innerHTML = bloecke;
-
+    ziel.querySelectorAll('[data-add]').forEach(b =>
+        b.addEventListener('click', () => eintragDialog(b.dataset.add)));
     ziel.querySelectorAll('[data-eintrag-weg]').forEach(b =>
         b.addEventListener('click', () => eintragEntfernen(Number(b.dataset.eintragWeg))));
     ziel.querySelectorAll('[data-stufe-um]').forEach(b =>
@@ -447,6 +453,9 @@ function zeichneEintraege() {
 }
 
 function eintragZeile(e) {
+    // Eine falsch geratene Stufe laesst sich antippen statt loeschen und neu
+    // eintragen. Bei einer gewogenen Menge geht das nicht: dort steht die
+    // Menge, und die ist keine Stufe.
     const stufe = e.level && !e.amount_label
         ? `<button type="button" class="ern-stufe is-${esc(e.level)}"
                data-stufe-um="${e.id}" data-stufe-neu="${e.level === 'viel' ? 'normal' : 'viel'}"
@@ -456,11 +465,11 @@ function eintragZeile(e) {
 
     const meta = [
         e.kind === 'free' ? 'frei notiert' : esc(e.sub || ''),
-        e.has_nutrition && e.kcal_min != null
+        istLocker() ? '' : (e.has_nutrition && e.kcal_min != null
             ? (e.kcal_min === e.kcal_max
                 ? `${zahlKurz(e.kcal_min)} kcal`
                 : `${zahlKurz(e.kcal_min)}–${zahlKurz(e.kcal_max)} kcal`)
-            : 'ohne Nährwerte',
+            : 'ohne Nährwerte'),
         e.assumed_portion ? 'Portion mit 100 g angenommen' : '',
     ].filter(Boolean);
 
@@ -476,61 +485,138 @@ function eintragZeile(e) {
     </div>`;
 }
 
-/* -------------------------------------------------------------- Eingabe */
-
-function zeichneMahlzeiten() {
-    const ziel = document.getElementById('ernMahlzeiten');
-    const liste = (state.tag && state.tag.meals) || [];
-    // "Ohne Zuordnung" ist der Standard und braucht keinen eigenen Chip --
-    // wer nichts waehlt, hat nichts gewaehlt.
-    ziel.innerHTML = liste.filter(m => m.key !== 'ohne').map(m =>
-        `<button type="button" class="v-chip${state.mahlzeit === m.key ? ' is-active' : ''}"
-            data-mahlzeit="${esc(m.key)}">${esc(m.label)}</button>`).join('')
-        + `<button type="button" class="v-chip${state.mahlzeit ? '' : ' is-active'}"
-            data-mahlzeit="">ohne</button>`;
-    ziel.querySelectorAll('[data-mahlzeit]').forEach(b => b.addEventListener('click', () => {
-        state.mahlzeit = b.dataset.mahlzeit || null;
-        zeichneMahlzeiten();
-    }));
+function zeichneTag() {
+    zeichneTagKopf();
+    zeichneTagBild();
+    zeichneMahlzeitenBloecke();
 }
 
-/* Alle Vorschläge haben DIESELBE Zeilenform: Name links, Bedienung rechts.
-   Was rechts steht, haengt am Modus und an der Art -- ein Gericht wird in
-   Stufen gegessen, ein Lebensmittel im Tracker in Mengen. */
-function vorschlagZeile(v) {
-    const mengenFeld = !istLocker() && v.kind === 'item' && v.item;
-    let rechts;
-    if (mengenFeld) {
-        const einheiten = v.item.units
-            || [{ key: v.item.base_unit || 'g', label: v.item.base_unit || 'g' }];
-        const eigene = einheiten.filter(e => !BASIS.includes(e.key));
-        const start = eigene.length ? eigene[0] : einheiten[0];
-        rechts = `<div class="ern-menge">
-            <input type="number" min="0" step="0.25"
-                   inputmode="decimal" value="${eigene.length ? 1 : 100}"
-                   data-menge="${v.item.id}" aria-label="Menge für ${esc(v.name)}">
-            <select class="v-select v-select--sm" data-einheit="${v.item.id}"
-                    aria-label="Einheit für ${esc(v.name)}">
-                ${einheiten.map(e => `<option value="${esc(e.key)}"${
-                    e.key === start.key ? ' selected' : ''}>${esc(e.label)}</option>`).join('')}
-            </select>
-            <button type="button" class="v-btn v-btn--sm v-btn--primary"
-                    data-log-item="${v.item.id}">Eintragen</button>
-        </div>`;
-    } else {
-        rechts = `<div class="ern-stufen">${STUFEN.map(s =>
-            `<button type="button" class="v-btn v-btn--sm${s.key === 'viel' ? '' : ' v-btn--primary'}"
-                data-log-stufe="${s.key}" data-log-art="${esc(v.kind)}"
-                data-log-id="${v.dish_id || v.item_id || ''}"
-                data-log-name="${esc(v.name)}">${s.label}</button>`).join('')}</div>`;
+async function ladeTag(datum) {
+    state.datum = datum || state.datum || heute();
+    let tag;
+    try {
+        tag = await API.tag(state.datum);
+    } catch (err) {
+        zeigeTagFehler(fehlerText(err));
+        return;
     }
-    return `<div class="ern-vorschlag${v.neu ? ' is-neu' : ''}">
-        <div class="ern-zeile-text">
-            <div class="ern-zeile-kopf"><strong>${esc(v.name)}</strong></div>
-            <div class="ern-note">${esc(v.sub || '')}</div>
-        </div>
-        ${rechts}
-    </div>`;
+    // Eine Antwort ohne ``counts`` und ``meals`` kommt aus einer aelteren
+    // Fassung des Backends. Sie hier durchzulassen hiesse, die Seite mitten
+    // im Zeichnen an einem fehlenden Feld abbrechen zu lassen -- und was man
+    // dann saehe, waere eine halbe Seite ohne Grund.
+    if (!tag || !tag.counts || !tag.meals) {
+        zeigeTagFehler(VERALTET);
+        return;
+    }
+    state.tag = tag;
+    document.getElementById('ernTagFehler').hidden = true;
+    document.getElementById('ernTagInhalt').hidden = false;
+    zeichneTag();
+}
+
+async function ladeHaeufig() {
+    try {
+        const res = await API.haeufig();
+        state.haeufig = res.suggestions || [];
+    } catch (e) {
+        state.haeufig = [];
+    }
+    if (state.dlg) zeichneDlgListe();
+}
+
+/* ----------------------------------------------------- Eintragen-Dialog
+ *
+ * Alles, was zum Eintragen gehoert, liegt hier drin: die Mahlzeit, das
+ * Suchfeld und die Vorschlaege. Auf der Seite selbst stand das vorher
+ * dauerhaft und schob den Tag nach unten -- dabei tippt man dort nur ein
+ * paar Sekunden am Tag.
+ */
+
+/* Welche Mahlzeit gemeint ist, wenn man den grossen Knopf drueckt. Nur fuer
+   heute geraten: bei einem vergangenen Tag waere "es ist jetzt Abend" kein
+   Argument dafuer, was damals auf dem Teller lag. */
+function mahlzeitJetzt() {
+    if ((state.datum || heute()) !== heute()) return null;
+    const h = new Date().getHours();
+    if (h < 11) return 'fruehstueck';
+    if (h < 15) return 'mittag';
+    if (h < 21) return 'abend';
+    return 'snack';
+}
+
+function eintragDialog(mahlzeit) {
+    if (!state.tag) return;
+    state.dlg = { mahlzeit: mahlzeit || null, eingabe: '', zuletzt: [], tippen: null,
+                  liste: [] };
+
+    const titel = (state.datum || heute()) === heute()
+        ? 'Eintragen · heute' : 'Eintragen · ' + datumKurz(state.datum);
+    const inhalt = `
+        <div class="ern-dlg-mahlzeiten" id="ernDlgMahlzeiten"></div>
+        <label class="ern-suche">
+            <span class="ern-suche-ico" aria-hidden="true">🔎</span>
+            <input type="search" id="ernDlgSuche" autocomplete="off"
+                   aria-label="Was gab es?" placeholder="${istLocker()
+                    ? 'Tippen, was es gab — „Pizza", „Müsli"'
+                    : 'Gericht oder Lebensmittel suchen'}">
+        </label>
+        <div id="ernDlgListe"></div>
+        <div class="ern-dlg-fuss">
+            <span class="ern-note" id="ernDlgZuletzt"></span>
+            <button type="button" class="v-btn v-btn--primary" id="ernDlgFertig">Fertig</button>
+        </div>`;
+
+    state.dialog = openModal(titel, inhalt, {
+        breit: true,
+        beimSchliessen: () => {
+            if (state.dlg) clearTimeout(state.dlg.tippen);
+            state.dialog = null;
+            state.dlg = null;
+        },
+    });
+
+    zeichneDlgMahlzeiten();
+    zeichneDlgListe();
+
+    const feld = document.getElementById('ernDlgSuche');
+    feld.addEventListener('input', (e) => {
+        clearTimeout(state.dlg.tippen);
+        const wert = e.target.value;
+        state.dlg.tippen = setTimeout(() => {
+            state.dlg.eingabe = wert;
+            zeichneDlgListe();
+        }, 160);
+    });
+    // Enter traegt den ersten Vorschlag normal ein -- der haeufigste Fall,
+    // und er soll ohne Maus gehen.
+    feld.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        clearTimeout(state.dlg.tippen);
+        state.dlg.eingabe = e.target.value;
+        zeichneDlgListe();
+        const erste = document.querySelector('#ernDlgListe [data-log-normal], #ernDlgListe [data-log-menge]');
+        if (erste) erste.click();
+    });
+    document.getElementById('ernDlgFertig')
+        .addEventListener('click', () => state.dialog && state.dialog.close());
+    // Auf dem Handy oeffnet der Fokus die Tastatur und verdeckt die Liste;
+    // auf dem Rechner ist er genau das, was man will.
+    if (window.matchMedia('(min-width: 720px)').matches) feld.focus();
+}
+
+function zeichneDlgMahlzeiten() {
+    const ziel = document.getElementById('ernDlgMahlzeiten');
+    if (!ziel) return;
+    const liste = (state.tag && state.tag.meals) || [];
+    ziel.innerHTML = liste.map(m =>
+        `<button type="button" class="v-chip${
+            (state.dlg.mahlzeit || 'ohne') === m.key ? ' is-active' : ''}"
+            data-mahlzeit="${esc(m.key)}">${esc(m.label)}</button>`).join('');
+    ziel.querySelectorAll('[data-mahlzeit]').forEach(b => b.addEventListener('click', () => {
+        state.dlg.mahlzeit = b.dataset.mahlzeit === 'ohne' ? null : b.dataset.mahlzeit;
+        zeichneDlgMahlzeiten();
+    }));
 }
 
 /* Woraus die Liste besteht:
@@ -539,10 +625,8 @@ function vorschlagZeile(v) {
      3. was man oft eintraegt, aus dem Tagebuch selbst gezaehlt.
    Im Tagebuch steht 1 obenan, im Tracker 2: dort tippt man einen Namen, um
    etwas zu finden, hier, um etwas hinzuschreiben. */
-function zeichneVorschlaege() {
-    const ziel = document.getElementById('ernVorschlaege');
-    const sub = document.getElementById('ernEingabeSub');
-    const text = (state.eingabe || '').trim();
+function dlgVorschlaege() {
+    const text = (state.dlg.eingabe || '').trim();
     const suche = text.toLowerCase();
     const passt = (n) => !suche || String(n || '').toLowerCase().includes(suche);
 
@@ -584,12 +668,57 @@ function zeichneVorschlaege() {
             sub: `${h.count}× notiert · zuletzt ${datumKurz(h.last)}`,
         }));
 
-    const liste = istLocker()
+    return istLocker()
         ? frei.concat(haeufig, gerichte)
         : frei.concat(gerichte, lebensmittel, haeufig);
+}
+
+/* Eine Zeile, eine Hauptsache: die ganze Zeile ist der Knopf fuer "normal",
+   "uebermaessig" steht klein daneben. Nur ein Lebensmittel im Tracker bekommt
+   statt der Stufen ein Mengenfeld -- dort ist die Menge die Angabe. */
+function dlgZeile(v, i) {
+    const mengenFeld = !istLocker() && v.kind === 'item' && v.item;
+    if (mengenFeld) {
+        const einheiten = v.item.units
+            || [{ key: v.item.base_unit || 'g', label: v.item.base_unit || 'g' }];
+        const eigene = einheiten.filter(e => !BASIS.includes(e.key));
+        const start = eigene.length ? eigene[0] : einheiten[0];
+        return `<div class="ern-w is-menge">
+            <div class="ern-w-text">
+                <span class="ern-w-name">${esc(v.name)}</span>
+                <span class="ern-w-sub">${esc(v.sub || '')}</span>
+            </div>
+            <div class="ern-menge">
+                <input type="number" min="0" step="0.25" inputmode="decimal"
+                       value="${eigene.length ? 1 : 100}"
+                       data-menge="${i}" aria-label="Menge für ${esc(v.name)}">
+                <select class="v-select v-select--sm" data-einheit="${i}"
+                        aria-label="Einheit für ${esc(v.name)}">
+                    ${einheiten.map(e => `<option value="${esc(e.key)}"${
+                        e.key === start.key ? ' selected' : ''}>${esc(e.label)}</option>`).join('')}
+                </select>
+                <button type="button" class="v-btn v-btn--sm v-btn--primary"
+                        data-log-menge="${i}">Eintragen</button>
+            </div>
+        </div>`;
+    }
+    return `<div class="ern-w${v.neu ? ' is-neu' : ''}">
+        <button type="button" class="ern-w-haupt" data-log-normal="${i}">
+            <span class="ern-w-name">${esc(v.name)}</span>
+            <span class="ern-w-sub">${esc(v.sub || '')}</span>
+        </button>
+        <button type="button" class="ern-w-viel" data-log-viel="${i}"
+                title="Als übermäßig eintragen">übermäßig</button>
+    </div>`;
+}
+
+function zeichneDlgListe() {
+    const ziel = document.getElementById('ernDlgListe');
+    if (!ziel || !state.dlg) return;
+    const liste = dlgVorschlaege();
+    state.dlg.liste = liste;
 
     if (!liste.length) {
-        sub.textContent = '';
         ziel.innerHTML = leerKarte('✏️', istLocker()
             ? 'Tipp oben hin, was es gab — „Pizza", „Müsli", „Kaffee". Es muss in keiner '
               + 'Liste stehen, und nach ein paar Tagen schlägt dir die Seite genau das vor, '
@@ -599,31 +728,36 @@ function zeichneVorschlaege() {
         return;
     }
 
-    const MAX = 10;
-    const mahlzeiten = (state.tag && state.tag.meals) || [];
-    sub.textContent = state.mahlzeit
-        ? (mahlzeiten.find(m => m.key === state.mahlzeit) || {}).label || ''
-        : '';
-    ziel.innerHTML = liste.slice(0, MAX).map(vorschlagZeile).join('')
+    const MAX = 12;
+    ziel.innerHTML = liste.slice(0, MAX).map(dlgZeile).join('')
         + (liste.length > MAX
             ? `<p class="ern-note">… und ${liste.length - MAX} weitere — tipp oben weiter.</p>`
             : '');
 
-    ziel.querySelectorAll('[data-log-stufe]').forEach(b => b.addEventListener('click', () => {
-        const art = b.dataset.logArt;
-        const daten = { level: b.dataset.logStufe };
-        if (art === 'dish') daten.dish_id = Number(b.dataset.logId);
-        else if (art === 'item') daten.item_id = Number(b.dataset.logId);
-        else daten.label = b.dataset.logName;
-        eintragen(daten, b);
+    const auswahl = (i) => state.dlg.liste[Number(i)];
+    const daten = (v, stufe) => {
+        const d = { level: stufe };
+        if (v.kind === 'dish') d.dish_id = v.dish_id;
+        else if (v.kind === 'item') d.item_id = v.item_id;
+        else d.label = v.name;
+        return d;
+    };
+    ziel.querySelectorAll('[data-log-normal]').forEach(b => b.addEventListener('click', () => {
+        const v = auswahl(b.dataset.logNormal);
+        if (v) eintragen(daten(v, 'normal'), b, v.name);
     }));
-    ziel.querySelectorAll('[data-log-item]').forEach(b => b.addEventListener('click', () => {
-        const id = Number(b.dataset.logItem);
-        const feld = ziel.querySelector(`[data-menge="${id}"]`);
-        const wahl = ziel.querySelector(`[data-einheit="${id}"]`);
+    ziel.querySelectorAll('[data-log-viel]').forEach(b => b.addEventListener('click', () => {
+        const v = auswahl(b.dataset.logViel);
+        if (v) eintragen(daten(v, 'viel'), b, v.name);
+    }));
+    ziel.querySelectorAll('[data-log-menge]').forEach(b => b.addEventListener('click', () => {
+        const i = b.dataset.logMenge;
+        const v = auswahl(i);
+        const feld = ziel.querySelector(`[data-menge="${i}"]`);
+        const wahl = ziel.querySelector(`[data-einheit="${i}"]`);
         const menge = Number(String(feld.value).replace(',', '.'));
         if (!(menge > 0)) { melde('Wie viel davon?', 'error'); feld.focus(); return; }
-        eintragen({ item_id: id, amount: menge, unit: wahl.value }, b);
+        eintragen({ item_id: v.item_id, amount: menge, unit: wahl.value }, b, v.name);
     }));
     // Die Zahl im Feld passt sich der Einheit an: 100 g, aber 1 Scheibe.
     // Ohne das steht nach dem Umschalten "100 Scheiben" da.
@@ -633,21 +767,31 @@ function zeichneVorschlaege() {
     }));
 }
 
-async function eintragen(daten, knopf) {
+async function eintragen(daten, knopf, name) {
     knopf.classList.add('is-loading');
     try {
         state.tag = await API.eintragen(Object.assign(
-            { day: state.datum || heute(), meal: state.mahlzeit }, daten));
-        // Das Feld leeren: der naechste Eintrag faengt bei null an, und ein
-        // stehengebliebener Text sieht aus, als waere nichts passiert.
-        // Auch den laufenden Tipp-Takt: er wuerde sonst 180 ms spaeter den
-        // gerade eingetragenen Text wieder als Vorschlag hinstellen.
-        clearTimeout(state.tippen);
-        state.eingabe = '';
-        document.getElementById('ernEingabe').value = '';
+            { day: state.datum || heute(),
+              meal: state.dlg ? state.dlg.mahlzeit : null }, daten));
         zeichneTag();
+        if (state.dlg) {
+            // Das Feld leeren: der naechste Eintrag faengt bei null an, und
+            // ein stehengebliebener Text sieht aus, als waere nichts
+            // passiert. Auch den laufenden Tipp-Takt, sonst stellt er den
+            // Text 160 ms spaeter wieder als Vorschlag hin.
+            clearTimeout(state.dlg.tippen);
+            state.dlg.eingabe = '';
+            const feld = document.getElementById('ernDlgSuche');
+            if (feld) { feld.value = ''; feld.focus(); }
+            if (name) state.dlg.zuletzt.push(name);
+            const fuss = document.getElementById('ernDlgZuletzt');
+            if (fuss) {
+                fuss.textContent = state.dlg.zuletzt.length
+                    ? 'Eingetragen: ' + state.dlg.zuletzt.join(', ') : '';
+            }
+            zeichneDlgListe();
+        }
         ladeHaeufig();
-        melde('Eingetragen.', 'success');
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
     } finally {
@@ -674,48 +818,6 @@ async function eintragEntfernen(id) {
     }
 }
 
-function zeichneTag() {
-    zeichneTagKopf();
-    zeichneTagBild();
-    zeichneBaender();
-    zeichneEintraege();
-    zeichneMahlzeiten();
-    zeichneVorschlaege();
-}
-
-async function ladeTag(datum) {
-    state.datum = datum || state.datum || heute();
-    let tag;
-    try {
-        tag = await API.tag(state.datum);
-    } catch (err) {
-        zeigeTagFehler(fehlerText(err));
-        return;
-    }
-    // Eine Antwort ohne ``counts`` und ``meals`` kommt aus einer aelteren
-    // Fassung des Backends. Sie hier durchzulassen hiesse, die Seite mitten
-    // im Zeichnen an einem fehlenden Feld abbrechen zu lassen -- und was man
-    // dann saehe, waere eine halbe Seite ohne Grund.
-    if (!tag || !tag.counts || !tag.meals) {
-        zeigeTagFehler(VERALTET);
-        return;
-    }
-    state.tag = tag;
-    document.getElementById('ernTagFehler').hidden = true;
-    document.getElementById('ernTagInhalt').hidden = false;
-    zeichneTag();
-}
-
-async function ladeHaeufig() {
-    try {
-        const res = await API.haeufig();
-        state.haeufig = res.suggestions || [];
-    } catch (e) {
-        state.haeufig = [];
-    }
-    zeichneVorschlaege();
-}
-
 /* -------------------------------------------------------------- Verlauf */
 
 function mountRange() {
@@ -737,6 +839,7 @@ async function ladeVerlauf() {
         state.verlauf = await API.verlauf(qs ? '?' + qs : '');
     } catch (err) {
         state.verlauf = null;
+        zerstoereCharts();
         document.getElementById('ernVerlaufKpi').innerHTML = '';
         document.getElementById('ernChart1Box').hidden = true;
         document.getElementById('ernChart1Leer').hidden = false;
@@ -1059,14 +1162,58 @@ async function zieleZuruecksetzen() {
     await zieleSpeichern();
 }
 
-/* ------------------------------------------------------------- Gerichte */
+/* ------------------------------------------------------------- Gerichte
+ *
+ * Der Reiter zeigt die Liste; angelegt und geaendert wird im Dialog. Ein
+ * Rezept schreibt man selten und liest es oft -- die Maske dauerhaft ueber
+ * die Liste zu legen, drehte das um.
+ */
+
+function gerichtDialog(g) {
+    state.entwurf = g
+        ? { id: g.id, name: g.name,
+            items: g.items.map(z => ({ item_id: z.item_id, name: z.name,
+                                       amount: z.amount, unit: z.unit, units: z.units })) }
+        : { id: null, name: '', items: [] };
+
+    const inhalt = `
+        <label class="ern-feld">
+            <span>Name</span>
+            <input type="text" id="ernGerichtName" autocomplete="off"
+                   placeholder="z. B. Wraps" value="${esc(state.entwurf.name)}">
+        </label>
+        <div id="ernZutaten"></div>
+        <label class="ern-suche">
+            <span class="ern-suche-ico" aria-hidden="true">➕</span>
+            <input type="search" id="ernZutatSuche" autocomplete="off"
+                   aria-label="Zutat aus dem Bestand suchen"
+                   placeholder="Zutat aus dem Bestand suchen">
+        </label>
+        <div id="ernZutatTreffer"></div>
+        <p class="ern-note">Gramm stehen nur hier im Rezept. Beim Eintragen sagst du danach
+            nur noch <em>normal</em> oder <em>übermäßig</em>: wie viel vom eigenen Rezept auf
+            dem Teller lag, weiß niemand in Gramm.</p>
+        <div class="ern-tasten">
+            <button type="button" class="v-btn v-btn--primary" id="ernGerichtSpeichern">${
+                state.entwurf.id ? 'Änderung speichern' : 'Gericht speichern'}</button>
+        </div>`;
+
+    state.dialog = openModal(state.entwurf.id ? 'Gericht ändern' : 'Neues Gericht', inhalt, {
+        breit: true,
+        beimSchliessen: () => { state.dialog = null; },
+    });
+
+    zeichneEntwurf();
+    document.getElementById('ernZutatSuche')
+        .addEventListener('input', (e) => zutatSuchen(e.target.value));
+    document.getElementById('ernGerichtSpeichern')
+        .addEventListener('click', gerichtSpeichern);
+}
 
 function zeichneEntwurf() {
     const e = state.entwurf;
-    document.getElementById('ernGerichtTitel').textContent =
-        e.id ? 'Gericht bearbeiten' : 'Neues Gericht';
-    document.getElementById('ernGerichtNeu').hidden = !e.id;
     const ziel = document.getElementById('ernZutaten');
+    if (!ziel) return;
     ziel.innerHTML = !e.items.length
         ? '<p class="ern-note">Noch keine Zutat. Such unten etwas aus deinem Bestand.</p>'
         : e.items.map((z, i) => `
@@ -1099,6 +1246,7 @@ function zeichneEntwurf() {
 
 function zutatSuchen(text) {
     const ziel = document.getElementById('ernZutatTreffer');
+    if (!ziel) return;
     const begriff = text.trim().toLowerCase();
     if (!begriff) { ziel.innerHTML = ''; return; }
     const treffer = state.bestand.filter(p =>
@@ -1142,37 +1290,14 @@ async function gerichtSpeichern() {
                 item_id: z.item_id, amount: z.amount, unit: z.unit })),
         });
         state.gerichte = res.dishes;
-        entwurfLeeren();
+        if (state.dialog) state.dialog.close();
         zeichneGerichte();
-        zeichneVorschlaege();
         melde('Gericht gespeichert.', 'success');
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
     } finally {
         knopf.classList.remove('is-loading');
     }
-}
-
-function entwurfLeeren() {
-    state.entwurf = { id: null, name: '', items: [] };
-    document.getElementById('ernGerichtName').value = '';
-    document.getElementById('ernZutatSuche').value = '';
-    document.getElementById('ernZutatTreffer').innerHTML = '';
-    zeichneEntwurf();
-}
-
-function gerichtBearbeiten(id) {
-    const g = state.gerichte.find(x => x.id === id);
-    if (!g) return;
-    state.entwurf = {
-        id: g.id, name: g.name,
-        items: g.items.map(z => ({
-            item_id: z.item_id, name: z.name,
-            amount: z.amount, unit: z.unit, units: z.units })),
-    };
-    document.getElementById('ernGerichtName').value = g.name;
-    zeichneEntwurf();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function gerichtLoeschen(id) {
@@ -1219,7 +1344,10 @@ function zeichneGerichte() {
                 </div>
             </div>`).join('');
     ziel.querySelectorAll('[data-bearbeiten]').forEach(b =>
-        b.addEventListener('click', () => gerichtBearbeiten(Number(b.dataset.bearbeiten))));
+        b.addEventListener('click', () => {
+            const g = state.gerichte.find(x => x.id === Number(b.dataset.bearbeiten));
+            if (g) gerichtDialog(g);
+        }));
     ziel.querySelectorAll('[data-gericht-weg]').forEach(b =>
         b.addEventListener('click', () => gerichtLoeschen(Number(b.dataset.gerichtWeg))));
 }
@@ -1232,7 +1360,6 @@ async function ladeGerichte() {
         state.gerichte = [];
     }
     zeichneGerichte();
-    zeichneVorschlaege();
 }
 
 /* ---------------------------------------------------------------- Kamera
@@ -1271,7 +1398,7 @@ async function kameraStarten() {
         return;
     }
     document.getElementById('ernKameraBereich').hidden = false;
-    document.getElementById('ernKamera').textContent = '📷 Kamera schließen';
+    document.getElementById('ernKamera').textContent = '📷 Schließen';
     kamera.laeuft = true;
     kameraHinweis('Kamera wird geöffnet …');
     try {
@@ -1341,10 +1468,11 @@ function codeGefunden(code) {
     const ziffern = String(code || '').replace(/\D/g, '');
     if (!ziffern) return;
     kameraStoppen();
-    document.getElementById('ernBarcode').value = ziffern;
-    // Direkt nachschlagen: wer gerade eine Packung vor die Kamera gehalten
-    // hat, will das Ergebnis, nicht noch einen Knopf.
-    nachschlagen();
+    // Der Code landet im selben Suchfeld wie ein Name -- und wird sofort
+    // nachgeschlagen: wer gerade eine Packung vor die Kamera gehalten hat,
+    // will das Ergebnis, nicht noch einen Knopf.
+    document.getElementById('ernSuche').value = ziffern;
+    suchen(ziffern);
 }
 
 function kameraStoppen() {
@@ -1360,7 +1488,7 @@ function kameraStoppen() {
     const video = document.getElementById('ernVideo');
     if (video) video.srcObject = null;
     document.getElementById('ernKameraBereich').hidden = true;
-    document.getElementById('ernKamera').textContent = '📷 Kamera';
+    document.getElementById('ernKamera').textContent = '📷 Scannen';
 }
 
 /* -------------------------------------------------------- Nachschlagen */
@@ -1449,59 +1577,61 @@ async function katalogHochladen(datei) {
     }
 }
 
-function zeichneTreffer(ziel, produkt, bekannt, notiz, herkunft) {
-    state.vorschlag = produkt;
-    const el = document.getElementById(ziel);
-    if (!produkt && bekannt) {
-        el.innerHTML = `<div class="ern-treffer">
-            <div class="ern-kopf"><strong>${esc(bekannt.name)}</strong>
-                <span class="ern-herkunft">schon im Bestand</span></div>
-            ${naehrwertZeile(bekannt)}
-            ${notiz ? `<p class="ern-note">${esc(notiz)}</p>` : ''}
-        </div>`;
-        return;
-    }
-    if (!produkt) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="ern-treffer">
+function trefferKarte(produkt, herkunft, bekannt, index) {
+    return `<div class="ern-treffer">
         <div class="ern-kopf">
             <strong>${esc(produkt.name)}</strong>
             ${produkt.brand ? `<span class="ern-marke">${esc(produkt.brand)}</span>` : ''}
             <span class="ern-herkunft">${esc(HERKUNFT[herkunft] || 'Open Food Facts')}</span>
         </div>
-        ${naehrwertZeile(produkt)}
-        ${bekannt ? '<p class="ern-note">Dieses Lebensmittel ist bereits im Bestand — Übernehmen aktualisiert die Werte.</p>' : ''}
+        <p class="ern-note">${zahl(produkt.kcal, '')} kcal · ${zahl(produkt.protein_g, ' g')} Eiweiß
+            · ${zahl(produkt.fiber_g, ' g')} Ballaststoffe · je 100 ${esc(produkt.base_unit || 'g')}</p>
+        ${bekannt ? '<p class="ern-note">Schon im Bestand — Übernehmen aktualisiert die Werte.</p>' : ''}
         ${produkt.missing && produkt.missing.length
             ? `<p class="ern-note">Dort fehlen ${produkt.missing.length} Angaben. Du kannst sie nach dem Übernehmen von der Packung nachtragen.</p>`
             : ''}
         <div class="ern-tasten">
-            <button type="button" class="v-btn v-btn--primary" id="ernUebernehmen">In den Bestand</button>
+            <button type="button" class="v-btn v-btn--sm v-btn--primary"
+                    data-treffer="${index}">In den Bestand</button>
         </div>
     </div>`;
-    const knopf = document.getElementById('ernUebernehmen');
-    if (knopf) knopf.addEventListener('click', () => uebernehmen(produkt));
 }
 
-async function nachschlagen(e) {
-    if (e) e.preventDefault();
-    const code = document.getElementById('ernBarcode').value.trim();
-    if (!code) return;
-    document.getElementById('ernTreffer').innerHTML = '<span class="skel skel-block"></span>';
-    try {
-        const res = await API.barcode(code);
-        zeichneTreffer('ernTreffer', res.found ? res.product : null,
-                       res.known, res.note, res.origin);
-    } catch (err) {
-        document.getElementById('ernTreffer').innerHTML =
-            leerKarte('🔎', esc(err.message || 'Nicht gefunden.'));
-    }
-}
+/* Ein Suchfeld fuer beides. Ziffern sind ein Strichcode, alles andere ein
+   Name -- den Nutzer vorher zu fragen, waere eine Frage nach etwas, das an
+   den Zeichen schon abzulesen ist. */
+const istBarcode = (t) => /^\d{6,14}$/.test(t.replace(/\s/g, ''));
 
 async function suchen(text) {
-    const ziel = document.getElementById('ernSuchTreffer');
-    if (text.length < 2) { ziel.innerHTML = ''; return; }
+    const ziel = document.getElementById('ernTreffer');
+    const begriff = (text || '').trim();
+    if (begriff.length < 2) { ziel.innerHTML = ''; return; }
     ziel.innerHTML = '<span class="skel skel-block"></span>';
+
+    if (istBarcode(begriff)) {
+        try {
+            const res = await API.barcode(begriff.replace(/\s/g, ''));
+            if (!res.found && res.known) {
+                ziel.innerHTML = `<div class="ern-treffer">
+                    <div class="ern-kopf"><strong>${esc(res.known.name)}</strong>
+                        <span class="ern-herkunft">schon im Bestand</span></div>
+                    ${naehrwertZeile(res.known)}
+                    ${res.note ? `<p class="ern-note">${esc(res.note)}</p>` : ''}
+                </div>`;
+                return;
+            }
+            if (!res.found) { ziel.innerHTML = leerKarte('🔎', 'Zu diesem Strichcode ist nichts hinterlegt.'); return; }
+            ziel.innerHTML = trefferKarte(res.product, res.origin, res.known, 0);
+            ziel.querySelectorAll('[data-treffer]').forEach(b =>
+                b.addEventListener('click', () => uebernehmen(res.product)));
+        } catch (err) {
+            ziel.innerHTML = leerKarte('🔎', esc(err.message || 'Nicht gefunden.'));
+        }
+        return;
+    }
+
     try {
-        const res = await API.suche(text);
+        const res = await API.suche(begriff);
         if (!res.results.length) {
             ziel.innerHTML = leerKarte('🔎',
                 'Nichts gefunden. Bei Losem ohne Strichcode lohnt sich oft ein '
@@ -1510,16 +1640,7 @@ async function suchen(text) {
         }
         ziel.innerHTML = `<p class="ern-note">${res.results.length} Treffer aus
             ${esc(HERKUNFT[res.origin] || 'Open Food Facts')}</p>`
-            + res.results.map((p, i) => `
-            <div class="ern-treffer">
-                <div class="ern-kopf"><strong>${esc(p.name)}</strong>
-                    ${p.brand ? `<span class="ern-marke">${esc(p.brand)}</span>` : ''}</div>
-                <p class="ern-note">${zahl(p.kcal, '')} kcal · ${zahl(p.protein_g, ' g')} Eiweiß
-                    · ${zahl(p.fiber_g, ' g')} Ballaststoffe</p>
-                <div class="ern-tasten">
-                    <button type="button" class="v-btn v-btn--sm" data-treffer="${i}">In den Bestand</button>
-                </div>
-            </div>`).join('');
+            + res.results.map((p, i) => trefferKarte(p, res.origin, null, i)).join('');
         ziel.querySelectorAll('[data-treffer]').forEach(b =>
             b.addEventListener('click', () => uebernehmen(res.results[Number(b.dataset.treffer)])));
     } catch (err) {
@@ -1545,13 +1666,13 @@ async function uebernehmen(produkt) {
         await ladeBestand();
         const neu = antwort && antwort.item;
         // Ohne Portionsgroesse laesst sich spaeter nur "100 g" eintragen.
-        // Statt das stillschweigend hinzunehmen, steht das Formular gleich
+        // Statt das stillschweigend hinzunehmen, steht der Dialog gleich
         // offen -- ein Feld ausfuellen ist leichter, als den Eintrag spaeter
         // wiederzufinden.
         if (neu && !(neu.sizes || []).length) {
-            formFuellen(neu);
+            itemDialog(neu);
             melde('Aufgenommen. Trag noch ein, was eine Einheit wiegt — dann '
-                + 'kannst du „2 × Scheibe“ eintragen statt in Gramm zu rechnen.', 'info');
+                + 'kannst du „2 × Scheibe" eintragen statt in Gramm zu rechnen.', 'info');
         } else {
             melde('In den Bestand aufgenommen.', 'success');
         }
@@ -1562,7 +1683,7 @@ async function uebernehmen(produkt) {
 
 /* ------------------------------------------------- Anlegen und Aendern
  *
- * Dasselbe Formular fuer beides. Ein zweites Formular zum Bearbeiten waere
+ * Derselbe Dialog fuer beides. Ein zweites Formular zum Bearbeiten waere
  * dieselbe Maske zweimal -- und zwei Stellen, an denen ein Feld fehlen kann.
  * Leere Felder bleiben leer: null heisst "keine Angabe" und ist etwas
  * anderes als 0.
@@ -1575,11 +1696,85 @@ const FORM = {
 };
 const ZAHLENFELDER = ['fKcal', 'fProtein', 'fFiber', 'fCarbs', 'fFat'];
 
+let bearbeitet = null;   // id des Lebensmittels, das gerade geaendert wird
+
+function itemDialog(p) {
+    bearbeitet = p ? p.id : null;
+    state.formGroessen = p ? (p.sizes || []).map(g => ({ label: g.label, grams: g.grams })) : [];
+
+    const inhalt = `
+        <div class="ern-gitter">
+            <label class="ern-feld ern-feld--breit">
+                <span>Name</span>
+                <input type="text" id="fName" autocomplete="off" placeholder="z. B. Omas Gulasch">
+            </label>
+            <label class="ern-feld">
+                <span>Marke oder Quelle</span>
+                <input type="text" id="fBrand" autocomplete="off" placeholder="optional">
+            </label>
+            <label class="ern-feld">
+                <span>Angaben beziehen sich auf</span>
+                <select class="v-select" id="fBase">
+                    <option value="g">100 g (fest)</option>
+                    <option value="ml">100 ml (flüssig)</option>
+                </select>
+            </label>
+        </div>
+        <div class="ern-gitter">
+            <label class="ern-feld"><span>Kalorien</span>
+                <input type="number" id="fKcal" min="0" step="1" inputmode="decimal"></label>
+            <label class="ern-feld"><span>Eiweiß (g)</span>
+                <input type="number" id="fProtein" min="0" step="0.1" inputmode="decimal"></label>
+            <label class="ern-feld"><span>Ballaststoffe (g)</span>
+                <input type="number" id="fFiber" min="0" step="0.1" inputmode="decimal"></label>
+            <label class="ern-feld"><span>Kohlenhydrate (g)</span>
+                <input type="number" id="fCarbs" min="0" step="0.1" inputmode="decimal"></label>
+            <label class="ern-feld"><span>Fett (g)</span>
+                <input type="number" id="fFat" min="0" step="0.1" inputmode="decimal"></label>
+        </div>
+        <p class="ern-note">Leer lassen, was du nicht weißt — leer heißt „keine Angabe" und
+            wird später als Lücke ausgewiesen, nicht als Null verrechnet.</p>
+
+        <div class="ern-groessen-kopf">
+            <h4>Eigene Größen</h4>
+            <button type="button" class="v-btn v-btn--sm" id="fGroesseNeu">Größe hinzufügen</button>
+        </div>
+        <div class="ern-groessen" id="fGroessen"></div>
+        <p class="ern-note">Jede Zeile ist eine Einheit, die du beim Eintragen auswählen
+            kannst — „2 × Scheibe" statt „90 g". Die <strong>erste</strong> Zeile ist die
+            Standardgröße.</p>
+
+        <div class="ern-tasten">
+            <button type="button" class="v-btn v-btn--primary" id="fSpeichern">${
+                p ? 'Änderung speichern' : 'Aufnehmen'}</button>
+        </div>`;
+
+    state.dialog = openModal(p ? 'Lebensmittel ändern' : 'Von Hand anlegen', inhalt, {
+        breit: true,
+        beimSchliessen: () => { state.dialog = null; bearbeitet = null; },
+    });
+
+    Object.entries(FORM).forEach(([id, feld]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = p && p[feld] != null ? p[feld] : (id === 'fBase' ? 'g' : '');
+    });
+    document.getElementById('fBase').value = (p && p.base_unit) || 'g';
+    zeichneGroessen();
+
+    document.getElementById('fGroesseNeu').addEventListener('click', () => {
+        state.formGroessen.push({ label: '', grams: null });
+        zeichneGroessen();
+    });
+    document.getElementById('fBase').addEventListener('change', zeichneGroessen);
+    document.getElementById('fSpeichern').addEventListener('click', formSpeichern);
+}
+
 /* Die eigenen Groessen sind eine Liste, kein festes Feldpaar: dasselbe
    Lebensmittel hat oft mehrere (Scheibe, Laib, Packung), und wer nur eine
    hinterlegen kann, rechnet den Rest jedes Mal im Kopf. */
 function zeichneGroessen() {
     const ziel = document.getElementById('fGroessen');
+    if (!ziel) return;
     const basis = document.getElementById('fBase').value || 'g';
     ziel.innerHTML = !state.formGroessen.length
         ? `<p class="ern-note">Noch keine eigene Größe. Ohne eine trägst du dieses
@@ -1596,8 +1791,7 @@ function zeichneGroessen() {
                 <span class="ern-groesse-basis">${esc(basis)}</span>
                 <button type="button" class="v-btn v-btn--icon" data-g-weg="${i}"
                         aria-label="Größe entfernen" title="Entfernen">🗑️</button>
-            </div>`).join('')
-          + '<p class="ern-note">Die erste Zeile ist die Standardgröße.</p>';
+            </div>`).join('');
 
     // Waehrend des Tippens in den Zustand schreiben, aber NICHT neu zeichnen:
     // ein Neuaufbau bei jedem Zeichen nimmt dem Feld den Fokus.
@@ -1612,37 +1806,6 @@ function zeichneGroessen() {
         state.formGroessen.splice(Number(b.dataset.gWeg), 1);
         zeichneGroessen();
     }));
-}
-
-let bearbeitet = null;   // id des Lebensmittels, das gerade geaendert wird
-
-function formLeeren() {
-    bearbeitet = null;
-    state.formGroessen = [];
-    Object.keys(FORM).forEach(id => {
-        const feld = document.getElementById(id);
-        if (feld) feld.value = id === 'fBase' ? 'g' : '';
-    });
-    zeichneGroessen();
-    document.getElementById('ernFormTitel').textContent = 'Von Hand anlegen';
-    document.getElementById('fSpeichern').textContent = 'Aufnehmen';
-    document.getElementById('fAbbrechen').hidden = true;
-}
-
-function formFuellen(p) {
-    bearbeitet = p.id;
-    Object.entries(FORM).forEach(([id, feld]) => {
-        const el = document.getElementById(id);
-        if (el) el.value = p[feld] == null ? '' : p[feld];
-    });
-    document.getElementById('fBase').value = p.base_unit || 'g';
-    state.formGroessen = (p.sizes || []).map(g => ({ label: g.label, grams: g.grams }));
-    zeichneGroessen();
-    document.getElementById('ernFormTitel').textContent = 'Lebensmittel ändern';
-    document.getElementById('fSpeichern').textContent = 'Änderung speichern';
-    document.getElementById('fAbbrechen').hidden = false;
-    activateTab('vorrat');
-    document.getElementById('ernFormTitel').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 async function formSpeichern() {
@@ -1663,7 +1826,7 @@ async function formSpeichern() {
     knopf.classList.add('is-loading');
     try {
         await API.aufnehmen(daten);
-        formLeeren();
+        if (state.dialog) state.dialog.close();
         await ladeBestand();
         await ladeGerichte();
         melde('Gespeichert.', 'success');
@@ -1673,6 +1836,8 @@ async function formSpeichern() {
         knopf.classList.remove('is-loading');
     }
 }
+
+/* ------------------------------------------------------------- Bestand */
 
 async function ladeBestand() {
     const ziel = document.getElementById('ernBestand');
@@ -1695,7 +1860,6 @@ async function ladeBestand() {
         ziel.innerHTML = leerKarte('🥫',
             'Noch nichts aufgenommen. Was einmal hier steht, bleibt — auch wenn '
             + 'Open Food Facts den Eintrag später ändert.');
-        zeichneVorschlaege();
         return;
     }
     ziel.innerHTML = state.bestand.map(p => `
@@ -1721,9 +1885,8 @@ async function ladeBestand() {
         b.addEventListener('click', () => entfernen(Number(b.dataset.weg))));
     ziel.querySelectorAll('[data-aendern]').forEach(b => b.addEventListener('click', () => {
         const p = state.bestand.find(x => x.id === Number(b.dataset.aendern));
-        if (p) formFuellen(p);
+        if (p) itemDialog(p);
     }));
-    zeichneVorschlaege();
 }
 
 async function entfernen(id) {
@@ -1773,53 +1936,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('ernTagZurueck').addEventListener('click', () => tagVerschieben(-1));
     document.getElementById('ernTagVor').addEventListener('click', () => tagVerschieben(1));
-
-    document.getElementById('ernEingabe').addEventListener('input', (e) => {
-        clearTimeout(state.tippen);
-        const wert = e.target.value;
-        state.tippen = setTimeout(
-            () => { state.eingabe = wert; zeichneVorschlaege(); }, 180);
-    });
-    // Enter traegt den ersten Vorschlag normal ein -- der haeufigste Fall,
-    // und er soll ohne Maus gehen.
-    document.getElementById('ernEingabe').addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        state.eingabe = e.target.value;
-        zeichneVorschlaege();
-        // Die erste Zeile und ihre Hauptaktion. Irgendeinen „normal"-Knopf
-        // aus der Liste zu nehmen hiesse, etwas anderes einzutragen, als
-        // oben steht.
-        const erste = document.querySelector('#ernVorschlaege .ern-vorschlag');
-        const knopf = erste && erste.querySelector(
-            '[data-log-stufe="normal"], [data-log-item]');
-        if (knopf) knopf.click();
-    });
+    document.getElementById('ernTagAdd').addEventListener('click',
+        () => eintragDialog(mahlzeitJetzt()));
 
     document.getElementById('ernZieleSpeichern').addEventListener('click', zieleSpeichern);
     document.getElementById('ernZieleWeg').addEventListener('click', zieleZuruecksetzen);
 
-    document.getElementById('ernGerichtSpeichern').addEventListener('click', gerichtSpeichern);
-    document.getElementById('ernGerichtNeu').addEventListener('click', entwurfLeeren);
-    document.getElementById('ernZutatSuche').addEventListener('input',
-        (e) => zutatSuchen(e.target.value));
+    document.getElementById('ernGerichtNeu').addEventListener('click', () => gerichtDialog(null));
+    document.getElementById('ernItemNeu').addEventListener('click', () => itemDialog(null));
 
-    document.getElementById('ernScanForm').addEventListener('submit', nachschlagen);
     document.getElementById('ernKamera').addEventListener('click', kameraStarten);
     document.getElementById('ernKameraStop').addEventListener('click', kameraStoppen);
     let suchTakt = null;
-    document.getElementById('ernSuche').addEventListener('input', (e) => {
+    const suchFeld = document.getElementById('ernSuche');
+    suchFeld.addEventListener('input', (e) => {
         clearTimeout(suchTakt);
         const wert = e.target.value.trim();
-        suchTakt = setTimeout(() => suchen(wert), 400);
+        // Ein Strichcode ist fertig, sobald er da ist -- ein Name wird noch
+        // getippt. Deshalb zwei Takte statt einem.
+        suchTakt = setTimeout(() => suchen(wert), istBarcode(wert) ? 120 : 400);
     });
-    document.getElementById('fSpeichern').addEventListener('click', formSpeichern);
-    document.getElementById('fAbbrechen').addEventListener('click', formLeeren);
-    document.getElementById('fGroesseNeu').addEventListener('click', () => {
-        state.formGroessen.push({ label: '', grams: null });
-        zeichneGroessen();
+    suchFeld.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        clearTimeout(suchTakt);
+        suchen(e.target.value.trim());
     });
-    document.getElementById('fBase').addEventListener('change', zeichneGroessen);
+
     setupKatalogDrop();
     // Die Kamera nicht weiterlaufen lassen, wenn die Seite in den
     // Hintergrund geht -- ein laufendes Bild kostet Akku und sieht aus wie
@@ -1835,8 +1978,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) { /* der lockere Modus ist der Standard */ }
     zeichneModus();
     zeichneZiele();
-    formLeeren();
-    entwurfLeeren();
 
     await ladeTag(heute());
     await Promise.all([ladeGerichte(), ladeBestand(), ladeHaeufig(), katalogStand()]);

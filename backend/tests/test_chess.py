@@ -390,3 +390,93 @@ def test_auswertung_fasst_eroeffnungen_und_serie_zusammen():
     # des Diagramms mit den Daten.
     assert len(antwort["gegnerstaerke"]) == 5
     assert [s["partien"] for s in antwort["gegnerstaerke"]] == [0, 0, 40, 0, 0]
+
+
+# --------------------------------------------------------------------------
+# Der Stand der Historie
+# --------------------------------------------------------------------------
+class AttrappeImport:
+    """Merkt sich, was ``partien_stueck`` in die Kontozeile schreibt."""
+
+    def __init__(self):
+        self.geschrieben = None
+
+    async def fetchrow(self, sql, *args):
+        return {"id": 1}                    # jede Partie gilt als neu
+
+    async def execute(self, sql, *args):
+        if "UPDATE chess_accounts" in sql:
+            self.geschrieben = args
+
+
+def _stueck(anzahl, hoechstens):
+    """Laesst die Plattform ``anzahl`` Partien liefern und gibt den Lauf zurueck."""
+    from services import chess_sync as cs
+
+    partien = [{
+        "ext_id": f"g{i}", "played_at": datetime(2019, 3, 1, tzinfo=timezone.utc)
+        + timedelta(days=i), "perf": "blitz", "rated": True, "color": "weiss",
+        "result": "sieg", "own_rating": 1700, "rating_diff": 8,
+    } for i in range(anzahl)]
+    cs.plattform.hole_partien = lambda *a, **k: iter(partien)   # type: ignore
+    db = AttrappeImport()
+    konto = {"id": 7, "platform": "lichess", "username": "Spieler",
+             "games_through": None}
+    lauf = asyncio.run(cs.partien_stueck(db, 1, konto, hoechstens=hoechstens))
+    return db, lauf
+
+
+def test_volles_stueck_heisst_historie_noch_offen():
+    db, lauf = _stueck(anzahl=5, hoechstens=5)
+    assert lauf["more"] is True
+    assert lauf["done"] is False
+    # args: (konto_id, juengste, fertig)
+    assert db.geschrieben[2] is False
+
+
+def test_halbes_stueck_ist_das_ende_der_historie():
+    db, lauf = _stueck(anzahl=2, hoechstens=5)
+    assert lauf["more"] is False
+    assert lauf["done"] is True
+    assert db.geschrieben[2] is True
+    # Der Zeiger steht auf der juengsten Partie des Stuecks, nicht auf heute.
+    assert db.geschrieben[1] == datetime(2019, 3, 2, tzinfo=timezone.utc)
+
+
+class AttrappeReset:
+    def __init__(self, treffer=True):
+        self.treffer = treffer
+        self.sql = None
+
+    async def fetchrow(self, sql, *args):
+        self.sql = sql
+        return {"id": 7} if self.treffer else None
+
+    async def fetch(self, sql, *args):
+        return []                            # _konten_mit_wertung: keine Konten
+
+
+# Der Begrenzer (slowapi) will ein echtes Request-Objekt sehen. Geprueft
+# wird hier die Wirkung des Endpunkts, nicht sein Limit -- also die Funktion
+# darunter.
+ZURUECKSETZEN = cr.historie_neu.__wrapped__
+
+
+def test_zeiger_zuruecksetzen_leert_nur_den_zeiger():
+    db = AttrappeReset()
+    antwort = asyncio.run(ZURUECKSETZEN(
+        request=None, account_id=7, db=db, user={"id": 1}))
+    assert antwort["ok"] is True
+    assert "games_through=NULL" in db.sql
+    assert "backfill_done=FALSE" in db.sql
+    # Der Bestand bleibt: geloescht wird hier nichts.
+    assert "DELETE" not in db.sql.upper()
+
+
+def test_zeiger_zuruecksetzen_kennt_fremde_konten_nicht():
+    import pytest
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as fehler:
+        asyncio.run(ZURUECKSETZEN(request=None, account_id=99,
+                                  db=AttrappeReset(treffer=False), user={"id": 1}))
+    assert fehler.value.status_code == 404

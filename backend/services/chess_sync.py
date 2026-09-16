@@ -98,11 +98,17 @@ async def partien_stueck(conn, user_id: int, konto, hoechstens: int = STUECK) ->
         if treffer:
             neu += 1
 
+    # Ein nicht volles Stueck ist das Ende der Historie. Das festzuhalten ist
+    # der Unterschied zwischen "holt nur noch Neues" und "da fehlen noch
+    # Jahre" -- am Zeiger allein sieht man das nicht, er wandert in beiden
+    # Faellen gleich.
+    fertig = len(partien) < hoechstens
     await conn.execute(
-        "UPDATE chess_accounts SET games_at=now(), games_through=$2 WHERE id=$1",
-        konto["id"], juengste)
+        "UPDATE chess_accounts SET games_at=now(), games_through=$2, "
+        "       backfill_done = backfill_done OR $3 WHERE id=$1",
+        konto["id"], juengste, fertig)
     return {"seen": len(partien), "new": neu,
-            "more": len(partien) >= hoechstens, "through": juengste}
+            "more": not fertig, "through": juengste, "done": fertig}
 
 
 async def _konto_nachfuehren(conn, user_id: int, konto) -> dict:

@@ -34,25 +34,30 @@
         <h1>🥗 Ernährung</h1>
     </header>
 
-    <!-- Der Modus ist keine Ansicht, sondern die Frage: im Tagebuch wird
-         eine Stufe erfasst, im Tracker eine Menge. Deshalb steht er über
-         den Reitern und nicht in einem Einstellungsmenü — und deshalb
-         ändert er auch, welche Reiter es gibt. -->
-    <div class="ern-moduswahl">
+    <!-- Eine Navigationszeile, nicht drei. Der Modus steht rechts in
+         derselben Reihe wie die Reiter, weil er sie ändert: das Tagebuch hat
+         zwei, der Tracker vier. Was er bedeutet, steht dort, wo es gerade
+         gilt — beim Eintragen —, nicht als Absatz über der Seite. -->
+    <div class="ern-leiste">
+        <div class="tabs" id="ernTabs"></div>
         <div class="ern-modus" role="group" aria-label="Modus">
-            <button type="button" data-modus="locker" aria-pressed="false">
+            <button type="button" data-modus="locker" aria-pressed="false"
+                    title="Tagebuch: hinschreiben, was es gab — normal oder übermäßig. Mehr wird nicht gefragt.">
                 <span aria-hidden="true">📓</span> Tagebuch
             </button>
-            <button type="button" data-modus="ausfuehrlich" aria-pressed="false">
+            <button type="button" data-modus="ausfuehrlich" aria-pressed="false"
+                    title="Tracker: Mengen, Nährwerte und eigene Tagesziele. Dazu Gerichte und Bestand.">
                 <span aria-hidden="true">📊</span> Tracker
             </button>
         </div>
-        <p class="ern-modus-satz" id="ernModusSatz"></p>
     </div>
 
-    <div class="tabs" id="ernTabs"></div>
-
-    <!-- ====================== Tag ====================== -->
+    <!-- ====================== Tag ======================
+         Der Tag IST die Seite: eine Karte, die oben sagt, welcher Tag gemeint
+         ist und wie er aussieht, und darunter die Mahlzeiten mit dem, was
+         darin steht. Eingetragen wird aus der Mahlzeit heraus — dadurch
+         braucht es keine Chipreihe, die fragt, wohin der nächste Eintrag
+         gehört: das sagt schon, wo man getippt hat. -->
     <div id="tab-tag">
         <!-- Ein Ladefehler tritt vor den Tag, statt ihn in Ladebalken stehen
              zu lassen: ein Ladezustand, der nie endet, sieht aus wie ein
@@ -60,55 +65,23 @@
         <div id="ernTagFehler" hidden></div>
 
         <div id="ernTagInhalt">
-        <div class="ern-tagleiste">
-            <button type="button" class="v-btn v-btn--icon" id="ernTagZurueck"
-                    aria-label="Tag zurück">◀</button>
-            <div class="ern-tagleiste-mitte">
-                <strong id="ernTagName">Heute</strong>
-                <span id="ernTagDatum"></span>
+            <div class="stat-card">
+                <div class="ern-tagkopf">
+                    <button type="button" class="ern-pfeil" id="ernTagZurueck"
+                            aria-label="Tag zurück">◀</button>
+                    <div class="ern-tagkopf-mitte">
+                        <strong id="ernTagName">Heute</strong>
+                        <span id="ernTagDatum"></span>
+                    </div>
+                    <button type="button" class="ern-pfeil" id="ernTagVor"
+                            aria-label="Tag vor">▶</button>
+                    <button type="button" class="v-btn v-btn--primary ern-add" id="ernTagAdd">
+                        <span aria-hidden="true">＋</span> Eintragen</button>
+                </div>
+
+                <div id="ernTagBild"><span class="skel skel-block"></span></div>
+                <div id="ernTagMahlzeiten"></div>
             </div>
-            <button type="button" class="v-btn v-btn--icon" id="ernTagVor"
-                    aria-label="Tag vor">▶</button>
-        </div>
-
-        <!-- Eintragen steht ÜBER dem Tag: man kommt auf diese Seite, um
-             etwas hinzuschreiben, nicht um zu lesen. -->
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3 id="ernEingabeTitel">Was gab es?</h3>
-                <span class="stat-range-lbl" id="ernEingabeSub"></span>
-            </div>
-
-            <label class="ern-suche">
-                <span class="ern-suche-ico" aria-hidden="true">🔎</span>
-                <input type="search" id="ernEingabe" autocomplete="off"
-                       aria-label="Was hast du gegessen?"
-                       placeholder="Tippen — oder unten aus der Liste wählen">
-            </label>
-
-            <div class="ern-mahlzeiten stat-preset-chips" id="ernMahlzeiten"></div>
-
-            <div id="ernVorschlaege"><span class="skel skel-block"></span></div>
-        </div>
-
-        <!-- Was der Tag hergibt. Im Tagebuch sind das Zahl und Verteilung,
-             im Tracker die Nährwert-Bänder gegen das eigene Ziel. -->
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>Der Tag</h3>
-                <span class="stat-range-lbl" id="ernTagSub"></span>
-            </div>
-            <div id="ernTagBild"><span class="skel skel-block"></span></div>
-            <div id="ernBaender"></div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>Eingetragen</h3>
-                <span class="stat-range-lbl" id="ernEintraegeZahl"></span>
-            </div>
-            <div id="ernEintraege"></div>
-        </div>
         </div>
     </div>
 
@@ -150,77 +123,55 @@
                 <h3>Tagesziele</h3>
                 <span class="stat-range-lbl">freiwillig, einzeln</span>
             </div>
-            <p class="ern-note">Was du leer lässt, misst weiter am allgemeinen Richtwert —
-                der üblichen Größenordnung für einen Tag, nicht an einem Ziel.
-                Wer nur auf Eiweiß achtet, muss hier keine fünf Zahlen erfinden.</p>
             <div class="ern-ziele" id="ernZiele"></div>
             <div class="ern-tasten">
                 <button type="button" class="v-btn v-btn--primary" id="ernZieleSpeichern">Ziele speichern</button>
                 <button type="button" class="v-btn" id="ernZieleWeg">Alle zurücksetzen</button>
             </div>
+            <p class="ern-note">Leere Felder messen weiter am allgemeinen Richtwert — wer nur
+                auf Eiweiß achtet, muss hier keine fünf Zahlen erfinden.</p>
         </div>
     </div>
 
-    <!-- ====================== Gerichte ====================== -->
+    <!-- ====================== Gerichte ======================
+         Die Liste zuerst, das Formular im Dialog: eine dauerhaft offene Maske
+         für etwas, das man selten anlegt, nimmt jedes Mal den Platz weg, an
+         dem das steht, was man sucht. -->
     <div id="tab-gerichte" hidden>
         <div class="stat-card">
             <div class="stat-card-head">
-                <h3 id="ernGerichtTitel">Neues Gericht</h3>
-                <span class="stat-range-lbl">einmal anlegen, hundertmal eintragen</span>
-            </div>
-            <label class="ern-feld">
-                <span>Name</span>
-                <input type="text" id="ernGerichtName" autocomplete="off"
-                       placeholder="z. B. Wraps">
-            </label>
-
-            <div id="ernZutaten"></div>
-
-            <label class="ern-suche">
-                <span class="ern-suche-ico" aria-hidden="true">➕</span>
-                <input type="search" id="ernZutatSuche" autocomplete="off"
-                       aria-label="Zutat aus dem Bestand suchen"
-                       placeholder="Zutat aus dem Bestand suchen">
-            </label>
-            <div id="ernZutatTreffer"></div>
-
-            <p class="ern-note">
-                Gramm stehen nur hier, im Rezept — einmal geschrieben, hundertmal benutzt.
-                Beim Eintragen sagst du danach nur noch <em>normal</em> oder <em>übermäßig</em>:
-                wie viel vom eigenen Rezept auf dem Teller lag, weiß niemand in Gramm.
-            </p>
-
-            <div class="ern-tasten">
-                <button type="button" class="v-btn v-btn--primary" id="ernGerichtSpeichern">Gericht speichern</button>
-                <button type="button" class="v-btn" id="ernGerichtNeu" hidden>Neues Gericht</button>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-card-head">
                 <h3>Meine Gerichte</h3>
-                <span class="stat-range-lbl" id="ernGerichteZahl"></span>
+                <div class="ern-kopf-tasten">
+                    <span class="stat-range-lbl" id="ernGerichteZahl"></span>
+                    <button type="button" class="v-btn v-btn--sm v-btn--primary" id="ernGerichtNeu">
+                        <span aria-hidden="true">＋</span> Neues Gericht</button>
+                </div>
             </div>
             <div id="ernGerichte"><span class="skel skel-block"></span></div>
         </div>
     </div>
 
-    <!-- ====================== Vorrat ====================== -->
+    <!-- ====================== Lebensmittel ====================== -->
     <div id="tab-vorrat" hidden>
+        <!-- Ein Suchfeld, nicht zwei. Ob da ein Name oder ein Strichcode
+             steht, sieht man den Zeichen an — den Nutzer danach zu fragen,
+             wäre eine Frage nach etwas, das schon feststeht. -->
         <div class="stat-card">
             <div class="stat-card-head">
-                <h3>Strichcode nachschlagen</h3>
+                <h3>Lebensmittel finden</h3>
                 <span class="stat-range-lbl" id="ernKatalogStand">eigener Katalog, sonst Open Food Facts</span>
             </div>
-            <form class="ern-form" id="ernScanForm">
-                <label class="ern-feld">
-                    <span>Strichcode (EAN)</span>
-                    <input type="text" id="ernBarcode" inputmode="numeric"
-                           autocomplete="off" placeholder="z. B. 3017620422003">
+            <div class="ern-suchzeile">
+                <label class="ern-suche">
+                    <span class="ern-suche-ico" aria-hidden="true">🔎</span>
+                    <input type="search" id="ernSuche" autocomplete="off"
+                           aria-label="Lebensmittel oder Strichcode suchen"
+                           placeholder="Name oder Strichcode">
                 </label>
-                <button type="submit" class="v-btn v-btn--primary">Nachschlagen</button>
-                <button type="button" class="v-btn" id="ernKamera">📷 Kamera</button>
-            </form>
+                <button type="button" class="v-btn" id="ernKamera">📷 Scannen</button>
+                <button type="button" class="v-btn v-btn--primary" id="ernItemNeu">
+                    <span aria-hidden="true">＋</span> Von Hand</button>
+            </div>
 
             <div class="ern-kamera" id="ernKameraBereich" hidden>
                 <!-- playsinline: ohne das Attribut spielt iOS das Bild im
@@ -231,42 +182,28 @@
                     <button type="button" class="v-btn v-btn--sm" id="ernKameraStop">Schließen</button>
                 </div>
             </div>
-            <p class="ern-note">
-                Open Food Facts ist eine offene Datenbank, die von Freiwilligen gepflegt wird:
-                frei nutzbar, ohne Anmeldung — dafür nicht lückenlos. Was von dort kommt, ist ein
-                <strong>Vorschlag zum Nachbessern</strong>, keine Wahrheit; fehlende Angaben
-                bleiben leer statt still auf null gesetzt zu werden. Gesucht wird zuerst im
-                <strong>eigenen Katalog</strong> — einem Abzug derselben Datenbank, der hier
-                liegt und deshalb sofort antwortet, auch wenn der Dienst gerade überlastet ist.
-            </p>
+
             <div id="ernTreffer"></div>
         </div>
 
         <div class="stat-card">
             <div class="stat-card-head">
-                <h3>Suche ohne Strichcode</h3>
-                <span class="stat-range-lbl">für Obst, Brot, Loses</span>
+                <h3>Eigener Bestand</h3>
+                <span class="stat-range-lbl" id="ernBestandZahl"></span>
             </div>
-            <label class="ern-suche">
-                <span class="ern-suche-ico" aria-hidden="true">🔎</span>
-                <input type="search" id="ernSuche" placeholder="Name des Lebensmittels"
-                       aria-label="Lebensmittel suchen" autocomplete="off">
-            </label>
-            <div id="ernSuchTreffer"></div>
+            <div id="ernBestand"><span class="skel skel-block"></span></div>
         </div>
 
-        <!-- Nur fuer Admins: der Katalog gehoert keinem Nutzer, er ist das
-             Nachschlagewerk fuer alle. Die Karte blendet sich selbst ein,
-             wenn der Server das Recht dazu meldet. -->
-        <div class="stat-card" id="ernKatalogKarte" hidden>
-            <div class="stat-card-head">
-                <h3>Katalog einspielen</h3>
+        <!-- Nur für Admins, und zugeklappt: der Katalog gehört keinem
+             Nutzer, er wird einmal im Jahr eingespielt. -->
+        <details class="ern-klapp" id="ernKatalogKarte" hidden>
+            <summary>
+                <span>Katalog einspielen</span>
                 <span class="stat-range-lbl" id="ernKatalogKarteSub"></span>
-            </div>
+            </summary>
             <p class="ern-note">
-                Der Katalog ist ein Abzug von Open Food Facts, der hier liegt — damit
-                antwortet die Suche sofort, auch wenn der Dienst gerade überlastet ist.
-                Die Datei entsteht aus dem Tagesabzug und liegt im Projekt unter
+                Ein Abzug von Open Food Facts, der hier liegt — damit antwortet die Suche
+                sofort. Die Datei entsteht aus dem Tagesabzug und liegt im Projekt unter
                 <strong>backend/data/off-katalog-dach.csv.gz</strong>. Einspielen
                 <strong>ersetzt</strong> den bisherigen Stand vollständig.
             </p>
@@ -277,73 +214,10 @@
                 <div class="dropzone-sub" id="ernKatDropSub">off-katalog-dach.csv.gz</div>
                 <input type="file" id="ernKatFile" accept=".gz,.csv,.tsv" hidden>
             </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3 id="ernFormTitel">Von Hand anlegen</h3>
-                <span class="stat-range-lbl">für alles ohne Strichcode</span>
-            </div>
-            <div class="ern-gitter">
-                <label class="ern-feld ern-feld--breit">
-                    <span>Name</span>
-                    <input type="text" id="fName" autocomplete="off" placeholder="z. B. Omas Gulasch">
-                </label>
-                <label class="ern-feld">
-                    <span>Marke oder Quelle</span>
-                    <input type="text" id="fBrand" autocomplete="off" placeholder="optional">
-                </label>
-                <label class="ern-feld">
-                    <span>Angaben beziehen sich auf</span>
-                    <select class="v-select" id="fBase">
-                        <option value="g">100 g (fest)</option>
-                        <option value="ml">100 ml (flüssig)</option>
-                    </select>
-                </label>
-            </div>
-
-            <div class="ern-gitter">
-                <label class="ern-feld"><span>Kalorien</span>
-                    <input type="number" id="fKcal" min="0" step="1" inputmode="decimal"></label>
-                <label class="ern-feld"><span>Eiweiß (g)</span>
-                    <input type="number" id="fProtein" min="0" step="0.1" inputmode="decimal"></label>
-                <label class="ern-feld"><span>Ballaststoffe (g)</span>
-                    <input type="number" id="fFiber" min="0" step="0.1" inputmode="decimal"></label>
-                <label class="ern-feld"><span>Kohlenhydrate (g)</span>
-                    <input type="number" id="fCarbs" min="0" step="0.1" inputmode="decimal"></label>
-                <label class="ern-feld"><span>Fett (g)</span>
-                    <input type="number" id="fFat" min="0" step="0.1" inputmode="decimal"></label>
-            </div>
-            <p class="ern-note">Leer lassen, was du nicht weißt — leer heißt „keine Angabe“
-                und wird später als Lücke ausgewiesen, nicht als Null verrechnet.</p>
-
-            <div class="ern-groessen-kopf">
-                <h4>Eigene Größen</h4>
-                <span class="ern-note">so viele, wie du brauchst</span>
-            </div>
-            <div class="ern-groessen" id="fGroessen"></div>
-            <datalist id="ernGroessenVorschlaege"></datalist>
-            <button type="button" class="v-btn v-btn--sm" id="fGroesseNeu">Größe hinzufügen</button>
-            <p class="ern-note">Jede Zeile ist eine Einheit, die du beim Eintragen auswählen
-                kannst — „2 × Scheibe“ statt „90 g“. Ein Brot darf gleichzeitig eine
-                <em>Scheibe</em>, einen <em>Laib</em> und eine <em>Packung</em> haben.
-                Die <strong>erste</strong> Zeile ist die Standardgröße und wird vorgeschlagen.</p>
-
-            <div class="ern-tasten">
-                <button type="button" class="v-btn v-btn--primary" id="fSpeichern">Aufnehmen</button>
-                <button type="button" class="v-btn" id="fAbbrechen" hidden>Abbrechen</button>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>Eigener Bestand</h3>
-                <span class="stat-range-lbl" id="ernBestandZahl"></span>
-            </div>
-            <div id="ernBestand"><span class="skel skel-block"></span></div>
-        </div>
+        </details>
     </div>
 
+    <datalist id="ernGroessenVorschlaege"></datalist>
     <div class="version-tag"></div>
 </main>
 <script src="/ernaehrung/ernaehrung.js"></script>

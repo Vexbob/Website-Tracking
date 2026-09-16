@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.95.0', date: '2026-09-16', title: 'Ernährung: der Tag ist die Seite', notes: [
+        'Die Ernährungsseite ist neu gebaut: der Tag steht jetzt als eine Karte da — Datum, was der Tag hergibt, und darunter die Mahlzeiten mit dem, was drinsteht. Vorher lagen Suchfeld, Mahlzeiten-Chips, Vorschlagsliste, Tagesbild und Eintragsliste als fünf Blöcke untereinander, und das, weswegen man die Seite öffnet, begann unter dem Bildschirmrand.',
+        'Eingetragen wird aus der Mahlzeit heraus: ein Plus am Frühstück öffnet den Dialog, und dass es zum Frühstück gehört, muss niemand mehr anklicken. In der Liste ist die ganze Zeile der Knopf für „normal", „übermäßig" steht klein daneben — statt zweier gleich großer Knöpfe in jeder Zeile.',
+        'Der Modus steht jetzt rechts neben den Reitern statt als eigene Etage darüber, und die vier Nährwerte sind vier schmale Kacheln statt vier Balken über die volle Breite.',
+        'Gerichte und Lebensmittel zeigen zuerst die Liste; angelegt und geändert wird im Dialog. Strichcode und Name teilen sich ein Suchfeld — ob das eine oder das andere gemeint ist, sieht man den Zeichen an.',
+        'Schach: die Kurven sagen jetzt, wie weit sie zurückreichen, und die Kontokarte, ob die Historie überhaupt vollständig geholt ist. Solange sie es nicht ist, heißt der Knopf „Historie weiterholen" statt „Neue Partien holen"; ein langer Lauf bricht nicht mehr ab, wenn der Server bremst, und „Von vorn holen" holt nach, was ein abgebrochener erster Lauf übersprungen hat.',
+    ]},
     { v: 'v1.94.1', date: '2026-09-16', title: 'Ernährung: Tagebuch oder Tracker', notes: [
         'Die Seite hat jetzt zwei Modi: ein lockeres Tagebuch, das nur fragt, was es gab und ob es normal oder übermäßig viel war — und einen ausführlichen Tracker mit Mengen, Nährwerten und eigenen Tageszielen.',
         'Im Tagebuch lässt sich alles hinschreiben, auch was in keiner Liste steht: „Pizza beim Italiener" braucht keinen Bestand und kein Rezept. Nach ein paar Tagen schlägt die Seite von selbst vor, was du wirklich isst.',

@@ -1,10 +1,11 @@
-/* ernaehrung.css — v1.94.0
+/* ernaehrung.css — v1.95.0
  *
  * Das Ernaehrungs-Modul in zwei Betriebsarten. Flaechen, Knoepfe, Kopfzahlen
- * (.stat-kpi), Diagrammrahmen (.chart-wrap), Ablegeflaeche (.dropzone) und
- * leere Zustaende kommen aus css/style.css und css/statistics.css; hier steht
- * nur, was es sonst nirgends gibt: der Modus-Umschalter, die Eingabezeile,
- * die Mahlzeiten-Bloecke, die Spannen-Baender und das Formular.
+ * (.stat-kpi), Diagrammrahmen (.chart-wrap), Dialoge (.modal-*), die
+ * Ablegeflaeche (.dropzone) und leere Zustaende kommen aus css/style.css und
+ * css/statistics.css; hier steht nur, was es sonst nirgends gibt: die
+ * Kopfleiste, die Tageskarte mit ihren Mahlzeiten, die Makro-Kacheln, die
+ * Vorschlagszeilen im Eintragen-Dialog und die Formulare.
  *
  * Farbe: der Modulton --m-ernaehrung traegt die Identitaet. Die Stufen sind
  * KEINE Bewertung -- "uebermaessig" ist nicht rot, sondern gelb: mehr, nicht
@@ -20,19 +21,25 @@
     --ern-exakt: var(--text-4);
 }
 
-/* ---------- Modus ----------
-   Er steht ueber den Reitern, weil er sie aendert: das Tagebuch hat zwei,
-   der Tracker vier. Ein Umschalter, der Navigation umbaut, gehoert sichtbar
-   darueber und nicht in ein Menue. */
-.ern-moduswahl {
+/* ---------- Kopfleiste ----------
+   Reiter links, Modus rechts, eine Zeile. Der Modus aendert die Reiter --
+   das Tagebuch hat zwei, der Tracker vier --, also gehoert er neben sie und
+   nicht in eine eigene Etage darueber. */
+.ern-leiste {
     display: flex;
     align-items: center;
-    gap: 0.875rem;
+    gap: 0.75rem;
     flex-wrap: wrap;
     margin-bottom: 0.875rem;
 }
+/* Die Reiterleiste ist eine Kapsel -- sie darf nicht ueber die Zeile
+   gezogen werden, sonst steht viel leere Flaeche in ihr. Der Modus wird
+   stattdessen an den rechten Rand geschoben. */
+.ern-leiste .tabs { margin: 0; min-width: 0; }
+
 .ern-modus {
     display: flex;
+    margin-left: auto;
     gap: 0;
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -42,11 +49,11 @@
 .ern-modus button {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.35rem;
     width: auto;
     margin: 0;
-    padding: 0.5rem 0.95rem;
-    font-size: 0.875rem;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.8125rem;
     font-weight: 600;
     border: 0;
     border-radius: 0;
@@ -61,110 +68,63 @@
     background: var(--accent-strong);
     color: var(--accent-ink);
 }
-.ern-modus-satz {
-    margin: 0;
-    flex: 1 1 260px;
+
+/* ---------- Die Tageskarte ----------
+   Eine Karte statt dreier: oben der Tag, darunter sein Bild, darunter die
+   Mahlzeiten. Was man auf dieser Seite sucht, ist der Tag -- er soll nicht
+   unter einem Eingabefeld und einer Vorschlagsliste beginnen. */
+.ern-tagkopf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: var(--space-4);
+}
+.ern-tagkopf-mitte {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
     min-width: 0;
+}
+.ern-tagkopf-mitte strong { font-size: 1.0625rem; color: var(--text-1); font-weight: 650; }
+.ern-tagkopf-mitte span {
     font-size: 0.8125rem;
-    line-height: 1.5;
-    color: var(--text-3);
-}
-
-/* ---------- Tagesleiste ---------- */
-.ern-tagleiste {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    background: var(--surface-1);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    padding: 0.625rem 0.875rem;
-    margin-bottom: 1rem;
-}
-.ern-tagleiste-mitte {
-    flex: 1;
-    min-width: 0;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    gap: 0.05rem;
-}
-.ern-tagleiste-mitte strong { font-size: 1rem; color: var(--text-1); }
-.ern-tagleiste-mitte span {
-    font-size: 0.75rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
 }
-
-/* ---------- Eingabe ----------
-   Sie steht ueber dem Tag: man kommt auf diese Seite, um etwas
-   hinzuschreiben, nicht um zu lesen. */
-.ern-suche {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 0.45rem 0.7rem;
-    margin-bottom: 0.625rem;
-}
-.ern-suche-ico { opacity: 0.7; flex: none; }
-.ern-suche input {
-    flex: 1;
-    min-width: 0;
-    background: none;
-    border: 0;
-    color: var(--text-1);
-    font-size: 0.9375rem;
-}
-.ern-suche input:focus { outline: none; }
-.ern-suche:focus-within { box-shadow: var(--focus-ring); }
-
-.ern-mahlzeiten { margin-bottom: 0.875rem; }
-
-/* Alle Vorschlaege haben dieselbe Form: Name links, Bedienung rechts. Was
-   rechts steht, haengt am Modus -- die Zeile bleibt dieselbe. */
-.ern-vorschlag {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 0.55rem 0.75rem;
-}
-.ern-vorschlag + .ern-vorschlag { margin-top: 0.375rem; }
-/* Der frei getippte Text ist der Weg, der ohne Bestand auskommt -- er steht
-   deshalb abgesetzt, nicht als eine Zeile unter vielen. */
-.ern-vorschlag.is-neu {
-    border-color: var(--ern-figur);
-    background: color-mix(in srgb, var(--ern-figur) 10%, var(--surface-2));
-}
-.ern-stufen { display: flex; gap: 0.375rem; flex: none; }
-
-.ern-menge {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+.ern-pfeil {
     flex: none;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    color: var(--text-2);
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+.ern-pfeil:hover { color: var(--text-1); border-color: var(--line-strong); opacity: 1; }
+.ern-pfeil:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ern-pfeil[disabled] { opacity: 0.35; cursor: default; }
+/* Der grosse Knopf steht am rechten Rand der Tageszeile: die eine Sache, die
+   man auf dieser Seite wirklich tut. */
+.ern-add { margin: 0 0 0 auto; width: auto; flex: none; }
+
+.ern-tagzeile {
+    display: flex;
+    align-items: baseline;
+    gap: 0.875rem;
     flex-wrap: wrap;
 }
-.ern-menge input {
-    width: 4.5rem;
-    margin: 0;
-    padding: 0.4rem 0.5rem;
-    background: var(--surface-3);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    color: var(--text-1);
-    font-size: 0.875rem;
-    font-variant-numeric: tabular-nums;
-}
-.ern-menge select { width: auto; min-width: 5.5rem; margin: 0; }
+.ern-tagleer { margin: 0; color: var(--text-3); font-size: 0.875rem; }
 
-/* ---------- Der Tag ---------- */
 .ern-gross {
     display: flex;
     align-items: baseline;
@@ -186,11 +146,10 @@
 }
 
 .ern-stufenzeile {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.4rem;
     flex-wrap: wrap;
-    margin: 0.5rem 0 0;
     font-size: 0.8125rem;
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
@@ -217,27 +176,123 @@
 .ern-note:empty { display: none; }
 .ern-fehlt { color: var(--text-4); }
 
-/* ---------- Mahlzeiten ---------- */
-.ern-mahlzeit + .ern-mahlzeit { margin-top: var(--space-4); }
-.ern-mahlzeit-kopf {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    margin-bottom: 0.375rem;
+/* ---------- Makro-Kacheln ----------
+   Vier schmale Kacheln nebeneinander statt vier Balken ueber die ganze
+   Breite. Die Spur reicht bis zum Anderthalbfachen des Massstabs, der
+   Massstab steht als Strich darin; gefuellt ist der Bereich zwischen
+   unterer und oberer Schaetzung -- die BREITE ist die Unsicherheit. Ein
+   Ring, der zu 73 % gefuellt ist, waere zwei Behauptungen auf einmal. */
+.ern-makros {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+    margin-top: var(--space-4);
 }
-.ern-mahlzeit-name {
+.ern-makro {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.55rem 0.7rem;
+    min-width: 0;
+}
+.ern-makro-kopf {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+}
+.ern-makro-lbl { font-size: 0.75rem; color: var(--text-3); }
+.ern-makro-wert {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+}
+.ern-makro-spur {
+    position: relative;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--surface-3);
+    overflow: hidden;
+}
+.ern-makro-fuell {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 999px;
+    background: var(--ern-figur);
+    opacity: 0.85;
+}
+.ern-makro-marke {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    width: 2px;
+    background: var(--text-2);
+    z-index: 1;
+}
+.ern-makro.is-unvollstaendig .ern-makro-fuell { opacity: 0.5; }
+.ern-makro-fuss {
+    margin-top: 0.3rem;
+    font-size: 0.6875rem;
+    color: var(--text-4);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Mahlzeiten ----------
+   Jede traegt ihr eigenes Plus: wo man tippt, sagt schon, wohin der Eintrag
+   gehoert -- eine Chipreihe, die dieselbe Frage stellt, wird damit
+   ueberfluessig. Eine leere Mahlzeit bleibt als schmale Zeile stehen; sie
+   ist der kuerzeste Weg zum naechsten Eintrag. */
+.ern-mz { margin-top: var(--space-4); }
+.ern-mz-kopf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--line);
+}
+.ern-mz-name {
     font-size: 0.6875rem;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-4);
 }
-.ern-mahlzeit-summe {
+.ern-mz-summe {
     margin-left: auto;
     font-size: 0.75rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
 }
+.ern-mz-summe + .ern-mz-plus { margin-left: 0; }
+.ern-mz-plus {
+    margin: 0 0 0 auto;
+    width: 26px;
+    height: 26px;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text-3);
+    font-size: 0.8125rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.ern-mz-plus:hover {
+    color: var(--ern-figur);
+    border-color: var(--ern-figur);
+    opacity: 1;
+}
+.ern-mz-plus:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ern-mz.is-leer .ern-mz-kopf { border-bottom-color: transparent; }
+.ern-mz.is-leer .ern-mz-name { color: var(--text-4); opacity: 0.6; }
 
 /* ---------- Eine Zeile (Eintrag, Zutat, Bestand) ---------- */
 .ern-zeile {
@@ -298,55 +353,155 @@ button.ern-stufe:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     padding: 0.05rem 0.45rem;
 }
 
-/* ---------- Spannen-Baender ----------
-   Die Spur reicht bis zum Anderthalbfachen des Massstabs, der Massstab steht
-   als Strich darin. Gefuellt ist der Bereich zwischen unterer und oberer
-   Schaetzung -- die BREITE des Balkens ist die Unsicherheit. Ein Ring, der zu
-   73 % gefuellt ist, waere zwei Behauptungen auf einmal. */
-.ern-band { margin-top: var(--space-4); }
-.ern-band-kopf {
+/* ---------- Suchfeld ---------- */
+.ern-suche {
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 0.5rem;
-    margin-bottom: 0.3rem;
+    align-items: center;
+    gap: 0.45rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.45rem 0.7rem;
+    flex: 1 1 220px;
+    min-width: 0;
 }
-.ern-band-lbl { font-size: 0.8125rem; color: var(--text-2); font-weight: 600; }
-.ern-band-wert {
-    font-size: 0.8125rem;
+.ern-suche-ico { opacity: 0.7; flex: none; }
+.ern-suche input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
     color: var(--text-1);
-    font-variant-numeric: tabular-nums;
+    font-size: 0.9375rem;
 }
-.ern-band-spur {
-    position: relative;
-    height: 10px;
-    border-radius: 999px;
+.ern-suche input:focus { outline: none; }
+.ern-suche:focus-within { box-shadow: var(--focus-ring); }
+
+/* Suchfeld, Kamera und „von Hand" in einer Zeile: drei Wege zu demselben
+   Ziel, und keiner davon ist eine eigene Karte wert. */
+.ern-suchzeile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.ern-suchzeile .v-btn { width: auto; margin: 0; flex: none; }
+
+.ern-kopf-tasten {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+}
+.ern-kopf-tasten .v-btn { width: auto; margin: 0; }
+
+/* ---------- Eintragen-Dialog ----------
+   Eine Zeile, eine Hauptsache: die ganze Zeile ist der Knopf fuer "normal",
+   "uebermaessig" steht klein daneben. Zwei gleich grosse Knoepfe je Zeile
+   waren bei acht Vorschlaegen sechzehn gleichberechtigte Ziele. */
+.ern-dlg-mahlzeiten {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-bottom: 0.75rem;
+}
+.ern-dlg-fuss {
+    position: sticky;
+    bottom: -1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: var(--space-4);
+    padding: 0.625rem 0 0.25rem;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+}
+.ern-dlg-fuss .ern-note { margin: 0; flex: 1 1 140px; min-width: 0; }
+.ern-dlg-fuss .v-btn { width: auto; margin: 0; flex: none; }
+
+.ern-w {
+    display: flex;
+    align-items: stretch;
+    gap: 0.375rem;
+    margin-top: 0.375rem;
+}
+.ern-w-haupt,
+.ern-w-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    align-items: flex-start;
+    text-align: left;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+.ern-w-haupt { cursor: pointer; width: auto; }
+.ern-w-haupt:hover {
+    opacity: 1;
+    border-color: var(--ern-figur);
+    background: color-mix(in srgb, var(--ern-figur) 8%, var(--surface-2));
+}
+.ern-w-haupt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ern-w-name { font-size: 0.9375rem; font-weight: 600; color: var(--text-1); }
+.ern-w-sub { font-size: 0.75rem; color: var(--text-3); }
+/* Der frei getippte Text ist der Weg, der ohne Bestand auskommt -- er steht
+   deshalb abgesetzt, nicht als eine Zeile unter vielen. */
+.ern-w.is-neu .ern-w-haupt {
+    border-color: var(--ern-figur);
+    background: color-mix(in srgb, var(--ern-figur) 10%, var(--surface-2));
+}
+.ern-w-viel {
+    flex: none;
+    width: auto;
+    margin: 0;
+    padding: 0 0.7rem;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text-3);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.ern-w-viel:hover {
+    opacity: 1;
+    color: var(--ern-viel);
+    border-color: var(--ern-viel);
+}
+.ern-w-viel:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ern-w.is-menge { align-items: center; flex-wrap: wrap; }
+.ern-w.is-menge .ern-w-text { flex: 1 1 200px; }
+
+.ern-menge {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex: none;
+    flex-wrap: wrap;
+}
+.ern-menge input {
+    width: 4.5rem;
+    margin: 0;
+    padding: 0.4rem 0.5rem;
     background: var(--surface-3);
-    overflow: hidden;
-}
-.ern-band-fuell {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    border-radius: 999px;
-    background: var(--ern-figur);
-    opacity: 0.85;
-}
-.ern-band-marke {
-    position: absolute;
-    top: -2px;
-    bottom: -2px;
-    width: 2px;
-    background: var(--text-2);
-    z-index: 1;
-}
-.ern-band.is-unvollstaendig .ern-band-fuell { opacity: 0.55; }
-.ern-band-fuss {
-    margin-top: 0.25rem;
-    font-size: 0.6875rem;
-    color: var(--text-4);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text-1);
+    font-size: 0.875rem;
     font-variant-numeric: tabular-nums;
 }
+.ern-menge select { width: auto; min-width: 5.5rem; margin: 0; }
+.ern-menge .v-btn { width: auto; margin: 0; }
+/* Ein kleineres Auswahlfeld fuer die Mengenzeile -- dieselbe Optik wie
+   .v-select, nur schmaler. */
+.v-select--sm { padding: 0.35rem 1.6rem 0.35rem 0.55rem; font-size: 0.8125rem; }
 
 /* ---------- Ziele ---------- */
 .ern-ziele {
@@ -389,30 +544,22 @@ button.ern-stufe:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     box-shadow: var(--focus-ring);
 }
 
-.ern-form {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
-}
-.ern-form .ern-feld { flex: 1 1 220px; max-width: 320px; }
-
 .ern-tasten {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: var(--space-3);
 }
+.ern-tasten .v-btn { width: auto; margin: 0; }
 
 .ern-groessen-kopf {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 0.5rem;
     margin-top: var(--space-4);
 }
 .ern-groessen-kopf h4 { margin: 0; font-size: 0.875rem; }
-.ern-groessen-kopf .ern-note { margin: 0; }
+.ern-groessen-kopf .v-btn { width: auto; margin: 0 0 0 auto; }
 .ern-groessen { margin: 0.5rem 0; }
 .ern-groesse {
     display: flex;
@@ -474,6 +621,29 @@ button.ern-stufe:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Zugeklapptes (Katalog) ---------- */
+.ern-klapp {
+    background: var(--surface-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 0.75rem 1rem;
+    margin-top: var(--space-4);
+}
+.ern-klapp > summary {
+    display: flex;
+    align-items: baseline;
+    gap: 0.625rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-2);
+    list-style: none;
+}
+.ern-klapp > summary::-webkit-details-marker { display: none; }
+.ern-klapp > summary::before { content: '▸'; color: var(--text-4); font-size: 0.75rem; }
+.ern-klapp[open] > summary::before { content: '▾'; }
+.ern-klapp > summary:hover { color: var(--text-1); }
+
 /* ---------- Kamera ---------- */
 .ern-kamera {
     margin: 0.75rem 0;
@@ -497,6 +667,7 @@ button.ern-stufe:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     padding: 0.5rem 0.75rem;
 }
 .ern-kamera-leiste .ern-note { margin: 0; }
+.ern-kamera-leiste .v-btn { width: auto; margin: 0; }
 
 /* ---------- Verlauf ---------- */
 .ern-verlaufleiste .ern-kopf-text {
@@ -513,12 +684,14 @@ button.ern-stufe:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 @media (max-width: 640px) {
     .ern-gross { font-size: 1.75rem; }
     .ern-feld--breit { grid-column: span 1; }
+    /* Der grosse Knopf bekommt eine eigene Zeile unter dem Datum, statt das
+       Datum auf ein Wort zu quetschen. */
+    .ern-tagkopf { flex-wrap: wrap; }
+    .ern-add { width: 100%; margin: 0.5rem 0 0; order: 9; }
     /* Die Bedienung rutscht unter den Namen, statt ihn auf ein Wort zu
        quetschen. */
-    .ern-vorschlag { align-items: stretch; }
-    .ern-vorschlag .ern-stufen,
-    .ern-vorschlag .ern-menge { width: 100%; }
-    .ern-vorschlag .ern-stufen .v-btn { flex: 1; }
+    .ern-w.is-menge .ern-menge { width: 100%; }
     .ern-menge input { flex: 1 1 4rem; width: auto; }
     .ern-menge select { flex: 1 1 5rem; }
+    .ern-suchzeile .v-btn { flex: 1 1 auto; }
 }

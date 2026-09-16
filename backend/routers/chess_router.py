@@ -117,7 +117,7 @@ async def _konten_mit_wertung(db, user_id: int) -> list:
     """Konten samt der jeweils juengsten Wertung je Disziplin."""
     konten = await db.fetch(
         "SELECT id, platform, username, profile_url, linked_at, ratings_at, "
-        "       games_at, games_through "
+        "       games_at, games_through, backfill_done "
         "  FROM chess_accounts WHERE user_id=$1 ORDER BY platform", user_id)
     if not konten:
         return []
@@ -167,6 +167,7 @@ async def _konten_mit_wertung(db, user_id: int) -> list:
             "ratings_at": k["ratings_at"],
             "games_at": k["games_at"],
             "games_through": k["games_through"],
+            "backfill_done": k["backfill_done"],
             "ratings": [_mit_trend(w, je_basis.get((w["account_id"], w["perf"])))
                         for w in eigene],
             "games_count": zahl["anzahl"] if zahl else 0,
@@ -335,6 +336,27 @@ async def partien_holen(request: Request, account_id: int = Query(...),
         "total": await db.fetchval(
             "SELECT COUNT(*) FROM chess_games WHERE account_id=$1", konto["id"]),
     }
+
+
+@router.post("/api/chess/import/reset")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def historie_neu(request: Request, account_id: int = Query(...),
+                       db=Depends(get_db), user=Depends(get_current_user)):
+    """Setzt den Zeiger zurueck, damit der naechste Lauf von vorn anfaengt.
+
+    ``games_through`` wandert nur vorwaerts. Steht er einmal zu weit vorn --
+    ein abgebrochener erster Lauf, eine Plattform, die eine Partie spaeter
+    nachtraegt --, ist alles davor mit dem normalen Knopf nicht mehr
+    erreichbar: er fragt ab dem Zeiger. Zurueckgesetzt wird nur der Zeiger,
+    nicht der Bestand; doppelte Partien faengt der Schluessel
+    (account_id, ext_id) ab, geholt wird also nur, was fehlt.
+    """
+    treffer = await db.fetchrow(
+        "UPDATE chess_accounts SET games_through=NULL, backfill_done=FALSE "
+        " WHERE id=$1 AND user_id=$2 RETURNING id", account_id, user["id"])
+    if not treffer:
+        raise HTTPException(404, "Dieses Konto gibt es nicht.")
+    return {"ok": True, "accounts": await _konten_mit_wertung(db, user["id"])}
 
 
 # ---------------------------------------------------------------------------

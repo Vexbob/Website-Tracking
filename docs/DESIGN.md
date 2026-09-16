@@ -236,6 +236,32 @@ zu sehen, liest die Liste nicht.
   Vollfläche.
 - Trennzeichen in der Meta-Zeile sind `--text-4`; die Angaben daneben nicht.
 
+## 6d. Was selten passiert, steht nicht dauerhaft da
+
+Eine Seite gehört dem, weswegen man sie aufruft. Alles, was man **selten** tut
+— ein Rezept anlegen, ein Lebensmittel von Hand pflegen, einen Katalog
+einspielen —, liegt hinter einem Knopf im Dialog (`.modal-overlay` /
+`.modal-box`), nicht als dauerhaft offene Maske darüber.
+
+Das Muster stammt aus der Ernährungsseite (v1.95.0): dort standen Eingabefeld,
+Mahlzeiten-Chips, Vorschlagsliste, Tagesbild und Eintragsliste als fünf Klötze
+untereinander — und das, weswegen man die Seite öffnet (was habe ich heute
+gegessen), begann unter dem Bildschirmrand.
+
+- **Der Gegenstand der Seite steht oben**, die Werkzeuge dazu daneben oder
+  darin. Ein Eingabefeld über dem Inhalt kostet jeden Aufruf eine
+  Bildschirmhöhe, auch die neunzig Prozent, in denen man nur nachsieht.
+- **Der Ort sagt den Zusammenhang.** Ein Plus am Kopf der Mahlzeit trägt die
+  Mahlzeit schon in sich; eine Chipreihe, die dieselbe Frage noch einmal
+  stellt, ist damit überflüssig. Was aus dem Ort folgt, wird nicht gefragt.
+- **Eine Zeile, eine Hauptsache.** In einer Vorschlagsliste ist die ganze Zeile
+  der Knopf für den häufigen Fall; der seltene steht klein daneben. Zwei gleich
+  große Knöpfe je Zeile sind bei acht Vorschlägen sechzehn gleichberechtigte
+  Ziele, und keins davon sticht heraus.
+- **Erklärabsätze sind ein Warnzeichen.** Wo drei Sätze erklären, wie ein
+  Bedienelement gemeint ist, stimmt meist das Bedienelement nicht. Bleibt ein
+  Satz nötig, steht er direkt daneben — nicht als Karte am Seitenende.
+
 ## 7. Diagramme
 
 Reduziert, ruhig, dieselbe Farbwelt.
