@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.0.0', date: '2026-09-18', title: 'Beide Ernährungs-Module sind fertig', notes: [
+        'Essenstagebuch und Nährwerte stehen jetzt als fertige Module auf dem Dashboard statt unter „In Arbeit“ — und ein ruhendes Modul verschwindet auch von dort. Bisher hätte seine Kachel weitergestanden, obwohl die Einstellung verspricht, dass es in keiner Leiste und in keinem Menü steht.',
+        'Beide wandern in den Gesamt-Export: das Tagebuch als eigene Sektion (bewusst ohne Kalorienspalte — es kennt keine), die Nährwerte mit Menge und Makros je Zeile, dazu Bestand und Gerichte als Stammdaten. Eine fehlende Angabe bleibt dabei ein leeres Feld statt einer Null.',
+        'Fehlende Angaben, fehlende Sektionen: eine neue Prüfung vergleicht die Export-Liste mit dem, was der Export wirklich baut. Vorher konnte eine Sektion im Dialog zur Wahl stehen und die Datei an dieser Stelle leer bleiben.',
+        'Die README beschreibt beide Module; der Hinweis zum Katalog zeigt auf den Ort, an dem er jetzt wirklich steht.',
+    ]},
     { v: 'v1.99.0', date: '2026-09-18', title: 'Gerichte am Handy — und mit Foto', notes: [
         'Ein Gericht anzulegen ist jetzt ein Blatt, das auf dem Handy das ganze Bild einnimmt: erst der Name (und gleich das Foto, weil das Telefon dann ohnehin in der Hand ist), dann die Zutaten. Das Suchfeld klebt oben und sucht in einem Rutsch über deinen Bestand UND den Katalog — ein Treffer von dort wird beim Antippen still aufgenommen. Damit fällt der Reiterwechsel weg, an dem der alte Ablauf gescheitert ist.',
         'Mengen tippt man nicht mehr, man tippt darauf: ein Stepper, bei Gramm in Zehnerschritten, bei eigenen Größen in ganzen Einheiten. Die Einheit öffnet ein Blatt mit genau dem, was am Lebensmittel hinterlegt ist.',

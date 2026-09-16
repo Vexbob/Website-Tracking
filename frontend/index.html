@@ -93,6 +93,14 @@
                     <div class="tile-icon v-icon-tile" style="--tone:var(--m-health)">🏋️</div>
                     <div class="tile-text"><div class="tile-title">Gesundheit</div><div class="tile-sub">Vitalwerte, Schlaf &amp; Workouts</div></div>
                 </a>
+                <a href="/essen/" class="tile" data-modul="/essen/">
+                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-essen)">🍽️</div>
+                    <div class="tile-text"><div class="tile-title">Essenstagebuch</div><div class="tile-sub">Hinschreiben, was es gab — mehr nicht</div></div>
+                </a>
+                <a href="/naehrwerte/" class="tile" data-modul="/naehrwerte/">
+                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-naehrwerte)">📊</div>
+                    <div class="tile-text"><div class="tile-title">Nährwerte</div><div class="tile-sub">Mengen, Nährwerte &amp; eigene Tagesziele</div></div>
+                </a>
             </div>
         </section>
         <!-- v1.82.0: Module im Bau stehen getrennt von dem, was laeuft.
@@ -124,6 +132,18 @@
         // Navigation (MODULES in nav-switcher.js). Ein drittes Modul im Bau
         // taucht hier dadurch von selbst auf -- und verschwindet wieder,
         // sobald sein ``status`` faellt.
+        // Ein ruhendes Modul steht in keiner Leiste und in keinem Menue --
+        // dann darf es hier auch keine Kachel haben. Die fertigen Kacheln
+        // stehen von Hand im HTML (sie tragen mehr Text als die Registry
+        // hergibt); ``data-modul`` ist der Faden dorthin.
+        document.addEventListener('vexnav:ready', () => {
+            const ruht = new Set((window.VexNav && VexNav.readOff)
+                ? VexNav.readOff() : []);
+            document.querySelectorAll('#tileGrid [data-modul]').forEach(k => {
+                k.hidden = ruht.has(k.dataset.modul);
+            });
+        });
+
         document.addEventListener('vexnav:ready', () => {
             const wip = (window.VexNav ? VexNav.modules() : [])
                 .filter(m => m.status === 'neu');

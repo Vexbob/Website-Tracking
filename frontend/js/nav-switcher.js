@@ -46,13 +46,13 @@
           status: 'neu', tone: '--m-schach',
           sub: 'Rating und Partien von Lichess und Chess.com' },
         { href: '/naehrwerte/', label: '📊 Nährwerte',       public: false, icon: 'ring',  short: 'Werte',
-          status: 'neu', tone: '--m-naehrwerte',
+          tone: '--m-naehrwerte',
           sub: 'Mengen, Nährwerte und eigene Tagesziele' },
         // v1.97.0 -- das Tagebuch ist ein eigenes Modul mit eigener Tabelle.
         // Es fragt nur, WAS es gab und ob es normal oder uebermaessig war;
         // Mengen gibt es dort nicht einmal als Spalte.
         { href: '/essen/',      label: '🍽️ Essenstagebuch', public: false, icon: 'meal',  short: 'Essen',
-          status: 'neu', tone: '--m-essen',
+          tone: '--m-essen',
           sub: 'Hinschreiben, was es gab — mehr nicht' },
     ];
 

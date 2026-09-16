@@ -31,6 +31,7 @@ import re
 from datetime import date, datetime, timezone
 from typing import Optional
 
+from services import food_mahlzeit as mahlzeiten
 from helpers import (
     _export_csv_field as _f,
     _export_amt as _amt,  # noqa: F401  (kompatibel gehalten fuer moegliche Reimporte)
@@ -173,7 +174,11 @@ def _compact_timestamps(csv_text: str) -> str:
 def _num(v) -> str:
     """Health-Zahlenformat: Punkt-Dezimal, aber ohne unnoetiges ``.00``
     bei ganzzahligen Werten (spart bei Vitalwerten wie ``steps`` oder
-    ``resting_hr`` pro Zeile 3 Zeichen)."""
+    ``resting_hr`` pro Zeile 3 Zeichen).
+
+    ``None`` bleibt LEER und wird nicht zu 0: in der Ernaehrung heisst eine
+    fehlende Angabe "wir wissen es nicht", und eine 0 waere eine Behauptung
+    ueber einen Naehrwert, den niemand kennt."""
     if v is None:
         return ""
     try:
@@ -231,6 +236,17 @@ EXPORT_SECTIONS: list[dict] = [
      "label": "Hörregister (Periode, Interpret, Titel, Wiedergaben)"},
     {"key": "music_imports", "group": "musik", "aggregatable": False, "dated": False,
      "label": "Protokoll der CSV-Uploads"},
+    # Zwei Module, zwei Genauigkeiten -- deshalb zwei Protokolle. Sie in eine
+    # Sektion zu werfen hiesse, "Pizza, uebermaessig" und "180 g Brot" in
+    # dieselbe Spalte zu schreiben.
+    {"key": "diary_log", "group": "ernaehrung", "aggregatable": True, "dated": True,
+     "label": "Essenstagebuch (Tag, Mahlzeit, Was, Stufe)"},
+    {"key": "track_log", "group": "ernaehrung", "aggregatable": True, "dated": True,
+     "label": "Naehrwerte-Eintraege (Menge, kcal, Makros)"},
+    {"key": "food_stock", "group": "ernaehrung", "aggregatable": False, "dated": False,
+     "label": "Eigener Bestand samt eigenen Groessen"},
+    {"key": "food_dishes", "group": "ernaehrung", "aggregatable": False, "dated": False,
+     "label": "Eigene Gerichte (eine Zeile je Zutat)"},
 ]
 
 EXPORT_GROUPS: list[dict] = [
@@ -238,6 +254,7 @@ EXPORT_GROUPS: list[dict] = [
     {"key": "ausgaben", "label": "Ausgaben"},
     {"key": "health", "label": "Gesundheit"},
     {"key": "musik", "label": "Musik"},
+    {"key": "ernaehrung", "label": "Ernährung"},
 ]
 
 ALL_SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS]
@@ -510,6 +527,163 @@ def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
     return lines
 
 
+# ---------------------------------------------------------------------------
+# Ernaehrung (v2.0.0) — zwei Module, vier Sektionen
+# ---------------------------------------------------------------------------
+# Das Essenstagebuch und die Naehrwerte sind zwei Module mit zwei Tabellen und
+# zwei verschiedenen Genauigkeiten. Sie in EINE Sektion zu werfen hiesse,
+# "Pizza, uebermaessig" und "180 g Brot" in dieselbe Spalte zu schreiben --
+# und in fuenf Jahren waere nicht mehr zu erkennen, was davon gemessen und was
+# notiert war. Deshalb vier Sektionen: je ein Protokoll, dazu Bestand und
+# Rezepte als Stammdaten.
+
+
+async def _sec_diary(db, user_id: int, date_from, date_to) -> list[str]:
+    """Essenstagebuch: was gab es, normal oder uebermaessig.
+
+    Hier steht bewusst KEINE Kalorienzahl. Das Tagebuch kennt keine, und eine
+    im Export zu ergaenzen hiesse, sie zu erfinden.
+    """
+    bedingungen, werte = ["user_id=$1"], [user_id]
+    if date_from:
+        werte.append(date_from)
+        bedingungen.append(f"day >= ${len(werte)}")
+    if date_to:
+        werte.append(date_to)
+        bedingungen.append(f"day <= ${len(werte)}")
+    rows = await db.fetch(
+        f"SELECT day, meal, label, level, note, logged_time, meal_auto "
+        f"  FROM food_diary WHERE {' AND '.join(bedingungen)} "
+        f" ORDER BY day, created_at", *werte)
+
+    out = ["# SEKTION: Essenstagebuch - was gab es (ohne Mengen, ohne Naehrwerte)",
+           "Datum;Mahlzeit;Was;Stufe;Uhrzeit;Mahlzeit geraten;Notiz"]
+    for r in rows:
+        mahlzeit = (mahlzeiten.MAHLZEIT_LABEL.get(r["meal"])
+                    or mahlzeiten.OHNE_MAHLZEIT_LABEL)
+        out.append(
+            f'{r["day"].isoformat()};{_f(mahlzeit)};{_f(r["label"] or "")};'
+            f'{_f("uebermaessig" if r["level"] == "viel" else "normal")};'
+            f'{r["logged_time"].strftime("%H:%M") if r["logged_time"] else ""};'
+            f'{"ja" if r["meal_auto"] else "nein"};{_f(r["note"] or "")}')
+    out.append("")
+    return out
+
+
+async def _sec_track_log(db, user_id: int, date_from, date_to) -> list[str]:
+    """Naehrwerte: Mengen und was daraus folgt.
+
+    Die Naehrwerte stehen als Zahl je Zeile und nicht als Tagessumme: eine
+    Summe laesst sich aus Zeilen bilden, aus einer Summe aber keine Zeilen.
+    Fehlt eine Angabe, bleibt das Feld LEER -- eine Null waere eine Behauptung.
+    """
+    bedingungen, werte = ["l.user_id=$1"], [user_id]
+    if date_from:
+        werte.append(date_from)
+        bedingungen.append(f"l.day >= ${len(werte)}")
+    if date_to:
+        werte.append(date_to)
+        bedingungen.append(f"l.day <= ${len(werte)}")
+    rows = await db.fetch(
+        f"SELECT l.day, l.meal, l.amount, l.unit, l.grams, l.note, l.logged_time, "
+        f"       d.name AS dish_name, i.name AS item_name, i.brand, "
+        f"       i.kcal, i.protein_g, i.fiber_g, i.carbs_g, i.fat_g "
+        f"  FROM food_log l "
+        f"  LEFT JOIN food_dishes d ON d.id = l.dish_id "
+        f"  LEFT JOIN food_items  i ON i.id = l.item_id "
+        f" WHERE {' AND '.join(bedingungen)} ORDER BY l.day, l.created_at", *werte)
+
+    out = ["# SEKTION: Naehrwerte - Eintraege mit Menge",
+           "Datum;Mahlzeit;Was;Art;Menge;Einheit;Gramm;kcal;Eiweiss_g;"
+           "Ballaststoffe_g;Kohlenhydrate_g;Fett_g;Uhrzeit;Notiz"]
+    for r in rows:
+        ist_gericht = r["dish_name"] is not None
+        name = r["dish_name"] or r["item_name"] or ""
+        if not ist_gericht and r["brand"]:
+            name = f'{name} ({r["brand"]})'
+        mahlzeit = (mahlzeiten.MAHLZEIT_LABEL.get(r["meal"])
+                    or mahlzeiten.OHNE_MAHLZEIT_LABEL)
+        gramm = float(r["grams"] or 0)
+        # Ein Gericht traegt seine Naehrwerte in seinem Rezept, nicht an der
+        # Zeile: sie hier je 100 g auszurechnen waere eine zweite Fassung
+        # derselben Rechnung. Die Rezepte stehen in ihrer eigenen Sektion.
+        werte_text = ";" * 5
+        if not ist_gericht:
+            stuecke = []
+            for makro in ("kcal", "protein_g", "fiber_g", "carbs_g", "fat_g"):
+                roh = r[makro]
+                stuecke.append("" if roh is None
+                               else _num(float(roh) * gramm / 100.0))
+            werte_text = ";".join(stuecke)
+        out.append(
+            f'{r["day"].isoformat()};{_f(mahlzeit)};{_f(name)};'
+            f'{"Gericht" if ist_gericht else "Lebensmittel"};'
+            f'{_num(r["amount"])};{_f(r["unit"] or "")};{_num(gramm)};'
+            f'{werte_text};'
+            f'{r["logged_time"].strftime("%H:%M") if r["logged_time"] else ""};'
+            f'{_f(r["note"] or "")}')
+    out.append("")
+    return out
+
+
+async def _sec_food_stock(db, user_id: int) -> list[str]:
+    """Der eigene Bestand samt eigenen Groessen. Stammdaten, kein Zeitraum."""
+    rows = await db.fetch(
+        "SELECT i.id, i.name, i.brand, i.barcode, i.source, i.base_unit, "
+        "       i.kcal, i.protein_g, i.carbs_g, i.sugar_g, i.fat_g, "
+        "       i.sat_fat_g, i.fiber_g, i.salt_g, i.user_edited "
+        "  FROM food_items i WHERE i.user_id=$1 ORDER BY lower(i.name)", user_id)
+    groessen: dict = {}
+    for g in await db.fetch(
+            "SELECT s.item_id, s.label, s.grams FROM food_item_sizes s "
+            "  JOIN food_items i ON i.id = s.item_id "
+            " WHERE i.user_id=$1 ORDER BY s.position", user_id):
+        groessen.setdefault(g["item_id"], []).append(
+            f'{g["label"]}={_num(g["grams"])}')
+
+    out = ["# SEKTION: Naehrwerte - eigener Bestand (je 100 g bzw. 100 ml)",
+           "Name;Marke;Strichcode;Herkunft;Basis;kcal;Eiweiss_g;Kohlenhydrate_g;"
+           "Zucker_g;Fett_g;gesaettigt_g;Ballaststoffe_g;Salz_g;Eigene Groessen;"
+           "von Hand gepflegt"]
+    for r in rows:
+        zahlen = ";".join("" if r[m] is None else _num(r[m]) for m in (
+            "kcal", "protein_g", "carbs_g", "sugar_g", "fat_g",
+            "sat_fat_g", "fiber_g", "salt_g"))
+        out.append(
+            f'{_f(r["name"])};{_f(r["brand"] or "")};{_f(r["barcode"] or "")};'
+            f'{_f("Open Food Facts" if r["source"] == "off" else "selbst angelegt")};'
+            f'{_f(r["base_unit"] or "g")};{zahlen};'
+            f'{_f(" ".join(groessen.get(r["id"], [])))};'
+            f'{"ja" if r["user_edited"] else "nein"}')
+    out.append("")
+    return out
+
+
+async def _sec_food_dishes(db, user_id: int) -> list[str]:
+    """Die eigenen Rezepte, eine Zeile je Zutat.
+
+    Eine Zeile je Gericht mit den Zutaten in einem Feld waere kuerzer und
+    nicht auswertbar. So laesst sich die Datei nach Zutat filtern -- und
+    genau dafuer exportiert man sie.
+    """
+    rows = await db.fetch(
+        "SELECT d.id, d.name AS gericht, d.note, "
+        "       z.position, z.amount, z.unit, z.grams, i.name AS zutat, i.brand "
+        "  FROM food_dishes d "
+        "  LEFT JOIN food_dish_items z ON z.dish_id = d.id "
+        "  LEFT JOIN food_items i ON i.id = z.item_id "
+        " WHERE d.user_id=$1 ORDER BY lower(d.name), z.position", user_id)
+    out = ["# SEKTION: Naehrwerte - eigene Gerichte (eine Zeile je Zutat)",
+           "Gericht;Zutat;Marke;Menge;Einheit;Gramm;Notiz"]
+    for r in rows:
+        out.append(
+            f'{_f(r["gericht"])};{_f(r["zutat"] or "")};{_f(r["brand"] or "")};'
+            f'{_num(r["amount"])};{_f(r["unit"] or "")};{_num(r["grams"])};'
+            f'{_f(r["note"] or "")}')
+    out.append("")
+    return out
+
+
 async def _build_sections(db, user, picked: list[str], date_from, date_to,
                           agg_map: dict) -> list[tuple]:
     """Baut die gewaehlten Sektionen einzeln. Getrennt gehalten, damit die
@@ -565,6 +739,16 @@ async def _build_sections(db, user, picked: list[str], date_from, date_to,
 
     if "music_imports" in want:
         out.append(("music_imports", await _music_imports_section(db, uid)))
+
+    # Ernaehrung: zwei Protokolle mit Zeitraum, zwei Stammdaten-Sektionen ohne.
+    if "diary_log" in want:
+        out.append(("diary_log", await _sec_diary(db, uid, date_from, date_to)))
+    if "track_log" in want:
+        out.append(("track_log", await _sec_track_log(db, uid, date_from, date_to)))
+    if "food_stock" in want:
+        out.append(("food_stock", await _sec_food_stock(db, uid)))
+    if "food_dishes" in want:
+        out.append(("food_dishes", await _sec_food_dishes(db, uid)))
     return out
 
 

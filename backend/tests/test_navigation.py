@@ -142,3 +142,29 @@ def test_tabellen_ohne_user_id_haengen_an_einer_mit():
     assert not fehlt, (
         "Diese Tabellen haben keine user_id und keinen PARENT_SCOPE-Eintrag — "
         "ihr Backup enthielte fremde Zeilen: " + ", ".join(fehlt))
+
+
+# --------------------------------------------------------------------------
+# Gesamt-Export
+# --------------------------------------------------------------------------
+# Eine Sektion braucht ZWEI Eintraege: einen in EXPORT_SECTIONS und einen
+# Zweig in _build_sections. Fehlt der zweite, steht die Sektion im Dialog zur
+# Wahl und die Datei bleibt an dieser Stelle leer -- ein Fehler, den niemand
+# bemerkt, bis er die Datei aufmacht.
+def test_jede_export_sektion_wird_auch_gebaut():
+    from services import full_export as fe
+    quelle = (WURZEL / "backend" / "services" / "full_export.py").read_text(
+        encoding="utf-8")
+    bau = quelle[quelle.index("async def _build_sections"):]
+    fehlt = [s["key"] for s in fe.EXPORT_SECTIONS
+             if f'"{s["key"]}" in want' not in bau]
+    assert not fehlt, (
+        "Diese Sektionen stehen in EXPORT_SECTIONS, werden aber in "
+        "_build_sections nie gebaut: " + ", ".join(fehlt))
+
+
+def test_jede_export_sektion_gehoert_zu_einer_gruppe():
+    from services import full_export as fe
+    gruppen = {g["key"] for g in fe.EXPORT_GROUPS}
+    fehlt = sorted({s["group"] for s in fe.EXPORT_SECTIONS} - gruppen)
+    assert not fehlt, "Gruppen ohne Eintrag in EXPORT_GROUPS: " + ", ".join(fehlt)

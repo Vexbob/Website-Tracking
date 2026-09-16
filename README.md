@@ -1,6 +1,6 @@
 # Vexbob
 
-**Persönliche Web-App mit Sparziel-Tracker, Ausgaben, Notizen, Gesundheit & Blog — selfhosted, PWA-fähig, Multi-User mit Admin-Bereich.**
+**Persönliche Web-App mit Sparziel-Tracker, Ausgaben, Notizen, Gesundheit, Ernährung, Musik, Schach & Blog — selfhosted, PWA-fähig, Multi-User mit Admin-Bereich.**
 
 ---
 
@@ -55,6 +55,25 @@ Sync-Ziel für die iPhone-App **Auto Health Export** — die App schiebt die App
 - **Schlaf** — ein Diagramm auf einer Uhrzeit-Achse: je Nacht ein Balken vom Zubettgehen bis zum Aufstehen, darin die Phasen mit ihrer echten Dauer (nichts auf eine Grundlinie normiert). Regelmäßigkeit und Zusammensetzung stehen damit im selben Bild. Die Achse zeigt immer genau 24 Stunden; eine Nacht, die darüber hinausreicht, endet mit einem grünen Strich an der Unterkante. Darunter die typische Zubettgeh- und Aufstehzeit mit ihrer Streuung in Stunden. Nächte ohne Zeitstempel bleiben aus dem Diagramm draußen, zählen aber in die Ø-Werte — die Notiz über dem Diagramm nennt beide Arten von Lücken. Die Position einer Phase im Balken ist eine feste Reihenfolge, keine Messung — die Quelle liefert je Nacht nur Summen, kein Hypnogramm. Nächte unter einer Stunde Schlaf gelten als Messlücke und bleiben aus Kacheln und Diagrammen draußen.
 - **Workouts** — Historie mit Typ-Filter und Detailansicht inkl. sportartspezifischer Zusatzmetriken und Pulsverlauf je Minute. Auto Health Export liefert dasselbe Training je nach Einstellung in zwei Ausprägungen mit je eigener ID: die eine bringt Puls, Minutenreihe und Bahnlänge, die andere Schwimmzüge, Kadenz, Schritte und Höhenmeter. Zugeordnet wird deshalb über Startzeit und Typ statt über die ID — beide Exporte füllen dasselbe Workout und ergänzen jeweils die Lücken des anderen. Distanz und Tempo werden dabei auf eine Einheit gebracht; dieselbe Bahn kommt je nach Variante als 1,825 km oder als 1825 m an.
 - **CSV-Export & gezieltes Löschen** — alle Gesundheitsdaten als eine CSV; gelöscht wird wahlweise nach Kategorie und Zeitraum, damit ein fehlerhafter Import korrigierbar bleibt, ohne alles wegzuwerfen.
+
+### 🍽️ Essenstagebuch
+Hinschreiben, was es gab — mehr nicht. Null Einrichtung, ein Tipp je Eintrag.
+
+- **Eine Seite, eine Aufgabe** — Datum, Mahlzeiten, fertig. Kein Diagramm, keine Einstellungen, kein Bestand. Wer Mengen und Nährwerte will, ist im Nährwerte-Modul; die beiden schreiben in getrennte Tabellen, und im Tagebuch gibt es **keine Spalte, in die eine Menge passt**.
+- **Schnellwahl** — die sechs häufigsten Namen als Knopf. Ein Tipp trägt ein, als *normal*, in die Mahlzeit, die zur Uhrzeit passt. Was du tippst, steht ab dem zweiten Mal selbst dort.
+- **Zwei Stufen, mehr nicht** — *normal* oder *übermäßig*. Eine falsch geratene Stufe schaltet ein Tipp auf die Zeile um; für Name, Mahlzeit und Notiz öffnet ein Tipp auf den Namen den Eintrag.
+- **Mahlzeit nach Uhrzeit, aber nie heimlich** — die Ortszeit kommt vom Browser, entschieden wird im Server, und im Eintragen-Fenster steht *jetzt* am vorgeschlagenen Chip. An vergangenen Tagen wird gar nicht erst geraten.
+
+### 📊 Nährwerte
+Der ausführliche Teil: Mengen, Kalorien, Makros und eigene Tagesziele.
+
+- **Halbkreis und Ringe** — ein großer Ring für die Kalorien, drei kleine für Eiweiß, Kohlenhydrate und Fett. Über dem Ziel legt sich ein zweiter Bogen in Gelb darüber: *mehr* ist eine Auskunft, kein Urteil.
+- **Mengen statt Stufen** — ein Lebensmittel in Gramm oder einer eigenen Größe („2 × Scheibe"), ein Gericht in Portionen (0,5 / 1 / 1,5). Umgerechnet wird beim Speichern, nie beim Anzeigen — sonst ändert eine korrigierte Scheibengröße einen vergangenen Tag.
+- **Eine Lücke ist keine Null** — fehlt einer Zutat eine Angabe, ist die Tagessumme *unvollständig* und nicht niedriger. Der Ring zeigt das als gestrichelte Spur, die Zahl bekommt ein „mind.".
+- **Eigene Tagesziele, freiwillig und einzeln** — wer nur auf Eiweiß achtet, muss keine fünf Zahlen erfinden. Wo keines steht, gilt der allgemeine Richtwert, und die Seite sagt, dass er es ist.
+- **Strichcode, Katalog, eigener Bestand** — gesucht wird in dieser Reihenfolge: eigener Bestand, eigener Open-Food-Facts-Abzug, dann der Dienst live. Woher eine Zahl kam, steht auf dem Bildschirm.
+- **Gerichte mit Foto** — ein Rezept anlegen ist auf dem Handy ein Blatt über das ganze Bild: Name, Foto, dann die Zutaten. Das Suchfeld klebt oben und sucht über Bestand **und** Katalog; unten läuft die Summe mit.
+- **Die Brücke** — schaltest du die Nährwerte ein, schlägt das Modul vor, was du im Tagebuch oft notiert hast. Es liest dabei nur: ein Tagebuch-Eintrag wird nicht nachträglich zu einer Menge.
 
 ### 📰 Blog
 Das einzige nach außen sichtbare Modul: `/blog/` ist ohne Anmeldung lesbar, geschrieben wird im Admin-Bereich.
@@ -152,7 +171,7 @@ Ohne diesen Schritt funktioniert das Modul vollständig — es fragt dann bei je
 
 Der fertige Katalog liegt als **`backend/data/off-katalog-dach.csv.gz`** im Repo (rund 10 MB). Er ist ein Auszug aus der Datenbank von Open Food Facts und steht wie das Original unter der ODbL — Herkunft und Lizenz stehen in `backend/data/HERKUNFT.md`. Personenbezogene Daten sind keine darin, nur Produktangaben.
 
-**Der einfache Weg:** im Modul unter *Scanner* → Karte **Katalog einspielen** die Datei ablegen. Sichtbar ist die Karte nur für Admins; der Katalog gehört keinem Konto. Vor dem Ersetzen steht da, was ersetzt wird.
+**Der einfache Weg:** im Modul **Nährwerte** unter *Lebensmittel* → aufklappbarer Abschnitt **Katalog einspielen** die Datei ablegen. Sichtbar ist die Karte nur für Admins; der Katalog gehört keinem Konto. Vor dem Ersetzen steht da, was ersetzt wird.
 
 Ohne Browser geht es weiterhin über das Skript — die Datei ist nach `git pull` und einem Image-Neubau auch im Container:
 
