@@ -4,17 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0a0c10">
-<meta name="description" content="Ernährung: Gerichte, Makronährwerte je Tag und Barcode-Scanner — bewusst grob statt auf das Gramm.">
+<meta name="description" content="Ernährung in zwei Modi: ein lockeres Tagebuch oder ein ausführlicher Tracker mit Mengen, Nährwerten und eigenen Tageszielen.">
 <title>Ernährung — Vexbob</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/statistics.css">
 <link rel="stylesheet" href="/ernaehrung/ernaehrung.css">
 <script src="/js/config.js"></script>
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/sw-update.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/range-filter.js"></script>
 </head>
 <body>
 <nav class="navbar">
@@ -28,70 +32,134 @@
 
     <header class="page-head">
         <h1>🥗 Ernährung</h1>
-        <p class="page-sub">
-            Ein Tracker, der <strong>locker</strong> bleibt. Bei einem <strong>Gericht</strong>
-            reicht <em>normal</em> oder <em>übermäßig</em> — die Gramm stehen einmal im Rezept.
-            Ein einzelnes <strong>Lebensmittel</strong> trägst du so ein, wie es dasteht:
-            100 g, zwei Scheiben, eine Packung. Was geschätzt ist, wird als
-            <strong>Spanne</strong> angezeigt statt als erfundene Einzelzahl.
-        </p>
     </header>
 
-    <div class="tabs">
-        <button class="tab-btn active" data-tab="heute">🍽️ Heute</button>
-        <button class="tab-btn" data-tab="gerichte">📖 Gerichte</button>
-        <button class="tab-btn" data-tab="scanner">📷 Scanner</button>
+    <!-- Der Modus ist keine Ansicht, sondern die Frage: im Tagebuch wird
+         eine Stufe erfasst, im Tracker eine Menge. Deshalb steht er über
+         den Reitern und nicht in einem Einstellungsmenü — und deshalb
+         ändert er auch, welche Reiter es gibt. -->
+    <div class="ern-moduswahl">
+        <div class="ern-modus" role="group" aria-label="Modus">
+            <button type="button" data-modus="locker">
+                <span aria-hidden="true">📓</span> Tagebuch
+            </button>
+            <button type="button" data-modus="ausfuehrlich">
+                <span aria-hidden="true">📊</span> Tracker
+            </button>
+        </div>
+        <p class="ern-modus-satz" id="ernModusSatz"></p>
     </div>
 
-    <!-- ---------- Heute ---------- -->
-    <div id="tab-heute">
-        <div class="v-card ern-tag">
-            <div class="ern-tag-kopf">
-                <button type="button" class="v-btn v-btn--icon" id="ernTagZurueck"
-                        aria-label="Tag zurück">◀</button>
-                <div class="ern-tag-datum">
-                    <div id="ernTagName">Heute</div>
-                    <div class="ern-klein" id="ernTagDatum"></div>
-                </div>
-                <button type="button" class="v-btn v-btn--icon" id="ernTagVor"
-                        aria-label="Tag vor">▶</button>
-            </div>
+    <div class="tabs" id="ernTabs"></div>
 
-            <div class="ern-summe" id="ernSumme"><span class="skel skel-block"></span></div>
-            <div id="ernBaender"></div>
-            <p class="ern-klein ern-massstab" id="ernMassstab"></p>
+    <!-- ====================== Tag ====================== -->
+    <div id="tab-tag">
+        <div class="ern-tagleiste">
+            <button type="button" class="v-btn v-btn--icon" id="ernTagZurueck"
+                    aria-label="Tag zurück">◀</button>
+            <div class="ern-tagleiste-mitte">
+                <strong id="ernTagName">Heute</strong>
+                <span id="ernTagDatum"></span>
+            </div>
+            <button type="button" class="v-btn v-btn--icon" id="ernTagVor"
+                    aria-label="Tag vor">▶</button>
         </div>
 
-        <div class="v-card">
-            <div class="v-card-head">
-                <h3>Schnell eintragen</h3>
-                <span class="v-card-sub">Gericht antippen, Lebensmittel abmessen</span>
+        <!-- Eintragen steht ÜBER dem Tag: man kommt auf diese Seite, um
+             etwas hinzuschreiben, nicht um zu lesen. -->
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3 id="ernEingabeTitel">Was gab es?</h3>
+                <span class="stat-range-lbl" id="ernEingabeSub"></span>
             </div>
-            <label class="ern-suche ern-schnell-suche">
+
+            <label class="ern-suche">
                 <span class="ern-suche-ico" aria-hidden="true">🔎</span>
-                <input type="search" id="ernSchnellSuche" autocomplete="off"
-                       aria-label="Gericht oder Lebensmittel suchen"
-                       placeholder="Gericht oder Lebensmittel suchen">
+                <input type="search" id="ernEingabe" autocomplete="off"
+                       aria-label="Was hast du gegessen?"
+                       placeholder="Tippen — oder unten aus der Liste wählen">
             </label>
-            <div id="ernSchnell"><span class="skel skel-block"></span></div>
+
+            <div class="ern-mahlzeiten stat-preset-chips" id="ernMahlzeiten"></div>
+
+            <div id="ernVorschlaege"><span class="skel skel-block"></span></div>
         </div>
 
-        <div class="v-card">
-            <div class="v-card-head">
+        <!-- Was der Tag hergibt. Im Tagebuch sind das Zahl und Verteilung,
+             im Tracker die Nährwert-Bänder gegen das eigene Ziel. -->
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>Der Tag</h3>
+                <span class="stat-range-lbl" id="ernTagSub"></span>
+            </div>
+            <div id="ernTagBild"><span class="skel skel-block"></span></div>
+            <div id="ernBaender"></div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-head">
                 <h3>Eingetragen</h3>
-                <span class="v-card-sub" id="ernEintraegeZahl"></span>
+                <span class="stat-range-lbl" id="ernEintraegeZahl"></span>
             </div>
             <div id="ernEintraege"></div>
         </div>
     </div>
 
+    <!-- ====================== Verlauf ====================== -->
+    <div id="tab-verlauf" hidden>
+        <div class="stat-filterbar ern-verlaufleiste">
+            <div class="ern-kopf-text">
+                <strong id="ernVerlaufZeitraum"></strong>
+                <span id="ernVerlaufSub"></span>
+            </div>
+            <div class="stat-filter-slot" id="ernRange"></div>
+        </div>
 
-    <!-- ---------- Gerichte ---------- -->
+        <div class="stat-kpi-grid" id="ernVerlaufKpi"></div>
+
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3 id="ernChart1Titel">Verlauf</h3>
+                <span class="stat-range-lbl" id="ernChart1Sub"></span>
+            </div>
+            <div id="ernChart1Leer" hidden></div>
+            <div class="chart-wrap" id="ernChart1Box"><canvas id="ernChart1"></canvas></div>
+            <p class="ern-note" id="ernChart1Note"></p>
+        </div>
+
+        <div class="stat-card" id="ernChart2Karte" hidden>
+            <div class="stat-card-head">
+                <h3 id="ernChart2Titel">Eiweiß</h3>
+                <span class="stat-range-lbl" id="ernChart2Sub"></span>
+            </div>
+            <div class="chart-wrap small"><canvas id="ernChart2"></canvas></div>
+            <p class="ern-note" id="ernChart2Note"></p>
+        </div>
+
+        <!-- Nur im Tracker: ohne Mengen gibt es nichts, wogegen ein Ziel
+             gemessen werden könnte. -->
+        <div class="stat-card" id="ernZieleKarte" hidden>
+            <div class="stat-card-head">
+                <h3>Tagesziele</h3>
+                <span class="stat-range-lbl">freiwillig, einzeln</span>
+            </div>
+            <p class="ern-note">Was du leer lässt, misst weiter am allgemeinen Richtwert —
+                der üblichen Größenordnung für einen Tag, nicht an einem Ziel.
+                Wer nur auf Eiweiß achtet, muss hier keine fünf Zahlen erfinden.</p>
+            <div class="ern-ziele" id="ernZiele"></div>
+            <div class="ern-tasten">
+                <button type="button" class="v-btn v-btn--primary" id="ernZieleSpeichern">Ziele speichern</button>
+                <button type="button" class="v-btn" id="ernZieleWeg">Alle zurücksetzen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====================== Gerichte ====================== -->
     <div id="tab-gerichte" hidden>
-        <div class="v-card">
-            <div class="v-card-head">
+        <div class="stat-card">
+            <div class="stat-card-head">
                 <h3 id="ernGerichtTitel">Neues Gericht</h3>
-                <span class="v-card-sub">einmal anlegen, hundertmal eintragen</span>
+                <span class="stat-range-lbl">einmal anlegen, hundertmal eintragen</span>
             </div>
             <label class="ern-feld">
                 <span>Name</span>
@@ -99,9 +167,9 @@
                        placeholder="z. B. Wraps">
             </label>
 
-            <div class="ern-zutaten" id="ernZutaten"></div>
+            <div id="ernZutaten"></div>
 
-            <label class="ern-suche ern-zutat-suche">
+            <label class="ern-suche">
                 <span class="ern-suche-ico" aria-hidden="true">➕</span>
                 <input type="search" id="ernZutatSuche" autocomplete="off"
                        aria-label="Zutat aus dem Bestand suchen"
@@ -109,9 +177,10 @@
             </label>
             <div id="ernZutatTreffer"></div>
 
-            <p class="ern-hinweis">
+            <p class="ern-note">
                 Gramm stehen nur hier, im Rezept — einmal geschrieben, hundertmal benutzt.
-                Beim Eintragen sagst du danach nur noch <em>normal</em> oder <em>übermäßig</em>.
+                Beim Eintragen sagst du danach nur noch <em>normal</em> oder <em>übermäßig</em>:
+                wie viel vom eigenen Rezept auf dem Teller lag, weiß niemand in Gramm.
             </p>
 
             <div class="ern-tasten">
@@ -120,21 +189,21 @@
             </div>
         </div>
 
-        <div class="v-card">
-            <div class="v-card-head">
+        <div class="stat-card">
+            <div class="stat-card-head">
                 <h3>Meine Gerichte</h3>
-                <span class="v-card-sub" id="ernGerichteZahl"></span>
+                <span class="stat-range-lbl" id="ernGerichteZahl"></span>
             </div>
             <div id="ernGerichte"><span class="skel skel-block"></span></div>
         </div>
     </div>
 
-    <!-- ---------- Scanner ---------- -->
-    <div id="tab-scanner" hidden>
-        <div class="v-card">
-            <div class="v-card-head">
+    <!-- ====================== Vorrat ====================== -->
+    <div id="tab-vorrat" hidden>
+        <div class="stat-card">
+            <div class="stat-card-head">
                 <h3>Strichcode nachschlagen</h3>
-                <span class="v-card-sub" id="ernKatalogStand">eigener Katalog, sonst Open Food Facts</span>
+                <span class="stat-range-lbl" id="ernKatalogStand">eigener Katalog, sonst Open Food Facts</span>
             </div>
             <form class="ern-form" id="ernScanForm">
                 <label class="ern-feld">
@@ -151,11 +220,11 @@
                      Vollbild ab, und der Rest der Seite ist weg. -->
                 <video id="ernVideo" playsinline muted autoplay></video>
                 <div class="ern-kamera-leiste">
-                    <span class="ern-klein" id="ernKameraHinweis">Kamera wird geöffnet …</span>
+                    <span class="ern-note" id="ernKameraHinweis">Kamera wird geöffnet …</span>
                     <button type="button" class="v-btn v-btn--sm" id="ernKameraStop">Schließen</button>
                 </div>
             </div>
-            <p class="ern-hinweis">
+            <p class="ern-note">
                 Open Food Facts ist eine offene Datenbank, die von Freiwilligen gepflegt wird:
                 frei nutzbar, ohne Anmeldung — dafür nicht lückenlos. Was von dort kommt, ist ein
                 <strong>Vorschlag zum Nachbessern</strong>, keine Wahrheit; fehlende Angaben
@@ -166,10 +235,10 @@
             <div id="ernTreffer"></div>
         </div>
 
-        <div class="v-card">
-            <div class="v-card-head">
+        <div class="stat-card">
+            <div class="stat-card-head">
                 <h3>Suche ohne Strichcode</h3>
-                <span class="v-card-sub">für Obst, Brot, Loses</span>
+                <span class="stat-range-lbl">für Obst, Brot, Loses</span>
             </div>
             <label class="ern-suche">
                 <span class="ern-suche-ico" aria-hidden="true">🔎</span>
@@ -182,12 +251,12 @@
         <!-- Nur fuer Admins: der Katalog gehoert keinem Nutzer, er ist das
              Nachschlagewerk fuer alle. Die Karte blendet sich selbst ein,
              wenn der Server das Recht dazu meldet. -->
-        <div class="v-card" id="ernKatalogKarte" hidden>
-            <div class="v-card-head">
+        <div class="stat-card" id="ernKatalogKarte" hidden>
+            <div class="stat-card-head">
                 <h3>Katalog einspielen</h3>
-                <span class="v-card-sub" id="ernKatalogKarteSub"></span>
+                <span class="stat-range-lbl" id="ernKatalogKarteSub"></span>
             </div>
-            <p class="ern-hinweis">
+            <p class="ern-note">
                 Der Katalog ist ein Abzug von Open Food Facts, der hier liegt — damit
                 antwortet die Suche sofort, auch wenn der Dienst gerade überlastet ist.
                 Die Datei entsteht aus dem Tagesabzug und liegt im Projekt unter
@@ -203,10 +272,10 @@
             </div>
         </div>
 
-        <div class="v-card">
-            <div class="v-card-head">
+        <div class="stat-card">
+            <div class="stat-card-head">
                 <h3 id="ernFormTitel">Von Hand anlegen</h3>
-                <span class="v-card-sub">für alles ohne Strichcode</span>
+                <span class="stat-range-lbl">für alles ohne Strichcode</span>
             </div>
             <div class="ern-gitter">
                 <label class="ern-feld ern-feld--breit">
@@ -238,17 +307,17 @@
                 <label class="ern-feld"><span>Fett (g)</span>
                     <input type="number" id="fFat" min="0" step="0.1" inputmode="decimal"></label>
             </div>
-            <p class="ern-klein">Leer lassen, was du nicht weißt — leer heißt „keine Angabe“
+            <p class="ern-note">Leer lassen, was du nicht weißt — leer heißt „keine Angabe“
                 und wird später als Lücke ausgewiesen, nicht als Null verrechnet.</p>
 
             <div class="ern-groessen-kopf">
                 <h4>Eigene Größen</h4>
-                <span class="ern-klein">so viele, wie du brauchst</span>
+                <span class="ern-note">so viele, wie du brauchst</span>
             </div>
             <div class="ern-groessen" id="fGroessen"></div>
             <datalist id="ernGroessenVorschlaege"></datalist>
             <button type="button" class="v-btn v-btn--sm" id="fGroesseNeu">Größe hinzufügen</button>
-            <p class="ern-klein">Jede Zeile ist eine Einheit, die du beim Eintragen auswählen
+            <p class="ern-note">Jede Zeile ist eine Einheit, die du beim Eintragen auswählen
                 kannst — „2 × Scheibe“ statt „90 g“. Ein Brot darf gleichzeitig eine
                 <em>Scheibe</em>, einen <em>Laib</em> und eine <em>Packung</em> haben.
                 Die <strong>erste</strong> Zeile ist die Standardgröße und wird vorgeschlagen.</p>
@@ -259,10 +328,10 @@
             </div>
         </div>
 
-        <div class="v-card">
-            <div class="v-card-head">
+        <div class="stat-card">
+            <div class="stat-card-head">
                 <h3>Eigener Bestand</h3>
-                <span class="v-card-sub" id="ernBestandZahl"></span>
+                <span class="stat-range-lbl" id="ernBestandZahl"></span>
             </div>
             <div id="ernBestand"><span class="skel skel-block"></span></div>
         </div>

@@ -1,5 +1,17 @@
 """Aus Stufen werden Spannen — die Rechnung des Ernaehrungs-Moduls.
 
+Das Modul hat zwei Betriebsarten, die in DASSELBE Tagebuch schreiben:
+
+    locker        Was gab es, und war es normal oder uebermaessig viel?
+                  Mehr wird nicht gefragt. Ein Eintrag darf ein blosser Name
+                  sein ("Pizza beim Italiener") -- ohne Naehrwerte, und die
+                  Anzeige sagt das.
+    ausfuehrlich  Mengen, Naehrwerte, eigene Tagesziele, Verlauf.
+
+Der Modus schaltet keine zweite Datenhaltung ein, sondern nur, wonach gefragt
+wird. Deshalb kann derselbe Tag locker angefangen und spaeter genauer gemacht
+werden -- und ein Wechsel laesst nichts verschwinden.
+
 Bei einem GERICHT wird eine Stufe eingetragen ("normal" oder
 "uebermaessig"), keine Gramm.
 Daraus eine einzelne Zahl zu machen, waere die Genauigkeit, die es nie gab:
@@ -31,6 +43,36 @@ niedriger. Der Unterschied ist der zwischen "du hast wenig gegessen" und
 "wir wissen es nicht".
 """
 
+MODI = ("locker", "ausfuehrlich")
+MODUS_LABEL = {"locker": "Tagebuch", "ausfuehrlich": "Tracker"}
+
+# Der Tag wird nach Mahlzeiten gelesen, nicht nach Uhrzeit: "Mittag" ist die
+# Auskunft, die man geben kann, "12:47" waere eine, die man erfinden muesste.
+# Die Liste steht nur hier -- die Datenbank haelt bewusst keine zweite.
+MAHLZEITEN = ("fruehstueck", "mittag", "abend", "snack")
+MAHLZEIT_LABEL = {
+    "fruehstueck": "Frühstück",
+    "mittag": "Mittag",
+    "abend": "Abend",
+    "snack": "Zwischendurch",
+}
+# Wohin alles faellt, was ohne Zuordnung eingetragen wurde -- ein eigener
+# Topf und keine stille Einsortierung unter "Zwischendurch".
+OHNE_MAHLZEIT = "ohne"
+OHNE_MAHLZEIT_LABEL = "Ohne Zuordnung"
+
+
+def mahlzeit_sauber(wert):
+    """Eine bekannte Mahlzeit oder None. Unbekanntes ist ein Fehler."""
+    if wert in (None, "", OHNE_MAHLZEIT):
+        return None
+    if wert not in MAHLZEITEN:
+        raise ValueError(
+            "Unbekannte Mahlzeit. Möglich sind: "
+            + ", ".join(MAHLZEIT_LABEL[m] for m in MAHLZEITEN))
+    return wert
+
+
 STUFEN = {
     "normal": (0.85, 1.15),
     "viel": (1.4, 2.0),
@@ -61,6 +103,30 @@ RICHTWERT = {
     "fat_g": 80,
 }
 RICHTWERT_QUELLE = "Übliche Größenordnung für einen Tag, kein persönliches Ziel."
+
+# Wer eigene Tagesziele hinterlegt, bekommt sie als Massstab. Gesetzt wird
+# jedes einzeln: wer nur auf Eiweiss achtet, soll nicht fuenf Zahlen erfinden
+# muessen. Wo nichts steht, gilt weiter der allgemeine Richtwert -- und die
+# Antwort sagt je Naehrwert, welcher von beiden gerade den Massstab stellt.
+ZIEL_SPALTEN = {
+    "kcal": "kcal_target",
+    "protein_g": "protein_target",
+    "fiber_g": "fiber_target",
+    "carbs_g": "carbs_target",
+    "fat_g": "fat_target",
+}
+ZIEL_QUELLE = "Dein eigenes Tagesziel."
+
+
+def massstab(ziele) -> dict:
+    """Je Naehrwert: {wert, eigen}. Ohne eigenes Ziel gilt der Richtwert."""
+    ziele = ziele or {}
+    raus = {}
+    for makro in MAKROS:
+        eigen = _zahl(ziele.get(ZIEL_SPALTEN[makro]))
+        raus[makro] = ({"wert": eigen, "eigen": True} if eigen and eigen > 0
+                       else {"wert": float(RICHTWERT[makro]), "eigen": False})
+    return raus
 
 # Hat ein Lebensmittel keine uebliche Portion hinterlegt, wird mit 100 g
 # gerechnet -- der Bezug, in dem alle Naehrwerte stehen. Die Antwort sagt das
@@ -233,11 +299,13 @@ def exakte_spanne(basis: dict) -> dict:
     return raus
 
 
-def tages_summe(eintraege) -> dict:
-    """Die Spanne des Tages.
+def tages_summe(eintraege, ziele=None) -> dict:
+    """Die Spanne des Tages, gemessen am eigenen Ziel oder am Richtwert.
 
     ``eintraege``: Folge von Spannen aus ``eintrag_spanne``.
-    Rueckgabe je Makro: {min, max, incomplete, reference, share_min, share_max}
+    ``ziele``: die Zeile aus ``food_settings`` oder None.
+    Rueckgabe je Makro: {min, max, incomplete, reference, own_target,
+    share_min, share_max, remaining_min, remaining_max}
     """
     unten = {m: 0.0 for m in MAKROS}
     oben = {m: 0.0 for m in MAKROS}
@@ -251,18 +319,26 @@ def tages_summe(eintraege) -> dict:
                 unten[makro] += wert[0]
                 oben[makro] += wert[1]
 
+    mass = massstab(ziele)
     raus = {}
     for makro in MAKROS:
-        richt = RICHTWERT[makro]
+        richt = mass[makro]["wert"]
         raus[makro] = {
             "label": MAKRO_LABEL[makro],
             "min": round(unten[makro]),
             "max": round(oben[makro]),
             "incomplete": makro in fehlt,
-            "reference": richt,
-            # Anteil am Richtwert, gedeckelt bei 150 %: ein Balken, der
+            "reference": round(richt),
+            "own_target": mass[makro]["eigen"],
+            # Anteil am Massstab, gedeckelt bei 150 %: ein Balken, der
             # weiterlaeuft, sagt nichts mehr -- ab da steht die Zahl daneben.
             "share_min": min(1.5, round(unten[makro] / richt, 3)),
             "share_max": min(1.5, round(oben[makro] / richt, 3)),
+            # Was bis zum Massstab noch fehlt. Bei einer Spanne sind das zwei
+            # Zahlen -- "noch 300 bis 700" ist die ehrliche Auskunft, "noch
+            # 500" waere eine erfundene Mitte. Ueberschritten heisst 0 und
+            # nicht negativ: wie weit darueber, sagt die Zahl daneben.
+            "remaining_min": max(0, round(richt - oben[makro])),
+            "remaining_max": max(0, round(richt - unten[makro])),
         }
     return raus

@@ -47,7 +47,7 @@
           sub: 'Rating und Partien von Lichess und Chess.com' },
         { href: '/ernaehrung/', label: '🥗 Ernährung',       public: false, icon: 'meal',  short: 'Essen',
           status: 'neu', tone: '--m-ernaehrung',
-          sub: 'Gerichte, Makros und Barcode-Scanner' },
+          sub: 'Lockeres Tagebuch oder ausführlicher Tracker' },
     ];
 
     const istNeu = (m) => m.status === 'neu';

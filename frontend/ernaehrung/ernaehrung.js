@@ -1,24 +1,34 @@
-/* ernaehrung.js — v1.85.0
+/* ernaehrung.js — v1.94.0
  *
- * Das Ernaehrungs-Modul. Bisher gebaut: der Lebensmittel-Bestand und wie er
- * sich fuellt -- ueber den Strichcode oder die Textsuche bei Open Food Facts.
- * Gerichte und das Tagebuch folgen; die leeren Zustaende dort sagen, woran
- * es noch fehlt.
+ * Das Ernaehrungs-Modul, in zwei Betriebsarten auf EINEM Tagebuch.
  *
- * Drei Entscheidungen, die das Modul tragen:
+ *   📓 Tagebuch (locker)
+ *      Was gab es, und war es normal oder uebermaessig viel? Mehr wird nicht
+ *      gefragt. Ein Eintrag darf ein frei getippter Name sein -- "Pizza beim
+ *      Italiener" steht in keinem Bestand und soll trotzdem im Tag stehen.
+ *      Die Vorschlagsliste kommt aus dem Tagebuch selbst: nach ein paar
+ *      Tagen steht genau das zur Auswahl, was man wirklich isst.
  *
- *   1. **Stufen fuer Gerichte, Mengen fuer Lebensmittel.** Wie viel von
- *      den eigenen Wraps auf dem Teller lag, weiss niemand in Gramm --
- *      dort wird "normal" oder "uebermaessig" erfasst und daraus eine
- *      Spanne. Was einzeln dasteht, weiss man dagegen genau genug: 100 g,
- *      zwei Scheiben, eine Packung. Die Einheiten dafuer stehen als eigene
- *      Groessen am Lebensmittel, beliebig viele.
- *   2. **Fremde Daten bleiben fremd.** Was von Open Food Facts kommt, ist
- *      ein Vorschlag: aenderbar, als Herkunft erkennbar, und fehlende
- *      Angaben bleiben leer. Eine 0 bei Ballaststoffen liefe in jeder
- *      Tagessumme mit, ohne zu stimmen.
- *   3. **Der eigene Bestand geht vor.** Derselbe Artikel zum zweiten Mal
- *      gescannt zeigt die eigenen, vielleicht korrigierten Werte.
+ *   📊 Tracker (ausfuehrlich)
+ *      Mengen in eigenen Einheiten, Naehrwerte als Spanne, eigene Tagesziele
+ *      und ein Verlauf ueber den Zeitraum. Dazu die Werkstatt: Gerichte,
+ *      Bestand, Scanner.
+ *
+ * Vier Entscheidungen, die das Modul tragen:
+ *
+ *   1. **Der Modus ist die Frage, nicht die Ansicht.** Er bestimmt, wonach
+ *      gefragt wird -- Stufe oder Menge -- und deshalb auch, welche Reiter
+ *      es gibt. Beide schreiben in dasselbe Tagebuch: ein locker notierter
+ *      Tag laesst sich spaeter genauer machen, und ein Wechsel laesst nie
+ *      etwas verschwinden.
+ *   2. **Was geschaetzt ist, bleibt eine Spanne.** Aus zwei Grobstufen eine
+ *      Zahl zu machen waere eine Genauigkeit, die es nie gab. Ein gewogener
+ *      Eintrag ist eine Spanne der Breite null und macht den Tag schmaler.
+ *   3. **Eine Luecke ist keine Null.** Ein freier Eintrag hat keine
+ *      Naehrwerte; die Tagessumme sagt, dass sie ihn nicht enthaelt, statt
+ *      ihn stillschweigend mit null zu verrechnen.
+ *   4. **Fremde Daten bleiben fremd.** Was von Open Food Facts kommt, ist
+ *      ein Vorschlag: aenderbar, als Herkunft erkennbar, mit Luecken.
  */
 
 const API = {
@@ -38,30 +48,77 @@ const API = {
     },
     tag:      (d)  => apiCall('/api/food/day' + (d ? '?date=' + d : '')),
     eintragen:(d)  => apiCall('/api/food/log', { method: 'POST', body: d }),
+    eintragAendern: (id, d) =>
+        apiCall('/api/food/log/' + id, { method: 'PATCH', body: d }),
     eintragWeg: (id) => apiCall('/api/food/log/' + id, { method: 'DELETE' }),
+    einstellungen: () => apiCall('/api/food/settings'),
+    setzen:   (d)  => apiCall('/api/food/settings', { method: 'PUT', body: d }),
+    verlauf:  (qs) => apiCall('/api/food/history' + qs),
+    haeufig:  ()   => apiCall('/api/food/frequent'),
 };
 
-const TABS = ['heute', 'gerichte', 'scanner'];
+// Welche Reiter es gibt, haengt am Modus. Das Tagebuch braucht keinen
+// Bestand und keine Rezepte -- ihm zwei Reiter hinzustellen, die er nie
+// oeffnet, waere genau die Ueberfrachtung, gegen die der Modus gebaut ist.
+const REITER = {
+    locker: [
+        { key: 'tag', label: '📓 Tagebuch' },
+        { key: 'verlauf', label: '📈 Verlauf' },
+    ],
+    ausfuehrlich: [
+        { key: 'tag', label: '🍽️ Tag' },
+        { key: 'verlauf', label: '📈 Verlauf' },
+        { key: 'gerichte', label: '📖 Gerichte' },
+        { key: 'vorrat', label: '🥫 Lebensmittel' },
+    ],
+};
+const ALLE_REITER = ['tag', 'verlauf', 'gerichte', 'vorrat'];
+
+const MODUS_SATZ = {
+    locker: 'Hinschreiben, was es gab, und ob es normal oder übermäßig viel war. '
+        + 'Mehr wird nicht gefragt — auch Dinge, die in keiner Liste stehen.',
+    ausfuehrlich: 'Mengen, Nährwerte und eigene Tagesziele. Dazu die Werkstatt: '
+        + 'Gerichte, Bestand und Scanner.',
+};
 
 // Die beiden Einheiten, in denen die Naehrwerte stehen. Alles andere ist
 // eine eigene Groesse des Lebensmittels und traegt ihren Namen als
 // Schluessel -- "Scheibe", "Laib", "Becher".
 const BASIS = ['g', 'ml'];
 
+const STUFEN = [
+    { key: 'normal', label: 'normal' },
+    { key: 'viel', label: 'übermäßig' },
+];
+
 const state = {
+    modus: 'locker', einstellungen: null,
     bestand: [], vorschlag: null, groessenVorschlaege: [],
     katalog: null, katalogLaeuft: false,
-    // Die Groessen-Zeilen des Formulars: [{label, grams}]
     formGroessen: [],
-    tag: null, datum: null, gerichte: [], schnellSuche: '',
-    // Das Gericht, das gerade gebaut wird: {id, name, items:[{item_id, name, grams}]}
+    tag: null, datum: null, gerichte: [], haeufig: [],
+    eingabe: '', mahlzeit: null,
+    verlauf: null, range: null, rangeMount: null,
+    charts: { eins: null, zwei: null },
     entwurf: { id: null, name: '', items: [] },
+    reiter: 'tag',
 };
 
-const heute = () => new Date().toISOString().slice(0, 10);
+/* ------------------------------------------------------------- Werkzeug */
+
+const heute = () => {
+    // Aus den lokalen Feldern gebaut, nicht mit toISOString: das rechnet nach
+    // UTC um, und oestlich von Greenwich waere "heute" abends schon morgen.
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+        + '-' + String(d.getDate()).padStart(2, '0');
+};
 
 const esc = (v) => String(v == null ? '' : v)
     .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const figurFarbe = () => cssVar('--figure') || cssVar('--m-ernaehrung');
 
 function melde(text, art, versuche) {
     if (window.Toast) { Toast[art || 'info'](text); return; }
@@ -76,6 +133,8 @@ function melde(text, art, versuche) {
     }
 }
 
+const zahlKurz = (v) => Math.round(v || 0).toLocaleString('de-DE');
+
 // Naehrwerte in der Reihenfolge, in der sie gelesen werden. "fehlt" ist ein
 // eigener Zustand -- nicht 0.
 const WERTE = [
@@ -85,6 +144,7 @@ const WERTE = [
     { key: 'carbs_g',   label: 'Kohlenhydrate', einheit: ' g' },
     { key: 'fat_g',     label: 'Fett',          einheit: ' g' },
 ];
+const EINHEIT = { kcal: '', protein_g: ' g', fiber_g: ' g', carbs_g: ' g', fat_g: ' g' };
 
 const zahl = (v, einheit) => v == null
     ? '<span class="ern-fehlt">keine Angabe</span>'
@@ -96,153 +156,91 @@ function naehrwertZeile(p) {
             <div class="ern-wert-lbl">${w.label}</div>
             <div class="ern-wert-num">${zahl(p[w.key], w.einheit)}</div>
         </div>`).join('')}</div>
-        <p class="ern-klein">je 100 g${p.portion_g ? ` · übliche Portion ${p.portion_g} g` : ''}</p>`;
+        <p class="ern-note">je 100 g${p.portion_g ? ` · übliche Portion ${p.portion_g} g` : ''}</p>`;
 }
 
-const HERKUNFT = {
-    katalog: 'eigener Katalog',
-    off: 'Open Food Facts',
-};
-
-/* Wie alt der Katalog ist, gehoert auf den Bildschirm: ein Nachschlagewerk,
-   dessen Stand man nicht sieht, wird irgendwann geglaubt, obwohl es nicht
-   mehr stimmt. */
-async function katalogStand() {
-    let stand;
-    try { stand = await API.katalog(); } catch (e) { return; }
-    state.katalog = stand;
-
-    const alter = stand.newest
-        ? new Date(stand.newest * 1000).toLocaleDateString('de-DE',
-            { day: '2-digit', month: '2-digit', year: 'numeric' })
-        : null;
-    const text = stand.count
-        ? `eigener Katalog: ${stand.count.toLocaleString('de-DE')} Produkte`
-          + (alter ? ` · Stand ${alter}` : '')
-        : 'kein eigener Katalog — es wird direkt bei Open Food Facts gefragt';
-
-    document.getElementById('ernKatalogStand').textContent = text;
-    // Die Karte zum Einspielen gibt es nur, wenn der Server das Recht dazu
-    // meldet -- der Katalog gehoert keinem Nutzer, sondern allen.
-    const karte = document.getElementById('ernKatalogKarte');
-    karte.hidden = !stand.may_import;
-    if (stand.may_import) {
-        document.getElementById('ernKatalogKarteSub').textContent = stand.count
-            ? `${stand.count.toLocaleString('de-DE')} Produkte drin`
-            : 'noch leer';
-    }
-}
-
-/* Die Ablegeflaeche fuer den Katalog. Dasselbe Muster wie beim
-   Ausgaben-Import: klicken, ziehen, Tastatur -- und vor dem Ersetzen steht
-   da, was ersetzt wird. */
-function setupKatalogDrop() {
-    const drop = document.getElementById('ernKatDrop');
-    const feld = document.getElementById('ernKatFile');
-    if (!drop) return;
-
-    const nimm = (datei) => { if (datei) katalogHochladen(datei); };
-    drop.onclick = () => { if (!state.katalogLaeuft) feld.click(); };
-    drop.onkeydown = (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); drop.onclick(); }
-    };
-    drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('drag'); };
-    drop.ondragleave = () => drop.classList.remove('drag');
-    drop.ondrop = (e) => {
-        e.preventDefault();
-        drop.classList.remove('drag');
-        if (!state.katalogLaeuft) nimm(e.dataTransfer.files && e.dataTransfer.files[0]);
-    };
-    feld.onchange = () => nimm(feld.files[0]);
-}
-
-async function katalogHochladen(datei) {
-    const drin = (state.katalog && state.katalog.count) || 0;
-    const ok = await askConfirm({
-        title: 'Katalog ersetzen?',
-        text: drin
-            ? `Im Katalog stehen ${drin.toLocaleString('de-DE')} Produkte. `
-              + `„${datei.name}" ersetzt sie vollständig — ein Abzug ist ein Stand, `
-              + 'zwei nebeneinander wären später nicht zu trennen.'
-            : `Der Katalog ist leer. „${datei.name}" legt ihn an.`,
-        confirmText: 'Einspielen',
-    });
-    document.getElementById('ernKatFile').value = '';
-    if (!ok) return;
-
-    const drop = document.getElementById('ernKatDrop');
-    const sub = document.getElementById('ernKatDropSub');
-    state.katalogLaeuft = true;
-    drop.classList.add('has-files');
-    sub.textContent = `${datei.name} wird eingespielt — das dauert bis zu einer Minute …`;
-    try {
-        const neu = await API.katalogEinspielen(datei);
-        sub.textContent = `${neu.count.toLocaleString('de-DE')} Produkte eingespielt.`;
-        melde(`Katalog eingespielt: ${neu.count.toLocaleString('de-DE')} Produkte.`,
-              'success');
-        await katalogStand();
-    } catch (err) {
-        drop.classList.remove('has-files');
-        sub.textContent = 'off-katalog-dach.csv.gz';
-        melde(err.message || 'Das Einspielen ging nicht.', 'error');
-    } finally {
-        state.katalogLaeuft = false;
-    }
-}
-
-function zeichneTreffer(ziel, produkt, bekannt, notiz, herkunft) {
-    state.vorschlag = produkt;
-    const el = document.getElementById(ziel);
-    if (!produkt && bekannt) {
-        el.innerHTML = `<div class="v-row ern-treffer">
-            <div class="ern-kopf"><strong>${esc(bekannt.name)}</strong>
-                <span class="ern-herkunft">schon im Bestand</span></div>
-            ${naehrwertZeile(bekannt)}
-            ${notiz ? `<p class="ern-klein">${esc(notiz)}</p>` : ''}
-        </div>`;
-        return;
-    }
-    if (!produkt) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="v-row ern-treffer">
-        <div class="ern-kopf">
-            <strong>${esc(produkt.name)}</strong>
-            ${produkt.brand ? `<span class="ern-marke">${esc(produkt.brand)}</span>` : ''}
-            <span class="ern-herkunft">${esc(HERKUNFT[herkunft] || 'Open Food Facts')}</span>
-        </div>
-        ${naehrwertZeile(produkt)}
-        ${bekannt ? '<p class="ern-klein">Dieses Lebensmittel ist bereits im Bestand — Übernehmen aktualisiert die Werte.</p>' : ''}
-        ${produkt.missing && produkt.missing.length
-            ? `<p class="ern-klein">Dort fehlen: ${produkt.missing.length} Angabe(n). Du kannst sie nach dem Übernehmen von der Packung nachtragen.</p>`
-            : ''}
-        <div class="ern-tasten">
-            <button type="button" class="v-btn v-btn--primary" id="ernUebernehmen">In den Bestand</button>
-        </div>
-    </div>`;
-    const knopf = document.getElementById('ernUebernehmen');
-    if (knopf) knopf.addEventListener('click', () => uebernehmen(produkt));
-}
-
-/* ----------------------------------------------------------------- Tag
- *
- * Die Anzeige zeigt SPANNEN, keine Einzelwerte. Wer "Wraps, uebermaessig"
- * eintraegt, hat keine 612 kcal gegessen -- er hat irgendetwas zwischen
- * anderthalb und doppelt so viel wie eine Portion gegessen. Genau das steht
- * da: ein Balken mit Anfang und Ende, keine Scheibe eines Kreises.
- *
- * Das uebliche Halbkreis-Design der Ernaehrungs-Apps setzt eine genaue Zahl
- * und ein festes Ziel voraus. Beides gibt es hier nicht -- ein Ring, der zu
- * 73 % gefuellt ist, waere zwei Behauptungen auf einmal.
- */
+const HERKUNFT = { katalog: 'eigener Katalog', off: 'Open Food Facts' };
 
 const TAG_NAMEN = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
                    'Freitag', 'Samstag'];
 
-const zahlKurz = (v) => Math.round(v).toLocaleString('de-DE');
+function datumKurz(iso) {
+    const d = new Date(iso + 'T12:00:00');
+    return isNaN(d.getTime()) ? iso
+        : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function leerKarte(mark, text, knopf) {
+    return `<div class="empty">
+        <span class="empty-mark" aria-hidden="true">${mark}</span>
+        <p class="empty-text">${text}</p>
+        ${knopf || ''}
+    </div>`;
+}
+
+/* ---------------------------------------------------------------- Modus */
+
+const istLocker = () => state.modus === 'locker';
+
+function zeichneModus() {
+    document.querySelectorAll('[data-modus]').forEach(b =>
+        b.classList.toggle('is-active', b.dataset.modus === state.modus));
+    document.getElementById('ernModusSatz').textContent = MODUS_SATZ[state.modus];
+
+    const reiter = REITER[state.modus];
+    const leiste = document.getElementById('ernTabs');
+    leiste.innerHTML = reiter.map(r =>
+        `<button type="button" class="tab-btn${r.key === state.reiter ? ' active' : ''}"
+            data-tab="${r.key}">${r.label}</button>`).join('');
+    leiste.querySelectorAll('.tab-btn').forEach(b =>
+        b.addEventListener('click', () => activateTab(b.dataset.tab)));
+
+    // Steht man auf einem Reiter, den es im neuen Modus nicht gibt, landet
+    // man auf dem ersten -- und nicht auf einer leeren Seite.
+    if (!reiter.some(r => r.key === state.reiter)) activateTab(reiter[0].key);
+    else activateTab(state.reiter);
+
+    document.getElementById('ernZieleKarte').hidden = istLocker();
+    document.getElementById('ernEingabeTitel').textContent =
+        istLocker() ? 'Was gab es?' : 'Eintragen';
+}
+
+async function modusWechseln(modus) {
+    if (modus === state.modus) return;
+    state.modus = modus;
+    zeichneModus();
+    zeichneTag();
+    zeichneVorschlaege();
+    if (state.verlauf) zeichneVerlauf();
+    try {
+        state.einstellungen = await API.setzen({ mode: modus });
+    } catch (err) {
+        // Die Umschaltung gilt trotzdem -- sie nur deshalb zurueckzunehmen,
+        // weil der Server gerade nicht antwortet, waere die schlechtere
+        // Ueberraschung. Beim naechsten Laden steht wieder der alte Modus.
+        melde('Der Modus gilt für jetzt, konnte aber nicht gespeichert werden.', 'error');
+    }
+}
+
+function activateTab(tab) {
+    if (ALLE_REITER.indexOf(tab) < 0) tab = 'tag';
+    state.reiter = tab;
+    document.querySelectorAll('#ernTabs .tab-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.tab === tab));
+    ALLE_REITER.forEach(t => {
+        const el = document.getElementById('tab-' + t);
+        if (el) el.hidden = t !== tab;
+    });
+    if (tab === 'verlauf') mountRange();
+}
+
+/* ------------------------------------------------------------------ Tag */
 
 function tagVerschieben(tage) {
     const d = new Date((state.datum || heute()) + 'T12:00:00');
     d.setDate(d.getDate() + tage);
-    const neu = d.toISOString().slice(0, 10);
+    const neu = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+        + '-' + String(d.getDate()).padStart(2, '0');
     // Nicht in die Zukunft: was morgen gegessen wird, weiss heute niemand.
     if (neu > heute()) return;
     ladeTag(neu);
@@ -252,187 +250,336 @@ function zeichneTagKopf() {
     const datum = state.datum || heute();
     const d = new Date(datum + 'T12:00:00');
     const istHeute = datum === heute();
-    const gestern = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const gestern = new Date(Date.now() - 86400000);
+    const gesternIso = gestern.getFullYear() + '-'
+        + String(gestern.getMonth() + 1).padStart(2, '0') + '-'
+        + String(gestern.getDate()).padStart(2, '0');
     document.getElementById('ernTagName').textContent =
-        istHeute ? 'Heute' : (datum === gestern ? 'Gestern' : TAG_NAMEN[d.getDay()]);
-    document.getElementById('ernTagDatum').textContent =
-        d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        istHeute ? 'Heute' : (datum === gesternIso ? 'Gestern' : TAG_NAMEN[d.getDay()]);
+    document.getElementById('ernTagDatum').textContent = datumKurz(datum);
     document.getElementById('ernTagVor').disabled = istHeute;
 }
 
-function zeichneSumme() {
+/* Das Tagesbild. Im Tagebuch ist die Zahl der Eintraege und ihre Verteilung
+   die Auskunft -- eine Kalorienzahl kann es dort gar nicht geben. Im Tracker
+   steht die Spanne oben und daneben, was bis zum Ziel noch fehlt. */
+function zeichneTagBild() {
+    const ziel = document.getElementById('ernTagBild');
+    const sub = document.getElementById('ernTagSub');
     const t = state.tag;
+    if (!t) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
+
+    const c = t.counts;
+    if (!c.entries) {
+        sub.textContent = '';
+        ziel.innerHTML = leerKarte('🍽️', istLocker()
+            ? 'Für diesen Tag steht noch nichts da. Oben hinschreiben, was es gab — '
+              + 'ein Wort reicht.'
+            : 'Für diesen Tag ist noch nichts eingetragen.');
+        return;
+    }
+
+    sub.textContent = `${c.entries} ${c.entries === 1 ? 'Eintrag' : 'Einträge'}`;
     const kcal = t.totals.kcal;
-    const anzahl = t.entries.length;
-    document.getElementById('ernSumme').innerHTML = !anzahl
-        ? `<div class="ern-summe-leer">Für diesen Tag ist noch nichts eingetragen.</div>`
-        : `<div class="ern-summe-zahl">
+    const bekannt = c.entries - c.unknown;
+
+    // Die Kalorienzeile steht nur da, wenn wenigstens ein Eintrag Naehrwerte
+    // hat -- sonst waere "0 kcal" eine Behauptung ueber einen Tag, von dem
+    // wir nur die Namen kennen.
+    const kcalZeile = !bekannt ? ''
+        : `<div class="ern-gross">
                <span>${zahlKurz(kcal.min)}</span>
-               <span class="ern-summe-bis">bis</span>
-               <span>${zahlKurz(kcal.max)}</span>
-               <span class="ern-summe-einheit">kcal</span>
-           </div>
-           <div class="ern-klein">geschätzt aus ${anzahl} ${anzahl === 1 ? 'Eintrag' : 'Einträgen'} — ${
-               kcal.incomplete ? 'mindestens, es fehlen Angaben' : 'zwei Grobstufen ergeben eine Spanne, keine genaue Zahl'}</div>`;
+               ${kcal.min === kcal.max ? '' : `<span class="ern-bis">bis</span>
+               <span>${zahlKurz(kcal.max)}</span>`}
+               <span class="ern-einheit">kcal</span>
+           </div>`;
+
+    const luecke = c.unknown
+        ? `<span class="v-tag v-tag--warn">${c.unknown} ohne Nährwerte</span>` : '';
+    const stufen = `<span class="ern-punkt is-normal" aria-hidden="true"></span> ${c.normal} normal`
+        + ` <span class="ern-punkt is-viel" aria-hidden="true"></span> ${c.viel} übermäßig`
+        + (c.exact ? ` <span class="ern-punkt is-exakt" aria-hidden="true"></span> ${c.exact} abgewogen` : '');
+
+    if (istLocker()) {
+        ziel.innerHTML = `
+            <div class="ern-gross"><span>${c.entries}</span>
+                <span class="ern-einheit">${c.entries === 1 ? 'Eintrag' : 'Einträge'}</span></div>
+            <p class="ern-stufenzeile">${stufen}</p>
+            ${bekannt ? `<p class="ern-note">Grob gerechnet ${zahlKurz(kcal.min)}–${zahlKurz(kcal.max)} kcal
+                aus ${bekannt} von ${c.entries} Einträgen. ${luecke}</p>`
+              : `<p class="ern-note">Zu keinem dieser Einträge sind Nährwerte hinterlegt —
+                 im Tagebuch ist das kein Mangel, sondern der Punkt.</p>`}`;
+        return;
+    }
+
+    const rest = kcal.remaining_max > 0
+        ? (kcal.remaining_min === kcal.remaining_max
+            ? `Noch ${zahlKurz(kcal.remaining_min)} kcal bis zum ${kcal.own_target ? 'Ziel' : 'Richtwert'}.`
+            : `Noch ${zahlKurz(kcal.remaining_min)}–${zahlKurz(kcal.remaining_max)} kcal bis zum ${kcal.own_target ? 'Ziel' : 'Richtwert'}.`)
+        : `Der ${kcal.own_target ? 'Zielwert' : 'Richtwert'} von ${zahlKurz(kcal.reference)} kcal ist erreicht.`;
+
+    ziel.innerHTML = `${kcalZeile}
+        <p class="ern-stufenzeile">${stufen}</p>
+        <p class="ern-note">${rest} ${kcal.incomplete
+            ? 'Die Spanne ist eine Untergrenze — zu manchen Einträgen fehlen Angaben. ' : ''}${luecke}</p>`;
 }
 
 /* Ein Band je Naehrwert: die Spur reicht bis zum Anderthalbfachen des
-   Richtwerts, der Richtwert selbst steht als Strich darin. Gefuellt ist
-   genau der Bereich zwischen der unteren und der oberen Schaetzung -- die
-   Breite des Balkens IST die Unsicherheit. */
+   Massstabs, der Massstab selbst steht als Strich darin. Gefuellt ist genau
+   der Bereich zwischen der unteren und der oberen Schaetzung -- die Breite
+   des Balkens IST die Unsicherheit. Nur im Tracker: im Tagebuch waere ein
+   Balken gegen ein Ziel eine Bewertung von Zahlen, die es nicht gibt. */
 function band(makro, d) {
     const links = Math.min(100, (d.share_min / 1.5) * 100);
     const breite = Math.max(2, Math.min(100 - links, ((d.share_max - d.share_min) / 1.5) * 100));
-    const einheit = makro === 'kcal' ? '' : ' g';
+    const e = EINHEIT[makro] || '';
     return `<div class="ern-band${d.incomplete ? ' is-unvollstaendig' : ''}">
         <div class="ern-band-kopf">
-            <span class="ern-band-lbl">${d.label}</span>
-            <span class="ern-band-wert">${d.incomplete ? 'mind. ' : ''}${zahlKurz(d.min)}–${zahlKurz(d.max)}${einheit}</span>
+            <span class="ern-band-lbl">${esc(d.label)}</span>
+            <span class="ern-band-wert">${d.incomplete ? 'mind. ' : ''}${zahlKurz(d.min)}–${zahlKurz(d.max)}${e}</span>
         </div>
         <div class="ern-band-spur" role="img"
-             aria-label="${d.label}: ${zahlKurz(d.min)} bis ${zahlKurz(d.max)}${einheit}, Richtwert ${zahlKurz(d.reference)}${einheit}">
+             aria-label="${esc(d.label)}: ${zahlKurz(d.min)} bis ${zahlKurz(d.max)}${e}, ${
+                d.own_target ? 'Ziel' : 'Richtwert'} ${zahlKurz(d.reference)}${e}">
             <span class="ern-band-marke" style="left:66.7%"></span>
             <span class="ern-band-fuell" style="left:${links.toFixed(1)}%;width:${breite.toFixed(1)}%"></span>
         </div>
-        ${d.incomplete ? '<div class="ern-band-fuss">Eine Zutat macht dazu keine Angabe — der Wert ist mindestens so hoch.</div>' : ''}
+        <div class="ern-band-fuss">${d.own_target ? 'Ziel' : 'Richtwert'} ${zahlKurz(d.reference)}${e}${
+            d.incomplete ? ' · eine Zutat macht dazu keine Angabe, der Wert ist mindestens so hoch' : ''}</div>
     </div>`;
 }
 
 function zeichneBaender() {
+    const ziel = document.getElementById('ernBaender');
     const t = state.tag;
-    document.getElementById('ernBaender').innerHTML = t.entries.length
-        ? t.macros.filter(m => m !== 'kcal').map(m => band(m, t.totals[m])).join('')
-        : '';
-    document.getElementById('ernMassstab').textContent = t.entries.length
-        ? 'Der Strich im Balken ist der Richtwert für einen Tag. ' + t.reference_note
-        : '';
+    if (!t || istLocker() || !t.counts.entries) { ziel.innerHTML = ''; return; }
+    const eigene = t.macros.some(m => t.totals[m].own_target);
+    ziel.innerHTML = t.macros.filter(m => m !== 'kcal').map(m => band(m, t.totals[m])).join('')
+        + `<p class="ern-note">Der Strich im Balken ist der Maßstab. ${
+            eigene ? t.target_note + ' Wo keines gesetzt ist, gilt der allgemeine Richtwert.'
+                   : t.reference_note + ' Eigene Ziele setzt du unter Verlauf.'}</p>`;
 }
 
-/* Eine genaue Menge ergibt eine Zahl, eine Stufe eine Spanne -- und das
-   soll man der Zeile ansehen. "320-320 kcal" waere ein Bindestrich, der
-   Unsicherheit behauptet, wo keine ist. */
-function kcalText(e) {
-    return e.kcal_min === e.kcal_max
-        ? `${zahlKurz(e.kcal_min)} kcal`
-        : `${zahlKurz(e.kcal_min)}–${zahlKurz(e.kcal_max)} kcal`;
-}
-
+/* Der Tag nach Mahlzeiten. "Mittag" ist die Auskunft, die man geben kann --
+   eine Uhrzeit waere eine, die man erfinden muesste. */
 function zeichneEintraege() {
+    const ziel = document.getElementById('ernEintraege');
     const t = state.tag;
+    if (!t) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
+
     document.getElementById('ernEintraegeZahl').textContent =
         t.entries.length ? t.entries.length + ' an diesem Tag' : '';
-    document.getElementById('ernEintraege').innerHTML = !t.entries.length
-        ? `<div class="empty"><span class="empty-mark">🍽️</span>
-             <p class="empty-text">Noch nichts eingetragen. Ein Gericht oben antippen —
-             normal oder übermäßig, mehr wird nicht gefragt. Bei einem einzelnen
-             Lebensmittel sagst du, wie viel: 100 g, zwei Scheiben, eine Packung.</p></div>`
-        : t.entries.map(e => `
-            <div class="v-row ern-zeile">
-                <div class="ern-zeile-text">
-                    <strong>${esc(e.name)}</strong>
-                    ${e.amount_label
-                        ? `<span class="ern-stufe is-menge">${esc(e.amount_label)}</span>`
-                        : `<span class="ern-stufe is-${e.level}">${esc(e.level_label || '')}</span>`}
-                    <div class="ern-klein">${esc(e.sub || '')}${
-                        e.kcal_min != null ? ` · ${kcalText(e)}` : ''}${
-                        e.assumed_portion ? ' · Portion mit 100 g angenommen' : ''}</div>
-                </div>
-                <button type="button" class="v-btn v-btn--icon" data-eintrag="${e.id}"
-                        aria-label="Eintrag entfernen" title="Entfernen">🗑️</button>
-            </div>`).join('');
-    document.querySelectorAll('[data-eintrag]').forEach(b =>
-        b.addEventListener('click', () => eintragEntfernen(Number(b.dataset.eintrag))));
-}
 
-/* Schnelleintrag: je Gericht eine Zeile mit zwei Knoepfen. Ein Tipp, fertig --
-   erst eine Auswahlliste zu oeffnen und dann die Menge zu waehlen, waere der
-   Weg, den man nach einer Woche nicht mehr geht. */
-const SCHNELL_MAX = 12;
-
-/* Gerichte zuerst, danach einzelne Lebensmittel -- und alles durchsuchbar.
-   Vorher waren nur acht Lebensmittel MIT hinterlegter Portion zu sehen: alles
-   frisch Gescannte fehlte in der Liste, ohne dass man den Grund sah. */
-function zeichneSchnell() {
-    const ziel = document.getElementById('ernSchnell');
-    const suche = (state.schnellSuche || '').toLowerCase();
-    const passt = (name, marke) => !suche
-        || name.toLowerCase().includes(suche)
-        || (marke || '').toLowerCase().includes(suche);
-
-    if (!state.gerichte.length && !state.bestand.length) {
-        ziel.innerHTML = `<div class="empty"><span class="empty-mark">📖</span>
-            <p class="empty-text">Noch nichts zum Eintragen da. Über den <strong>Scanner</strong>
-            kommen Lebensmittel herein, unter <strong>Gerichte</strong> stellst du daraus
-            eines zusammen — danach steht beides hier.</p></div>`;
+    if (!t.entries.length) {
+        ziel.innerHTML = leerKarte('🍽️', istLocker()
+            ? 'Noch nichts notiert. Oben tippen, was es gab, dann <strong>normal</strong> '
+              + 'oder <strong>übermäßig</strong> — fertig.'
+            : 'Noch nichts eingetragen. Ein Gericht oben antippen — normal oder übermäßig. '
+              + 'Bei einem einzelnen Lebensmittel sagst du, wie viel: 100 g, zwei Scheiben, '
+              + 'eine Packung.');
         return;
     }
 
-    const rahmen = (name, sub, innen) => `
-        <div class="v-row ern-schnell">
-            <div class="ern-zeile-text">
-                <strong>${esc(name)}</strong>
-                <div class="ern-klein">${esc(sub)}</div>
+    const bloecke = t.meals.map(m => {
+        const eigene = t.entries.filter(e => e.meal === m.key);
+        if (!eigene.length) return '';
+        const kcalSumme = eigene.reduce((a, e) => ({
+            min: a.min + (e.kcal_min || 0), max: a.max + (e.kcal_max || 0),
+            offen: a.offen || !e.has_nutrition,
+        }), { min: 0, max: 0, offen: false });
+        const summe = istLocker() || !(kcalSumme.max > 0) ? ''
+            : `<span class="ern-mahlzeit-summe">${kcalSumme.offen ? 'mind. ' : ''}${
+                zahlKurz(kcalSumme.min)}–${zahlKurz(kcalSumme.max)} kcal</span>`;
+        return `<div class="ern-mahlzeit">
+            <div class="ern-mahlzeit-kopf">
+                <span class="ern-mahlzeit-name">${esc(m.label)}</span>${summe}
             </div>
-            ${innen}
+            ${eigene.map(eintragZeile).join('')}
         </div>`;
+    }).join('');
 
-    // Ein Gericht: zwei Knoepfe, ein Tipp. Die Stufe ist hier die ehrliche
-    // Angabe -- wie viel vom eigenen Rezept auf dem Teller lag, weiss
-    // niemand in Gramm.
-    const gerichtZeile = (g) => rahmen(g.name,
-        g.portion.kcal != null
-            ? `${zahlKurz(g.portion.kcal)} kcal je Portion`
-            : 'Nährwerte unvollständig',
-        `<div class="ern-schnell-tasten">
-            <button type="button" class="v-btn v-btn--sm" data-dish="${g.id}" data-stufe="normal">normal</button>
-            <button type="button" class="v-btn v-btn--sm" data-dish="${g.id}" data-stufe="viel">übermäßig</button>
-        </div>`);
+    ziel.innerHTML = bloecke;
 
-    // Ein einzelnes Lebensmittel: die Menge, wie sie dasteht. Vorbelegt ist
-    // die erste eigene Groesse (meist die, die man nimmt), sonst 100 g.
-    const itemZeile = (p) => {
-        const einheiten = p.units || [{ key: p.base_unit || 'g', label: p.base_unit || 'g' }];
+    ziel.querySelectorAll('[data-eintrag-weg]').forEach(b =>
+        b.addEventListener('click', () => eintragEntfernen(Number(b.dataset.eintragWeg))));
+    ziel.querySelectorAll('[data-stufe-um]').forEach(b =>
+        b.addEventListener('click', () => stufeUmschalten(
+            Number(b.dataset.stufeUm), b.dataset.stufeNeu)));
+}
+
+function eintragZeile(e) {
+    const stufe = e.level && !e.amount_label
+        ? `<button type="button" class="ern-stufe is-${esc(e.level)}"
+               data-stufe-um="${e.id}" data-stufe-neu="${e.level === 'viel' ? 'normal' : 'viel'}"
+               title="Umstellen auf ${e.level === 'viel' ? 'normal' : 'übermäßig'}">${
+               esc(e.level_label || '')}</button>`
+        : (e.amount_label ? `<span class="ern-stufe is-exakt">${esc(e.amount_label)}</span>` : '');
+
+    const meta = [
+        e.kind === 'free' ? 'frei notiert' : esc(e.sub || ''),
+        e.has_nutrition && e.kcal_min != null
+            ? (e.kcal_min === e.kcal_max
+                ? `${zahlKurz(e.kcal_min)} kcal`
+                : `${zahlKurz(e.kcal_min)}–${zahlKurz(e.kcal_max)} kcal`)
+            : 'ohne Nährwerte',
+        e.assumed_portion ? 'Portion mit 100 g angenommen' : '',
+    ].filter(Boolean);
+
+    return `<div class="ern-zeile">
+        <span class="ern-punkt is-${e.amount_label ? 'exakt' : esc(e.level || 'normal')}"
+              aria-hidden="true"></span>
+        <div class="ern-zeile-text">
+            <div class="ern-zeile-kopf"><strong>${esc(e.name)}</strong>${stufe}</div>
+            <div class="ern-note">${meta.join(' · ')}</div>
+        </div>
+        <button type="button" class="v-btn v-btn--icon" data-eintrag-weg="${e.id}"
+                aria-label="Eintrag entfernen" title="Entfernen">🗑️</button>
+    </div>`;
+}
+
+/* -------------------------------------------------------------- Eingabe */
+
+function zeichneMahlzeiten() {
+    const ziel = document.getElementById('ernMahlzeiten');
+    const liste = (state.tag && state.tag.meals) || [];
+    // "Ohne Zuordnung" ist der Standard und braucht keinen eigenen Chip --
+    // wer nichts waehlt, hat nichts gewaehlt.
+    ziel.innerHTML = liste.filter(m => m.key !== 'ohne').map(m =>
+        `<button type="button" class="v-chip${state.mahlzeit === m.key ? ' is-active' : ''}"
+            data-mahlzeit="${esc(m.key)}">${esc(m.label)}</button>`).join('')
+        + `<button type="button" class="v-chip${state.mahlzeit ? '' : ' is-active'}"
+            data-mahlzeit="">ohne</button>`;
+    ziel.querySelectorAll('[data-mahlzeit]').forEach(b => b.addEventListener('click', () => {
+        state.mahlzeit = b.dataset.mahlzeit || null;
+        zeichneMahlzeiten();
+    }));
+}
+
+/* Alle Vorschläge haben DIESELBE Zeilenform: Name links, Bedienung rechts.
+   Was rechts steht, haengt am Modus und an der Art -- ein Gericht wird in
+   Stufen gegessen, ein Lebensmittel im Tracker in Mengen. */
+function vorschlagZeile(v) {
+    const mengenFeld = !istLocker() && v.kind === 'item' && v.item;
+    let rechts;
+    if (mengenFeld) {
+        const einheiten = v.item.units
+            || [{ key: v.item.base_unit || 'g', label: v.item.base_unit || 'g' }];
         const eigene = einheiten.filter(e => !BASIS.includes(e.key));
         const start = eigene.length ? eigene[0] : einheiten[0];
-        const menge = eigene.length ? 1 : 100;
-        return rahmen(p.name,
-            (p.brand ? esc(p.brand) + ' · ' : '')
-            + (eigene.length
-                ? eigene.map(e => `1 ${e.label} = ${e.grams} ${p.base_unit || 'g'}`).join(' · ')
-                : `keine eigene Größe hinterlegt`),
-            `<div class="ern-menge">
-                <input type="number" class="ern-menge-zahl" min="0" step="0.25"
-                       inputmode="decimal" value="${menge}" data-menge="${p.id}"
-                       aria-label="Menge für ${esc(p.name)}">
-                <select class="v-select v-select--sm" data-einheit="${p.id}"
-                        aria-label="Einheit für ${esc(p.name)}">
-                    ${einheiten.map(e => `<option value="${esc(e.key)}"${
-                        e.key === start.key ? ' selected' : ''}>${esc(e.label)}</option>`).join('')}
-                </select>
-                <button type="button" class="v-btn v-btn--sm" data-item="${p.id}">Eintragen</button>
-            </div>`);
-    };
+        rechts = `<div class="ern-menge">
+            <input type="number" min="0" step="0.25"
+                   inputmode="decimal" value="${eigene.length ? 1 : 100}"
+                   data-menge="${v.item.id}" aria-label="Menge für ${esc(v.name)}">
+            <select class="v-select v-select--sm" data-einheit="${v.item.id}"
+                    aria-label="Einheit für ${esc(v.name)}">
+                ${einheiten.map(e => `<option value="${esc(e.key)}"${
+                    e.key === start.key ? ' selected' : ''}>${esc(e.label)}</option>`).join('')}
+            </select>
+            <button type="button" class="v-btn v-btn--sm v-btn--primary"
+                    data-log-item="${v.item.id}">Eintragen</button>
+        </div>`;
+    } else {
+        rechts = `<div class="ern-stufen">${STUFEN.map(s =>
+            `<button type="button" class="v-btn v-btn--sm${s.key === 'viel' ? '' : ' v-btn--primary'}"
+                data-log-stufe="${s.key}" data-log-art="${esc(v.kind)}"
+                data-log-id="${v.dish_id || v.item_id || ''}"
+                data-log-name="${esc(v.name)}">${s.label}</button>`).join('')}</div>`;
+    }
+    return `<div class="ern-vorschlag${v.neu ? ' is-neu' : ''}">
+        <div class="ern-zeile-text">
+            <div class="ern-zeile-kopf"><strong>${esc(v.name)}</strong></div>
+            <div class="ern-note">${esc(v.sub || '')}</div>
+        </div>
+        ${rechts}
+    </div>`;
+}
 
-    const gerichte = state.gerichte.filter(g => passt(g.name, ''));
-    // Lebensmittel mit eigener Groesse zuerst: dort geht das Eintragen mit
-    // einer Zahl, bei den anderen steht erst einmal 100 g im Feld.
-    const lebensmittel = state.bestand
-        .filter(p => passt(p.name, p.brand))
-        .sort((a, b) => ((b.sizes || []).length ? 1 : 0) - ((a.sizes || []).length ? 1 : 0));
+/* Woraus die Liste besteht:
+     1. der frei getippte Text -- der Weg, der ohne Bestand auskommt,
+     2. was im Bestand dazu passt (Gerichte, Lebensmittel),
+     3. was man oft eintraegt, aus dem Tagebuch selbst gezaehlt.
+   Im Tagebuch steht 1 obenan, im Tracker 2: dort tippt man einen Namen, um
+   etwas zu finden, hier, um etwas hinzuschreiben. */
+function zeichneVorschlaege() {
+    const ziel = document.getElementById('ernVorschlaege');
+    const sub = document.getElementById('ernEingabeSub');
+    const text = (state.eingabe || '').trim();
+    const suche = text.toLowerCase();
+    const passt = (n) => !suche || String(n || '').toLowerCase().includes(suche);
 
-    const zeilen = gerichte.map(gerichtZeile).concat(lebensmittel.map(itemZeile));
+    const frei = !text ? [] : [{
+        kind: 'free', name: text, neu: true,
+        sub: istLocker() ? 'so hinschreiben — braucht keinen Bestand'
+                         : 'frei notieren, ohne Nährwerte',
+    }];
 
-    ziel.innerHTML = zeilen.length
-        ? zeilen.slice(0, SCHNELL_MAX).join('')
-          + (zeilen.length > SCHNELL_MAX
-             ? `<p class="ern-klein">… und ${zeilen.length - SCHNELL_MAX} weitere — such oben danach.</p>`
-             : '')
-        : `<p class="ern-klein">Nichts gefunden, das zu „${esc(state.schnellSuche)}“ passt.</p>`;
+    const gerichte = state.gerichte.filter(g => passt(g.name)).map(g => ({
+        kind: 'dish', dish_id: g.id, name: g.name,
+        sub: g.portion && g.portion.kcal != null
+            ? `Gericht · ${zahlKurz(g.portion.kcal)} kcal je Portion`
+            : 'Gericht · Nährwerte unvollständig',
+    }));
 
-    ziel.querySelectorAll('[data-stufe]').forEach(b => b.addEventListener('click', () =>
-        eintragen({ dish_id: Number(b.dataset.dish), level: b.dataset.stufe }, b)));
-    ziel.querySelectorAll('[data-item]').forEach(b => b.addEventListener('click', () => {
-        const id = Number(b.dataset.item);
+    const lebensmittel = istLocker() ? [] : state.bestand
+        .filter(p => passt(p.name) || passt(p.brand))
+        .map(p => ({
+            kind: 'item', item_id: p.id, item: p, name: p.name,
+            sub: (p.brand ? p.brand + ' · ' : '')
+                + ((p.sizes || []).length
+                    ? (p.sizes || []).map(g =>
+                        `${g.label} = ${g.grams} ${p.base_unit || 'g'}`).join(' · ')
+                    : 'keine eigene Größe — wird in ' + (p.base_unit || 'g') + ' eingetragen'),
+        }));
+
+    // Was man oft eintraegt. Doppelt zeigen brauchen wir es nicht: was schon
+    // als Gericht oder Lebensmittel in der Liste steht, faellt hier weg.
+    const schon = new Set(gerichte.map(g => 'd' + g.dish_id)
+        .concat(lebensmittel.map(l => 'i' + l.item_id)));
+    const haeufig = state.haeufig
+        .filter(h => passt(h.name))
+        .filter(h => !schon.has((h.dish_id ? 'd' + h.dish_id : (h.item_id ? 'i' + h.item_id : 'x'))))
+        .map(h => ({
+            kind: h.kind, dish_id: h.dish_id, item_id: h.item_id,
+            item: h.item_id ? state.bestand.find(p => p.id === h.item_id) : null,
+            name: h.name,
+            sub: `${h.count}× notiert · zuletzt ${datumKurz(h.last)}`,
+        }));
+
+    const liste = istLocker()
+        ? frei.concat(haeufig, gerichte)
+        : frei.concat(gerichte, lebensmittel, haeufig);
+
+    if (!liste.length) {
+        sub.textContent = '';
+        ziel.innerHTML = leerKarte('✏️', istLocker()
+            ? 'Tipp oben hin, was es gab — „Pizza", „Müsli", „Kaffee". Es muss in keiner '
+              + 'Liste stehen, und nach ein paar Tagen schlägt dir die Seite genau das vor, '
+              + 'was du wirklich isst.'
+            : 'Noch nichts im Bestand. Über <strong>Lebensmittel</strong> kommt etwas herein, '
+              + 'unter <strong>Gerichte</strong> stellst du daraus eines zusammen.');
+        return;
+    }
+
+    const MAX = 10;
+    const mahlzeiten = (state.tag && state.tag.meals) || [];
+    sub.textContent = state.mahlzeit
+        ? (mahlzeiten.find(m => m.key === state.mahlzeit) || {}).label || ''
+        : '';
+    ziel.innerHTML = liste.slice(0, MAX).map(vorschlagZeile).join('')
+        + (liste.length > MAX
+            ? `<p class="ern-note">… und ${liste.length - MAX} weitere — tipp oben weiter.</p>`
+            : '');
+
+    ziel.querySelectorAll('[data-log-stufe]').forEach(b => b.addEventListener('click', () => {
+        const art = b.dataset.logArt;
+        const daten = { level: b.dataset.logStufe };
+        if (art === 'dish') daten.dish_id = Number(b.dataset.logId);
+        else if (art === 'item') daten.item_id = Number(b.dataset.logId);
+        else daten.label = b.dataset.logName;
+        eintragen(daten, b);
+    }));
+    ziel.querySelectorAll('[data-log-item]').forEach(b => b.addEventListener('click', () => {
+        const id = Number(b.dataset.logItem);
         const feld = ziel.querySelector(`[data-menge="${id}"]`);
         const wahl = ziel.querySelector(`[data-einheit="${id}"]`);
         const menge = Number(String(feld.value).replace(',', '.'));
@@ -450,9 +597,14 @@ function zeichneSchnell() {
 async function eintragen(daten, knopf) {
     knopf.classList.add('is-loading');
     try {
-        state.tag = await API.eintragen(
-            Object.assign({ day: state.datum || heute() }, daten));
+        state.tag = await API.eintragen(Object.assign(
+            { day: state.datum || heute(), meal: state.mahlzeit }, daten));
+        // Das Feld leeren: der naechste Eintrag faengt bei null an, und ein
+        // stehengebliebener Text sieht aus, als waere nichts passiert.
+        state.eingabe = '';
+        document.getElementById('ernEingabe').value = '';
         zeichneTag();
+        ladeHaeufig();
         melde('Eingetragen.', 'success');
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
@@ -461,10 +613,20 @@ async function eintragen(daten, knopf) {
     }
 }
 
+async function stufeUmschalten(id, neu) {
+    try {
+        state.tag = await API.eintragAendern(id, { level: neu });
+        zeichneTag();
+    } catch (err) {
+        melde(err.message || 'Das ging nicht.', 'error');
+    }
+}
+
 async function eintragEntfernen(id) {
     try {
         state.tag = await API.eintragWeg(id);
         zeichneTag();
+        ladeHaeufig();
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
     }
@@ -472,9 +634,11 @@ async function eintragEntfernen(id) {
 
 function zeichneTag() {
     zeichneTagKopf();
-    zeichneSumme();
+    zeichneTagBild();
     zeichneBaender();
     zeichneEintraege();
+    zeichneMahlzeiten();
+    zeichneVorschlaege();
 }
 
 async function ladeTag(datum) {
@@ -488,6 +652,321 @@ async function ladeTag(datum) {
     zeichneTag();
 }
 
+async function ladeHaeufig() {
+    try {
+        const res = await API.haeufig();
+        state.haeufig = res.suggestions || [];
+    } catch (e) {
+        state.haeufig = [];
+    }
+    zeichneVorschlaege();
+}
+
+/* -------------------------------------------------------------- Verlauf */
+
+function mountRange() {
+    if (state.rangeMount) return;
+    const host = document.getElementById('ernRange');
+    if (!host) return;
+    state.rangeMount = VexRange.mount(host, {
+        onChange: (r) => { state.range = r; ladeVerlauf(); },
+    });
+}
+
+async function ladeVerlauf() {
+    const range = state.range || (state.rangeMount ? state.rangeMount.get() : null);
+    const abfrage = new URLSearchParams();
+    if (range && range.from) abfrage.set('from', range.from);
+    if (range && range.to) abfrage.set('to', range.to);
+    const qs = abfrage.toString();
+    try {
+        state.verlauf = await API.verlauf(qs ? '?' + qs : '');
+    } catch (err) {
+        state.verlauf = null;
+        document.getElementById('ernVerlaufKpi').innerHTML = '';
+        document.getElementById('ernChart1Box').hidden = true;
+        document.getElementById('ernChart1Leer').hidden = false;
+        document.getElementById('ernChart1Leer').innerHTML =
+            `<div class="empty is-error"><span class="empty-mark">⚠️</span>
+             <p class="empty-text">${esc(err.message || 'Der Verlauf konnte nicht geladen werden.')}</p></div>`;
+        return;
+    }
+    zeichneVerlauf();
+}
+
+function zerstoereCharts() {
+    ['eins', 'zwei'].forEach(k => {
+        if (state.charts[k]) { try { state.charts[k].destroy(); } catch (e) {} }
+        state.charts[k] = null;
+    });
+}
+
+function kpiKarte(icon, label, wert, sub) {
+    return `<div class="stat-kpi">
+        <div class="stat-kpi-icon" aria-hidden="true">${icon}</div>
+        <div class="stat-kpi-label">${label}</div>
+        <div class="stat-kpi-value">${wert}</div>
+        <div class="stat-kpi-sub">${sub || ''}</div>
+    </div>`;
+}
+
+/* Die laengste Strecke ohne Notiz. Sie ist die ehrlichste Kennzahl eines
+   Tagebuchs: nicht wie viel man gegessen hat, sondern wie lueckenlos man
+   ueberhaupt aufgeschrieben hat. */
+function laengsteLuecke(tage) {
+    let lauf = 0, beste = 0;
+    tage.forEach(t => {
+        lauf = t.entries ? 0 : lauf + 1;
+        beste = Math.max(beste, lauf);
+    });
+    return beste;
+}
+
+function zeichneVerlauf() {
+    const v = state.verlauf;
+    if (!v) return;
+    zerstoereCharts();
+
+    document.getElementById('ernVerlaufZeitraum').textContent =
+        `${datumKurz(v.from)} bis ${datumKurz(v.to)}`;
+    document.getElementById('ernVerlaufSub').textContent = v.truncated
+        ? 'auf 400 Tage gekürzt — länger wird die Liste breiter als jede Darstellung'
+        : '';
+
+    const z = v.summary;
+    const kpi = [];
+    kpi.push(kpiKarte('📅', 'Notiert', `${z.days_logged} von ${z.days}`,
+        z.days_logged ? `längste Lücke: ${laengsteLuecke(v.days)} Tage` : 'noch nichts im Zeitraum'));
+    kpi.push(kpiKarte('🍽️', 'Einträge', zahlKurz(z.entries),
+        z.days_logged ? `Ø ${(z.entries / z.days_logged).toFixed(1)} an Tagen mit Notiz` : ''));
+    kpi.push(kpiKarte('⚖️', 'Übermäßig', z.viel_share == null ? '–'
+        : Math.round(z.viel_share * 100) + ' %',
+        z.leveled ? `${z.viel} von ${z.leveled} Einträgen mit Stufe` : 'keine Stufe im Zeitraum'));
+    kpi.push(kpiKarte('🔥', 'Kalorien Ø', z.kcal_avg_min == null ? '–'
+        : `${zahlKurz(z.kcal_avg_min)}–${zahlKurz(z.kcal_avg_max)}`,
+        z.complete_days
+            ? `über ${z.complete_days} ${z.complete_days === 1 ? 'Tag' : 'Tage'} mit vollständigen Angaben`
+            : 'kein Tag, an dem zu allem Nährwerte standen'));
+    document.getElementById('ernVerlaufKpi').innerHTML = kpi.join('');
+
+    document.getElementById('ernChart1Leer').hidden = true;
+    document.getElementById('ernChart1Box').hidden = false;
+    if (istLocker()) zeichneStreifen();
+    else zeichneSpannen();
+
+    document.getElementById('ernZieleKarte').hidden = istLocker();
+    if (!istLocker()) zeichneZiele();
+}
+
+function achsenTexte(tage) {
+    return {
+        kurz: tage.map(t => t.day.slice(8, 10) + '.' + t.day.slice(5, 7) + '.'),
+        voll: tage.map(t => VexCharts.fullDay(t.day)),
+    };
+}
+
+const BASIS_OPTIONEN = (texte, extra) => VexCharts.applyFullDates(Object.assign({
+    maintainAspectRatio: false,
+    animation: { duration: 200 },
+    interaction: { mode: 'index', intersect: false },
+}, extra || {}), texte.voll);
+
+const TOOLTIP = (extra) => Object.assign({
+    backgroundColor: cssVar('--surface-3'),
+    borderColor: cssVar('--line-strong'), borderWidth: 1,
+    titleColor: cssVar('--text-1'), bodyColor: cssVar('--text-2'),
+    cornerRadius: 12, padding: 10, displayColors: true,
+}, extra || {});
+
+const ACHSE_X = { ticks: { color: cssVar('--chart-axis'), font: { size: 11 },
+                           maxRotation: 0, autoSkipPadding: 16 },
+                  grid: { display: false }, border: { display: false } };
+
+/* Tagebuch-Verlauf: gezaehlt, nicht geschaetzt. Die Hoehe der Saeule ist die
+   Zahl der Eintraege, ihre Aufteilung die Stufe -- beides Dinge, die im
+   lockeren Modus wirklich dastehen. Eine Kalorienkurve waere hier eine
+   Kurve aus Zahlen, die es gar nicht gibt. */
+function zeichneStreifen() {
+    const v = state.verlauf;
+    const texte = achsenTexte(v.days);
+    document.getElementById('ernChart1Titel').textContent = 'Einträge je Tag';
+    document.getElementById('ernChart1Sub').textContent = 'nach Stufe';
+    document.getElementById('ernChart1Note').textContent =
+        'Ein leerer Tag heißt: nichts notiert. Er heißt nicht, dass nichts gegessen wurde — '
+        + 'das ist der Unterschied, den ein Tagebuch machen kann und eine Waage nicht.';
+    document.getElementById('ernChart2Karte').hidden = true;
+
+    const reihe = (name, feld, farbe) => ({
+        label: name, data: v.days.map(t => t[feld]),
+        backgroundColor: farbe, borderRadius: 6, borderSkipped: false,
+        maxBarThickness: 34, order: VexCharts.ORDER.VALUE,
+    });
+
+    state.charts.eins = new Chart(document.getElementById('ernChart1'), {
+        type: 'bar',
+        data: {
+            labels: texte.kurz,
+            datasets: [
+                reihe('normal', 'normal', figurFarbe()),
+                reihe('übermäßig', 'viel', cssVar('--warn')),
+                reihe('abgewogen', 'exact', cssVar('--text-4')),
+            ],
+        },
+        options: BASIS_OPTIONEN(texte, {
+            plugins: {
+                legend: { display: true, position: 'top',
+                          labels: { color: cssVar('--text-3'), font: { size: 11 },
+                                    boxWidth: 10, boxHeight: 10, usePointStyle: true,
+                                    pointStyle: 'circle' } },
+                tooltip: TOOLTIP({ callbacks: {
+                    title: VexCharts.titleFrom(texte.voll),
+                    label: (i) => ' ' + i.dataset.label + ': ' + i.parsed.y,
+                    footer: (items) => {
+                        const t = v.days[items[0].dataIndex];
+                        return t.entries
+                            ? `${t.entries} ${t.entries === 1 ? 'Eintrag' : 'Einträge'}`
+                              + (t.unknown ? ` · ${t.unknown} ohne Nährwerte` : '')
+                            : 'nichts notiert';
+                    },
+                } }),
+            },
+            scales: {
+                x: Object.assign({ stacked: true }, ACHSE_X),
+                y: { stacked: true, beginAtZero: true,
+                     ticks: { color: cssVar('--chart-axis'), font: { size: 11 },
+                              maxTicksLimit: 5, precision: 0 },
+                     grid: { color: cssVar('--chart-grid') }, border: { display: false } },
+            },
+        }),
+    });
+}
+
+/* Tracker-Verlauf: je Tag ein Balken von der unteren zur oberen Schaetzung.
+   Chart.js nimmt dafuer ein Wertepaar -- und genau das ist die ehrliche
+   Darstellung: die Hoehe des Balkens IST die Unsicherheit, nicht ein Punkt,
+   der eine Genauigkeit behauptet. Ein Tag ohne Eintrag bleibt leer statt
+   auf null zu fallen: "nichts notiert" ist nicht "nichts gegessen". */
+function spannenChart(canvasId, makro, farbe, texte, titelEl, subEl, noteEl) {
+    const v = state.verlauf;
+    const ziel = (v.targets && v.targets[makro]) || v.reference[makro];
+    const eigen = !!(v.targets && v.targets[makro]);
+    const e = EINHEIT[makro] || '';
+
+    document.getElementById(titelEl).textContent = v.macro_labels[makro] + ' je Tag';
+    document.getElementById(subEl).textContent =
+        `${eigen ? 'Ziel' : 'Richtwert'} ${zahlKurz(ziel)}${e}`;
+    document.getElementById(noteEl).textContent =
+        'Jeder Balken reicht von der unteren zur oberen Schätzung des Tages — seine Höhe '
+        + 'ist die Unsicherheit. Tage ohne Eintrag bleiben leer: nichts notiert ist nicht '
+        + 'nichts gegessen.';
+
+    return new Chart(document.getElementById(canvasId), {
+        data: {
+            labels: texte.kurz,
+            datasets: [
+                {
+                    type: 'bar', label: v.macro_labels[makro],
+                    data: v.days.map(t => t.entries ? [t[makro].min, t[makro].max] : null),
+                    backgroundColor: farbe, borderRadius: 6, borderSkipped: false,
+                    maxBarThickness: 34, order: VexCharts.ORDER.VALUE,
+                },
+                {
+                    type: 'line', label: eigen ? 'Dein Ziel' : 'Richtwert',
+                    data: v.days.map(() => ziel),
+                    borderColor: cssVar('--text-2'), borderWidth: 2, borderDash: [5, 4],
+                    pointRadius: 0, fill: false, order: VexCharts.ORDER.TREND,
+                },
+            ],
+        },
+        options: BASIS_OPTIONEN(texte, {
+            plugins: {
+                legend: { display: false },
+                tooltip: TOOLTIP({ callbacks: {
+                    title: VexCharts.titleFrom(texte.voll),
+                    label: (i) => {
+                        const t = v.days[i.dataIndex];
+                        if (i.dataset.type === 'line') {
+                            return ' ' + i.dataset.label + ': ' + zahlKurz(ziel) + e;
+                        }
+                        if (!t.entries) return ' nichts notiert';
+                        return ' ' + (t[makro].incomplete ? 'mind. ' : '')
+                            + zahlKurz(t[makro].min) + '–' + zahlKurz(t[makro].max) + e;
+                    },
+                    footer: (items) => {
+                        const t = v.days[items[0].dataIndex];
+                        if (!t.entries) return '';
+                        return `${t.entries} ${t.entries === 1 ? 'Eintrag' : 'Einträge'}`
+                            + (t.unknown ? ` · ${t.unknown} ohne Nährwerte` : '');
+                    },
+                } }),
+            },
+            scales: {
+                x: ACHSE_X,
+                y: { beginAtZero: true,
+                     ticks: { color: cssVar('--chart-axis'), font: { size: 11 },
+                              maxTicksLimit: 5 },
+                     grid: { color: cssVar('--chart-grid') }, border: { display: false } },
+            },
+        }),
+    });
+}
+
+function zeichneSpannen() {
+    const texte = achsenTexte(state.verlauf.days);
+    document.getElementById('ernChart2Karte').hidden = false;
+    state.charts.eins = spannenChart('ernChart1', 'kcal', figurFarbe(), texte,
+        'ernChart1Titel', 'ernChart1Sub', 'ernChart1Note');
+    state.charts.zwei = spannenChart('ernChart2', 'protein_g', cssVar('--chart-2'), texte,
+        'ernChart2Titel', 'ernChart2Sub', 'ernChart2Note');
+}
+
+/* ----------------------------------------------------------------- Ziele */
+
+function zeichneZiele() {
+    const e = state.einstellungen;
+    if (!e) return;
+    document.getElementById('ernZiele').innerHTML = e.macros.map(m => `
+        <label class="ern-feld">
+            <span>${esc(e.macro_labels[m])}${EINHEIT[m] ? ' (g)' : ''}</span>
+            <input type="number" min="0" step="${m === 'kcal' ? 10 : 1}" inputmode="decimal"
+                   data-ziel="${esc(m)}" value="${e.targets[m] == null ? '' : e.targets[m]}"
+                   placeholder="${zahlKurz(e.defaults[m])}">
+        </label>`).join('');
+}
+
+async function zieleSpeichern() {
+    const knopf = document.getElementById('ernZieleSpeichern');
+    const ziele = {};
+    document.querySelectorAll('[data-ziel]').forEach(f => {
+        const roh = String(f.value).replace(',', '.').trim();
+        ziele[f.dataset.ziel] = roh ? Number(roh) : null;
+    });
+    knopf.classList.add('is-loading');
+    try {
+        state.einstellungen = await API.setzen({ targets: ziele });
+        zeichneZiele();
+        await ladeTag(state.datum);
+        if (state.rangeMount) await ladeVerlauf();
+        melde('Ziele gespeichert.', 'success');
+    } catch (err) {
+        melde(err.message || 'Das ging nicht.', 'error');
+    } finally {
+        knopf.classList.remove('is-loading');
+    }
+}
+
+async function zieleZuruecksetzen() {
+    const ok = await askConfirm({
+        title: 'Ziele zurücksetzen?',
+        text: 'Danach misst jeder Balken wieder am allgemeinen Richtwert — der üblichen '
+            + 'Größenordnung für einen Tag, nicht an einem Ziel.',
+        confirmText: 'Zurücksetzen',
+    });
+    if (!ok) return;
+    document.querySelectorAll('[data-ziel]').forEach(f => { f.value = ''; });
+    await zieleSpeichern();
+}
+
 /* ------------------------------------------------------------- Gerichte */
 
 function zeichneEntwurf() {
@@ -495,31 +974,32 @@ function zeichneEntwurf() {
     document.getElementById('ernGerichtTitel').textContent =
         e.id ? 'Gericht bearbeiten' : 'Neues Gericht';
     document.getElementById('ernGerichtNeu').hidden = !e.id;
-    document.getElementById('ernZutaten').innerHTML = !e.items.length
-        ? '<p class="ern-klein">Noch keine Zutat. Such unten etwas aus deinem Bestand.</p>'
+    const ziel = document.getElementById('ernZutaten');
+    ziel.innerHTML = !e.items.length
+        ? '<p class="ern-note">Noch keine Zutat. Such unten etwas aus deinem Bestand.</p>'
         : e.items.map((z, i) => `
-            <div class="v-row ern-zutat">
+            <div class="ern-zeile">
                 <div class="ern-zeile-text"><strong>${esc(z.name)}</strong></div>
-                <label class="ern-gramm">
-                    <input type="number" min="0.25" step="0.25" value="${z.amount}" data-menge="${i}"
-                           aria-label="Menge für ${esc(z.name)}">
-                    <select class="v-select v-select--sm" data-einheit="${i}"
+                <div class="ern-menge">
+                    <input type="number" min="0.25" step="0.25" value="${z.amount}"
+                           data-zmenge="${i}" aria-label="Menge für ${esc(z.name)}">
+                    <select class="v-select v-select--sm" data-zeinheit="${i}"
                             aria-label="Einheit für ${esc(z.name)}">
                         ${(z.units || [{ key: 'g', label: 'g' }]).map(u =>
-                            `<option value="${u.key}"${u.key === z.unit ? ' selected' : ''}>${esc(u.label)}</option>`).join('')}
+                            `<option value="${esc(u.key)}"${u.key === z.unit ? ' selected' : ''}>${esc(u.label)}</option>`).join('')}
                     </select>
-                </label>
+                </div>
                 <button type="button" class="v-btn v-btn--icon" data-zutat-weg="${i}"
                         aria-label="Zutat entfernen" title="Entfernen">🗑️</button>
             </div>`).join('');
-    document.querySelectorAll('[data-menge]').forEach(f => f.addEventListener('change', () => {
+    ziel.querySelectorAll('[data-zmenge]').forEach(f => f.addEventListener('change', () => {
         const wert = Number(String(f.value).replace(',', '.'));
-        if (wert > 0) state.entwurf.items[Number(f.dataset.menge)].amount = wert;
+        if (wert > 0) state.entwurf.items[Number(f.dataset.zmenge)].amount = wert;
     }));
-    document.querySelectorAll('[data-einheit]').forEach(f => f.addEventListener('change', () => {
-        state.entwurf.items[Number(f.dataset.einheit)].unit = f.value;
+    ziel.querySelectorAll('[data-zeinheit]').forEach(f => f.addEventListener('change', () => {
+        state.entwurf.items[Number(f.dataset.zeinheit)].unit = f.value;
     }));
-    document.querySelectorAll('[data-zutat-weg]').forEach(b => b.addEventListener('click', () => {
+    ziel.querySelectorAll('[data-zutat-weg]').forEach(b => b.addEventListener('click', () => {
         state.entwurf.items.splice(Number(b.dataset.zutatWeg), 1);
         zeichneEntwurf();
     }));
@@ -533,9 +1013,9 @@ function zutatSuchen(text) {
         p.name.toLowerCase().includes(begriff)
         || (p.brand || '').toLowerCase().includes(begriff)).slice(0, 6);
     ziel.innerHTML = !treffer.length
-        ? `<p class="ern-klein">Nichts im Bestand. Über den <strong>Scanner</strong> kommt es hinein.</p>`
+        ? `<p class="ern-note">Nichts im Bestand. Über <strong>Lebensmittel</strong> kommt es hinein.</p>`
         : treffer.map(p => `
-            <button type="button" class="v-chip ern-zutat-treffer" data-zutat="${p.id}">
+            <button type="button" class="v-chip" data-zutat="${p.id}">
                 ${esc(p.name)}${p.brand ? ' · ' + esc(p.brand) : ''}
             </button>`).join('');
     ziel.querySelectorAll('[data-zutat]').forEach(b => b.addEventListener('click', () => {
@@ -572,7 +1052,7 @@ async function gerichtSpeichern() {
         state.gerichte = res.dishes;
         entwurfLeeren();
         zeichneGerichte();
-        zeichneSchnell();
+        zeichneVorschlaege();
         melde('Gericht gespeichert.', 'success');
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
@@ -625,23 +1105,22 @@ function zeichneGerichte() {
     document.getElementById('ernGerichteZahl').textContent =
         state.gerichte.length ? state.gerichte.length + ' Gerichte' : '';
     ziel.innerHTML = !state.gerichte.length
-        ? `<div class="empty"><span class="empty-mark">📖</span>
-             <p class="empty-text">Noch keine Gerichte. Was du oft isst, legst du einmal an —
-             danach reicht ein Tipp am Tag.</p></div>`
+        ? leerKarte('📖', 'Noch keine Gerichte. Was du oft isst, legst du einmal an — '
+            + 'danach reicht ein Tipp am Tag.')
         : state.gerichte.map(g => `
-            <div class="v-row ern-gericht">
+            <div class="ern-zeile">
                 <div class="ern-zeile-text">
                     <strong>${esc(g.name)}</strong>
-                    <div class="ern-klein">${g.items.map(z => {
+                    <div class="ern-note">${g.items.map(z => {
                         const e = (z.units || []).find(u => u.key === z.unit);
                         return esc(z.name) + ' ' + z.amount + ' ' + esc(e ? e.label : z.unit);
                     }).join(' · ')}</div>
-                    <div class="ern-klein">${g.portion.kcal != null
+                    <div class="ern-note">${g.portion.kcal != null
                         ? `${zahlKurz(g.portion.kcal)} kcal je Portion (${g.portion.grams} g)`
                         : 'Nährwerte unvollständig'}${g.portion.incomplete.length
                         ? ' · ohne Angabe: ' + g.portion.incomplete.length : ''}</div>
                 </div>
-                <div class="ern-schnell-tasten">
+                <div class="ern-tasten">
                     <button type="button" class="v-btn v-btn--sm" data-bearbeiten="${g.id}">Ändern</button>
                     <button type="button" class="v-btn v-btn--icon" data-gericht-weg="${g.id}"
                             aria-label="Gericht löschen" title="Löschen">🗑️</button>
@@ -661,7 +1140,7 @@ async function ladeGerichte() {
         state.gerichte = [];
     }
     zeichneGerichte();
-    zeichneSchnell();
+    zeichneVorschlaege();
 }
 
 /* ---------------------------------------------------------------- Kamera
@@ -792,6 +1271,124 @@ function kameraStoppen() {
     document.getElementById('ernKamera').textContent = '📷 Kamera';
 }
 
+/* -------------------------------------------------------- Nachschlagen */
+
+/* Wie alt der Katalog ist, gehoert auf den Bildschirm: ein Nachschlagewerk,
+   dessen Stand man nicht sieht, wird irgendwann geglaubt, obwohl es nicht
+   mehr stimmt. */
+async function katalogStand() {
+    let stand;
+    try { stand = await API.katalog(); } catch (e) { return; }
+    state.katalog = stand;
+
+    const alter = stand.newest
+        ? new Date(stand.newest * 1000).toLocaleDateString('de-DE',
+            { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : null;
+    document.getElementById('ernKatalogStand').textContent = stand.count
+        ? `eigener Katalog: ${stand.count.toLocaleString('de-DE')} Produkte`
+          + (alter ? ` · Stand ${alter}` : '')
+        : 'kein eigener Katalog — es wird direkt bei Open Food Facts gefragt';
+
+    // Die Karte zum Einspielen gibt es nur, wenn der Server das Recht dazu
+    // meldet -- der Katalog gehoert keinem Nutzer, sondern allen.
+    const karte = document.getElementById('ernKatalogKarte');
+    karte.hidden = !stand.may_import;
+    if (stand.may_import) {
+        document.getElementById('ernKatalogKarteSub').textContent = stand.count
+            ? `${stand.count.toLocaleString('de-DE')} Produkte drin`
+            : 'noch leer';
+    }
+}
+
+/* Die Ablegeflaeche fuer den Katalog. Dasselbe Muster wie beim
+   Ausgaben-Import: klicken, ziehen, Tastatur -- und vor dem Ersetzen steht
+   da, was ersetzt wird. */
+function setupKatalogDrop() {
+    const drop = document.getElementById('ernKatDrop');
+    const feld = document.getElementById('ernKatFile');
+    if (!drop) return;
+
+    const nimm = (datei) => { if (datei) katalogHochladen(datei); };
+    drop.onclick = () => { if (!state.katalogLaeuft) feld.click(); };
+    drop.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); drop.onclick(); }
+    };
+    drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('drag'); };
+    drop.ondragleave = () => drop.classList.remove('drag');
+    drop.ondrop = (e) => {
+        e.preventDefault();
+        drop.classList.remove('drag');
+        if (!state.katalogLaeuft) nimm(e.dataTransfer.files && e.dataTransfer.files[0]);
+    };
+    feld.onchange = () => nimm(feld.files[0]);
+}
+
+async function katalogHochladen(datei) {
+    const drin = (state.katalog && state.katalog.count) || 0;
+    const ok = await askConfirm({
+        title: 'Katalog ersetzen?',
+        text: drin
+            ? `Im Katalog stehen ${drin.toLocaleString('de-DE')} Produkte. `
+              + `„${datei.name}" ersetzt sie vollständig — ein Abzug ist ein Stand, `
+              + 'zwei nebeneinander wären später nicht zu trennen.'
+            : `Der Katalog ist leer. „${datei.name}" legt ihn an.`,
+        confirmText: 'Einspielen',
+    });
+    document.getElementById('ernKatFile').value = '';
+    if (!ok) return;
+
+    const drop = document.getElementById('ernKatDrop');
+    const sub = document.getElementById('ernKatDropSub');
+    state.katalogLaeuft = true;
+    drop.classList.add('has-files');
+    sub.textContent = `${datei.name} wird eingespielt — das dauert bis zu einer Minute …`;
+    try {
+        const neu = await API.katalogEinspielen(datei);
+        sub.textContent = `${neu.count.toLocaleString('de-DE')} Produkte eingespielt.`;
+        melde(`Katalog eingespielt: ${neu.count.toLocaleString('de-DE')} Produkte.`, 'success');
+        await katalogStand();
+    } catch (err) {
+        drop.classList.remove('has-files');
+        sub.textContent = 'off-katalog-dach.csv.gz';
+        melde(err.message || 'Das Einspielen ging nicht.', 'error');
+    } finally {
+        state.katalogLaeuft = false;
+    }
+}
+
+function zeichneTreffer(ziel, produkt, bekannt, notiz, herkunft) {
+    state.vorschlag = produkt;
+    const el = document.getElementById(ziel);
+    if (!produkt && bekannt) {
+        el.innerHTML = `<div class="ern-treffer">
+            <div class="ern-kopf"><strong>${esc(bekannt.name)}</strong>
+                <span class="ern-herkunft">schon im Bestand</span></div>
+            ${naehrwertZeile(bekannt)}
+            ${notiz ? `<p class="ern-note">${esc(notiz)}</p>` : ''}
+        </div>`;
+        return;
+    }
+    if (!produkt) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="ern-treffer">
+        <div class="ern-kopf">
+            <strong>${esc(produkt.name)}</strong>
+            ${produkt.brand ? `<span class="ern-marke">${esc(produkt.brand)}</span>` : ''}
+            <span class="ern-herkunft">${esc(HERKUNFT[herkunft] || 'Open Food Facts')}</span>
+        </div>
+        ${naehrwertZeile(produkt)}
+        ${bekannt ? '<p class="ern-note">Dieses Lebensmittel ist bereits im Bestand — Übernehmen aktualisiert die Werte.</p>' : ''}
+        ${produkt.missing && produkt.missing.length
+            ? `<p class="ern-note">Dort fehlen ${produkt.missing.length} Angaben. Du kannst sie nach dem Übernehmen von der Packung nachtragen.</p>`
+            : ''}
+        <div class="ern-tasten">
+            <button type="button" class="v-btn v-btn--primary" id="ernUebernehmen">In den Bestand</button>
+        </div>
+    </div>`;
+    const knopf = document.getElementById('ernUebernehmen');
+    if (knopf) knopf.addEventListener('click', () => uebernehmen(produkt));
+}
+
 async function nachschlagen(e) {
     if (e) e.preventDefault();
     const code = document.getElementById('ernBarcode').value.trim();
@@ -803,8 +1400,7 @@ async function nachschlagen(e) {
                        res.known, res.note, res.origin);
     } catch (err) {
         document.getElementById('ernTreffer').innerHTML =
-            `<div class="empty"><span class="empty-mark">🔎</span>
-             <p class="empty-text">${esc(err.message || 'Nicht gefunden.')}</p></div>`;
+            leerKarte('🔎', esc(err.message || 'Nicht gefunden.'));
     }
 }
 
@@ -815,18 +1411,18 @@ async function suchen(text) {
     try {
         const res = await API.suche(text);
         if (!res.results.length) {
-            ziel.innerHTML = `<div class="empty"><span class="empty-mark">🔎</span>
-                <p class="empty-text">Nichts gefunden. Bei Losem ohne Strichcode lohnt sich
-                oft ein allgemeinerer Begriff — „Apfel" statt „Apfel Elstar".</p></div>`;
+            ziel.innerHTML = leerKarte('🔎',
+                'Nichts gefunden. Bei Losem ohne Strichcode lohnt sich oft ein '
+                + 'allgemeinerer Begriff — „Apfel" statt „Apfel Elstar".');
             return;
         }
-        ziel.innerHTML = `<p class="ern-klein">${res.results.length} Treffer aus
+        ziel.innerHTML = `<p class="ern-note">${res.results.length} Treffer aus
             ${esc(HERKUNFT[res.origin] || 'Open Food Facts')}</p>`
             + res.results.map((p, i) => `
-            <div class="v-row ern-treffer">
+            <div class="ern-treffer">
                 <div class="ern-kopf"><strong>${esc(p.name)}</strong>
                     ${p.brand ? `<span class="ern-marke">${esc(p.brand)}</span>` : ''}</div>
-                <p class="ern-klein">${zahl(p.kcal, '')} kcal · ${zahl(p.protein_g, ' g')} Eiweiß
+                <p class="ern-note">${zahl(p.kcal, '')} kcal · ${zahl(p.protein_g, ' g')} Eiweiß
                     · ${zahl(p.fiber_g, ' g')} Ballaststoffe</p>
                 <div class="ern-tasten">
                     <button type="button" class="v-btn v-btn--sm" data-treffer="${i}">In den Bestand</button>
@@ -894,7 +1490,7 @@ function zeichneGroessen() {
     const ziel = document.getElementById('fGroessen');
     const basis = document.getElementById('fBase').value || 'g';
     ziel.innerHTML = !state.formGroessen.length
-        ? `<p class="ern-klein">Noch keine eigene Größe. Ohne eine trägst du dieses
+        ? `<p class="ern-note">Noch keine eigene Größe. Ohne eine trägst du dieses
            Lebensmittel in ${basis} ein — das reicht für Loses völlig.</p>`
         : state.formGroessen.map((g, i) => `
             <div class="ern-groesse">
@@ -909,7 +1505,7 @@ function zeichneGroessen() {
                 <button type="button" class="v-btn v-btn--icon" data-g-weg="${i}"
                         aria-label="Größe entfernen" title="Entfernen">🗑️</button>
             </div>`).join('')
-          + '<p class="ern-klein">Die erste Zeile ist die Standardgröße.</p>';
+          + '<p class="ern-note">Die erste Zeile ist die Standardgröße.</p>';
 
     // Waehrend des Tippens in den Zustand schreiben, aber NICHT neu zeichnen:
     // ein Neuaufbau bei jedem Zeichen nimmt dem Feld den Fokus.
@@ -953,7 +1549,7 @@ function formFuellen(p) {
     document.getElementById('ernFormTitel').textContent = 'Lebensmittel ändern';
     document.getElementById('fSpeichern').textContent = 'Änderung speichern';
     document.getElementById('fAbbrechen').hidden = false;
-    activateTab('scanner');
+    activateTab('vorrat');
     document.getElementById('ernFormTitel').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -1004,25 +1600,26 @@ async function ladeBestand() {
     document.getElementById('ernBestandZahl').textContent =
         state.bestand.length ? state.bestand.length + ' Lebensmittel' : '';
     if (!state.bestand.length) {
-        ziel.innerHTML = `<div class="empty"><span class="empty-mark">🥫</span>
-            <p class="empty-text">Noch nichts aufgenommen. Was einmal hier steht, bleibt —
-            auch wenn Open Food Facts den Eintrag später ändert.</p></div>`;
+        ziel.innerHTML = leerKarte('🥫',
+            'Noch nichts aufgenommen. Was einmal hier steht, bleibt — auch wenn '
+            + 'Open Food Facts den Eintrag später ändert.');
+        zeichneVorschlaege();
         return;
     }
     ziel.innerHTML = state.bestand.map(p => `
-        <div class="v-row ern-zeile">
+        <div class="ern-zeile">
             <div class="ern-zeile-text">
-                <strong>${esc(p.name)}</strong>
-                ${p.brand ? `<span class="ern-marke">${esc(p.brand)}</span>` : ''}
-                <div class="ern-klein">${zahl(p.kcal, '')} kcal · ${zahl(p.protein_g, ' g')} Eiweiß
+                <div class="ern-zeile-kopf"><strong>${esc(p.name)}</strong>
+                    ${p.brand ? `<span class="ern-marke">${esc(p.brand)}</span>` : ''}</div>
+                <div class="ern-note">${zahl(p.kcal, '')} kcal · ${zahl(p.protein_g, ' g')} Eiweiß
                     · ${zahl(p.fiber_g, ' g')} Ballaststoffe · je 100 ${esc(p.base_unit || 'g')}</div>
-                <div class="ern-klein">${(p.sizes || []).length
+                <div class="ern-note">${(p.sizes || []).length
                     ? (p.sizes || []).map(g =>
                         `${esc(g.label)} = ${g.grams} ${esc(p.base_unit || 'g')}`).join(' · ')
                     : 'keine eigene Größe — wird in ' + esc(p.base_unit || 'g') + ' eingetragen'
                 }${p.user_edited ? ' · von Hand gepflegt' : ''}</div>
             </div>
-            <div class="ern-schnell-tasten">
+            <div class="ern-tasten">
                 <button type="button" class="v-btn v-btn--sm" data-aendern="${p.id}">Ändern</button>
                 <button type="button" class="v-btn v-btn--icon" data-weg="${p.id}"
                         aria-label="Entfernen" title="Entfernen">🗑️</button>
@@ -1034,6 +1631,7 @@ async function ladeBestand() {
         const p = state.bestand.find(x => x.id === Number(b.dataset.aendern));
         if (p) formFuellen(p);
     }));
+    zeichneVorschlaege();
 }
 
 async function entfernen(id) {
@@ -1041,8 +1639,7 @@ async function entfernen(id) {
     // Ein geloeschtes Lebensmittel verschwindet auch aus jedem Gericht, in
     // dem es steckt -- ohne Warnung faende man das erst wieder, wenn die
     // Naehrwerte eines Rezepts ploetzlich niedriger sind.
-    const betroffen = state.gerichte.filter(g =>
-        g.items.some(z => z.item_id === id));
+    const betroffen = state.gerichte.filter(g => g.items.some(z => z.item_id === id));
     const ok = await askConfirm({
         title: 'Entfernen?',
         text: `„${p ? p.name : 'Das Lebensmittel'}" wird aus dem Bestand gelöscht.`
@@ -1063,22 +1660,12 @@ async function entfernen(id) {
     }
 }
 
-function activateTab(tab) {
-    document.querySelectorAll('.tab-btn').forEach(b =>
-        b.classList.toggle('active', b.dataset.tab === tab));
-    TABS.forEach(t => {
-        const el = document.getElementById('tab-' + t);
-        if (el) el.hidden = t !== tab;
-    });
-}
-
 /* ------------------------------------------------------------------ Boot */
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (!isLoggedIn()) { location.href = '/private/login.html'; return; }
-    // Freigabe direkt nach dem synchronen Login-Check: ab hier steht fest,
-    // dass diese Seite bleibt. Haenge sie an eine Serverantwort, sieht man
-    // bei einer haengenden Antwort nur den Seitenhintergrund.
+    // Freigabe direkt nach dem synchronen Login-Check (css/statistics.css
+    // versteckt den Body, bis sie kommt).
     document.body.classList.add('ready');
 
     try {
@@ -1089,68 +1676,76 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('logoutBtn').addEventListener('click',
         () => { clearToken(); location.href = '/private/login.html'; });
 
-    document.querySelectorAll('.tab-btn').forEach(b =>
-        b.addEventListener('click', () => activateTab(b.dataset.tab)));
-
-    document.getElementById('ernScanForm').addEventListener('submit', nachschlagen);
-    document.getElementById('ernKamera').addEventListener('click', kameraStarten);
-    document.getElementById('ernKameraStop').addEventListener('click', kameraStoppen);
-    // Beim Verlassen der Seite die Kamera freigeben -- sonst bleibt das
-    // Lichtlein an, bis der Tab geschlossen wird.
-    window.addEventListener('pagehide', kameraStoppen);
-    let tippen = null;
-    document.getElementById('ernSuche').addEventListener('input', (e) => {
-        clearTimeout(tippen);
-        const wert = e.target.value.trim();
-        // Erst tippen lassen: Open Food Facts wird ehrenamtlich betrieben,
-        // eine Abfrage je Tastenanschlag waere unhoeflich.
-        tippen = setTimeout(() => suchen(wert), 400);
-    });
+    document.querySelectorAll('[data-modus]').forEach(b =>
+        b.addEventListener('click', () => modusWechseln(b.dataset.modus)));
 
     document.getElementById('ernTagZurueck').addEventListener('click', () => tagVerschieben(-1));
     document.getElementById('ernTagVor').addEventListener('click', () => tagVerschieben(1));
+
+    let tippen = null;
+    document.getElementById('ernEingabe').addEventListener('input', (e) => {
+        clearTimeout(tippen);
+        const wert = e.target.value;
+        tippen = setTimeout(() => { state.eingabe = wert; zeichneVorschlaege(); }, 180);
+    });
+    // Enter traegt den ersten Vorschlag normal ein -- der haeufigste Fall,
+    // und er soll ohne Maus gehen.
+    document.getElementById('ernEingabe').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        state.eingabe = e.target.value;
+        zeichneVorschlaege();
+        // Die erste Zeile und ihre Hauptaktion. Irgendeinen „normal"-Knopf
+        // aus der Liste zu nehmen hiesse, etwas anderes einzutragen, als
+        // oben steht.
+        const erste = document.querySelector('#ernVorschlaege .ern-vorschlag');
+        const knopf = erste && erste.querySelector(
+            '[data-log-stufe="normal"], [data-log-item]');
+        if (knopf) knopf.click();
+    });
+
+    document.getElementById('ernZieleSpeichern').addEventListener('click', zieleSpeichern);
+    document.getElementById('ernZieleWeg').addEventListener('click', zieleZuruecksetzen);
+
     document.getElementById('ernGerichtSpeichern').addEventListener('click', gerichtSpeichern);
     document.getElementById('ernGerichtNeu').addEventListener('click', entwurfLeeren);
     document.getElementById('ernZutatSuche').addEventListener('input',
         (e) => zutatSuchen(e.target.value));
 
+    document.getElementById('ernScanForm').addEventListener('submit', nachschlagen);
+    document.getElementById('ernKamera').addEventListener('click', kameraStarten);
+    document.getElementById('ernKameraStop').addEventListener('click', kameraStoppen);
+    let suchTakt = null;
+    document.getElementById('ernSuche').addEventListener('input', (e) => {
+        clearTimeout(suchTakt);
+        const wert = e.target.value.trim();
+        suchTakt = setTimeout(() => suchen(wert), 400);
+    });
     document.getElementById('fSpeichern').addEventListener('click', formSpeichern);
     document.getElementById('fAbbrechen').addEventListener('click', formLeeren);
     document.getElementById('fGroesseNeu').addEventListener('click', () => {
         state.formGroessen.push({ label: '', grams: null });
         zeichneGroessen();
-        const felder = document.querySelectorAll('[data-g-label]');
-        if (felder.length) felder[felder.length - 1].focus();
     });
-    // Die Einheit hinter den Groessen ist die Basis -- wechselt sie von g auf
-    // ml, muss dort auch ml stehen.
     document.getElementById('fBase').addEventListener('change', zeichneGroessen);
-    // Die Eingabefelder stehen bewusst in keinem <form> (ein Absenden waere
-    // ein Seitenwechsel) -- die Enter-Taste soll trotzdem das tun, was jeder
-    // erwartet.
-    Object.keys(FORM).forEach(id => {
-        const feld = document.getElementById(id);
-        if (feld && feld.tagName === 'INPUT') {
-            feld.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') { e.preventDefault(); formSpeichern(); }
-            });
-        }
-    });
-    let schnellTippen = null;
-    document.getElementById('ernSchnellSuche').addEventListener('input', (e) => {
-        clearTimeout(schnellTippen);
-        const wert = e.target.value;
-        schnellTippen = setTimeout(() => {
-            state.schnellSuche = wert.trim();
-            zeichneSchnell();
-        }, 150);
+    setupKatalogDrop();
+    // Die Kamera nicht weiterlaufen lassen, wenn die Seite in den
+    // Hintergrund geht -- ein laufendes Bild kostet Akku und sieht aus wie
+    // ein Fehler, wenn man zurueckkommt.
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && kamera.laeuft) kameraStoppen();
     });
 
-    zeichneEntwurf();
+    // Erst der Modus: er bestimmt, welche Reiter es gibt.
+    try {
+        state.einstellungen = await API.einstellungen();
+        state.modus = state.einstellungen.mode;
+    } catch (e) { /* der lockere Modus ist der Standard */ }
+    zeichneModus();
+    zeichneZiele();
     formLeeren();
-    setupKatalogDrop();
-    katalogStand();
-    await ladeBestand();
-    await ladeGerichte();
+    entwurfLeeren();
+
     await ladeTag(heute());
+    await Promise.all([ladeGerichte(), ladeBestand(), ladeHaeufig(), katalogStand()]);
 });

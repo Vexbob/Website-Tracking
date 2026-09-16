@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.94.0', date: '2026-09-16', title: 'Ernährung: Tagebuch oder Tracker', notes: [
+        'Die Seite hat jetzt zwei Modi: ein lockeres Tagebuch, das nur fragt, was es gab und ob es normal oder übermäßig viel war — und einen ausführlichen Tracker mit Mengen, Nährwerten und eigenen Tageszielen.',
+        'Im Tagebuch lässt sich alles hinschreiben, auch was in keiner Liste steht: „Pizza beim Italiener" braucht keinen Bestand und kein Rezept. Nach ein paar Tagen schlägt die Seite von selbst vor, was du wirklich isst.',
+        'Der Tag ist nach Mahlzeiten sortiert, und eine falsch geratene Stufe lässt sich antippen statt löschen und neu eintragen.',
+        'Neu ist ein Verlauf über einen frei wählbaren Zeitraum: im Tagebuch, an wie vielen Tagen überhaupt etwas dasteht und wie oft es übermäßig war — im Tracker Kalorien und Eiweiß je Tag als Spanne gegen dein Ziel.',
+        'Tagesziele sind freiwillig und einzeln: wer nur auf Eiweiß achtet, muss keine fünf Zahlen erfinden — wo keines steht, gilt weiter der allgemeine Richtwert.',
+    ]},
     { v: 'v1.93.1', date: '2026-09-16', title: 'Schach: der Verlauf, den es wirklich gibt', notes: [
         'Der Wertungsverlauf kommt jetzt aus den Partien selbst und reicht damit so weit zurück wie deine Historie — bisher begann er am Tag des Verbindens und war deshalb eine gerade Linie, egal welcher Zeitraum eingestellt war.',
         'Statt eines Diagramms mit sechs Umschaltern steht je Disziplin eine eigene kleine Kurve nebeneinander, jede mit ihrer Zahl und der Entwicklung im Zeitraum darüber.',
