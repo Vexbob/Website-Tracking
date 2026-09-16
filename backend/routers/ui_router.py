@@ -42,12 +42,13 @@ NAV_TABS_PREF = "ui_nav_tabs"
 # ganzen Speichervorgang ab -- und weil derselbe Pruefer fuer Reihenfolge,
 # Ausgeblendetes UND Ruhendes gilt, schlaegt dann jedes Speichern auf der
 # Einstellungsseite fehl, nicht nur das eine Modul. Genau das war zwischen
-# v1.83.0 und v1.95.1 der Fall: Schach und Ernaehrung fehlten hier, und der
+# v1.83.0 und v1.96.0 der Fall: Schach und Ernaehrung fehlten hier, und der
 # Knopf "Leiste speichern" antwortete jedes Mal mit einem Fehler.
 # ``backend/tests/test_navigation.py`` vergleicht beide Listen automatisch.
 ALLOWED_NAV_TABS = [
     "/", "/sparziel/", "/ausgaben/", "/notizen/", "/health/", "/musik/",
     "/blog/", "/blog/admin/", "/admin/", "/schach/", "/ernaehrung/",
+    "/essen/",
 ]
 
 # Zwei ist die Untergrenze, ab der eine Leiste ueberhaupt Navigation ist.

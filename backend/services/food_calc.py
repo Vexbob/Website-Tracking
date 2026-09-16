@@ -46,31 +46,14 @@ niedriger. Der Unterschied ist der zwischen "du hast wenig gegessen" und
 MODI = ("locker", "ausfuehrlich")
 MODUS_LABEL = {"locker": "Tagebuch", "ausfuehrlich": "Tracker"}
 
-# Der Tag wird nach Mahlzeiten gelesen, nicht nach Uhrzeit: "Mittag" ist die
-# Auskunft, die man geben kann, "12:47" waere eine, die man erfinden muesste.
-# Die Liste steht nur hier -- die Datenbank haelt bewusst keine zweite.
-MAHLZEITEN = ("fruehstueck", "mittag", "abend", "snack")
-MAHLZEIT_LABEL = {
-    "fruehstueck": "Frühstück",
-    "mittag": "Mittag",
-    "abend": "Abend",
-    "snack": "Zwischendurch",
-}
-# Wohin alles faellt, was ohne Zuordnung eingetragen wurde -- ein eigener
-# Topf und keine stille Einsortierung unter "Zwischendurch".
-OHNE_MAHLZEIT = "ohne"
-OHNE_MAHLZEIT_LABEL = "Ohne Zuordnung"
-
-
-def mahlzeit_sauber(wert):
-    """Eine bekannte Mahlzeit oder None. Unbekanntes ist ein Fehler."""
-    if wert in (None, "", OHNE_MAHLZEIT):
-        return None
-    if wert not in MAHLZEITEN:
-        raise ValueError(
-            "Unbekannte Mahlzeit. Möglich sind: "
-            + ", ".join(MAHLZEIT_LABEL[m] for m in MAHLZEITEN))
-    return wert
+# Die Mahlzeiten stehen seit v1.97.0 in einem eigenen Dienst: sie sind das
+# Einzige, was sich Tagebuch und Tracker wirklich teilen -- dass um 8 Uhr
+# Fruehstueck ist, gilt nicht je Modul verschieden. Hier weiter unter den
+# alten Namen erreichbar, damit der Tracker-Router nichts davon merkt.
+from services.food_mahlzeit import (         # noqa: F401  (Weiterreichen)
+    MAHLZEITEN, MAHLZEIT_LABEL, OHNE_MAHLZEIT, OHNE_MAHLZEIT_LABEL,
+    mahlzeit_sauber,
+)
 
 
 STUFEN = {

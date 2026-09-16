@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0c10">
+<meta name="description" content="Essenstagebuch: hinschreiben, was es gab, und ob es normal oder übermäßig viel war. Mehr wird nicht gefragt.">
+<title>Essenstagebuch — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/statistics.css">
+<link rel="stylesheet" href="/essen/essen.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav-switcher.js"></script>
+<script src="/js/sw-update.js"></script>
+</head>
+<body>
+<nav class="navbar">
+    <span class="nav-title">Essenstagebuch</span>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main class="wide">
+
+    <header class="page-head">
+        <h1>🍽️ Essenstagebuch</h1>
+    </header>
+
+    <!-- Eine Seite, eine Aufgabe. Kein Reiter, kein Diagramm, keine
+         Einstellungen: was hier zählt, ist die Strecke von „Seite offen" bis
+         „steht drin". Wer Mengen und Nährwerte will, ist im anderen Modul. -->
+    <div id="esFehler" hidden></div>
+
+    <div id="esInhalt">
+        <div class="stat-card">
+            <div class="es-tagkopf">
+                <button type="button" class="es-pfeil" id="esZurueck"
+                        aria-label="Tag zurück">◀</button>
+                <div class="es-tagkopf-mitte">
+                    <strong id="esTagName">Heute</strong>
+                    <span id="esTagDatum"></span>
+                </div>
+                <button type="button" class="es-pfeil" id="esVor"
+                        aria-label="Tag vor">▶</button>
+                <button type="button" class="v-btn v-btn--primary es-add" id="esAdd">
+                    <span aria-hidden="true">＋</span> Eintragen</button>
+            </div>
+
+            <!-- Der kürzeste Weg: was du oft isst, als Knopf. Ein Tipp trägt
+                 ein — als „normal", in die Mahlzeit, die zur Uhrzeit passt. -->
+            <div class="es-schnell" id="esSchnell" hidden></div>
+
+            <div id="esMahlzeiten"></div>
+
+            <p class="es-fuss" id="esFuss"></p>
+        </div>
+    </div>
+
+    <div class="version-tag"></div>
+</main>
+<script src="/essen/essen.js"></script>
+</body>
+</html>

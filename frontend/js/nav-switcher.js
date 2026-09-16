@@ -45,9 +45,15 @@
         { href: '/schach/',     label: '♟️ Schach',          public: false, icon: 'chess', short: 'Schach',
           status: 'neu', tone: '--m-schach',
           sub: 'Rating und Partien von Lichess und Chess.com' },
-        { href: '/ernaehrung/', label: '🥗 Ernährung',       public: false, icon: 'meal',  short: 'Essen',
+        { href: '/ernaehrung/', label: '🥗 Ernährung',       public: false, icon: 'meal',  short: 'Werte',
           status: 'neu', tone: '--m-ernaehrung',
-          sub: 'Lockeres Tagebuch oder ausführlicher Tracker' },
+          sub: 'Mengen, Nährwerte und eigene Tagesziele' },
+        // v1.97.0 -- das Tagebuch ist ein eigenes Modul mit eigener Tabelle.
+        // Es fragt nur, WAS es gab und ob es normal oder uebermaessig war;
+        // Mengen gibt es dort nicht einmal als Spalte.
+        { href: '/essen/',      label: '🍽️ Essenstagebuch', public: false, icon: 'meal',  short: 'Essen',
+          status: 'neu', tone: '--m-essen',
+          sub: 'Hinschreiben, was es gab — mehr nicht' },
     ];
 
     const istNeu = (m) => m.status === 'neu';
@@ -220,7 +226,10 @@
        MODULE_OFF_DEFAULT gilt, solange der Nutzer die Einstellung nie
        angefasst hat. Hier stehen die Module, die ab Werk ruhen sollen. */
     const MODULE_OFF_PREF = 'ui_module_off';
-    const MODULE_OFF_DEFAULT = [];
+    // Der Ernaehrungs-Tracker ruht, bis man ihn braucht: das Tagebuch ist
+    // der Anfang, der Tracker der Ausbau. Wer ihn einschaltet, findet ihn
+    // genau so vor, wie er ihn verlassen hat.
+    const MODULE_OFF_DEFAULT = ['/ernaehrung/'];
     let moduleRow = null;
     // Zeigt die Leiste gerade alle erlaubten Module? Steuert, ob der
     // Punkte-Schalter daneben noch gebraucht wird.

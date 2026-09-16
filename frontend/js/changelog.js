@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.97.0', date: '2026-09-17', title: 'Essenstagebuch — ein eigenes Modul', notes: [
+        'Das Tagebuch ist jetzt ein eigenes Modul mit einer eigenen Tabelle. Damit ist der Fehler weg, den du gefunden hattest: ein im Tracker eingetragenes „100 g“ kann im Tagebuch nicht mehr auftauchen — nicht weil es verboten wäre, sondern weil es dort keine Spalte gibt, in die eine Menge passt.',
+        'Eine Seite, eine Aufgabe: Datum, Mahlzeiten, fertig. Kein Umschalter, kein Diagramm, keine Einstellungen. Oben steht eine Schnellwahl mit deinen sechs häufigsten Sachen — ein Tipp trägt ein, als „normal“, in die Mahlzeit, die zur Uhrzeit passt.',
+        'Die Mahlzeit wird nach der Uhrzeit geraten, aber nie heimlich: im Eintragen-Fenster steht „jetzt“ am vorgeschlagenen Chip, und ein anderer überstimmt ihn mit einem Tipp. An vergangenen Tagen wird gar nicht erst geraten.',
+        'Einen Eintrag antippen öffnet ihn: Name, Stufe, Mahlzeit und Notiz an einer Stelle. Die Stufe lässt sich weiterhin direkt in der Zeile umschalten.',
+        'Der Ernährungs-Tracker ruht ab jetzt und lässt sich in den Einstellungen unter „Module“ einschalten. Seine Gerichte und Lebensmittel bleiben erhalten; die Tageseinträge beider Seiten fangen leer an.',
+    ]},
     { v: 'v1.96.0', date: '2026-09-17', title: 'Module, die man einschaltet', notes: [
         'Neue Karte „Module" in den Einstellungen: jedes Modul lässt sich schlafen legen. Ein ruhendes Modul steht in keiner Leiste und in keinem Menü — seine Daten bleiben vollständig erhalten, Export und Backup nehmen sie weiter mit, und über die Adresse ist es weiter erreichbar. Damit lässt sich ein Modul künftig erst freischalten, wenn du es wirklich anfängst.',
         'Behoben: der Knopf „Leiste speichern" auf der Einstellungsseite schlug seit Wochen jedes Mal fehl. Der Server kannte Schach und Ernährung nicht als Navigationsziele und wies deshalb die ganze Liste ab — auch für alle anderen Module.',

@@ -1866,6 +1866,15 @@ from routers.food_router import router as food_router
 app.include_router(food_router)
 
 # ==========================================================================
+# Essenstagebuch (v1.97.0) — eigenes Modul, eigene Tabelle
+# --------------------------------------------------------------------------
+# Getrennt vom Tracker, weil es eine andere Frage stellt: was gab es, und war
+# es normal oder uebermaessig viel. Die Trennung steht in der Spaltenliste von
+# ``food_diary`` -- dort gibt es keine Menge, also kann dort auch keine landen.
+from routers.tagebuch_router import router as tagebuch_router
+app.include_router(tagebuch_router)
+
+# ==========================================================================
 # Gesamt-Export (v1.23.0) — alle Module in einer CSV
 # --------------------------------------------------------------------------
 from routers.export_router import router as export_router

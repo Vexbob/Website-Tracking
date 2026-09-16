@@ -63,6 +63,12 @@
        beim Lesen auseinanderhaelt (12,0:1 gegen --surface-1). */
     --m-ernaehrung: #a3e635;
     --m-ernaehrung-soft: rgba(163,230,53,0.16);
+    /* v1.97.0 -- das Essenstagebuch ist ein eigenes Modul. Es traegt das
+       Gruen des Themas, weil es das Modul ist, das jeder Tag oeffnet; der
+       Tracker bekommt in der naechsten Etappe einen eigenen, kuehleren
+       Ton und heisst dann --m-naehrwerte. */
+    --m-essen: #a3e635;
+    --m-essen-soft: rgba(163,230,53,0.16);
 
     /* =====================================================================
        Verlaufs-Presets (v1.74.0)

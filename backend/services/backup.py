@@ -79,6 +79,9 @@ TABLES_ORDERED = [
     "food_dish_items",
     "food_log",
     "food_settings",
+    # Essenstagebuch (v1.97.0) -- eigene Tabelle, eigenes Modul. Sie haengt
+    # an nichts ausser users: ein Tagebucheintrag ist ein Name und eine Stufe.
+    "food_diary",
     # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
     # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
     "user_prefs",
