@@ -55,6 +55,10 @@
     // Von build() gefuellt: die Module, die dieses Konto ueberhaupt sehen
     // darf. Tab-Leiste und Einstell-Dialog richten sich danach.
     let visibleModules = null;
+    // Dasselbe, aber OHNE den Ruhe-Schalter: die Einstellungsseite muss auch
+    // die Module auflisten koennen, die gerade ruhen -- sonst gaebe es keinen
+    // Weg, sie wieder einzuschalten.
+    let allowedModules = null;
 
     function currentPath() {
         return location.pathname.replace(/\/+$/, '') || '/';
@@ -84,7 +88,7 @@
             }
         } catch (e) { /* nicht eingeloggter Zustand */ }
 
-        const visible = MODULES.filter(m => {
+        let visible = MODULES.filter(m => {
             if (m.hideForAdmin && loggedIn && isAdmin) return false;
             if (m.public) return true;
             if (!loggedIn) return false;
@@ -92,6 +96,13 @@
             return true;
         });
 
+        allowedModules = visible;
+        // Ruhende Module fallen genau hier heraus -- an einer Stelle. Dadurch
+        // ziehen Punkte-Menue, Leiste, Tab-Leiste, Dashboard und die
+        // Einstellungsseite von selbst nach, ohne dass eine davon den
+        // Schalter kennen muesste.
+        const ruht = new Set(readOff());
+        visible = visible.filter(m => !ruht.has(m.href));
         visibleModules = visible;
         if (!visible.length) return;
 
@@ -199,6 +210,17 @@
     // damit die Leiste beim Seitenwechsel nicht erst umspringt.
     const DESKTOP_PREF = 'ui_nav_desktop';
     const HIDDEN_PREF = 'ui_nav_hidden';
+    /* v1.95.1 -- Module, die dieses Konto (noch) nicht benutzt.
+       Der Unterschied zu HIDDEN_PREF ist die Frage, die beantwortet wird:
+       dort "was passt nicht mehr in die Leiste", hier "das habe ich noch
+       nicht angefangen". Ein ruhendes Modul verschwindet ueberall aus der
+       Navigation -- und bleibt ueber seine Adresse erreichbar. Es ist kein
+       Rechte-Schalter: die Daten bleiben, Export und Backup nehmen sie mit.
+
+       MODULE_OFF_DEFAULT gilt, solange der Nutzer die Einstellung nie
+       angefasst hat. Hier stehen die Module, die ab Werk ruhen sollen. */
+    const MODULE_OFF_PREF = 'ui_module_off';
+    const MODULE_OFF_DEFAULT = [];
     let moduleRow = null;
     // Zeigt die Leiste gerade alle erlaubten Module? Steuert, ob der
     // Punkte-Schalter daneben noch gebraucht wird.
@@ -211,6 +233,10 @@
     function readHidden() {
         const arr = VexPrefs.get(HIDDEN_PREF, null);
         return Array.isArray(arr) ? arr : [];
+    }
+    function readOff() {
+        const arr = VexPrefs.get(MODULE_OFF_PREF, null);
+        return Array.isArray(arr) ? arr : MODULE_OFF_DEFAULT.slice();
     }
 
     /* Die Wunschreihenfolge auf das, was dieses Konto sehen darf. Module, die
@@ -714,6 +740,11 @@
     // einer zweiten Liste, die mit der Zeit auseinanderlaeuft.
     window.VexNav = {
         modules: () => (visibleModules || MODULES).filter(m => TAB_ICONS[m.icon]),
+        // Auch die ruhenden -- nur die Einstellungsseite braucht das.
+        allModules: () => (allowedModules || MODULES).filter(m => TAB_ICONS[m.icon]),
+        readOff: readOff,
+        istAus: (href) => readOff().indexOf(href) !== -1,
+        MODULE_OFF_PREF: MODULE_OFF_PREF,
         iconSvg: moduleIconSvg,
         openTabBarSettings: openNavSettings,
         readDesktopOrder: readDesktopCache,
@@ -721,6 +752,7 @@
         HIDDEN_PREF: HIDDEN_PREF,
         // Der Cache haengt an VexPrefs.set() -- hier wird nur neu gezeichnet.
         redrawDesktop: () => { if (visibleModules) renderModuleRow(visibleModules); },
+        redrawTabs: () => renderTabBar(readTabCache()),
         DESKTOP_PREF: DESKTOP_PREF,
     };
 

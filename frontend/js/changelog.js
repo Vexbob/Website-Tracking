@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v1.96.0', date: '2026-09-17', title: 'Module, die man einschaltet', notes: [
+        'Neue Karte „Module" in den Einstellungen: jedes Modul lässt sich schlafen legen. Ein ruhendes Modul steht in keiner Leiste und in keinem Menü — seine Daten bleiben vollständig erhalten, Export und Backup nehmen sie weiter mit, und über die Adresse ist es weiter erreichbar. Damit lässt sich ein Modul künftig erst freischalten, wenn du es wirklich anfängst.',
+        'Behoben: der Knopf „Leiste speichern" auf der Einstellungsseite schlug seit Wochen jedes Mal fehl. Der Server kannte Schach und Ernährung nicht als Navigationsziele und wies deshalb die ganze Liste ab — auch für alle anderen Module.',
+        'Behoben: das Backup enthielt kein einziges Datum aus Ernährung, Schach, Notizen und Marken, dazu fehlten Gesundheits-Tageswerte und weggeklickte Dubletten-Vorschläge. Ein Wiederherstellen hätte das alles lautlos verloren.',
+        'Zwei neue Prüfungen sorgen dafür, dass beides nicht wiederkommt: eine vergleicht die Modulliste des Frontends mit der des Servers, die andere jede Tabelle in den Migrationen mit dem, was das Backup mitnimmt.',
+    ]},
     { v: 'v1.95.0', date: '2026-09-16', title: 'Ernährung: der Tag ist die Seite', notes: [
         'Die Ernährungsseite ist neu gebaut: der Tag steht jetzt als eine Karte da — Datum, was der Tag hergibt, und darunter die Mahlzeiten mit dem, was drinsteht. Vorher lagen Suchfeld, Mahlzeiten-Chips, Vorschlagsliste, Tagesbild und Eintragsliste als fünf Blöcke untereinander, und das, weswegen man die Seite öffnet, begann unter dem Bildschirmrand.',
         'Eingetragen wird aus der Mahlzeit heraus: ein Plus am Frühstück öffnet den Dialog, und dass es zum Frühstück gehört, muss niemand mehr anklicken. In der Liste ist die ganze Zeile der Knopf für „normal", „übermäßig" steht klein daneben — statt zweier gleich großer Knöpfe in jeder Zeile.',

@@ -37,9 +37,17 @@ NAV_TABS_PREF = "ui_nav_tabs"
 # Modul nicht benutzen darf, kommt ueber einen Tab genauso wenig hinein wie
 # ueber einen getippten Link. Das Frontend blendet Ziele, die dem Konto
 # fehlen (Admin-Bereich), beim Zeichnen ohnehin aus.
+# WICHTIG: Diese Liste muss jedes Modul enthalten, das in der MODULES-Registry
+# von ``frontend/js/nav-switcher.js`` steht. Sonst weist ``_href_list`` den
+# ganzen Speichervorgang ab -- und weil derselbe Pruefer fuer Reihenfolge,
+# Ausgeblendetes UND Ruhendes gilt, schlaegt dann jedes Speichern auf der
+# Einstellungsseite fehl, nicht nur das eine Modul. Genau das war zwischen
+# v1.83.0 und v1.95.1 der Fall: Schach und Ernaehrung fehlten hier, und der
+# Knopf "Leiste speichern" antwortete jedes Mal mit einem Fehler.
+# ``backend/tests/test_navigation.py`` vergleicht beide Listen automatisch.
 ALLOWED_NAV_TABS = [
     "/", "/sparziel/", "/ausgaben/", "/notizen/", "/health/", "/musik/",
-    "/blog/", "/blog/admin/", "/admin/",
+    "/blog/", "/blog/admin/", "/admin/", "/schach/", "/ernaehrung/",
 ]
 
 # Zwei ist die Untergrenze, ab der eine Leiste ueberhaupt Navigation ist.
@@ -130,6 +138,7 @@ async def reset_nav_tabs(request: Request, db=Depends(get_db),
 
 DESKTOP_NAV_PREF = "ui_nav_desktop"
 NAV_HIDDEN_PREF = "ui_nav_hidden"
+MODULE_OFF_PREF = "ui_module_off"
 
 
 def _href_list(value: Any) -> List[str]:
@@ -165,6 +174,26 @@ def _check_nav_hidden(value: Any) -> List[str]:
 
     Ausblenden heisst nicht sperren -- die Module bleiben ueber das
     Punkte-Menue und ihre Adresse erreichbar."""
+    return _href_list(value)
+
+
+def _check_module_off(value: Any) -> List[str]:
+    """Module, die dieses Konto (noch) nicht benutzt.
+
+    Der Unterschied zu ``ui_nav_hidden`` ist die Frage, die beantwortet wird:
+    dort "was passt nicht mehr in die Leiste am Rechner", hier "dieses Modul
+    habe ich noch nicht angefangen". Ein ruhendes Modul verschwindet aus
+    Leiste, Punkte-Menue, Tab-Leiste und Dashboard -- ausgeblendet ist es nur
+    in der Leiste.
+
+    Es ist trotzdem kein Rechte-Schalter: die Daten bleiben unangetastet,
+    Backup und Export nehmen sie weiter mit, und wer die Adresse kennt,
+    bekommt die Seite. Ein persoenlicher Tracker, der die eigenen Daten hinter
+    einem selbst gesetzten Schalter wegsperrt, waere Theater -- und jeder
+    Endpunkt muesste die Sperre einzeln erinnern.
+
+    Welche Module ab Werk ruhen, entscheidet das Frontend (MODULE_OFF_DEFAULT
+    in nav-switcher.js): hier steht nur, was der Nutzer selbst gesetzt hat."""
     return _href_list(value)
 
 
@@ -261,6 +290,7 @@ def _check_themes(value: Any) -> List[dict]:
 UI_PREFS = {
     DESKTOP_NAV_PREF: _check_nav_desktop,
     NAV_HIDDEN_PREF: _check_nav_hidden,
+    MODULE_OFF_PREF: _check_module_off,
     DEFAULT_RANGE_PREF: _check_default_range,
     GRAD_ACTION_PREF: _one_of(ALLOWED_GRADIENTS),
     GRAD_PROGRESS_PREF: _one_of(ALLOWED_GRADIENTS),

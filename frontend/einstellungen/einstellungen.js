@@ -7,7 +7,7 @@
  * dort einen Pruefer und hier eine Karte — sonst nichts.
  */
 
-const SET = { modules: [], order: [], hidden: new Set() };
+const SET = { modules: [], order: [], hidden: new Set(), alle: [], aus: new Set() };
 
 /* nav-switcher.js baut die Leiste asynchron (es fragt vorher, wer man ist).
  * Wir warten auf sein Signal, statt auf gut Glueck zu pollen. */
@@ -32,6 +32,48 @@ const EYE_OFF = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" str
     '<path d="M4 4l16 16"/><path d="M9.9 5.9A9.5 9.5 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.8"/>' +
     '<path d="M6.5 8.2A17 17 0 0 0 2.5 12S6 18.5 12 18.5c1 0 1.9-.2 2.7-.5"/>' +
     '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+
+/* Welche Module dieses Konto ueberhaupt benutzt. Anders als das Auge in der
+   Karte darunter nimmt der Schalter ein Modul aus der GANZEN Navigation --
+   Leiste, Punkte-Menue, Tab-Leiste und Dashboard. Gespeichert wird sofort:
+   ein Speichern-Knopf fuer einen einzelnen Schalter ist ein Klick, der nur
+   fragt, ob man es wirklich gemeint hat. */
+function renderModuleList() {
+    const box = document.getElementById('modList');
+    if (!box) return;
+    box.innerHTML = SET.alle.map(m => {
+        const aus = SET.aus.has(m.href);
+        const name = m.label.split(' ').slice(1).join(' ');
+        return '<div class="navcfg-row' + (aus ? ' is-schlaeft' : '') + '">' +
+                   '<span class="navcfg-ico">' + VexNav.iconSvg(m) + '</span>' +
+                   '<span class="navcfg-name">' + name +
+                       (m.sub ? '<span class="set-modsub">' + m.sub + '</span>' : '') +
+                   '</span>' +
+                   '<button type="button" class="v-btn v-btn--sm set-modbtn' +
+                       (aus ? '' : ' is-an') + '" data-href="' + m.href + '"' +
+                       ' aria-pressed="' + (aus ? 'false' : 'true') + '">' +
+                       (aus ? 'Ruht' : 'Benutze ich') + '</button>' +
+               '</div>';
+    }).join('');
+}
+
+async function toggleModule(href, btn) {
+    const warAus = SET.aus.has(href);
+    warAus ? SET.aus.delete(href) : SET.aus.add(href);
+    btn.disabled = true;
+    btn.classList.add('is-loading');
+    try {
+        await VexPrefs.set(VexNav.MODULE_OFF_PREF, [...SET.aus]);
+        // Neu laden statt an vier Stellen nachzuzeichnen: Leiste, Menue,
+        // Tab-Leiste und Dashboard lesen die Liste beim Aufbau. Ein halb
+        // nachgezogener Zustand waere schlechter als ein kurzer Moment.
+        location.reload();
+    } catch (e) {
+        warAus ? SET.aus.add(href) : SET.aus.delete(href);
+        renderModuleList();
+        if (window.Toast) Toast.error(e.message || String(e));
+    }
+}
 
 function renderDesktopList() {
     const box = document.getElementById('deskList');
@@ -251,6 +293,18 @@ async function saveRange(preset) {
     SET.modules.forEach(m => { if (SET.order.indexOf(m.href) === -1) SET.order.push(m.href); });
     SET.hidden = new Set(((window.VexNav && VexNav.readHidden()) || []).filter(h => known.has(h)));
     renderDesktopList();
+
+    // Die Modul-Karte listet auch die ruhenden -- sonst gaebe es keinen Weg,
+    // sie wieder einzuschalten. Das Dashboard steht nicht zur Wahl.
+    SET.alle = ((window.VexNav && VexNav.allModules && VexNav.allModules())
+                || SET.modules).filter(m => m.href !== '/');
+    SET.aus = new Set((window.VexNav && VexNav.readOff && VexNav.readOff()) || []);
+    renderModuleList();
+    const modBox = document.getElementById('modList');
+    if (modBox) modBox.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (btn && !btn.disabled) toggleModule(btn.dataset.href, btn);
+    });
 
     document.getElementById('deskList').addEventListener('click', (e) => {
         const btn = e.target.closest('button');

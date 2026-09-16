@@ -21,8 +21,12 @@ TABLES_ORDERED = [
     "potential_goals",
     "future_ideas",
     "completed_goals",
+    # Notizen (v1.14.0)
+    "notes",
     # Ausgaben-Modul (Paket 9)
     "stores",
+    # Marken zeigen auf Laeden (brands.store_id) -- also nach "stores".
+    "brands",
     "expense_categories",
     "category_rules",
     "receipt_images",
@@ -31,7 +35,17 @@ TABLES_ORDERED = [
     "expense_imports",
     "expenses",
     "expense_items",
+    # Abgelehnte Zusammenfuehrungs-Vorschlaege (024/028/036). Sie haengen nur
+    # an users und tragen eine Entscheidung: ohne sie kommt jeder einmal
+    # weggeklickte Vorschlag nach einem Restore wieder.
+    "dismissed_expense_duplicates",
+    "dismissed_product_merges",
+    "dismissed_store_merges",
     # Health-Modul (v1.22.0)
+    # health_metrics ist die Tagestabelle aus dem Handbetrieb (CSV-Export,
+    # services/health_ingest.py) -- aelter als der Rest, aber weiter in
+    # Benutzung und deshalb kein Altbestand, den man weglassen darf.
+    "health_metrics",
     "health_api_keys",
     "health_metric_samples",
     "health_blood_pressure",
@@ -47,6 +61,24 @@ TABLES_ORDERED = [
     # Fremdschluessels schon existieren.
     "music_imports",
     "music_entries",
+    # Schach-Modul (v1.83.0). Konto zuerst: Wertungen, Partien und
+    # Import-Protokoll zeigen alle darauf.
+    "chess_accounts",
+    "chess_ratings",
+    "chess_games",
+    "chess_imports",
+    "chess_settings",
+    # Ernaehrung (v1.85.0 ff.). Reihenfolge nach Fremdschluesseln: Groessen
+    # haengen am Lebensmittel, Zutaten am Gericht, und die Tageszeile zeigt
+    # auf beide. ``food_catalog`` steht bewusst NICHT hier: er gehoert keinem
+    # Nutzer, wird eingespielt statt gepflegt und waere mit 400.000 Zeilen
+    # in jedem Backup derselbe Ballast.
+    "food_items",
+    "food_item_sizes",
+    "food_dishes",
+    "food_dish_items",
+    "food_log",
+    "food_settings",
     # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
     # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
     "user_prefs",
@@ -71,6 +103,9 @@ USER_SCOPED_TABLES = {t for t in TABLES_ORDERED if t != "users"}
 PARENT_SCOPE = {
     "health_workout_metrics":    ("workout_id", "health_workouts"),
     "health_workout_hr_samples": ("workout_id", "health_workouts"),
+    "chess_ratings":             ("account_id", "chess_accounts"),
+    "food_item_sizes":           ("item_id", "food_items"),
+    "food_dish_items":           ("dish_id", "food_dishes"),
 }
 
 def _ser_value(v):

@@ -30,6 +30,15 @@
 .navcfg-row.is-off .navcfg-name { text-decoration: line-through; }
 .set-eye.is-off { color: var(--text-4); }
 .navcfg-row.is-off .set-eye { opacity: 1; }
+/* Der Modul-Schalter traegt sein Wort, nicht nur ein Symbol: hier steht
+   mehr auf dem Spiel als bei der Leiste, und "Ruht" muss man lesen koennen. */
+.set-modsub { display: block; color: var(--text-4); font-size: 0.75rem;
+    font-weight: 400; margin-top: 0.1rem; }
+.set-modbtn { width: auto; margin: 0; flex: none; min-width: 7.5rem; }
+.set-modbtn.is-an { background: var(--accent-strong); color: var(--accent-ink);
+    border-color: transparent; }
+.navcfg-row.is-schlaeft .navcfg-ico,
+.navcfg-row.is-schlaeft .navcfg-name { opacity: 0.55; }
 </style>
 </head>
 <body style="visibility:hidden">
@@ -45,6 +54,19 @@
         <span class="eyebrow">Persönlich</span>
         <h2>Einstellungen</h2>
         <div class="sub">Was hier steht, hängt am Konto — nicht am Browser — und gilt deshalb auf jedem Gerät.</div>
+    </div>
+
+    <div class="v-card">
+        <div class="v-card-head">
+            <h3>Module</h3>
+            <span class="v-card-sub">Was du benutzt</span>
+        </div>
+        <p class="set-hint">Ein ruhendes Modul steht in keiner Leiste und in keinem Menü —
+            auch nicht im Punkte-Schalter. Es ist keine Sperre: seine Daten bleiben vollständig
+            erhalten, Export und Backup nehmen sie weiter mit, und wer die Adresse direkt
+            aufruft, bekommt die Seite. Einschalten geht jederzeit und ändert nichts an dem,
+            was schon drinsteht.</p>
+        <div class="navcfg-list" id="modList"></div>
     </div>
 
     <div class="v-card">
