@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.3.0', date: '2026-09-18', title: 'Zum ersten Mal angesehen — und zwei Fehler gefunden', notes: [
+        'Behoben: „KOHLENHYDRATE“ passte nicht in seinen Ring und brach auf beiden Seiten über den Bogen. Die Beschriftung der kleinen Makro-Ringe steht jetzt darunter; innen bleibt die Zahl, und die ist immer kurz.',
+        'Behoben: ein eingeschaltetes Modul galt auf einem frischen Gerät als ruhend. Die Einstellungen liegen zwischengespeichert im Browser; beim ersten Besuch — oder nach gelöschten Browserdaten — war der Speicher leer, und dann galt die Werkseinstellung. Wer die Nährwerte am Handy eingeschaltet hatte und am Rechner herkam, fand sie in keiner Leiste und auf der Seite den Satz „Dieses Modul ruht“ — samt Knopf zum Einschalten von etwas, das schon an war.',
+        'Die gestrichelte Spur für fehlende Angaben las sich wie eine Tacho-Skala. Längere Striche, weniger Deckkraft: jetzt sieht sie nach unterbrochener Linie aus, und das ist gemeint.',
+    ]},
     { v: 'v2.2.1', date: '2026-09-18', title: 'Essen und Nährwerte: das Datum und die Menge', notes: [
         'Die Menge eines Nährwerte-Eintrags lässt sich jetzt berichtigen. Bisher ging das nicht: wer 200 g eintrug und 100 g meinte, musste löschen, das Lebensmittel erneut suchen, die Einheit erneut wählen und neu eintragen — im Tagebuch war dagegen alles änderbar. Ausgerechnet das genaue Modul war das, in dem die Zahl nicht zu berichtigen war.',
         'Im Dialog stand dafür eine Begründung: die Menge sei beim Eintragen umgerechnet worden. Das stimmte nicht — Kalorien und Makros holt der Server bei jedem Aufruf frisch aus dem Lebensmittel, festgehalten ist allein das Gewicht in Gramm, und das ist aus Menge und Einheit dieselbe Rechnung wie beim ersten Mal. Der Absatz ist weg, das Feld ist da.',

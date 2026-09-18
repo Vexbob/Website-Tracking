@@ -28,3 +28,6 @@ node_modules/
 
 # Lokale AI-Anweisungen (nicht pushen)
 CLAUDE.md
+
+# Bildschirmfotos der Vorschau -- Ergebnisse, kein Quelltext.
+tools/vorschau/bilder/

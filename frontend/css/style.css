@@ -1891,7 +1891,10 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
     stroke-dashoffset: calc(var(--ring-c) * (1 - var(--ring-over)));
     transition: stroke-dashoffset 0.6s var(--ease);
 }
-.v-ring.is-unvollstaendig .v-ring-track { stroke-dasharray: 2 6; }
+.v-ring.is-unvollstaendig .v-ring-track {
+    stroke-dasharray: 7 6;
+    opacity: 0.6;
+}
 .v-ring-txt {
     position: absolute;
     inset: 0;
@@ -1939,10 +1942,23 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 .v-ring--halb .v-ring-txt { inset: 22% 0 0 0; justify-content: center; }
 
 .v-ring--hero { --ring-size: 176px; --ring-w: 13; }
-.v-ring--sm { --ring-size: 78px; --ring-w: 9; }
+
+/* Der kleine Ring traegt seine Beschriftung UNTER sich, nicht darin. In einen
+   Kreis von 78 px passt „EIWEISS“, aber nicht „KOHLENHYDRATE“: das Wort
+   brach ueber den Bogen und kreuzte ihn auf beiden Seiten. Innen steht nur
+   die Zahl, und die ist immer kurz. */
+.v-ring--sm { --ring-size: 78px; --ring-w: 9; margin-bottom: 1.05rem; }
 .v-ring--sm .v-ring-val { font-size: 0.9375rem; }
-.v-ring--sm .v-ring-unit,
-.v-ring--sm .v-ring-lbl { font-size: 0.625rem; margin-top: 1px; }
+.v-ring--sm .v-ring-unit { font-size: 0.625rem; margin-top: 1px; }
+.v-ring--sm .v-ring-lbl {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 5px;
+    font-size: 0.625rem;
+    white-space: nowrap;
+}
 
 /* Mehrere Ringe nebeneinander -- je Ring seine eigene Beschriftung darunter,
    damit keine Legende noetig ist. */

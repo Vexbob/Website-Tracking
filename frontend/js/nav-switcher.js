@@ -352,6 +352,20 @@
         try {
             if (typeof apiCall !== 'function') return;
             await VexPrefs.load();
+            // Den Filter NEU rechnen, nicht dieselbe Liste noch einmal
+            // zeichnen: ``visible`` entstand oben aus dem Cache, und der war
+            // beim ersten Besuch eines Geraets leer -- dann galt die
+            // Werkseinstellung, und ein eingeschaltetes Modul fehlte
+            // ueberall, bis jemand die Seite ein zweites Mal aufrief.
+            const ruhtJetzt = new Set(readOff());
+            const neuSichtbar = allowedModules.filter(m => !ruhtJetzt.has(m.href));
+            const andersJetzt = (neuSichtbar.length !== visible.length
+                || neuSichtbar.some((m, i) => m !== visible[i]));
+            if (andersJetzt) {
+                visible = neuSichtbar;
+                visibleModules = visible;
+                renderTabBar(readTabCache());
+            }
             renderModuleRow(visible);
         } catch (e) { /* offline: der Cache steht */ }
     }

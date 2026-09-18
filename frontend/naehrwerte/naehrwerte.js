@@ -2271,7 +2271,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Ruht das Modul, steht der Grund oben auf der Seite. Eine Seite, die in
     // keiner Leiste auftaucht und dann kommentarlos normal aussieht, waere die
     // schlechtere Ueberraschung -- und gesperrt ist hier nichts.
-    if (window.VexNav && VexNav.istAus && VexNav.istAus('/naehrwerte/')) {
+    // Erst bei ``vexnav:ready`` fragen, nicht jetzt: ``VexNav.istAus`` liest
+    // aus dem Einstellungs-Cache im localStorage, und der ist beim ersten
+    // Besuch eines Geraets leer -- dann gilt die Werkseinstellung, und die
+    // laesst dieses Modul ruhen. Wer es am Handy eingeschaltet hat und am
+    // Rechner herkommt, bekaeme sonst „Dieses Modul ruht“ samt einem Knopf,
+    // der etwas einschalten will, das schon an ist. Das Signal faellt, wenn
+    // der Serverstand da ist; die Karte ist bis dahin ohnehin verborgen.
+    document.addEventListener('vexnav:ready', () => {
+        if (!(window.VexNav && VexNav.istAus && VexNav.istAus('/naehrwerte/'))) return;
         const karte = document.getElementById('nwRuht');
         karte.hidden = false;
         document.getElementById('nwEinschalten').addEventListener('click', async (e) => {
@@ -2284,7 +2292,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 melde(err.message || 'Das ging nicht.', 'error');
             }
         });
-    }
+    });
 
     try {
         const me = await fetchMe();
