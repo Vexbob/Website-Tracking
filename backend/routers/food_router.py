@@ -120,9 +120,15 @@ class LogEingabe(BaseModel):
 
 
 class EintragAendern(BaseModel):
-    """Was sich an einer Zeile nachtraeglich richtigstellen laesst."""
+    """Was sich an einer Zeile nachtraeglich richtigstellen laesst.
+
+    Die Quelle steht NICHT darin: aus einem Gericht ein Lebensmittel zu machen
+    waere kein Richtigstellen, sondern ein anderer Eintrag.
+    """
     meal: Optional[str] = None
     note: Optional[str] = None
+    amount: Optional[float] = None
+    unit: Optional[str] = None
 
 
 class ZieleEingabe(BaseModel):
@@ -738,6 +744,14 @@ def _zeile_rechnen(z, portionen: dict):
         "sub": zusatz,
         "kind": art,
         "amount_label": _menge_text(z),
+        # Menge, Einheit und Quelle gehen mit hinaus, damit der Dialog sie
+        # vorbelegen kann. Ohne sie muesste er die Zahl aus ``amount_label``
+        # zurueckuebersetzen -- aus Text eine Zahl zu lesen, die man auch
+        # mitgeben kann, ist der unsicherste Weg von zweien.
+        "amount": float(z["amount"]),
+        "unit": z["unit"],
+        "item_id": z["item_id"],
+        "dish_id": z["dish_id"],
         "grams": round(gramm, 1),
         "meal": z["meal"] or mz.OHNE_MAHLZEIT,
         "meal_auto": bool(z["meal_auto"]),
@@ -821,6 +835,59 @@ async def tag(date: Optional[str] = None, db=Depends(get_db),
     return await _tag(db, user["id"], _als_tag(date))
 
 
+async def _menge_rechnen(db, user_id: int, dish_id, item_id,
+                         amount, unit):
+    """Aus Menge und Einheit werden Gramm -- die eine Stelle, an der das steht.
+
+    Beim Eintragen und beim Richtigstellen muss dasselbe herauskommen. Stuende
+    die Rechnung zweimal da, koennte eine Korrektur eine Zeile erzeugen, die
+    ueber den normalen Weg nie entstanden waere -- und niemand saehe es der
+    Zeile an.
+
+    Gibt ``(menge, einheit, gramm)`` zurueck.
+    """
+    if dish_id:
+        gericht = None
+        for g in await _gerichte(db, user_id):
+            if g["id"] == dish_id:
+                gericht = g
+                break
+        if not gericht:
+            raise HTTPException(404, "Das gibt es in deinem Bestand nicht.")
+        menge = PORTIONEN_STANDARD if amount is None else float(amount)
+        if menge <= 0:
+            raise HTTPException(400, "Eine Menge von null ist kein Eintrag.")
+        # Das Gewicht einer Portion kennt das Rezept. Gerechnet wird beim
+        # Speichern -- sonst aendert eine spaeter geaenderte Zutat einen
+        # vergangenen Tag.
+        gramm = round(float(gericht["portion"].get("grams") or 0) * menge, 2)
+        return menge, PORTION_EINHEIT, gramm
+
+    lebensmittel = await db.fetchrow(
+        "SELECT id, base_unit, portion_g, portion_label, package_g "
+        "  FROM food_items WHERE id=$1 AND user_id=$2", item_id, user_id)
+    if not lebensmittel:
+        raise HTTPException(404, "Das gibt es in deinem Bestand nicht.")
+    eigene = await _groessen_eines(db, item_id)
+    basis = lebensmittel["base_unit"] or "g"
+    # Ohne Angabe die Standardgroesse: die erste eigene Groesse, sonst
+    # 100 g bzw. 100 ml -- der Bezug, in dem die Naehrwerte stehen.
+    if amount is None:
+        menge = 1.0 if eigene else calc.PORTION_FALLBACK
+        einheit = eigene[0]["label"] if eigene else basis
+    else:
+        menge, einheit = float(amount), (unit or basis)
+    if menge <= 0:
+        raise HTTPException(400, "Eine Menge von null ist kein Eintrag.")
+    erlaubt = [e["key"] for e in calc.einheiten_fuer(dict(lebensmittel), eigene)]
+    if einheit not in erlaubt:
+        raise HTTPException(
+            400, f"„{einheit}“ ist für dieses Lebensmittel keine "
+                 "hinterlegte Größe.")
+    gramm, _hinweis = calc.in_basis(menge, einheit, dict(lebensmittel), eigene)
+    return menge, einheit, round(gramm, 2)
+
+
 @router.post("/api/food/track/log")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def eintragen(request: Request, daten: LogEingabe, db=Depends(get_db),
@@ -849,47 +916,8 @@ async def eintragen(request: Request, daten: LogEingabe, db=Depends(get_db),
         mahlzeit = mz.mahlzeit_fuer_uhrzeit(zeit[0])
         geraten = True
 
-    if daten.dish_id:
-        gericht = None
-        for g in await _gerichte(db, user["id"]):
-            if g["id"] == daten.dish_id:
-                gericht = g
-                break
-        if not gericht:
-            raise HTTPException(404, "Das gibt es in deinem Bestand nicht.")
-        menge = PORTIONEN_STANDARD if daten.amount is None else float(daten.amount)
-        if menge <= 0:
-            raise HTTPException(400, "Eine Menge von null ist kein Eintrag.")
-        einheit = PORTION_EINHEIT
-        # Das Gewicht einer Portion kennt das Rezept. Gerechnet wird beim
-        # Speichern -- sonst aendert eine spaeter geaenderte Zutat einen
-        # vergangenen Tag.
-        gramm = round(float(gericht["portion"].get("grams") or 0) * menge, 2)
-    else:
-        lebensmittel = await db.fetchrow(
-            "SELECT id, base_unit, portion_g, portion_label, package_g "
-            "  FROM food_items WHERE id=$1 AND user_id=$2",
-            daten.item_id, user["id"])
-        if not lebensmittel:
-            raise HTTPException(404, "Das gibt es in deinem Bestand nicht.")
-        eigene = await _groessen_eines(db, daten.item_id)
-        basis = lebensmittel["base_unit"] or "g"
-        # Ohne Angabe die Standardgroesse: die erste eigene Groesse, sonst
-        # 100 g bzw. 100 ml -- der Bezug, in dem die Naehrwerte stehen.
-        if daten.amount is None:
-            menge = 1.0 if eigene else calc.PORTION_FALLBACK
-            einheit = eigene[0]["label"] if eigene else basis
-        else:
-            menge, einheit = float(daten.amount), (daten.unit or basis)
-        if menge <= 0:
-            raise HTTPException(400, "Eine Menge von null ist kein Eintrag.")
-        erlaubt = [e["key"] for e in calc.einheiten_fuer(dict(lebensmittel), eigene)]
-        if einheit not in erlaubt:
-            raise HTTPException(
-                400, f"„{einheit}“ ist für dieses Lebensmittel keine "
-                     "hinterlegte Größe.")
-        gramm, _hinweis = calc.in_basis(menge, einheit, dict(lebensmittel), eigene)
-        gramm = round(gramm, 2)
+    menge, einheit, gramm = await _menge_rechnen(
+        db, user["id"], daten.dish_id, daten.item_id, daten.amount, daten.unit)
 
     await db.execute(
         "INSERT INTO food_log (user_id, day, dish_id, item_id, meal, note, "
@@ -905,16 +933,18 @@ async def eintragen(request: Request, daten: LogEingabe, db=Depends(get_db),
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def eintrag_aendern(request: Request, log_id: int, daten: EintragAendern,
                           db=Depends(get_db), user=Depends(get_current_user)):
-    """Mahlzeit oder Notiz nachtraeglich richtigstellen.
+    """Mahlzeit, Notiz oder Menge nachtraeglich richtigstellen.
 
-    Absichtlich nur diese zwei: eine Menge nachtraeglich zu aendern hiesse,
-    die Umrechnung von damals zu wiederholen -- dafuer gibt es Loeschen und
-    neu eintragen. Eine von Hand gesetzte Mahlzeit ist keine Vermutung mehr,
-    deshalb faellt dabei ``meal_auto`` weg.
+    Die Menge wird dabei mit DERSELBEN Funktion umgerechnet wie beim
+    Eintragen (``_menge_rechnen``) -- eine zweite Fassung waere eine zweite
+    Regel. Was bleibt, ist die Quelle: ein Gericht bleibt ein Gericht.
+
+    Eine von Hand gesetzte Mahlzeit ist keine Vermutung mehr, deshalb faellt
+    dabei ``meal_auto`` weg.
     """
     zeile = await db.fetchrow(
-        "SELECT id, day FROM food_log WHERE id=$1 AND user_id=$2",
-        log_id, user["id"])
+        "SELECT id, day, dish_id, item_id, amount, unit "
+        "  FROM food_log WHERE id=$1 AND user_id=$2", log_id, user["id"])
     if not zeile:
         raise HTTPException(404, "Diesen Eintrag gibt es nicht.")
 
@@ -929,6 +959,17 @@ async def eintrag_aendern(request: Request, log_id: int, daten: EintragAendern,
     if daten.note is not None:
         werte.append(daten.note.strip() or None)
         felder.append(f"note=${len(werte) + 2}")
+    if daten.amount is not None or daten.unit is not None:
+        menge, einheit, gramm = await _menge_rechnen(
+            db, user["id"], zeile["dish_id"], zeile["item_id"],
+            daten.amount if daten.amount is not None else zeile["amount"],
+            daten.unit or zeile["unit"])
+        werte.append(menge)
+        felder.append(f"amount=${len(werte) + 2}")
+        werte.append(einheit)
+        felder.append(f"unit=${len(werte) + 2}")
+        werte.append(gramm)
+        felder.append(f"grams=${len(werte) + 2}")
     if not felder:
         raise HTTPException(400, "Es wurde nichts zum Ändern übergeben.")
 

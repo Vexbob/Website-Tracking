@@ -482,3 +482,78 @@ def test_ein_leerer_name_wird_nicht_abgelehnt():
             request=None, daten=fr.BrueckeAblehnen(label="   "),
             db=AttrappeBruecke(), user=NUTZER))
     assert fehler.value.status_code == 400
+
+
+# ==========================================================================
+# Die Menge laesst sich korrigieren (v2.1.0)
+# ==========================================================================
+# Bis dahin nahm PATCH nur Mahlzeit und Notiz. Wer 200 g eintrug und 100 g
+# meinte, musste loeschen und von vorn suchen -- im Tagebuch liess sich
+# dagegen alles aendern. Ausgerechnet das genaue Modul war das, in dem die
+# Zahl nicht zu berichtigen war.
+def test_die_menge_laesst_sich_nachtraeglich_berichtigen():
+    db = AttrappeDB(treffer={"id": 5, "day": HEUTE, "dish_id": None,
+                             "item_id": 3, "amount": 2, "unit": "Scheibe"})
+    asyncio.run(AENDERN(request=None, log_id=5,
+                        daten=fr.EintragAendern(amount=1),
+                        db=db, user=NUTZER))
+    sql, args = db.geschrieben[0]
+    assert "amount=" in sql and "unit=" in sql and "grams=" in sql
+    assert 1.0 in args
+
+
+def test_eine_berichtigte_menge_rechnet_die_gramm_mit():
+    """Sonst stuende an der Zeile eine neue Menge mit dem alten Gewicht --
+    und die Tagessumme haette mit der Zeile nichts mehr zu tun."""
+    db = AttrappeDB(treffer={"id": 5, "day": HEUTE, "dish_id": None,
+                             "item_id": 3, "amount": 2, "unit": "Scheibe"})
+    asyncio.run(AENDERN(request=None, log_id=5,
+                        daten=fr.EintragAendern(amount=3),
+                        db=db, user=NUTZER))
+    _, args = db.geschrieben[0]
+    # Eine Scheibe wiegt in der Attrappe 45 g -- drei sind 135 g.
+    assert 135.0 in args or 135 in args
+
+
+def test_eine_menge_von_null_wird_auch_beim_berichtigen_abgewiesen():
+    db = AttrappeDB(treffer={"id": 5, "day": HEUTE, "dish_id": None,
+                             "item_id": 3, "amount": 2, "unit": "Scheibe"})
+    with pytest.raises(HTTPException) as fehler:
+        asyncio.run(AENDERN(request=None, log_id=5,
+                            daten=fr.EintragAendern(amount=0),
+                            db=db, user=NUTZER))
+    assert fehler.value.status_code == 400
+
+
+def test_eine_nicht_hinterlegte_groesse_faellt_auch_beim_berichtigen_auf():
+    """Beide Wege muessen dieselbe Regel anwenden. Taeten sie es nicht,
+    entstuende ueber die Korrektur eine Zeile, die es ueber das Eintragen nie
+    gegeben haette -- und niemand saehe es ihr an."""
+    db = AttrappeDB(treffer={"id": 5, "day": HEUTE, "dish_id": None,
+                             "item_id": 3, "amount": 2, "unit": "Scheibe"})
+    with pytest.raises(HTTPException) as fehler:
+        asyncio.run(AENDERN(request=None, log_id=5,
+                            daten=fr.EintragAendern(amount=1, unit="Fuhre"),
+                            db=db, user=NUTZER))
+    assert fehler.value.status_code == 400
+
+
+def test_die_quelle_laesst_sich_nicht_umschreiben():
+    """Aus einem Gericht ein Lebensmittel zu machen waere kein
+    Richtigstellen, sondern ein anderer Eintrag."""
+    daten = fr.EintragAendern(amount=1)
+    for feld in ("dish_id", "item_id", "day", "label", "level"):
+        assert not hasattr(daten, feld)
+
+
+def test_nur_notiz_geaendert_laesst_die_menge_in_ruhe():
+    """Wer die Notiz anfasst, soll nicht nebenbei die Gramm neu gerechnet
+    bekommen."""
+    db = AttrappeDB(treffer={"id": 5, "day": HEUTE, "dish_id": None,
+                             "item_id": 3, "amount": 2, "unit": "Scheibe"})
+    asyncio.run(AENDERN(request=None, log_id=5,
+                        daten=fr.EintragAendern(note="mit Butter"),
+                        db=db, user=NUTZER))
+    sql, _ = db.geschrieben[0]
+    assert "note=" in sql
+    assert "grams=" not in sql and "amount=" not in sql

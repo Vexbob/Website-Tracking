@@ -1,12 +1,12 @@
 {
     "name": "Vexbob",
     "short_name": "Vexbob",
-    "description": "Persönlicher Tool-Hub mit Sparziel-Tracker",
+    "description": "Persönlicher Tool-Hub: Sparziel, Ausgaben, Gesundheit, Musik, Schach, Essenstagebuch und Nährwerte.",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",
-    "background_color": "#f8f9fa",
-    "theme_color": "#ff5c7a",
+    "background_color": "#0a0c10",
+    "theme_color": "#0a0c10",
     "orientation": "portrait-primary",
     "lang": "de",
     "icons": [
@@ -15,6 +15,20 @@
             "sizes": "any",
             "type": "image/svg+xml",
             "purpose": "any maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Essenstagebuch",
+            "short_name": "Essen",
+            "description": "Hinschreiben, was es gab",
+            "url": "/essen/"
+        },
+        {
+            "name": "Bon erfassen",
+            "short_name": "Bon",
+            "description": "Einen Einkauf eintragen",
+            "url": "/ausgaben/neu.html"
         }
     ]
 }

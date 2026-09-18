@@ -271,6 +271,11 @@ function zeichneKopf() {
         istHeute ? 'Heute' : (datum === gesternIso ? 'Gestern' : TAG_NAMEN[d.getDay()]);
     document.getElementById('nwTagDatum').textContent = datumKurz(datum);
     document.getElementById('nwVor').disabled = istHeute;
+    // Die Auswahl steht auf dem gezeigten Tag und reicht nicht in die
+    // Zukunft -- dieselbe Grenze wie am Pfeil daneben.
+    const wahl = document.getElementById('nwDatumWahl');
+    wahl.value = datum;
+    wahl.max = heute();
 }
 
 /* Der Kalorienring. Er sagt drei Dinge auf einmal: wie viel, wovon wie viel
@@ -366,7 +371,7 @@ function zeichneMahlzeiten() {
     ziel.querySelectorAll('[data-weg]').forEach(b =>
         b.addEventListener('click', () => entfernenEintrag(Number(b.dataset.weg))));
     ziel.querySelectorAll('[data-mz-um]').forEach(b =>
-        b.addEventListener('click', () => mahlzeitDialog(Number(b.dataset.mzUm))));
+        b.addEventListener('click', () => eintragAendernDialog(Number(b.dataset.mzUm))));
 }
 
 function zeile(e) {
@@ -376,7 +381,7 @@ function zeile(e) {
         e.logged_time || '',
     ].filter(Boolean).join(' · ');
     return `<div class="ern-zeile"${e.meal_auto
-            ? ' title="Mahlzeit automatisch nach Uhrzeit — Namen antippen zum Verschieben"' : ''}>
+            ? ' title="Mahlzeit automatisch nach Uhrzeit — Namen antippen zum Ändern"' : ''}>
         <button type="button" class="nw-zeile-name" data-mz-um="${e.id}">
             <strong>${esc(e.name)}</strong>
             <span class="nw-zeile-meta">${meta}</span>
@@ -825,24 +830,69 @@ async function entfernenEintrag(id) {
 /* Die Mahlzeit einer Zeile richtigstellen. Die Menge steht nicht zur Wahl:
    sie nachtraeglich zu aendern hiesse, die Umrechnung von damals zu
    wiederholen -- dafuer gibt es Entfernen und neu eintragen. */
-function mahlzeitDialog(id) {
+/* Ein Eintrag richtigstellen: Menge, Mahlzeit, Notiz.
+
+   Die Menge stand hier bis v2.1.0 nicht, und darunter stand ein Absatz, der
+   das begruendete ("sie wurde beim Eintragen umgerechnet"). Die Begruendung
+   war falsch: kcal und Makros holt der Server bei jedem Aufruf frisch aus dem
+   Lebensmittel, eingefroren ist allein das Gramm-Gewicht -- und das ist aus
+   Menge und Einheit dieselbe Rechnung wie beim ersten Mal. Es fehlte eine
+   Funktion, kein Grund.
+
+   Ein Erklaerabsatz vor einem Bedienelement ist ohnehin das Zeichen, dass das
+   Bedienelement nicht stimmt. Hier war es das Zeichen, dass es fehlte. */
+function eintragAendernDialog(id) {
     const e = ((state.tag && state.tag.entries) || []).find(x => x.id === id);
     if (!e) return;
+
+    const istGericht = e.kind === 'dish';
+    const vorrat = istGericht ? null
+        : state.bestand.find(p => p.id === e.item_id);
+    // Ist das Lebensmittel nicht mehr im Bestand, bleibt wenigstens die
+    // Einheit, die an der Zeile steht -- eine leere Auswahl waere schlimmer
+    // als eine mit genau einem Eintrag.
+    const einheiten = (vorrat && vorrat.units && vorrat.units.length)
+        ? vorrat.units : [{ key: e.unit, label: e.unit }];
+
+    const mengeFeld = istGericht
+        ? `<div class="nw-stepper nw-stepper--breit">
+               <button type="button" id="nwEdMinus" aria-label="Weniger">−</button>
+               <output id="nwEdMenge" data-wert="${e.amount}">${
+                   mengeKurz(e.amount)} Portion${e.amount === 1 ? '' : 'en'}</output>
+               <button type="button" id="nwEdPlus" aria-label="Mehr">＋</button>
+           </div>`
+        : `<div class="ern-menge">
+               <input type="number" min="0" step="0.25" inputmode="decimal"
+                      id="nwEdMenge" value="${mengeKurz(e.amount)}"
+                      aria-label="Menge">
+               <select class="v-select v-select--sm" id="nwEdEinheit"
+                       aria-label="Einheit">
+                   ${einheiten.map(u => `<option value="${esc(u.key)}"${
+                       u.key === e.unit ? ' selected' : ''}>${esc(u.label)}</option>`).join('')}
+               </select>
+           </div>`;
+
     const inhalt = `
-        <p class="ern-note" style="margin-top:0">${esc(e.name)} · ${esc(e.amount_label)}</p>
-        <div class="ern-dlg-mahlzeiten" id="nwEdMahlzeiten"></div>
+        <p class="ern-note" style="margin-top:0">${esc(e.name)}${
+            e.has_nutrition ? ` · ${zahlKurz(e.kcal)} kcal` : ' · ohne Nährwerte'}</p>
+        <div class="ern-feld">
+            <span>Wie viel?</span>
+            ${mengeFeld}
+        </div>
+        <div class="ern-feld">
+            <span>Wann?</span>
+            <div class="ern-dlg-mahlzeiten" id="nwEdMahlzeiten"></div>
+        </div>
         <label class="ern-feld">
             <span>Notiz</span>
             <input type="text" id="nwEdNote" value="${esc(e.note || '')}"
                    autocomplete="off" placeholder="optional">
         </label>
-        <p class="ern-note">Die Menge lässt sich nicht nachträglich ändern — sie wurde
-            beim Eintragen umgerechnet. Entfernen und neu eintragen ist der ehrlichere
-            Weg als eine Zahl, die zu einer anderen Rechnung gehört.</p>
         <div class="ern-tasten">
             <button type="button" class="v-btn v-btn--primary" id="nwEdOk">Übernehmen</button>
             <button type="button" class="v-btn v-btn--danger" id="nwEdWeg">Entfernen</button>
         </div>`;
+
     const wahl = { meal: e.meal === 'ohne' ? null : e.meal };
     const dlg = openModal('Eintrag', inhalt);
 
@@ -859,14 +909,50 @@ function mahlzeitDialog(id) {
     };
     zeichne();
 
+    if (istGericht) {
+        const feld = document.getElementById('nwEdMenge');
+        const um = (schritt) => {
+            // Eine halbe Portion ist die kleinste sinnvolle Einheit -- wie im
+            // Eintragen-Dialog, damit dieselbe Handlung dieselbe Stufe hat.
+            const neu = Math.max(0.5, Number(feld.dataset.wert) + schritt);
+            feld.dataset.wert = String(neu);
+            feld.textContent = mengeKurz(neu) + ' Portion' + (neu === 1 ? '' : 'en');
+        };
+        document.getElementById('nwEdMinus').addEventListener('click', () => um(-0.5));
+        document.getElementById('nwEdPlus').addEventListener('click', () => um(0.5));
+    } else {
+        // Die Zahl passt sich der Einheit an: 100 g, aber 1 Scheibe.
+        document.getElementById('nwEdEinheit').addEventListener('change', (ev) => {
+            document.getElementById('nwEdMenge').value =
+                BASIS.includes(ev.target.value) ? 100 : 1;
+        });
+    }
+
     document.getElementById('nwEdOk').addEventListener('click', async (ev) => {
         const knopf = ev.currentTarget;
+        const feld = document.getElementById('nwEdMenge');
+        const menge = istGericht
+            ? Number(feld.dataset.wert)
+            : Number(String(feld.value).replace(',', '.'));
+        if (!(menge > 0)) { melde('Wie viel davon?', 'error'); feld.focus(); return; }
+
+        const aenderung = {
+            meal: wahl.meal === null ? 'ohne' : wahl.meal,
+            note: document.getElementById('nwEdNote').value,
+        };
+        // Die Menge nur mitschicken, wenn sie sich wirklich geaendert hat:
+        // sonst wuerde jedes Übernehmen die Gramm neu rechnen, auch wenn nur
+        // die Notiz angefasst wurde.
+        const einheit = istGericht ? e.unit
+            : document.getElementById('nwEdEinheit').value;
+        if (menge !== e.amount || einheit !== e.unit) {
+            aenderung.amount = menge;
+            aenderung.unit = einheit;
+        }
+
         knopf.classList.add('is-loading');
         try {
-            state.tag = await API.eintragAendern(id, {
-                meal: wahl.meal === null ? 'ohne' : wahl.meal,
-                note: document.getElementById('nwEdNote').value,
-            });
+            state.tag = await API.eintragAendern(id, aenderung);
             dlg.close();
             zeichneTag();
         } catch (err) {
@@ -2208,6 +2294,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('logoutBtn').addEventListener('click',
         () => { clearToken(); location.href = '/private/login.html'; });
 
+    document.getElementById('nwDatumWahl').addEventListener('change', (e) => {
+        if (e.target.value) ladeTag(e.target.value);
+        else e.target.value = state.datum || heute();
+    });
     document.getElementById('nwZurueck').addEventListener('click', () => tagVerschieben(-1));
     document.getElementById('nwVor').addEventListener('click', () => tagVerschieben(1));
     document.getElementById('nwAdd').addEventListener('click', () => eintragDialog(null));

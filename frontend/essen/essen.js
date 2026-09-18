@@ -155,6 +155,11 @@ function zeichneKopf() {
         istHeute ? 'Heute' : (datum === gesternIso ? 'Gestern' : TAG_NAMEN[d.getDay()]);
     document.getElementById('esTagDatum').textContent = datumKurz(datum);
     document.getElementById('esVor').disabled = istHeute;
+    // Die Auswahl steht auf dem gezeigten Tag und reicht nicht in die
+    // Zukunft -- dieselbe Grenze wie am Pfeil daneben.
+    const wahl = document.getElementById('esDatumWahl');
+    wahl.value = datum;
+    wahl.max = heute();
 }
 
 /* Die Schnellwahl. Sie ist der ganze Punkt dieser Seite: nach ein paar Tagen
@@ -583,6 +588,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('logoutBtn').addEventListener('click',
         () => { clearToken(); location.href = '/private/login.html'; });
 
+    document.getElementById('esDatumWahl').addEventListener('change', (e) => {
+        // Ein leeres Feld (die Auswahl laesst sich auch loeschen) heisst
+        // nicht "kein Tag", sondern "nichts gewaehlt" -- dann bleibt alles.
+        if (e.target.value) ladeTag(e.target.value);
+        else e.target.value = state.datum || heute();
+    });
     document.getElementById('esZurueck').addEventListener('click', () => tagVerschieben(-1));
     document.getElementById('esVor').addEventListener('click', () => tagVerschieben(1));
     document.getElementById('esAdd').addEventListener('click', () => eintragDialog(null));

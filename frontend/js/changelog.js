@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.2.0', date: '2026-09-18', title: 'Essen und Nährwerte: das Datum und die Menge', notes: [
+        'Die Menge eines Nährwerte-Eintrags lässt sich jetzt berichtigen. Bisher ging das nicht: wer 200 g eintrug und 100 g meinte, musste löschen, das Lebensmittel erneut suchen, die Einheit erneut wählen und neu eintragen — im Tagebuch war dagegen alles änderbar. Ausgerechnet das genaue Modul war das, in dem die Zahl nicht zu berichtigen war.',
+        'Im Dialog stand dafür eine Begründung: die Menge sei beim Eintragen umgerechnet worden. Das stimmte nicht — Kalorien und Makros holt der Server bei jedem Aufruf frisch aus dem Lebensmittel, festgehalten ist allein das Gewicht in Gramm, und das ist aus Menge und Einheit dieselbe Rechnung wie beim ersten Mal. Der Absatz ist weg, das Feld ist da.',
+        'Zu einem Datum springen, in beiden Modulen: das Datum im Kopf ist antippbar und öffnet die Tagesauswahl deines Geräts. Bisher kam man nur mit den Pfeilen weiter — für den letzten Dienstag sechs Tipps, für den Vormonat dreißig.',
+        'Behoben: als installierte App blitzte beim Start ein weißer Bildschirm auf und die Titelleiste war rosa. Die App-Beschreibung nannte Hellgrau und Rosa, während jede Seite Schwarz angibt — in einer Anwendung, die es nur dunkel gibt.',
+        'Auf dem Startbildschirm des Handys führen jetzt zwei Kurzwege direkt hinein: Essenstagebuch und Bon erfassen. Langer Druck auf das App-Symbol.',
+    ]},
     { v: 'v2.1.0', date: '2026-09-18', title: 'Schach ist fertig — und Dialoge sind es auch', notes: [
         'Schach steht nicht mehr unter „In Arbeit“, sondern als eigene Kachel auf dem Dashboard. Es war seit Wochen fertig und wurde benutzt — eine Beschriftung, die etwas Falsches behauptet, ist schlimmer als gar keine.',
         'Schach und Notizen wandern in den Gesamt-Export. Partien mit Ergebnis, Gegner, Wertung und Eröffnung; die Zugfolgen als PGN in einer eigenen Sektion (ein PGN ist ein Dokument, in der Partienliste hätte es jede Tabelle unlesbar gemacht); und der Wertungsverlauf — die Reihe, die es sonst nirgends gibt, weil Lichess und Chess.com nur den aktuellen Stand herausgeben.',

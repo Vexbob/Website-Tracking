@@ -38,6 +38,29 @@
     min-width: 0;
 }
 .nw-tagkopf-mitte strong { font-size: 1.0625rem; color: var(--text-1); font-weight: 650; }
+/* Das Datum ist der Sprung. Ein durchsichtiges ``input type="date"``
+   liegt darueber und oeffnet die Auswahl des Betriebssystems -- die
+   kennt man schon, und sie ist auf jedem Geraet richtig gross. Der
+   gepunktete Strich ist der Hinweis, dass hier etwas passiert. */
+.nw-tagkopf-mitte { position: relative; cursor: pointer; }
+.nw-tagkopf-mitte span { text-decoration: underline dotted var(--line-strong);
+                          text-underline-offset: 3px; }
+.nw-tagkopf-mitte input[type="date"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 2.75rem;
+    opacity: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    font: inherit;
+}
+.nw-tagkopf-mitte:focus-within { outline: none; }
+.nw-tagkopf-mitte:focus-within span { text-decoration-color: var(--accent); }
+
 .nw-tagkopf-mitte span {
     font-size: 0.8125rem;
     color: var(--text-3);
@@ -448,6 +471,13 @@
 .nw-g-treffer:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .nw-g-treffer-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
 .nw-g-austag { margin-top: var(--space-3); display: flex; flex-wrap: wrap; gap: 0.375rem; }
+
+/* Im Dialog steht der Stepper allein in seiner Zeile -- nicht wie in der
+   Vorschlagsliste neben Name und Knopf. Er darf sie deshalb ausfuellen und
+   grosse Tippflaechen bekommen. */
+.nw-stepper--breit { width: 100%; justify-content: space-between; }
+.nw-stepper--breit button { min-width: 3rem; min-height: 2.75rem; }
+.nw-stepper--breit output { flex: 1; text-align: center; }
 
 /* Der Katalogblock im Eintragen-Dialog. Er steht UNTER der eigenen Liste und
    durch eine Linie von ihr getrennt: was einem gehoert, kommt zuerst, und der
