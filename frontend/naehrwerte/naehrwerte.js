@@ -863,7 +863,7 @@ function eintragAendernDialog(id) {
            </div>`
         : `<div class="ern-menge">
                <input type="number" min="0" step="0.25" inputmode="decimal"
-                      id="nwEdMenge" value="${mengeKurz(e.amount)}"
+                      id="nwEdMenge" value="${e.amount}"
                       aria-label="Menge">
                <select class="v-select v-select--sm" id="nwEdEinheit"
                        aria-label="Einheit">
