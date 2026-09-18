@@ -16,6 +16,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
 <script src="/js/ring.js"></script>
 <script src="/js/bild.js"></script>
 <script src="/js/sw-update.js"></script>
@@ -104,10 +105,12 @@
                     <h3>Aus deinem Tagebuch</h3>
                     <span class="stat-range-lbl" id="nwBrueckeSub"></span>
                 </div>
-                <p class="ern-note" style="margin-top:0">Das notierst du oft, und hier
-                    gibt es noch nichts dazu. Einmal Nährwerte hinterlegen — danach lässt
-                    es sich mit Menge eintragen. Deine Tagebuch-Einträge bleiben, wie sie
-                    sind; nachträglich wird nichts umgerechnet.</p>
+                <!-- Ein Satz, nicht vier. Was der Knopf tut, steht auf dem Knopf;
+                     was er NICHT tut (alte Einträge umrechnen), ist die einzige
+                     Auskunft, die man ihm nicht ansieht. -->
+                <p class="ern-note" style="margin-top:0">Das notierst du oft — einmal
+                    Nährwerte hinterlegen, danach geht es mit Menge. Nichts wird
+                    rückwirkend umgerechnet.</p>
                 <div id="nwBrueckeListe"></div>
             </div>
         </div>
@@ -145,23 +148,9 @@
         </div>
     </div>
 
-    <!-- ====================== Ziele ======================
-         Ein eigener Reiter, kein Anhängsel unter einem Diagramm: dort hat sie
-         zuletzt niemand gefunden. -->
-    <div id="tab-ziele" hidden>
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>Tagesziele</h3>
-                <span class="stat-range-lbl">freiwillig, einzeln</span>
-            </div>
-            <div class="ern-ziele" id="nwZiele"></div>
-            <div class="ern-tasten">
-                <button type="button" class="v-btn v-btn--primary" id="nwZieleSpeichern">Ziele speichern</button>
-                <button type="button" class="v-btn" id="nwZieleWeg">Alle zurücksetzen</button>
-            </div>
-            <p class="ern-note" id="nwZieleNote"></p>
-        </div>
-    </div>
+    <!-- Die Tagesziele haben keinen Reiter mehr. Sie liegen im Dialog hinter
+         dem Knopf am Kalorienring — an der Zahl, die sie messen. Siehe
+         ``zieleDialog`` in naehrwerte.js. -->
 
     <!-- ====================== Gerichte ====================== -->
     <div id="tab-gerichte" hidden>
@@ -187,12 +176,12 @@
             </div>
             <div class="ern-suchzeile">
                 <label class="ern-suche">
-                    <span class="ern-suche-ico" aria-hidden="true">🔎</span>
+                    <span class="ern-suche-ico" aria-hidden="true" id="ernSucheIco"></span>
                     <input type="search" id="ernSuche" autocomplete="off"
                            aria-label="Lebensmittel oder Strichcode suchen"
                            placeholder="Name oder Strichcode">
                 </label>
-                <button type="button" class="v-btn" id="ernKamera">📷 Scannen</button>
+                <button type="button" class="v-btn" id="ernKamera">Scannen</button>
                 <button type="button" class="v-btn v-btn--primary" id="ernItemNeu">
                     <span aria-hidden="true">＋</span> Von Hand</button>
             </div>

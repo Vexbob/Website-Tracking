@@ -11,6 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 <script src="/js/charts.js"></script>
 <script src="/js/range-filter.js"></script>
+<script src="/js/ikon.js"></script>
 <style>
 /* Nur Aufbau dieser Musterseite — alles Gestaltete kommt aus style.css. */
 .sg-sec { margin: 0 0 var(--space-6); }
@@ -396,7 +397,10 @@
         dem Handy die Hälfte hinter dem rechten Rand. <strong>Wenige, ungleiche Zeilen bleiben ein
         <code>.v-row</code>-Stapel; ein Zahlenraster bleibt eine <code>.stat-table</code>.</strong>
         Die Zeile darf ein <code>&lt;button&gt;</code> oder <code>&lt;a&gt;</code> sein, wenn
-        dahinter etwas aufgeht — dann trägt sie den Winkel rechts.</p>
+        dahinter etwas aufgeht — dann trägt sie den Winkel rechts.
+        Trägt der Datensatz ein Foto, steht es mit <code>.rec-mark--bild</code> an der
+        Stelle der Marke: es beantwortet dieselbe Frage — welcher ist das — und
+        beantwortet sie schneller.</p>
         <div class="v-card">
             <div class="rec-list">
                 <button type="button" class="rec-row">
@@ -420,6 +424,18 @@
                     <span class="rec-side">
                         <span class="rec-val">±0</span>
                         <span class="rec-sub">1713</span>
+                    </span>
+                    <span class="rec-go" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="rec-row">
+                    <span class="rec-mark rec-mark--bild"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23343b49'/%3E%3Ccircle cx='20' cy='20' r='9' fill='%235b667a'/%3E%3C/svg%3E" alt=""></span>
+                    <span class="rec-main">
+                        <span class="rec-title">Mit Foto statt Marke</span>
+                        <span class="rec-meta">dieselbe Zeile<span class="sep">·</span>2,5 rem<span class="sep">·</span>feste Kante</span>
+                    </span>
+                    <span class="rec-side">
+                        <span class="rec-val">413 kcal</span>
+                        <span class="rec-sub">je Portion</span>
                     </span>
                     <span class="rec-go" aria-hidden="true">›</span>
                 </button>
@@ -471,6 +487,19 @@
     </section>
 
     <section class="sg-sec">
+        <h2>Zeichen an Bedienelementen</h2>
+        <p class="sg-note">Lupe, Papierkorb, Kamera, Stift, Ziel — aus
+        <code>VexIkon.svg(name, groesse)</code> (<code>js/ikon.js</code>), nie als Emoji.
+        Ein Emoji ist auf jedem Gerät eine andere Zeichnung, in einer Farbe, die niemand
+        gewählt hat, und wo die Schrift es nicht kennt, steht ein leerer Kasten. Ein SVG
+        erbt <code>currentColor</code> und die Zustände des Knopfes, in dem es steckt —
+        damit gilt auch hier: die Farbe kommt aus den Tokens.
+        <strong>Emoji bleiben, wo sie Nutzerdaten oder Schmuck sind</strong> — Kategorie-Icons,
+        das Zeichen in einem leeren Zustand, ein Bild in einer Überschrift.</p>
+        <div class="v-card sg-row" id="sgIkonDemo"></div>
+    </section>
+
+    <section class="sg-sec">
         <h2>Bewegung</h2>
         <p class="sg-note">Drei Dauern, eine Kurve: 120 ms für Zustandswechsel, 200 ms für Ein- und
         Ausblenden, 280 ms für Overlays. Kein Federn, kein Nachschwingen. Nichts bewegt sich beim
@@ -488,6 +517,14 @@
 document.querySelector('.version-tag').textContent = typeof APP_VERSION !== 'undefined' ? APP_VERSION : '';
 window.addEventListener('load', () => {
     if (window.VexRange) VexRange.mount(document.getElementById('sgRangeDemo'), {});
+    // Jedes Zeichen in einem echten Knopf: so sieht man, ob es die Farbe und
+    // die Zustaende des Knopfes wirklich erbt.
+    const ikone = document.getElementById('sgIkonDemo');
+    if (ikone && window.VexIkon) {
+        ikone.innerHTML = VexIkon.namen.map(n =>
+            '<button type="button" class="v-btn" aria-label="' + n + '">'
+            + VexIkon.svg(n, 17) + ' ' + n + '</button>').join('');
+    }
     if (typeof Chart === 'undefined') return;
     const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     const axis = css('--chart-axis'), grid = css('--chart-grid');

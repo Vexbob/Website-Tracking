@@ -30,6 +30,13 @@ const API = {
     haeufig:   ()      => apiCall('/api/food/diary/frequent'),
 };
 
+/* Die Zeichen an den Bedienelementen kommen aus VexIkon (js/ikon.js) und
+   nicht mehr als Emoji -- siehe den Kopf jener Datei. */
+const ICON = {
+    lupe:  VexIkon.svg('lupe', 17),
+    muell: VexIkon.svg('muell', 17),
+};
+
 const state = {
     tag: null, datum: null, haeufig: [],
     dialog: null, dlg: null,
@@ -217,10 +224,14 @@ function zeichneMahlzeiten() {
             Number(b.dataset.stufe), b.dataset.neu)));
     ziel.querySelectorAll('[data-oeffnen]').forEach(b =>
         b.addEventListener('click', () => eintragDialogAendern(Number(b.dataset.oeffnen))));
-    ziel.querySelectorAll('[data-weg]').forEach(b =>
-        b.addEventListener('click', () => entfernen(Number(b.dataset.weg))));
 }
 
+/* Zwei Bedienelemente je Zeile, nicht drei. Der Papierkorb stand bis v2.3.0
+   daneben -- 44 Pixel fuer den seltensten Handgriff, direkt neben dem
+   haeufigsten, und ohne Rueckfrage. „Entfernen“ steht im Aenderungs-Dialog,
+   den derselbe Name mit einem Tipp oeffnet: einen Griff tiefer, dafuer nicht
+   mehr aus Versehen. Die Zeile hat den Platz an den Namen zurueckgegeben, der
+   vorher umbrach. */
 function zeile(e) {
     const gegen = e.level === 'viel' ? 'normal' : 'viel';
     const meta = [
@@ -238,8 +249,6 @@ function zeile(e) {
                 data-stufe="${e.id}" data-neu="${gegen}"
                 title="Umstellen auf ${gegen === 'viel' ? 'übermäßig' : 'normal'}"
             >${esc(e.level_label)}</button>
-        <button type="button" class="v-btn v-btn--icon" data-weg="${e.id}"
-                aria-label="Eintrag entfernen" title="Entfernen">🗑️</button>
     </div>`;
 }
 
@@ -298,18 +307,23 @@ async function ladeHaeufig() {
 function eintragDialog(mahlzeit) {
     if (!state.tag) return;
     state.dlg = { mahlzeit: mahlzeit || mahlzeitJetzt(), eingabe: '',
-                  zuletzt: [], tippen: null, liste: [] };
+                  zuletzt: [], liste: [] };
 
     const titel = (state.datum || heute()) === heute()
         ? 'Eintragen · heute' : 'Eintragen · ' + datumKurz(state.datum);
+    // Mahlzeit und Suchfeld kleben oben: sie sind der Kopf des Vorgangs und
+    // duerfen nicht unter dem Daumen wegwandern, waehrend die Liste darunter
+    // waechst und schrumpft.
     const inhalt = `
-        <div class="es-dlg-mahlzeiten" id="esDlgMahlzeiten"></div>
-        <label class="es-suche">
-            <span class="es-suche-ico" aria-hidden="true">🔎</span>
-            <input type="search" id="esDlgSuche" autocomplete="off"
-                   aria-label="Was gab es?"
-                   placeholder="Tippen, was es gab — „Pizza“, „Müsli“">
-        </label>
+        <div class="es-dlg-kopf">
+            <div class="es-dlg-mahlzeiten" id="esDlgMahlzeiten"></div>
+            <label class="es-suche">
+                <span class="es-suche-ico" aria-hidden="true">${ICON.lupe}</span>
+                <input type="search" id="esDlgSuche" autocomplete="off"
+                       aria-label="Was gab es?"
+                       placeholder="Tippen, was es gab — „Pizza“, „Müsli“">
+            </label>
+        </div>
         <div id="esDlgListe"></div>
         <div class="es-dlg-fuss">
             <span class="es-note" id="esDlgZuletzt"></span>
@@ -317,9 +331,13 @@ function eintragDialog(mahlzeit) {
         </div>`;
 
     state.dialog = openModal(titel, inhalt, {
-        breit: true,
+        // voll: auf dem Handy das ganze Bild. Ein mittig zentrierter Kasten
+        // rueckt bei JEDER Aenderung seiner Hoehe um die halbe Differenz --
+        // und die Hoehe aendert sich hier bei jedem getippten Zeichen, weil
+        // die Vorschlagsliste mitwaechst. Das war das Ruckeln: nicht die
+        // Liste sprang, der Rahmen sprang.
+        breit: true, voll: true,
         beimSchliessen: () => {
-            if (state.dlg) clearTimeout(state.dlg.tippen);
             state.dialog = null;
             state.dlg = null;
         },
@@ -330,19 +348,18 @@ function eintragDialog(mahlzeit) {
 
     const feld = document.getElementById('esDlgSuche');
     feld.addEventListener('input', (e) => {
-        clearTimeout(state.dlg.tippen);
-        const wert = e.target.value;
-        state.dlg.tippen = setTimeout(() => {
-            state.dlg.eingabe = wert;
-            zeichneDlgListe();
-        }, 160);
+        // Sofort. Die Liste steht im Speicher, es gibt hier keine Anfrage,
+        // auf deren Ruhe man warten muesste -- der Taktgeber, der bis v2.3.0
+        // hier stand, verzoegerte nichts Teures, sondern nur die Antwort auf
+        // den eigenen Finger.
+        state.dlg.eingabe = e.target.value;
+        zeichneDlgListe();
     });
     // Enter traegt den ersten Vorschlag normal ein -- der haeufigste Fall,
     // und er soll ohne Maus gehen.
     feld.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
-        clearTimeout(state.dlg.tippen);
         state.dlg.eingabe = e.target.value;
         zeichneDlgListe();
         const erste = document.querySelector('#esDlgListe [data-normal]');
@@ -449,9 +466,7 @@ async function eintragen(daten, knopf) {
         if (state.dlg) {
             // Das Feld leeren: der naechste Eintrag faengt bei null an, und
             // ein stehengebliebener Text sieht aus, als waere nichts
-            // passiert. Auch den laufenden Tipp-Takt, sonst stellt er den
-            // Text 160 ms spaeter wieder als Vorschlag hin.
-            clearTimeout(state.dlg.tippen);
+            // passiert.
             state.dlg.eingabe = '';
             const feld = document.getElementById('esDlgSuche');
             if (feld) { feld.value = ''; feld.focus(); }

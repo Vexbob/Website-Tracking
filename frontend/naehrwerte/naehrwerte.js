@@ -59,12 +59,27 @@ const API = {
     fotoWeg: (id) => apiCall('/api/food/dishes/' + id + '/photo', { method: 'DELETE' }),
 };
 
+/* Die Zeichen an den Bedienelementen kommen aus VexIkon (js/ikon.js) und
+   nicht mehr als Emoji: ein Emoji traegt eine Farbe, die niemand gewaehlt
+   hat, und faellt dort, wo die Schrift es nicht kennt, auf einen leeren
+   Kasten zurueck -- auf den Vorschaubildern war genau das zu sehen. */
+const ICON = {
+    lupe:   VexIkon.svg('lupe', 17),
+    muell:  VexIkon.svg('muell', 17),
+    kamera: VexIkon.svg('kamera', 17),
+    ziel:   VexIkon.svg('ziel', 16),
+};
+
+/* Vier Reiter, ohne Emoji. Fuenf mit Emoji passten bei 390 px nicht in die
+   Leiste: der letzte lag hinter dem rechten Rand, und wer ihn waehlte, sah
+   nicht einmal mehr, DASS er gewaehlt war. Die Ziele sind dafuer dorthin
+   gewandert, wo man sie sucht -- an den Ring, der sie misst (Dialog statt
+   Reiter, DESIGN 6d: was man selten tut, steht nicht dauerhaft da). */
 const REITER = [
-    { key: 'tag', label: '🍽️ Tag' },
-    { key: 'verlauf', label: '📈 Verlauf' },
-    { key: 'ziele', label: '🎯 Ziele' },
-    { key: 'gerichte', label: '📖 Gerichte' },
-    { key: 'vorrat', label: '🥫 Lebensmittel' },
+    { key: 'tag', label: 'Tag' },
+    { key: 'verlauf', label: 'Verlauf' },
+    { key: 'gerichte', label: 'Gerichte' },
+    { key: 'vorrat', label: 'Lebensmittel' },
 ];
 const ALLE_REITER = REITER.map(r => r.key);
 
@@ -84,7 +99,7 @@ const state = {
     katalog: null, katalogLaeuft: false, katalogGeholt: false,
     formGroessen: [],
     tag: null, datum: null, gerichte: [], haeufig: [],
-    dialog: null, dlg: null,
+    dialog: null, dlg: null, zieleDlg: null,
     bruecke: null,
     verlauf: null, range: null, rangeMount: null,
     charts: { eins: null, zwei: null },
@@ -295,20 +310,21 @@ function zeichneRinge() {
                       : `noch ${zahlKurz(kcal.remaining)}`,
     });
 
+    // EIN Knopf, der seinen eigenen Stand benennt -- dieselbe Form wie beim
+    // Zeitraum-Filter (DESIGN 6b). Bis v2.3.0 standen hier zwei Zeilen Prosa
+    // („das ist keine Zahl ueber dich“) und darunter ein unterstrichener
+    // Link. Die Auskunft, WORAN gemessen wird, bleibt -- sie passt in die
+    // Beschriftung. Der Absatz war das Warnzeichen dafuer, dass das
+    // Bedienelement fehlte.
     const zeile = document.getElementById('nwZielZeile');
-    if (kcal.own_target) {
-        zeile.innerHTML = `Dein Tagesziel: <strong>${zahlKurz(kcal.reference)} kcal</strong>`
-            + ` <button type="button" class="nw-ziel-link" data-zu-zielen>ändern</button>`;
-    } else {
-        // Ohne eigenes Ziel steht da, WORAN gemessen wird -- und der Weg
-        // dahin, es zu aendern. Eine Zahl ohne Herkunft waere eine Aussage
-        // ueber den Nutzer, die niemand getroffen hat.
-        zeile.innerHTML = `Gemessen am allgemeinen Richtwert `
-            + `(${zahlKurz(kcal.reference)} kcal) — das ist keine Zahl über dich. `
-            + `<button type="button" class="nw-ziel-link" data-zu-zielen>Eigenes Tagesziel setzen</button>`;
-    }
+    zeile.innerHTML = `<button type="button" class="nw-zielknopf${
+            kcal.own_target ? ' has-active' : ''}" data-zu-zielen>
+        ${ICON.ziel}
+        <span>${kcal.own_target ? 'Dein Tagesziel' : 'Richtwert'}
+            <strong>${zahlKurz(kcal.reference)} kcal</strong></span>
+    </button>`;
     zeile.querySelectorAll('[data-zu-zielen]').forEach(b =>
-        b.addEventListener('click', () => activateTab('ziele')));
+        b.addEventListener('click', zieleDialog));
 
     // Ballaststoffe bekommen nur dann einen Ring, wenn dafuer ein eigenes
     // Ziel steht: vier Ringe ohne Anlass waeren einer zu viel.
@@ -368,12 +384,15 @@ function zeichneMahlzeiten() {
 
     ziel.querySelectorAll('[data-add]').forEach(b =>
         b.addEventListener('click', () => eintragDialog(b.dataset.add)));
-    ziel.querySelectorAll('[data-weg]').forEach(b =>
-        b.addEventListener('click', () => entfernenEintrag(Number(b.dataset.weg))));
     ziel.querySelectorAll('[data-mz-um]').forEach(b =>
         b.addEventListener('click', () => eintragAendernDialog(Number(b.dataset.mzUm))));
 }
 
+/* Ein Bedienelement je Zeile, nicht zwei. Der Papierkorb stand bis v2.3.0
+   daneben -- 44 Pixel fuer den seltensten Handgriff, ohne Rueckfrage, direkt
+   neben dem Namen. „Entfernen“ steht im Aenderungs-Dialog, den derselbe
+   Name mit einem Tipp oeffnet: einen Griff tiefer, dafuer nicht aus
+   Versehen. */
 function zeile(e) {
     const meta = [
         esc(e.sub || ''),
@@ -387,8 +406,6 @@ function zeile(e) {
             <span class="nw-zeile-meta">${meta}</span>
         </button>
         <span class="nw-menge-tag">${esc(e.amount_label)}</span>
-        <button type="button" class="v-btn v-btn--icon" data-weg="${e.id}"
-                aria-label="Eintrag entfernen" title="Entfernen">🗑️</button>
     </div>`;
 }
 
@@ -418,19 +435,25 @@ function zeichneBruecke() {
 
     document.getElementById('nwBrueckeSub').textContent =
         `${state.bruecke.diary_days} Tage notiert`;
-    document.getElementById('nwBrueckeListe').innerHTML = liste.map((v, i) => `
-        <div class="ern-zeile">
-            <div class="ern-zeile-text">
-                <strong>${esc(v.name)}</strong>
-                <div class="ern-note">${v.count}× notiert · zuletzt ${datumKurz(v.last)}</div>
-            </div>
-            <div class="ern-tasten">
-                <button type="button" class="v-btn v-btn--sm v-btn--primary"
-                        data-bruecke-an="${i}">Nährwerte hinterlegen</button>
-                <button type="button" class="v-btn v-btn--sm"
-                        data-bruecke-weg="${i}">Nicht nötig</button>
-            </div>
-        </div>`).join('');
+    // Eine Zeile, eine Hauptsache: der breite Knopf hinterlegt die
+    // Naehrwerte, das Ablehnen steht klein daneben. Zwei gleich grosse
+    // Knoepfe je Zeile waeren bei fuenf Vorschlaegen zehn gleichberechtigte
+    // Ziele, und keins davon staeche heraus.
+    document.getElementById('nwBrueckeListe').innerHTML =
+        '<div class="rec-list nw-liste">' + liste.map((v, i) => `
+        <div class="rec-row">
+            <span class="rec-mark" style="--tone:var(--nw-figur)">${esc(v.name.slice(0, 1))}</span>
+            <span class="rec-main">
+                <span class="rec-title">${esc(v.name)}</span>
+                <span class="rec-meta">${v.count}× notiert<span class="sep">·</span>zuletzt ${
+                    datumKurz(v.last)}</span>
+            </span>
+            <button type="button" class="v-btn v-btn--sm nw-w-ok"
+                    data-bruecke-an="${i}">Nährwerte</button>
+            <button type="button" class="v-btn v-btn--icon v-btn--ghost"
+                    data-bruecke-weg="${i}" title="Nicht nötig"
+                    aria-label="„${esc(v.name)}“ nicht vorschlagen">✕</button>
+        </div>`).join('') + '</div>';
 
     karte.querySelectorAll('[data-bruecke-an]').forEach(b =>
         b.addEventListener('click', () => {
@@ -496,7 +519,7 @@ async function ladeHaeufig() {
 function eintragDialog(mahlzeit) {
     if (!state.tag) return;
     state.dlg = { mahlzeit: mahlzeit || mahlzeitJetzt(), eingabe: '',
-                  zuletzt: [], tippen: null, liste: [],
+                  zuletzt: [], liste: [],
                   // Der Katalog laeuft neben der eigenen Liste her: eigener
                   // Takt, eigener Zustand, eigene Trefferliste.
                   katTakt: null, katalog: [], katalogLaeuft: false,
@@ -504,27 +527,35 @@ function eintragDialog(mahlzeit) {
 
     const titel = (state.datum || heute()) === heute()
         ? 'Eintragen · heute' : 'Eintragen · ' + datumKurz(state.datum);
+    // Mahlzeit und Suchfeld kleben oben: sie sind der Kopf des Vorgangs und
+    // duerfen nicht unter dem Daumen wegwandern, waehrend die Liste darunter
+    // waechst und schrumpft.
     const inhalt = `
-        <div class="ern-dlg-mahlzeiten" id="nwDlgMahlzeiten"></div>
-        <label class="ern-suche">
-            <span class="ern-suche-ico" aria-hidden="true">🔎</span>
-            <input type="search" id="nwDlgSuche" autocomplete="off"
-                   aria-label="Gericht oder Lebensmittel suchen"
-                   placeholder="Gericht oder Lebensmittel suchen">
-        </label>
+        <div class="nw-dlg-kopf">
+            <div class="ern-dlg-mahlzeiten" id="nwDlgMahlzeiten"></div>
+            <label class="ern-suche">
+                <span class="ern-suche-ico" aria-hidden="true">${ICON.lupe}</span>
+                <input type="search" id="nwDlgSuche" autocomplete="off"
+                       aria-label="Gericht oder Lebensmittel suchen"
+                       placeholder="Gericht oder Lebensmittel suchen">
+            </label>
+        </div>
         <div id="nwDlgListe"></div>
+        <div id="nwDlgKat"></div>
         <div class="ern-dlg-fuss">
             <span class="ern-note" id="nwDlgZuletzt"></span>
             <button type="button" class="v-btn v-btn--primary" id="nwDlgFertig">Fertig</button>
         </div>`;
 
     state.dialog = openModal(titel, inhalt, {
-        breit: true,
+        // voll: auf dem Handy das ganze Bild. Ein mittig zentrierter Kasten
+        // rueckt bei JEDER Aenderung seiner Hoehe um die halbe Differenz --
+        // und die Hoehe aendert sich hier bei jedem getippten Zeichen, weil
+        // die Vorschlagsliste mitwaechst. Das war das Ruckeln: nicht die
+        // Liste sprang, der Rahmen sprang.
+        breit: true, voll: true,
         beimSchliessen: () => {
-            if (state.dlg) {
-                clearTimeout(state.dlg.tippen);
-                clearTimeout(state.dlg.katTakt);
-            }
+            if (state.dlg) clearTimeout(state.dlg.katTakt);
             state.dialog = null;
             state.dlg = null;
         },
@@ -535,16 +566,17 @@ function eintragDialog(mahlzeit) {
 
     const feld = document.getElementById('nwDlgSuche');
     feld.addEventListener('input', (e) => {
-        clearTimeout(state.dlg.tippen);
         clearTimeout(state.dlg.katTakt);
         const wert = e.target.value;
-        // Zwei Takte, weil es zwei verschiedene Dinge sind: die eigene Liste
-        // liegt im Speicher und darf sofort filtern, der Katalog ist eine
-        // Anfrage und wartet, bis das Tippen zur Ruhe kommt.
-        state.dlg.tippen = setTimeout(() => {
-            state.dlg.eingabe = wert;
-            zeichneDlgListe();
-        }, 160);
+        // Die eigene Liste liegt im Speicher -- sie filtert SOFORT. Der
+        // Taktgeber, der bis v2.3.0 auch hier stand, verzoegerte nichts
+        // Teures, er verzoegerte nur die Antwort auf den eigenen Finger.
+        state.dlg.eingabe = wert;
+        zeichneDlgListe();
+        // Der Katalog ist eine Anfrage und wartet, bis das Tippen zur Ruhe
+        // kommt. Er zeichnet in seinen EIGENEN Behaelter -- vorher riss
+        // seine Antwort die Liste darueber mit ab, und mit ihr die Menge,
+        // die man gerade hineingeschrieben hatte.
         state.dlg.katTakt = setTimeout(() => dlgKatalog(wert), 400);
     });
     document.getElementById('nwDlgFertig')
@@ -619,21 +651,35 @@ function dlgZeile(v, i) {
                 <span class="ern-w-name">${esc(v.name)}</span>
                 <span class="ern-w-sub">${esc(v.sub || '')}</span>
             </div>
-            <div class="nw-stepper">
-                <button type="button" data-schritt="${i}" data-um="-0.5"
-                        aria-label="Weniger">−</button>
-                <output data-menge="${i}" data-wert="1">1 Portion</output>
-                <button type="button" data-schritt="${i}" data-um="0.5"
-                        aria-label="Mehr">＋</button>
+            <div class="ern-menge ern-menge--stepper">
+                <div class="nw-stepper">
+                    <button type="button" data-schritt="${i}" data-um="-0.5"
+                            aria-label="Weniger">−</button>
+                    <output data-menge="${i}" data-wert="1">1 Portion</output>
+                    <button type="button" data-schritt="${i}" data-um="0.5"
+                            aria-label="Mehr">＋</button>
+                </div>
+                <button type="button" class="v-btn v-btn--sm nw-w-ok"
+                        data-log-dish="${i}">Eintragen</button>
             </div>
-            <button type="button" class="v-btn v-btn--sm v-btn--primary"
-                    data-log-dish="${i}">Eintragen</button>
         </div>`;
     }
     const einheiten = v.item.units
         || [{ key: v.item.base_unit || 'g', label: v.item.base_unit || 'g' }];
     const eigene = einheiten.filter(e => !BASIS.includes(e.key));
     const start = eigene.length ? eigene[0] : einheiten[0];
+    // Ein Auswahlfeld mit genau einem Eintrag ist kein Bedienelement, sondern
+    // eine Beschriftung, die aussieht wie eines. Gibt es nichts zu waehlen,
+    // steht die Einheit als Beschriftung da — und die Zeile hat ein
+    // Bedienelement weniger, das nichts tut.
+    const wahl = einheiten.length > 1
+        ? `<select class="v-select v-select--sm" data-item-einheit="${i}"
+                    aria-label="Einheit für ${esc(v.name)}">
+                ${einheiten.map(e => `<option value="${esc(e.key)}"${
+                    e.key === start.key ? ' selected' : ''}>${esc(e.label)}</option>`).join('')}
+            </select>`
+        : `<span class="ern-menge-fest">${esc(start.label)}</span>
+           <input type="hidden" data-item-einheit="${i}" value="${esc(start.key)}">`;
     return `<div class="ern-w">
         <div class="ern-w-text">
             <span class="ern-w-name">${esc(v.name)}</span>
@@ -643,12 +689,8 @@ function dlgZeile(v, i) {
             <input type="number" min="0" step="0.25" inputmode="decimal"
                    value="${eigene.length ? 1 : 100}"
                    data-item-menge="${i}" aria-label="Menge für ${esc(v.name)}">
-            <select class="v-select v-select--sm" data-item-einheit="${i}"
-                    aria-label="Einheit für ${esc(v.name)}">
-                ${einheiten.map(e => `<option value="${esc(e.key)}"${
-                    e.key === start.key ? ' selected' : ''}>${esc(e.label)}</option>`).join('')}
-            </select>
-            <button type="button" class="v-btn v-btn--sm v-btn--primary"
+            ${wahl}
+            <button type="button" class="v-btn v-btn--sm nw-w-ok"
                     data-log-item="${i}">Eintragen</button>
         </div>
     </div>`;
@@ -669,11 +711,11 @@ async function dlgKatalog(text) {
     if (begriff.length < 2) {
         state.dlg.katalog = [];
         state.dlg.katalogLaeuft = false;
-        zeichneDlgListe();
+        zeichneDlgKatalog();
         return;
     }
     state.dlg.katalogLaeuft = true;
-    zeichneDlgListe();
+    zeichneDlgKatalog();
 
     let treffer = [];
     try {
@@ -690,21 +732,32 @@ async function dlgKatalog(text) {
     state.dlg.katalog = treffer
         .filter(p => !drin.has(String(p.name).toLowerCase())).slice(0, 6);
     state.dlg.katalogLaeuft = false;
-    zeichneDlgListe();
+    zeichneDlgKatalog();
+    zeichneDlgListe();          // nur wegen des leeren Zustands darueber
 }
 
 /* Der Katalogblock unter der eigenen Liste. Dieselbe Zeile wie im
-   Gerichte-Dialog (`.nw-g-treffer`): derselbe Vorgang, dieselbe Gestalt. */
-function dlgKatalogHtml() {
+   Gerichte-Dialog (`.nw-g-treffer`): derselbe Vorgang, dieselbe Gestalt.
+
+   Er zeichnet seit v2.4.0 in seinen EIGENEN Behaelter. Vorher hing sein
+   Ergebnis am selben `innerHTML` wie die eigene Liste -- und weil die
+   Katalogantwort 400 bis 900 ms nach dem letzten Zeichen kommt, riss sie
+   genau in dem Moment die Liste ab, in dem man die Menge hineinschrieb:
+   Feld weg, Tastatur zu, Zahl weg. Das war kein Ruckeln, das war
+   Datenverlust, der wie Ruckeln aussah. */
+function zeichneDlgKatalog() {
+    const ziel = document.getElementById('nwDlgKat');
     const d = state.dlg;
-    if (!d) return '';
+    if (!ziel || !d) return;
+
     if (d.katalogLaeuft) {
-        return `<div class="nw-dlg-kat">
+        ziel.innerHTML = `<div class="nw-dlg-kat">
             <p class="ern-note">Im Katalog suchen …</p>
             <span class="skel skel-block"></span></div>`;
+        return;
     }
-    if (!d.katalog.length) return '';
-    return `<div class="nw-dlg-kat">
+    if (!d.katalog.length) { ziel.innerHTML = ''; return; }
+    ziel.innerHTML = `<div class="nw-dlg-kat">
         <p class="ern-note">Nicht in deinem Bestand — ein Tipp nimmt es auf:</p>
         ${d.katalog.map((p, i) => `<button type="button" class="nw-g-treffer" data-kat="${i}">
             <span class="nw-g-treffer-text">
@@ -715,6 +768,26 @@ function dlgKatalogHtml() {
             <span class="ern-herkunft">Katalog</span>
         </button>`).join('')}
     </div>`;
+
+    ziel.querySelectorAll('[data-kat]').forEach(b => b.addEventListener('click', async () => {
+        const p = (state.dlg.katalog || [])[Number(b.dataset.kat)];
+        if (!p) return;
+        b.classList.add('is-loading');
+        try {
+            await katalogAufnehmen(p);
+            if (!state.dlg) return;
+            // Aufgenommen heisst noch nicht eingetragen -- wie viel davon,
+            // weiss nur der Nutzer. Das Lebensmittel steht nach dem Zeichnen
+            // oben in der eigenen Liste, mit Mengenfeld: ein Tipp weiter.
+            state.dlg.katalog = state.dlg.katalog.filter(x => x !== p);
+            zeichneDlgKatalog();
+            zeichneDlgListe();
+            melde('Aufgenommen — jetzt die Menge.', 'success');
+        } catch (err) {
+            b.classList.remove('is-loading');
+            melde(err.message || 'Das ging nicht.', 'error');
+        }
+    }));
 }
 
 function zeichneDlgListe() {
@@ -722,7 +795,7 @@ function zeichneDlgListe() {
     if (!ziel || !state.dlg) return;
     const liste = dlgVorschlaege();
     state.dlg.liste = liste;
-    const katHtml = dlgKatalogHtml();
+    const d = state.dlg;
 
     const MAX = 12;
     let html = liste.slice(0, MAX).map(dlgZeile).join('')
@@ -733,14 +806,15 @@ function zeichneDlgListe() {
         // Solange der Katalog laeuft oder etwas hat, waere „nichts da“ falsch:
         // da kommt gerade etwas. Erst wenn beide Quellen leer sind, ist die
         // Auskunft eine Auskunft.
-        html = katHtml ? '' : leerKarte('🥫', state.dlg.eingabe
+        html = (d.katalogLaeuft || d.katalog.length)
+            ? '' : leerKarte('🥫', state.dlg.eingabe
             ? 'Weder im Bestand noch im Katalog. Bei Losem ohne Strichcode lohnt '
               + 'ein allgemeinerer Begriff — „Apfel“ statt „Apfel Elstar“. '
               + 'Unter <strong>Lebensmittel</strong> geht es auch von Hand.'
             : 'Noch nichts im Bestand. Tipp einfach einen Namen — gesucht wird '
               + 'auch im Katalog, und ein Tipp nimmt den Treffer auf.');
     }
-    ziel.innerHTML = html + katHtml;
+    ziel.innerHTML = html;
 
     const nimm = (i) => state.dlg.liste[Number(i)];
     ziel.querySelectorAll('[data-schritt]').forEach(b => b.addEventListener('click', () => {
@@ -771,24 +845,6 @@ function zeichneDlgListe() {
     ziel.querySelectorAll('[data-item-einheit]').forEach(w => w.addEventListener('change', () => {
         const feld = ziel.querySelector(`[data-item-menge="${w.dataset.itemEinheit}"]`);
         if (feld) feld.value = BASIS.includes(w.value) ? 100 : 1;
-    }));
-    ziel.querySelectorAll('[data-kat]').forEach(b => b.addEventListener('click', async () => {
-        const p = (state.dlg.katalog || [])[Number(b.dataset.kat)];
-        if (!p) return;
-        b.classList.add('is-loading');
-        try {
-            await katalogAufnehmen(p);
-            if (!state.dlg) return;
-            // Aufgenommen heisst noch nicht eingetragen — wie viel davon,
-            // weiss nur der Nutzer. Das Lebensmittel steht nach dem Zeichnen
-            // oben in der eigenen Liste, mit Mengenfeld: ein Tipp weiter.
-            state.dlg.katalog = state.dlg.katalog.filter(x => x !== p);
-            zeichneDlgListe();
-            melde('Aufgenommen — jetzt die Menge.', 'success');
-        } catch (err) {
-            b.classList.remove('is-loading');
-            melde(err.message || 'Das ging nicht.', 'error');
-        }
     }));
 }
 
@@ -1164,22 +1220,53 @@ function tagesChart(canvasId, makro, farbe, texte, titelEl, subEl, noteEl) {
     });
 }
 
-/* ----------------------------------------------------------------- Ziele */
+/* ----------------------------------------------------------------- Ziele
+ *
+ * Bis v2.3.0 ein eigener Reiter. Das war der zweite Versuch -- davor hingen
+ * die Ziele unter einem Diagramm, wo sie niemand fand. Beide Male wurde die
+ * falsche Frage beantwortet: nicht WO auf der Seite, sondern ob ueberhaupt
+ * auf der Seite. Ein Tagesziel setzt man einmal und danach im Jahr vielleicht
+ * zweimal; was man selten tut, steht nicht dauerhaft da (DESIGN 6d). Dabei
+ * hat es einen staendigen Platz in der Reiterleiste belegt -- einen von
+ * fuenf, und fuenf passten bei 390 px nicht nebeneinander.
+ *
+ * Jetzt liegt es hinter dem Knopf am Ring, der es misst. Das ist die Stelle,
+ * an der die Frage ueberhaupt aufkommt: man sieht die Zahl, an der gemessen
+ * wird, und fasst sie dort an.
+ */
 
-function zeichneZiele() {
+function zieleFelder() {
     const e = state.ziele;
-    if (!e) return;
-    document.getElementById('nwZiele').innerHTML = e.macros.map(m => `
+    if (!e) return '<span class="skel skel-block"></span>';
+    return e.macros.map(m => `
         <label class="ern-feld">
             <span>${esc(e.macro_labels[m])}${EINHEIT[m] ? ' (g)' : ''}</span>
             <input type="number" min="0" step="${m === 'kcal' ? 10 : 1}" inputmode="decimal"
                    data-ziel="${esc(m)}" value="${e.targets[m] == null ? '' : e.targets[m]}"
                    placeholder="${zahlKurz(e.defaults[m])}">
         </label>`).join('');
-    document.getElementById('nwZieleNote').textContent =
-        'Leere Felder messen weiter am allgemeinen Richtwert — der üblichen Größenordnung '
-        + 'für einen Tag, nicht an einem Ziel. Wer nur auf Eiweiß achtet, muss hier keine '
-        + 'fünf Zahlen erfinden.';
+}
+
+/* Ein Feld leer zu lassen ist hier die Haelfte der Bedienung, also steht das
+   AM Feld und nicht als Absatz darunter: der Platzhalter zeigt den Richtwert,
+   der dann gilt. Der dreisaetzige Absatz faellt damit weg -- wo drei Saetze
+   erklaeren, wie ein Bedienelement gemeint ist, fehlte meist das
+   Bedienelement. */
+function zieleDialog() {
+    const inhalt = `
+        <div class="ern-ziele" id="nwZiele">${zieleFelder()}</div>
+        <p class="ern-note">Leer heißt: weiter am Richtwert messen — der grauen Zahl
+            im Feld. Niemand muss fünf Ziele haben.</p>
+        <div class="ern-tasten">
+            <button type="button" class="v-btn v-btn--primary" id="nwZieleSpeichern">Ziele speichern</button>
+            <button type="button" class="v-btn" id="nwZieleWeg">Alle zurücksetzen</button>
+        </div>`;
+
+    state.zieleDlg = openModal('Tagesziele', inhalt, {
+        beimSchliessen: () => { state.zieleDlg = null; },
+    });
+    document.getElementById('nwZieleSpeichern').addEventListener('click', zieleSpeichern);
+    document.getElementById('nwZieleWeg').addEventListener('click', zieleZuruecksetzen);
 }
 
 async function ladeZiele() {
@@ -1188,7 +1275,10 @@ async function ladeZiele() {
     } catch (e) {
         state.ziele = null;
     }
-    zeichneZiele();
+    // Steht der Dialog gerade offen, bekommt er die frischen Werte; sonst
+    // gibt es nichts zu zeichnen -- die Felder entstehen erst mit ihm.
+    const ziel = document.getElementById('nwZiele');
+    if (ziel) ziel.innerHTML = zieleFelder();
 }
 
 async function zieleSpeichern() {
@@ -1201,7 +1291,9 @@ async function zieleSpeichern() {
     knopf.classList.add('is-loading');
     try {
         state.ziele = await API.zieleSetzen({ targets: ziele });
-        zeichneZiele();
+        // Der Dialog geht zu: was er zu tun hatte, ist getan, und dahinter
+        // steht der Ring, der die neue Zahl gerade bekommen hat.
+        if (state.zieleDlg) state.zieleDlg.close();
         await ladeTag(state.datum);
         if (state.rangeMount) await ladeVerlauf();
         melde('Ziele gespeichert.', 'success');
@@ -1293,7 +1385,7 @@ function gerichtDialog(g) {
         <div id="nwG2" hidden>
             <div id="nwGZutaten"></div>
             <label class="ern-suche nw-g-suche">
-                <span class="ern-suche-ico" aria-hidden="true">🔎</span>
+                <span class="ern-suche-ico" aria-hidden="true">${ICON.lupe}</span>
                 <input type="search" id="nwGSuche" autocomplete="off"
                        aria-label="Zutat suchen"
                        placeholder="Zutat suchen — Bestand und Katalog">
@@ -1303,6 +1395,8 @@ function gerichtDialog(g) {
 
         <div class="nw-g-fuss">
             <span class="nw-g-summe" id="nwGSumme"></span>
+            ${g ? `<button type="button" class="v-btn v-btn--danger"
+                           id="nwGWeg">Entfernen</button>` : ''}
             <button type="button" class="v-btn" id="nwGZurueck" hidden>Zurück</button>
             <button type="button" class="v-btn v-btn--primary" id="nwGWeiter">Weiter</button>
         </div>`;
@@ -1343,6 +1437,13 @@ function gerichtDialog(g) {
         gerichtSpeichern(weiter);
     });
     zurueck.addEventListener('click', () => schritt(1));
+    // Entfernen steht hier und nicht mehr als Papierkorb in der Liste --
+    // siehe itemDialog.
+    const gWeg = document.getElementById('nwGWeg');
+    if (gWeg) gWeg.addEventListener('click', async () => {
+        if (state.dialog) state.dialog.close();
+        await gerichtLoeschen(g.id);
+    });
 
     let takt = null;
     document.getElementById('nwGSuche').addEventListener('input', (e) => {
@@ -1370,7 +1471,7 @@ function zeichneEntwurfFoto() {
             : `<div class="v-bild-leer" aria-hidden="true">🍽️</div>`))
         + `<div class="ern-tasten">
                <button type="button" class="v-btn v-btn--sm" id="nwGFotoWahl">
-                   📷 ${url || e.hatFoto ? 'Anderes Foto' : 'Foto'}</button>
+                   ${ICON.kamera} ${url || e.hatFoto ? 'Anderes Foto' : 'Foto'}</button>
                ${url || e.hatFoto
                    ? '<button type="button" class="v-btn v-btn--sm" id="nwGFotoWeg">Ohne Foto</button>'
                    : ''}
@@ -1654,57 +1755,65 @@ async function gerichtLoeschen(id) {
     }
 }
 
+/* Die Liste der Gerichte. Sie war bis v2.3.0 eine eigene Zeilenform mit
+   Foto, drei Textbloecken und zwei Knoepfen rechts -- bei 390 px blieben
+   fuer den Namen rund achtzig Pixel, und „Wraps mit Haehnchen“ brach mitten
+   im Wort um. Jetzt ist es die geteilte `.rec-list` (DESIGN 6c): das Foto
+   steht an der Stelle der Marke, die ganze Zeile oeffnet das Gericht, und
+   „Entfernen“ liegt im Dialog dahinter -- eine Zeile, eine Hauptsache. */
 function zeichneGerichte() {
     const ziel = document.getElementById('ernGerichte');
     document.getElementById('ernGerichteZahl').textContent =
-        state.gerichte.length ? state.gerichte.length + ' Gerichte' : '';
-    ziel.innerHTML = !state.gerichte.length
-        ? leerKarte('📖', 'Noch keine Gerichte. Was du oft isst, legst du einmal an — '
-            + 'danach reicht ein Tipp am Tag.')
-        : state.gerichte.map(g => `
-            <div class="ern-zeile">
-                ${g.has_photo
-                    ? `<img class="v-bild v-bild--klein" data-foto="${g.id}"
-                           alt="Foto von ${esc(g.name)}">`
-                    : '<span class="v-bild-leer" aria-hidden="true">🍽️</span>'}
-                <div class="ern-zeile-text">
-                    <strong>${esc(g.name)}</strong>
-                    <div class="ern-note">${g.items.map(z => {
-                        const e = (z.units || []).find(u => u.key === z.unit);
-                        return esc(z.name) + ' ' + z.amount + ' ' + esc(e ? e.label : z.unit);
-                    }).join(' · ')}</div>
-                    <div class="ern-note">${g.portion.kcal != null
-                        ? `${zahlKurz(g.portion.kcal)} kcal je Portion (${g.portion.grams} g)`
-                        : 'Nährwerte unvollständig'}${g.portion.incomplete.length
-                        ? ' · ohne Angabe: ' + g.portion.incomplete.length : ''}</div>
-                </div>
-                <div class="ern-tasten">
-                    <button type="button" class="v-btn v-btn--sm" data-bearbeiten="${g.id}">Ändern</button>
-                    <button type="button" class="v-btn v-btn--icon" data-gericht-weg="${g.id}"
-                            aria-label="Gericht löschen" title="Löschen">🗑️</button>
-                </div>
-            </div>`).join('');
+        state.gerichte.length
+            ? state.gerichte.length + (state.gerichte.length === 1 ? ' Gericht' : ' Gerichte')
+            : '';
+    if (!state.gerichte.length) {
+        ziel.innerHTML = leerKarte('📖',
+            'Noch keine Gerichte. Was du oft isst, legst du einmal an — '
+            + 'danach reicht ein Tipp am Tag.');
+        return;
+    }
+    ziel.innerHTML = '<div class="rec-list nw-liste">' + state.gerichte.map(g => {
+        const zutaten = g.items.map(z => {
+            const e = (z.units || []).find(u => u.key === z.unit);
+            return esc(z.name) + ' ' + z.amount + ' ' + esc(e ? e.label : z.unit);
+        }).join(' · ');
+        // „mind.“ statt einer Zahl, die Vollständigkeit behauptet — dieselbe
+        // Sprache wie bei der Mahlzeitensumme. Es steht am WERT und nicht in
+        // der Meta-Zeile: die wird gekürzt, diese Auskunft darf es nicht.
+        const luecke = g.portion.incomplete.length;
+        return `<button type="button" class="rec-row" data-bearbeiten="${g.id}">
+            <span class="rec-mark rec-mark--bild" style="--tone:var(--nw-figur)">${
+                g.has_photo ? `<img data-foto="${g.id}" alt="">`
+                            : '<span aria-hidden="true">🍽️</span>'}</span>
+            <span class="rec-main">
+                <span class="rec-title">${esc(g.name)}</span>
+                <span class="rec-meta">${zutaten || 'ohne Zutaten'}</span>
+            </span>
+            <span class="rec-side">
+                <span class="rec-val">${g.portion.kcal != null
+                    ? (luecke ? 'mind. ' : '') + zahlKurz(g.portion.kcal) + ' kcal'
+                    : 'ohne Nährwerte'}</span>
+                <span class="rec-sub">je Portion (${g.portion.grams} g)</span>
+            </span>
+            <span class="rec-go" aria-hidden="true">›</span>
+        </button>`;
+    }).join('') + '</div>';
+
     ziel.querySelectorAll('[data-bearbeiten]').forEach(b =>
         b.addEventListener('click', () => {
             const g = state.gerichte.find(x => x.id === Number(b.dataset.bearbeiten));
             if (g) gerichtDialog(g);
         }));
-    ziel.querySelectorAll('[data-gericht-weg]').forEach(b =>
-        b.addEventListener('click', () => gerichtLoeschen(Number(b.dataset.gerichtWeg))));
     // Die Bilder brauchen den Anmelde-Kopf, ein nacktes <img src> schickt
     // keinen mit. Deshalb einzeln nachladen -- und nur das kleine: zwanzig
-    // Vollbilder waeren zwanzig Anfragen fuer eine Liste, die man ueberfliegt.
+    // Vollbilder waeren zwanzig Anfragen fuer eine Liste, die man
+    // ueberfliegt. Das grosse steht im Dialog, den die Zeile oeffnet.
     ziel.querySelectorAll('[data-foto]').forEach(bild => {
-        const id = Number(bild.dataset.foto);
-        VexBild.alsBlobUrl('/api/food/dishes/' + id + '/thumb')
+        VexBild.alsBlobUrl('/api/food/dishes/' + Number(bild.dataset.foto) + '/thumb')
             .then(u => { bild.src = u; })
-            .catch(() => { bild.replaceWith(Object.assign(document.createElement('span'), {
-                className: 'v-bild-leer', textContent: '🍽️' })); });
-        bild.addEventListener('click', () => {
-            VexBild.alsBlobUrl('/api/food/dishes/' + id + '/photo')
-                .then(u => VexBild.vollbild(u, bild.alt))
-                .catch(() => melde('Das Foto ließ sich nicht laden.', 'error'));
-        });
+            .catch(() => { bild.replaceWith(Object.assign(
+                document.createElement('span'), { textContent: '🍽️' })); });
     });
 }
 
@@ -1754,7 +1863,7 @@ async function kameraStarten() {
         return;
     }
     document.getElementById('ernKameraBereich').hidden = false;
-    document.getElementById('ernKamera').textContent = '📷 Schließen';
+    document.getElementById('ernKamera').innerHTML = ICON.kamera + ' Schließen';
     kamera.laeuft = true;
     kameraHinweis('Kamera wird geöffnet …');
     try {
@@ -1842,7 +1951,7 @@ function kameraStoppen() {
     const video = document.getElementById('ernVideo');
     if (video) video.srcObject = null;
     document.getElementById('ernKameraBereich').hidden = true;
-    document.getElementById('ernKamera').textContent = '📷 Scannen';
+    document.getElementById('ernKamera').innerHTML = ICON.kamera + ' Scannen';
 }
 
 /* -------------------------------------------------------- Nachschlagen */
@@ -2095,6 +2204,8 @@ function itemDialog(p, nameVorgabe) {
         <div class="ern-tasten">
             <button type="button" class="v-btn v-btn--primary" id="fSpeichern">${
                 p ? 'Änderung speichern' : 'Aufnehmen'}</button>
+            ${p ? `<button type="button" class="v-btn v-btn--danger"
+                           id="fWeg">Entfernen</button>` : ''}
         </div>`;
 
     state.dialog = openModal(p ? 'Lebensmittel ändern' : 'Von Hand anlegen', inhalt, {
@@ -2116,6 +2227,14 @@ function itemDialog(p, nameVorgabe) {
     });
     document.getElementById('fBase').addEventListener('change', zeichneGroessen);
     document.getElementById('fSpeichern').addEventListener('click', formSpeichern);
+    // Entfernen steht hier und nicht mehr als Papierkorb in der Liste: es
+    // ist der seltenste Handgriff am Bestand, und daneben getippt hiesse,
+    // ein Lebensmittel samt seiner Groessen zu verlieren.
+    const weg = document.getElementById('fWeg');
+    if (weg) weg.addEventListener('click', async () => {
+        if (state.dialog) state.dialog.close();
+        await entfernenItem(p.id);
+    });
 }
 
 function zeichneGroessen() {
@@ -2136,7 +2255,7 @@ function zeichneGroessen() {
                        placeholder="45" aria-label="Gewicht der ${i + 1}. Größe">
                 <span class="ern-groesse-basis">${esc(basis)}</span>
                 <button type="button" class="v-btn v-btn--icon" data-g-weg="${i}"
-                        aria-label="Größe entfernen" title="Entfernen">🗑️</button>
+                        aria-label="Größe entfernen" title="Entfernen">${ICON.muell}</button>
             </div>`).join('');
 
     // Waehrend des Tippens in den Zustand schreiben, aber NICHT neu zeichnen:
@@ -2210,27 +2329,39 @@ async function ladeBestand() {
             + 'Open Food Facts den Eintrag später ändert.');
         return;
     }
-    ziel.innerHTML = state.bestand.map(p => `
-        <div class="ern-zeile">
-            <div class="ern-zeile-text">
-                <div class="ern-zeile-kopf"><strong>${esc(p.name)}</strong>
-                    ${p.brand ? `<span class="ern-marke">${esc(p.brand)}</span>` : ''}</div>
-                <div class="ern-note">${zahl(p.kcal, '')} kcal · ${zahl(p.protein_g, ' g')} Eiweiß
-                    · ${zahl(p.fiber_g, ' g')} Ballaststoffe · je 100 ${esc(p.base_unit || 'g')}</div>
-                <div class="ern-note">${(p.sizes || []).length
-                    ? (p.sizes || []).map(g =>
-                        `${esc(g.label)} = ${g.grams} ${esc(p.base_unit || 'g')}`).join(' · ')
-                    : 'keine eigene Größe — wird in ' + esc(p.base_unit || 'g') + ' eingetragen'
-                }${p.user_edited ? ' · von Hand gepflegt' : ''}</div>
-            </div>
-            <div class="ern-tasten">
-                <button type="button" class="v-btn v-btn--sm" data-aendern="${p.id}">Ändern</button>
-                <button type="button" class="v-btn v-btn--icon" data-item-weg="${p.id}"
-                        aria-label="Entfernen" title="Entfernen">🗑️</button>
-            </div>
-        </div>`).join('');
-    ziel.querySelectorAll('[data-item-weg]').forEach(b =>
-        b.addEventListener('click', () => entfernenItem(Number(b.dataset.itemWeg))));
+    // Dieselbe `.rec-list` wie bei den Gerichten. Vorher standen hier drei
+    // Textbloecke und zwei Knoepfe nebeneinander; bei 390 px brach jeder
+    // Block um, und aus einem Lebensmittel wurden fuenf Zeilen. Die Angaben
+    // sind dieselben, sie stehen nur dort, wo sie hingehoeren: die eigene
+    // Groesse ist das, was man beim Eintragen waehlt -- sie steht am Rand,
+    // nicht in der dritten Zeile.
+    ziel.innerHTML = '<div class="rec-list nw-liste">' + state.bestand.map(p => {
+        const basis = esc(p.base_unit || 'g');
+        // Die Meta-Zeile wird auf EINE Zeile gekürzt. Deshalb steht vorn,
+        // was man beim Eintragen braucht — die eigenen Größen —, und erst
+        // danach die Makros. Fehlt eine Angabe, fällt sie weg: dreimal
+        // „keine Angabe“ nebeneinander war eine Zeile, die nichts sagte.
+        const groessen = (p.sizes || []).map(g =>
+            `${esc(g.label)} = ${g.grams} ${basis}`).join(' · ');
+        const meta = [groessen || 'keine eigene Größe']
+            .concat(p.protein_g != null ? [zahl(p.protein_g, ' g') + ' Eiweiß'] : [])
+            .concat(p.fiber_g != null ? [zahl(p.fiber_g, ' g') + ' Ballaststoffe'] : [])
+            .concat(p.user_edited ? ['von Hand gepflegt'] : []);
+        return `<button type="button" class="rec-row" data-aendern="${p.id}">
+            <span class="rec-mark" style="--tone:var(--nw-figur)">${esc(p.name.slice(0, 1))}</span>
+            <span class="rec-main">
+                <span class="rec-title">${esc(p.name)}${p.brand
+                    ? ` <span class="ern-marke">${esc(p.brand)}</span>` : ''}</span>
+                <span class="rec-meta">${meta.join('<span class="sep">·</span>')}</span>
+            </span>
+            <span class="rec-side">
+                <span class="rec-val">${p.kcal != null
+                    ? zahl(p.kcal, '') + ' kcal' : 'ohne Nährwerte'}</span>
+                <span class="rec-sub">je 100 ${basis}</span>
+            </span>
+            <span class="rec-go" aria-hidden="true">›</span>
+        </button>`;
+    }).join('') + '</div>';
     ziel.querySelectorAll('[data-aendern]').forEach(b => b.addEventListener('click', () => {
         const p = state.bestand.find(x => x.id === Number(b.dataset.aendern));
         if (p) itemDialog(p);
@@ -2310,13 +2441,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('nwVor').addEventListener('click', () => tagVerschieben(1));
     document.getElementById('nwAdd').addEventListener('click', () => eintragDialog(null));
 
-    document.getElementById('nwZieleSpeichern').addEventListener('click', zieleSpeichern);
-    document.getElementById('nwZieleWeg').addEventListener('click', zieleZuruecksetzen);
-
     document.getElementById('ernGerichtNeu').addEventListener('click', () => gerichtDialog(null));
     document.getElementById('ernItemNeu').addEventListener('click', () => itemDialog(null));
 
-    document.getElementById('ernKamera').addEventListener('click', kameraStarten);
+    document.getElementById('ernSucheIco').innerHTML = ICON.lupe;
+    const kameraKnopf = document.getElementById('ernKamera');
+    kameraKnopf.innerHTML = ICON.kamera + ' Scannen';
+    kameraKnopf.addEventListener('click', kameraStarten);
     document.getElementById('ernKameraStop').addEventListener('click', kameraStoppen);
     let suchTakt = null;
     const suchFeld = document.getElementById('ernSuche');
@@ -2340,8 +2471,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     zeichneReiter();
-    activateTab((location.hash || '').replace('#', '') || 'tag');
+    const anker = (location.hash || '').replace('#', '');
+    activateTab(anker);
     await ladeZiele();
+    // „/naehrwerte/#ziele“ war einmal ein Reiter und ist jetzt ein Dialog.
+    // Die Adresse bleibt gueltig: wer sie gespeichert hat, landet weiter bei
+    // den Zielen -- nur eben im Kasten davor statt in einer eigenen Seite.
+    if (anker === 'ziele') zieleDialog();
     await ladeTag(heute());
     await Promise.all([ladeGerichte(), ladeBestand(), ladeHaeufig(),
                        ladeBruecke()]);

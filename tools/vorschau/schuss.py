@@ -1,9 +1,20 @@
 # -*- coding: utf-8 -*-
 """Bildschirmfotos der echten Seiten machen -- ohne Server, ohne Datenbank.
 
-    python tools/vorschau/schuss.py                 # alles, Handy und Rechner
-    python tools/vorschau/schuss.py /essen/         # nur eine Seite
-    python tools/vorschau/schuss.py /essen/ 390     # nur eine Breite
+    python tools/vorschau/schuss.py                   # alles, Handy und Rechner
+    python tools/vorschau/schuss.py /essen/           # nur eine Seite
+    python tools/vorschau/schuss.py /essen/ 390       # nur eine Breite
+    python tools/vorschau/schuss.py /essen/ 390 844   # ... und eine Hoehe
+
+Einen Dialog ansehen: er steht hinter einem Klick, also wird geklickt. Der
+Griff steht in der Adresse der Seite und kennt ``klick`` und ``tippe``:
+
+    python tools/vorschau/schuss.py "/essen/?griff=klick:#esAdd" 390 844
+    python tools/vorschau/schuss.py "/essen/?griff=klick:#esAdd;tippe:#esDlgSuche=Pi" 390 844
+
+Getippt wird Zeichen fuer Zeichen mit ``input``-Ereignis -- eine Eingabe, die
+in einem Rutsch dasteht, loest die Taktgeber der Seite anders aus als ein
+Finger, und genau deren Zusammenspiel ist das, was man sehen will.
 
 Die Bilder landen unter ``tools/vorschau/bilder/``.
 
@@ -42,9 +53,14 @@ PORT = 8787
 # Die Seiten, die es zu sehen lohnt. Wer eine dazunimmt, braucht meist auch
 # eine Antwort dafuer in daten.py -- fehlt sie, bleibt die Seite leer, und
 # genau das soll sie dann auch.
-SEITEN = ["/", "/essen/", "/naehrwerte/", "/naehrwerte/#ziele",
-          "/naehrwerte/#gerichte", "/naehrwerte/#vorrat", "/schach/",
-          "/einstellungen/"]
+SEITEN = ["/", "/essen/", "/naehrwerte/", "/naehrwerte/#gerichte",
+          "/naehrwerte/#vorrat", "/schach/", "/einstellungen/",
+          "/design.html",
+          # Die beiden Dialoge, in denen die eigentliche Arbeit steckt.
+          # Ohne Griff endet die Vorschau davor.
+          "/essen/?griff=klick:#esAdd;tippe:#esDlgSuche=Pi",
+          "/naehrwerte/?griff=klick:#nwAdd;tippe:#nwDlgSuche=Milch",
+          "/naehrwerte/?griff=klick:[data-zu-zielen]"]
 
 # Handy und Rechner. 390 ist ein iPhone, 1280 ein uebliches Fenster.
 BREITEN = {390: 1400, 1280: 1200}
@@ -100,14 +116,23 @@ def seite_saeubern(roh: str) -> str:
 
 
 def name_fuer(seite: str, breite: int) -> str:
-    teil = seite.strip("/").replace("/", "-").replace("#", "-") or "start"
-    return "%s-%d.png" % (teil, breite)
+    # Ein Griff (``?griff=klick:#nwAdd``) steht mit in der Adresse und damit
+    # auch im Dateinamen -- sonst ueberschreiben sich die Bilder derselben
+    # Seite in verschiedenen Zustaenden gegenseitig. Alles, was kein
+    # Dateiname sein darf, wird zu einem Strich.
+    teil = re.sub(r"[^A-Za-z0-9]+", "-", seite).strip("-") or "start"
+    return "%s-%d.png" % (teil[:80], breite)
 
 
 def schiessen(exe: str, seite: str, breite: int, hoehe: int) -> pathlib.Path:
     ziel = BILDER / name_fuer(seite, breite)
+    # "#" und "&" muessen kodiert bleiben: das eine behielte sonst der
+    # BROWSER als eigenen Anker und der Server saehe alles dahinter nie
+    # (README), das andere risse die Rahmen-Adresse auseinander. Die Zeichen
+    # eines Griffs (?=:;,) duerfen dagegen stehen bleiben -- das haelt den
+    # Aufruf lesbar.
     url = ("http://127.0.0.1:%d/rahmen?url=%s&w=%d&h=%d"
-           % (PORT, urllib.parse.quote(seite, safe="/"), breite, hoehe))
+           % (PORT, urllib.parse.quote(seite, safe="/?=:;,"), breite, hoehe))
     subprocess.run(
         [exe, "--headless=new", "--disable-gpu", "--hide-scrollbars",
          "--virtual-time-budget=9000",
@@ -121,7 +146,13 @@ def schiessen(exe: str, seite: str, breite: int, hoehe: int) -> pathlib.Path:
 def main():
     seiten = ([seite_saeubern(sys.argv[1])] if len(sys.argv) > 1
               else SEITEN)
-    breiten = ({int(sys.argv[2]): BREITEN.get(int(sys.argv[2]), 1400)}
+    # Dritte Zahl: die Hoehe. Fuer eine lange Seite ist ein hohes Fenster
+    # richtig (man will alles auf einem Bild), fuer einen Dialog dagegen
+    # falsch -- der liegt mittig im SICHTFELD, und bei 1400 px Sichtfeld
+    # beantwortet das Bild eine Frage, die auf keinem Telefon gestellt wird.
+    # 844 ist ein iPhone 14.
+    breiten = ({int(sys.argv[2]): (int(sys.argv[3]) if len(sys.argv) > 3
+                                   else BREITEN.get(int(sys.argv[2]), 1400))}
                if len(sys.argv) > 2 else BREITEN)
 
     BILDER.mkdir(exist_ok=True)

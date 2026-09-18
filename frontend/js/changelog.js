@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.4.0', date: '2026-09-18', title: 'Essen und Nährwerte am Handy: das Springen hört auf', notes: [
+        'Beim Tippen in den Eintragen-Fenstern sprang die Seite. Drei Gründe, alle drei weg: die Mengen- und Größenfelder waren kleiner als 16 Pixel, und darunter zoomt iPhone-Safari beim Antippen die ganze Seite heran und danach nicht zurück; das Fenster stand mittig und rückte bei jedem getippten Zeichen um die halbe Höhe der Vorschlagsliste; und die Katalogsuche riss eine halbe Sekunde nach dem letzten Zeichen die Liste ab — samt der Menge, die du gerade hineingeschrieben hattest. Am Handy ist das Fenster jetzt das ganze Bild, Mahlzeit und Suchfeld kleben oben, und der Katalog zeichnet in seinen eigenen Bereich.',
+        'Die eigene Liste filtert sofort statt erst nach einer Sechstelsekunde — sie liegt ohnehin im Speicher, es gab nichts zu verzögern außer der Antwort auf deinen eigenen Finger.',
+        'Die Nährwerte hatten fünf Reiter, und der fünfte lag hinter dem rechten Rand: wer „Lebensmittel“ wählte, sah nicht einmal mehr, dass er gewählt war. Die Tagesziele haben ihren Reiter abgegeben und liegen jetzt hinter dem Knopf am Kalorienring — an der Zahl, die sie messen. Dort stand vorher ein Erklärabsatz.',
+        'Lebensmittel und Gerichte stehen als richtige Liste da statt als Blöcke, die bei 390 Pixeln auf vier Zeilen zerfielen: Marke oder Foto links, Kalorien rechts, die ganze Zeile öffnet sie. Der Papierkorb ist aus allen Listen verschwunden — Löschen steht im Fenster dahinter, wo es nicht aus Versehen getroffen wird.',
+        'Alle Tippziele sind jetzt mindestens 44 Pixel groß, die Schriftgrößen halten sich in beiden Modulen an dieselbe Skala, und die Zeichen an den Knöpfen — Lupe, Papierkorb, Kamera — sind gezeichnet statt Emoji.',
+    ]},
     { v: 'v2.3.0', date: '2026-09-18', title: 'Zum ersten Mal angesehen — und zwei Fehler gefunden', notes: [
         'Behoben: „KOHLENHYDRATE“ passte nicht in seinen Ring und brach auf beiden Seiten über den Bogen. Die Beschriftung der kleinen Makro-Ringe steht jetzt darunter; innen bleibt die Zahl, und die ist immer kurz.',
         'Behoben: ein eingeschaltetes Modul galt auf einem frischen Gerät als ruhend. Die Einstellungen liegen zwischengespeichert im Browser; beim ersten Besuch — oder nach gelöschten Browserdaten — war der Speicher leer, und dann galt die Werkseinstellung. Wer die Nährwerte am Handy eingeschaltet hatte und am Rechner herkam, fand sie in keiner Leiste und auf der Seite den Satz „Dieses Modul ruht“ — samt Knopf zum Einschalten von etwas, das schon an war.',

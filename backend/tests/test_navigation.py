@@ -178,12 +178,15 @@ def test_jede_export_sektion_gehoert_zu_einer_gruppe():
 # ``VexModal is not defined`` erst in dem Moment, in dem jemand den Dialog
 # oeffnet -- nicht beim Laden der Seite. Bis dahin sieht alles richtig aus.
 #
-# Ein Waechter fuer alle drei Bausteine, weil der naechste dieselbe Falle
-# mitbringt.
+# Ein Waechter fuer alle Bausteine, weil jeder naechste dieselbe Falle
+# mitbringt. ``VexIkon`` (v2.4.0) ist der schlimmste Fall davon: es wird beim
+# ZEICHNEN aufgerufen, nicht erst beim Klicken -- fehlt das Skript, stirbt das
+# Modul mitten im Aufbau der Seite und uebrig bleibt der Seitenhintergrund.
 def test_wer_einen_geteilten_baustein_benutzt_laedt_ihn_auch():
     bausteine = {"VexModal": "/js/modal.js",
                  "VexRing": "/js/ring.js",
-                 "VexBild": "/js/bild.js"}
+                 "VexBild": "/js/bild.js",
+                 "VexIkon": "/js/ikon.js"}
     front = WURZEL / "frontend"
     seiten = [(h, h.read_text(encoding="utf-8")) for h in front.rglob("*.html")]
     fehler = []

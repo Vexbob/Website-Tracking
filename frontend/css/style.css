@@ -701,7 +701,10 @@ input[type="checkbox"] { display: inline; width: auto; }
 .modal-box {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
     box-shadow: 0 24px 60px rgba(0,0,0,0.35); max-width: 460px; width: 100%;
-    max-height: calc(100vh - 2rem); display: flex; flex-direction: column; overflow: hidden;
+    /* dvh, nicht vh: auf dem Handy zaehlt vh die Adressleiste mit, die beim
+       Scrollen einfaehrt -- der Kasten war damit hoeher als das Sichtfeld,
+       und sein Fuss (die Taste, um die es geht) lag darunter. */
+    max-height: calc(100dvh - 2rem); display: flex; flex-direction: column; overflow: hidden;
 }
 
 /* ==========================================================================
@@ -1513,6 +1516,17 @@ a.rec-row:focus-visible, button.rec-row:focus-visible {
     color: var(--tone, var(--text-2));
     background: color-mix(in srgb, var(--tone, var(--line-strong)) 18%, transparent);
 }
+/* Traegt der Datensatz ein Foto, steht es an der Stelle der Marke: es sagt
+   dasselbe -- welcher ist das -- und sagt es schneller. Feste Kantenlaenge
+   und `object-fit: cover`, damit die Liste nicht bei jedem Bild springt; ein
+   leeres Feld behaelt die Groesse, sonst rutscht die Zeile nach, sobald ein
+   Bild nachgeladen ist. (v2.4.0, aus dem Naehrwerte-Modul.) */
+.rec-mark--bild {
+    width: 2.5rem; height: 2.5rem; padding: 0; overflow: hidden;
+    background: var(--surface-3);
+}
+.rec-mark--bild img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 .rec-main { flex: 1; min-width: 0; }
 .rec-title {
     /* display:block, damit das Kuerzen mit Ellipse greift -- an einem

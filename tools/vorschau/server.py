@@ -77,6 +77,84 @@ def stub_js() -> str:
         return Promise.resolve(new Response(JSON.stringify(treffer),
             { status: 200, headers: { 'Content-Type': 'application/json' } }));
     };
+
+    /* ---- Der Griff: etwas anfassen, bevor das Bild faellt ----
+       Ohne das endet die Vorschau vor jedem Dialog, und genau dort steckt
+       die Arbeit. Ein Griff steht in der Adresse der Seite:
+
+           /naehrwerte/?griff=klick:#nwAdd;tippe:#nwDlgSuche=Hafer
+
+       Zwei Griffe genuegen fuer alles bisher Gesuchte: ``klick`` auf eine
+       Kennung und ``tippe`` in ein Feld.
+
+       Gearbeitet wird SYNCHRON, ein Schritt nach dem anderen im selben
+       Durchlauf. Der erste Anlauf hat die Schritte ueber
+       requestAnimationFrame verkettet und blieb nach dem ersten Klick
+       stehen: unter --virtual-time-budget laeuft die Bilderfolge nicht
+       weiter, wenn nichts mehr zu zeichnen ist. Es braucht sie auch nicht --
+       ein Dialog wird synchron in den DOM gehaengt, er ist unmittelbar nach
+       dem Klick da. Wer auf etwas wartet, das erst eine Antwort bringt,
+       schiesst zweimal: einmal davor, einmal danach. */
+
+    function griffeAbarbeiten(schritte) {
+        for (const schritt of schritte) {
+            const teil = schritt.split(':');
+            const art = teil.shift().trim();
+            const rumpf = teil.join(':');
+
+            if (art === 'klick') {
+                const el = document.querySelector(rumpf.trim());
+                if (!el) { console.warn('[Vorschau] Griff findet nicht:', rumpf); return; }
+                el.click();
+                continue;
+            }
+            if (art === 'tippe') {
+                const schnitt = rumpf.indexOf('=');
+                const el = document.querySelector(rumpf.slice(0, schnitt).trim());
+                if (!el) { console.warn('[Vorschau] Griff findet nicht:', rumpf); return; }
+                const text = rumpf.slice(schnitt + 1);
+                // Zeichen fuer Zeichen mit ``input``-Ereignis: eine Eingabe,
+                // die in einem Rutsch dasteht, loest die Taktgeber der Seite
+                // anders aus als ein Finger -- und gesucht wird genau deren
+                // Zusammenspiel.
+                for (let i = 1; i <= text.length; i++) {
+                    el.value = text.slice(0, i);
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                continue;
+            }
+            console.warn('[Vorschau] unbekannter Griff:', art);
+            return;
+        }
+    }
+
+    const griff = new URLSearchParams(location.search).get('griff');
+    if (griff) {
+        // Uebergaenge abschalten. Ein Dialog blendet sich in 180 ms ein; die
+        // virtuelle Zeit des Kopflosen trifft das Bild mitten hinein, und
+        // was dann dasteht, ist halb durchsichtig -- man haelt es fuer einen
+        // Fehler in der Farbe. Gesucht ist der Zustand NACH der Bewegung.
+        document.addEventListener('DOMContentLoaded', () => {
+            const s = document.createElement('style');
+            s.textContent = '*,*::before,*::after{transition-duration:0s !important;'
+                + 'animation-duration:0s !important;animation-delay:0s !important}';
+            document.head.appendChild(s);
+        });
+        // Gewartet wird auf den FERTIGEN Zustand, nicht auf ``load``: die
+        // Module holen beim Start ihre Daten, und ``eintragDialog`` steigt
+        // ohne den geladenen Tag wortlos wieder aus -- der Klick ginge ins
+        // Leere und das Bild zeigte die Seite ohne Dialog, als waere der
+        // Knopf kaputt. Genau das ist hier einmal passiert.
+        //
+        // setTimeout ist dabei entgegen dem ersten Verdacht brauchbar:
+        // --virtual-time-budget spult die Uhr vor, die Rueckrufe kommen also
+        // sehr wohl -- nur eben nicht nach echten Sekunden. Was NICHT geht,
+        // ist eine Kette aus requestAnimationFrame: sobald nichts mehr zu
+        // zeichnen ist, laeuft die Bilderfolge nicht weiter, und die Kette
+        // bleibt nach dem ersten Klick liegen.
+        window.addEventListener('load', () =>
+            setTimeout(() => griffeAbarbeiten(griff.split(';').filter(Boolean)), 600));
+    }
 })();
 </script>
 """ % (json.dumps(daten.ICH), json.dumps(daten.ANTWORTEN, ensure_ascii=False))
@@ -109,6 +187,14 @@ class Handler(SimpleHTTPRequestHandler):
             from urllib.parse import urlparse, parse_qs
             frage = parse_qs(urlparse(self.path).query)
             ziel_url = frage.get("url", ["/"])[0]
+            # Ein "#" IM Griff (``klick:#nwAdd``) ist Teil eines Selektors,
+            # kein Anker. Bliebe es stehen, schnitte der Browser die halbe
+            # Adresse als Fragment ab und die Seite saehe nur noch
+            # ``griff=klick:``. Der Anker der Seite selbst (``/…/#ziele``)
+            # steht vor dem Fragezeichen und bleibt deshalb unberuehrt.
+            if "?" in ziel_url:
+                kopf, _, schwanz = ziel_url.partition("?")
+                ziel_url = kopf + "?" + schwanz.replace("#", "%23")
             breite = int(frage.get("w", ["390"])[0])
             hoehe = int(frage.get("h", ["1200"])[0])
             roh = (RAHMEN % (ziel_url, breite, hoehe)).encode("utf-8")
