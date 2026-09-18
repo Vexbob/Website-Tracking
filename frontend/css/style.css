@@ -118,6 +118,17 @@
     --danger: #ff8a99;  --danger-soft: rgba(255,138,153,0.16);
     --info: #7ab8ff;    --info-soft: rgba(122,184,255,0.16);
 
+    /* --- Schrift ---
+       Die Skala steht in docs/DESIGN.md 2: 12/13/15/17/22/28. Dazu EINE
+       Stufe darueber, --fs-display (36 px), fuer die eine grosse Zahl, um
+       die es auf einer Seite geht -- die Kalorien des Tages, der Kontostand.
+       Sie ist keine sechste Textrolle: sie steht hoechstens einmal je Seite,
+       und was sie traegt, ist immer eine Zahl. Ohne diese Stufe endet jede
+       Kennzahl bei 28 px und damit auf derselben Groesse wie eine
+       Kartenueberschrift -- die Seite hat dann keinen Blickfang, nur einen
+       Anfang. */
+    --fs-display: 2.25rem;
+
     /* --- Form --- */
     --radius-sm: 8px; --radius: 12px; --radius-lg: 16px; --radius-xl: 20px;
     --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
@@ -1955,7 +1966,18 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 .v-ring--halb .v-ring-over { stroke-dashoffset: calc(var(--ring-c) / 2 * (1 - var(--ring-over))); }
 .v-ring--halb .v-ring-txt { inset: 22% 0 0 0; justify-content: center; }
 
-.v-ring--hero { --ring-size: 176px; --ring-w: 13; }
+/* Der Hero-Ring: die eine grosse Zahl der Seite, und der einzige Ort, an dem
+   die Display-Stufe (--fs-display) steht.
+
+   Ein Schein auf dem Bogen waere hier reizvoll und geht NICHT: der Halbkreis
+   schneidet mit `overflow: hidden` sein leeres unteres Viertel weg, und ein
+   `drop-shadow` wird an genau dieser Kante mit abgeschnitten -- auf dem
+   Bildschirm stand ein hell leuchtendes Rechteck um den Bogen. Der Ring
+   traegt seine Wirkung ueber Groesse und Strichbreite, nicht ueber Licht. */
+.v-ring--hero { --ring-size: 200px; --ring-w: 12; }
+.v-ring--hero .v-ring-val { font-size: var(--fs-display); }
+.v-ring--hero .v-ring-unit { font-size: 0.8125rem; }
+.v-ring--hero .v-ring-lbl { font-size: 0.75rem; margin-top: 4px; }
 
 /* Der kleine Ring traegt seine Beschriftung UNTER sich, nicht darin. In einen
    Kreis von 78 px passt „EIWEISS“, aber nicht „KOHLENHYDRATE“: das Wort
@@ -2014,3 +2036,320 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 .ui-toast-error, .ausg-toast-error, .toast.err       { border-left-color: var(--danger); }
 .ui-toast-action { background: var(--surface-2); border-color: var(--line-strong); color: var(--text-1); }
 .ui-toast-action:hover { background: var(--surface-1); }
+
+
+/* ==========================================================================
+   Tageskopf, Mahlzeitenblock und Schwebeknopf — v2.4.0
+   --------------------------------------------------------------------------
+   Drei Bausteine, die beide Ernährungsmodule brauchen und bis v2.3.0 zweimal
+   nebeneinander hatten (`.es-tagkopf` und `.nw-tagkopf` waren Zeile für Zeile
+   dasselbe). Eine zweite Variante einer bestehenden Komponente ist genau das,
+   was docs/DESIGN.md 8 verbietet — und der Grund, warum die beiden Seiten
+   auseinandergelaufen sind, obwohl sie dieselbe Aufgabe haben.
+
+   Muster in design.html.
+   ========================================================================== */
+
+/* ---------- Der Tageskopf ----------
+   Eine Seite, die einen einzelnen Tag zeigt, sagt zuerst, WELCHEN. Deshalb
+   trägt der Kopf den Tagesnamen groß und das Datum darunter klein, statt
+   beides in eine Zeile zu quetschen — und die Pfeile sind runde Flächen von
+   44 px statt 32er Kästchen: am Tag davor und danach fasst man oft an.
+
+   Der ganze mittlere Block ist der Griff zur Datumsauswahl des Geräts; das
+   durchsichtige `input[type=date]` liegt darüber. */
+.v-tagkopf {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--line);
+    margin-bottom: var(--space-5);
+}
+.v-tagkopf-mitte {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    cursor: pointer;
+    padding-block: 2px;
+}
+.v-tagkopf-name {
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+    line-height: 1.15;
+}
+.v-tagkopf-datum {
+    font-size: 0.8125rem;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    /* Der gepunktete Strich ist der einzige Hinweis darauf, dass hier etwas
+       passiert — ein Kalendersymbol daneben wäre ein zweites Bedienelement
+       für dieselbe Fläche. */
+    text-decoration: underline dotted var(--line-strong);
+    text-underline-offset: 3px;
+    width: fit-content;
+}
+.v-tagkopf-mitte input[type="date"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    font: inherit;
+}
+.v-tagkopf-mitte:focus-within { outline: none; }
+.v-tagkopf-mitte:focus-within .v-tagkopf-datum { text-decoration-color: var(--accent); }
+
+.v-tagkopf-pfeil {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background var(--dur-1) var(--ease),
+                border-color var(--dur-1) var(--ease),
+                transform var(--dur-1) var(--ease);
+}
+.v-tagkopf-pfeil:hover {
+    opacity: 1;
+    background: var(--surface-3);
+    border-color: var(--line-strong);
+    color: var(--text-1);
+}
+.v-tagkopf-pfeil:active { transform: scale(0.93); }
+.v-tagkopf-pfeil:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.v-tagkopf-pfeil[disabled] { opacity: 0.3; cursor: default; transform: none; }
+/* Am Rechner steht die Hauptaktion im Kopf; am Handy trägt sie der
+   Schwebeknopf, und hier wäre sie nur eine Zeile, die den Tag nach unten
+   schiebt. */
+.v-tagkopf .v-tagkopf-aktion { flex: none; margin: 0; }
+@media (max-width: 720px) {
+    .v-tagkopf .v-tagkopf-aktion { display: none; }
+}
+
+/* ---------- Der Mahlzeitenblock ----------
+   Ein Tag besteht aus vier Mahlzeiten, und bis v2.3.0 sah er nicht so aus:
+   Überschrift, Haarlinie, Zeilen, Überschrift, Haarlinie, Zeilen — ein
+   gleichmäßiger Streifen, in dem man die Grenzen suchen musste. Jetzt ist
+   jede Mahlzeit ein eigener Körper auf --surface-2 mit einem leicht
+   getönten Kopf: vier Blöcke statt einer Liste mit Zwischenüberschriften.
+
+   Der Kopfstreifen bleibt dabei neutral (--surface-3, die dritte Ebene). Ein
+   erster Versuch hat ihn mit dem Modulton getönt; bei vier Blöcken
+   untereinander waren das vier grüne Balken, und der Ton hörte auf, Identität
+   zu sein — Farbe ohne Bedeutung, genau das, was DESIGN 8 ausschließt. Der
+   Ton steckt jetzt dort, wo er etwas heißt: im Plus, das die Mahlzeit
+   benennt, und in den Marken der Einträge. --v-mz-ton trägt ihn dorthin. */
+.v-mahlzeit {
+    --v-mz-ton: var(--text-3);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-top: var(--space-3);
+}
+.v-mahlzeit:first-child { margin-top: 0; }
+.v-mz-kopf {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0.5rem 0.5rem 0.5rem 0.875rem;
+    background: var(--surface-3);
+    border-bottom: 1px solid var(--line);
+    min-height: 44px;
+}
+.v-mz-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+.v-mz-summe {
+    margin-left: auto;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+.v-mz-plus {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    margin: 0 0 0 auto;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-3);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--text-2);
+    font-size: 0.9375rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: color var(--dur-1) var(--ease),
+                border-color var(--dur-1) var(--ease),
+                transform var(--dur-1) var(--ease);
+}
+.v-mz-summe + .v-mz-plus { margin-left: var(--space-2); }
+.v-mz-plus:hover {
+    opacity: 1;
+    color: var(--v-mz-ton);
+    border-color: var(--v-mz-ton);
+}
+.v-mz-plus:active { transform: scale(0.92); }
+.v-mz-plus:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.v-mz-koerper { padding: 0.25rem 0.625rem; }
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .v-mz-plus { width: 40px; height: 40px; }
+}
+
+/* ---------- Eine Zeile in der Mahlzeit ----------
+   Auch das lag zweimal nebeneinander (`.es-zeile` und `.ern-zeile`). Die
+   Form ist in beiden Modulen dieselbe: links eine Marke, dann der Name als
+   Knopf mit seiner Meta-Zeile darunter, rechts EINE Angabe. Verschieden ist
+   nur, was in den beiden Randplätzen steht — im Tagebuch ein Punkt und die
+   Stufe, im Tracker nichts und die Menge. Genau das gehört den Modulen; die
+   Zeile selbst nicht. */
+.v-mz-zeile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+    border-bottom: 1px solid var(--line);
+}
+.v-mz-zeile:last-child { border-bottom: 0; }
+/* Der Name ist der Knopf: ein Ort für alles, was an einer Zeile falsch sein
+   kann. Er nimmt die ganze freie Breite, damit die Trefferfläche nicht am
+   letzten Buchstaben endet. */
+.v-mz-zeile-name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    width: auto;
+    margin: 0;
+    padding: 0.45rem 0.4rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    text-align: left;
+    color: var(--text-1);
+    font-family: inherit;
+    font-size: 0.9375rem;
+    cursor: pointer;
+    transition: background var(--dur-1) var(--ease);
+}
+.v-mz-zeile-name:hover { opacity: 1; background: var(--surface-3); }
+.v-mz-zeile-name:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.v-mz-zeile-name strong { font-weight: 600; }
+.v-mz-zeile-name > strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.v-mz-zeile-meta {
+    font-size: 0.75rem;
+    color: var(--text-4);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .v-mz-zeile-name { min-height: 44px; justify-content: center; }
+}
+/* Die EINE Angabe am rechten Rand der Zeile — die Menge, die Stufe, der
+   Wert. Eine ruhende Marke, kein Knopf: was sie trägt, ändert man im Dialog,
+   den der Name daneben öffnet. Module, die sie anklickbar brauchen (die
+   Stufe im Tagebuch), setzen ihre eigene darüber. */
+.v-mz-tag {
+    flex: none;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: 0.75rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Eine leere Mahlzeit ist keine Fehlstelle, sondern der kürzeste Weg zum
+   nächsten Eintrag. Bis v2.3.0 blieb sie als blasse Zeile stehen und sah aus
+   wie etwas, das nicht geladen hat. Jetzt lädt sie ein: gestrichelte Kante
+   wie beim leeren Zustand (DESIGN 6), die ganze Fläche ist der Knopf. */
+.v-mahlzeit.is-leer { background: transparent; }
+.v-mahlzeit.is-leer .v-mz-kopf { background: transparent; border-bottom: 0; }
+.v-mz-leer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: calc(100% - 1rem);
+    margin: 0 0.5rem 0.5rem;
+    padding: 0.625rem;
+    min-height: 44px;
+    background: transparent;
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius);
+    color: var(--text-4);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.v-mz-leer:hover { opacity: 1; color: var(--v-mz-ton); border-color: var(--v-mz-ton); }
+.v-mz-leer:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ---------- Der Schwebeknopf ----------
+   Die eine Aktion, für die man die Seite überhaupt aufmacht — eintragen —
+   gehört am Handy dorthin, wo der Daumen ohnehin liegt, nicht an den oberen
+   Rand. Bis v2.3.0 stand sie als volle Zeile unter dem Datum und schob das,
+   weswegen man die Seite öffnet, eine Knopfhöhe nach unten; auf dem Weg
+   dorthin musste man außerdem zurückscrollen.
+
+   Er liegt über der Tab-Leiste (58 px plus Geräterand) und verschwindet am
+   Rechner: dort steht die Aktion im Tageskopf, wo sie im Blickfeld ist. */
+.v-fab {
+    position: fixed;
+    right: var(--space-4);
+    bottom: calc(58px + 0.75rem + env(safe-area-inset-bottom, 0px));
+    z-index: 70;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: auto;
+    margin: 0;
+    padding: 0.875rem 1.25rem;
+    background: var(--grad-accent);
+    color: var(--accent-ink);
+    border: 0;
+    border-radius: 999px;
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    box-shadow: var(--glow-accent), var(--shadow-float);
+    transition: transform var(--dur-1) var(--ease), filter var(--dur-1) var(--ease);
+}
+.v-fab:hover { opacity: 1; filter: brightness(1.06); }
+.v-fab:active { transform: scale(0.95); }
+.v-fab:focus-visible { outline: none; box-shadow: var(--focus-ring), var(--shadow-float); }
+.v-fab-plus { font-size: 1.0625rem; line-height: 1; }
+@media (min-width: 721px) {
+    .v-fab { display: none; }
+}

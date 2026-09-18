@@ -40,22 +40,32 @@
 
     <div id="esInhalt">
         <div class="stat-card">
-            <div class="es-tagkopf">
-                <button type="button" class="es-pfeil" id="esZurueck"
-                        aria-label="Tag zurück">◀</button>
-                <label class="es-tagkopf-mitte">
-                    <strong id="esTagName">Heute</strong>
-                    <span id="esTagDatum"></span>
+            <div class="v-tagkopf">
+                <button type="button" class="v-tagkopf-pfeil" id="esZurueck"
+                        aria-label="Tag zurück">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                         stroke-linejoin="round" aria-hidden="true"><path d="M14.5 5 8 12l6.5 7"/></svg>
+                </button>
+                <label class="v-tagkopf-mitte">
+                    <span class="v-tagkopf-name" id="esTagName">Heute</span>
+                    <span class="v-tagkopf-datum" id="esTagDatum"></span>
                     <input type="date" id="esDatumWahl" aria-label="Tag auswählen">
                 </label>
-                <button type="button" class="es-pfeil" id="esVor"
-                        aria-label="Tag vor">▶</button>
-                <button type="button" class="v-btn v-btn--primary es-add" id="esAdd">
+                <button type="button" class="v-tagkopf-pfeil" id="esVor"
+                        aria-label="Tag vor">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                         stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5 16 12l-6.5 7"/></svg>
+                </button>
+                <button type="button" class="v-btn v-btn--primary v-tagkopf-aktion" id="esAdd">
                     <span aria-hidden="true">＋</span> Eintragen</button>
             </div>
 
             <!-- Der kürzeste Weg: was du oft isst, als Knopf. Ein Tipp trägt
-                 ein — als „normal“, in die Mahlzeit, die zur Uhrzeit passt. -->
+                 ein — als „normal“, in die Mahlzeit, die zur Uhrzeit passt.
+                 Das ist der Grund, warum diese Seite Freude macht, also steht
+                 es über dem Tag und nicht darunter. -->
             <div class="es-schnell" id="esSchnell" hidden></div>
 
             <div id="esMahlzeiten"></div>
@@ -66,6 +76,10 @@
 
     <div class="version-tag"></div>
 </main>
+
+<!-- Am Handy liegt die Hauptaktion dort, wo der Daumen ohnehin ist. -->
+<button type="button" class="v-fab" id="esFab">
+    <span class="v-fab-plus" aria-hidden="true">＋</span> Eintragen</button>
 <script src="/essen/essen.js"></script>
 </body>
 </html>

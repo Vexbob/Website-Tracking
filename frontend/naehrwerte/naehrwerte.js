@@ -163,6 +163,16 @@ const HERKUNFT = { katalog: 'eigener Katalog', off: 'Open Food Facts' };
 
 const TAG_NAMEN = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
                    'Freitag', 'Samstag'];
+const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
+                'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+/* Ausgeschrieben, ohne Wochentag -- den setzt der Kopf davor, wenn er nicht
+   ohnehin im grossen Namen steht. */
+function datumLang(iso) {
+    const d = new Date(iso + 'T12:00:00');
+    if (isNaN(d.getTime())) return iso;
+    return d.getDate() + '. ' + MONATE[d.getMonth()] + ' ' + d.getFullYear();
+}
 
 function datumKurz(iso) {
     const d = new Date(iso + 'T12:00:00');
@@ -253,6 +263,11 @@ function activateTab(tab) {
     // ein Link auf die Ziele. Der erste Reiter bleibt ohne Anhaengsel, damit
     // die blanke Adresse die blanke Adresse bleibt.
     history.replaceState(null, '', tab === 'tag' ? location.pathname : '#' + tab);
+    // Der Schwebeknopf gehört dem Tag. Im Verlauf, in den Gerichten und im
+    // Bestand gibt es nichts einzutragen -- dort wäre er ein Knopf, der die
+    // Seite wechselt, ohne das zu sagen.
+    const fab = document.getElementById('nwFab');
+    if (fab) fab.hidden = tab !== 'tag';
     if (tab === 'verlauf') mountRange();
     // Der Katalogstand beschriftet nur den Reiter „Lebensmittel“. Ihn beim
     // Laden der Seite mitzuholen, hiesse: eine Anfrage fuer eine Zeile, die
@@ -282,9 +297,14 @@ function zeichneKopf() {
     const gesternIso = gestern.getFullYear() + '-'
         + String(gestern.getMonth() + 1).padStart(2, '0') + '-'
         + String(gestern.getDate()).padStart(2, '0');
-    document.getElementById('nwTagName').textContent =
-        istHeute ? 'Heute' : (datum === gesternIso ? 'Gestern' : TAG_NAMEN[d.getDay()]);
-    document.getElementById('nwTagDatum').textContent = datumKurz(datum);
+    const nahName = istHeute ? 'Heute' : (datum === gesternIso ? 'Gestern' : null);
+    document.getElementById('nwTagName').textContent = nahName || TAG_NAMEN[d.getDay()];
+    // Unter dem grossen Namen steht das Datum ausgeschrieben. „Heute“ allein
+    // sagt nicht, welcher Tag das ist, und „18.09.2026“ allein sagt nicht,
+    // dass es heute ist -- erst beides zusammen beantwortet die Frage, die
+    // ein Tageskopf beantworten soll.
+    document.getElementById('nwTagDatum').textContent =
+        (nahName ? TAG_NAMEN[d.getDay()] + ', ' : '') + datumLang(datum);
     document.getElementById('nwVor').disabled = istHeute;
     // Die Auswahl steht auf dem gezeigten Tag und reicht nicht in die
     // Zukunft -- dieselbe Grenze wie am Pfeil daneben.
@@ -366,19 +386,25 @@ function zeichneMahlzeiten() {
         if (m.key === 'ohne' && !eigene.length) return '';
         const summe = t.meal_totals[m.key];
         const kcalText = summe && summe.kcal
-            ? `<span class="nw-mz-summe">${summe.incomplete ? 'mind. ' : ''}${
+            ? `<span class="v-mz-summe">${summe.incomplete ? 'mind. ' : ''}${
                 zahlKurz(summe.kcal)} kcal</span>` : '';
         const plus = m.key === 'ohne' ? ''
-            : `<button type="button" class="nw-mz-plus" data-add="${esc(m.key)}"
+            : `<button type="button" class="v-mz-plus" data-add="${esc(m.key)}"
                    aria-label="Zu ${esc(m.label)} eintragen"
                    title="Zu ${esc(m.label)} eintragen">＋</button>`;
-        return `<div class="nw-mz${eigene.length ? '' : ' is-leer'}">
-            <div class="nw-mz-kopf">
-                <span class="nw-mz-name">${esc(m.label)}</span>
+        // Eine leere Mahlzeit laedt ein, statt blass dazustehen: die ganze
+        // Flaeche ist der Knopf, und der Ort sagt schon, wohin es geht.
+        const koerper = eigene.length
+            ? `<div class="v-mz-koerper">${eigene.map(zeile).join('')}</div>`
+            : (m.key === 'ohne' ? '' : `<button type="button" class="v-mz-leer"
+                   data-add="${esc(m.key)}">＋ ${esc(m.label)} eintragen</button>`);
+        return `<div class="v-mahlzeit${eigene.length ? '' : ' is-leer'}">
+            <div class="v-mz-kopf">
+                <span class="v-mz-name">${esc(m.label)}</span>
                 ${kcalText}
                 ${plus}
             </div>
-            ${eigene.map(zeile).join('')}
+            ${koerper}
         </div>`;
     }).join('');
 
@@ -399,13 +425,13 @@ function zeile(e) {
         e.has_nutrition ? `${zahlKurz(e.kcal)} kcal` : 'ohne Nährwerte',
         e.logged_time || '',
     ].filter(Boolean).join(' · ');
-    return `<div class="ern-zeile"${e.meal_auto
+    return `<div class="v-mz-zeile"${e.meal_auto
             ? ' title="Mahlzeit automatisch nach Uhrzeit — Namen antippen zum Ändern"' : ''}>
-        <button type="button" class="nw-zeile-name" data-mz-um="${e.id}">
+        <button type="button" class="v-mz-zeile-name" data-mz-um="${e.id}">
             <strong>${esc(e.name)}</strong>
-            <span class="nw-zeile-meta">${meta}</span>
+            <span class="v-mz-zeile-meta">${meta}</span>
         </button>
-        <span class="nw-menge-tag">${esc(e.amount_label)}</span>
+        <span class="v-mz-tag">${esc(e.amount_label)}</span>
     </div>`;
 }
 
@@ -440,7 +466,7 @@ function zeichneBruecke() {
     // Knoepfe je Zeile waeren bei fuenf Vorschlaegen zehn gleichberechtigte
     // Ziele, und keins davon staeche heraus.
     document.getElementById('nwBrueckeListe').innerHTML =
-        '<div class="rec-list nw-liste">' + liste.map((v, i) => `
+        '<div class="rec-list nw-liste nw-bruecke-liste">' + liste.map((v, i) => `
         <div class="rec-row">
             <span class="rec-mark" style="--tone:var(--nw-figur)">${esc(v.name.slice(0, 1))}</span>
             <span class="rec-main">
@@ -448,11 +474,13 @@ function zeichneBruecke() {
                 <span class="rec-meta">${v.count}× notiert<span class="sep">·</span>zuletzt ${
                     datumKurz(v.last)}</span>
             </span>
-            <button type="button" class="v-btn v-btn--sm nw-w-ok"
-                    data-bruecke-an="${i}">Nährwerte</button>
-            <button type="button" class="v-btn v-btn--icon v-btn--ghost"
-                    data-bruecke-weg="${i}" title="Nicht nötig"
-                    aria-label="„${esc(v.name)}“ nicht vorschlagen">✕</button>
+            <span class="nw-br-tasten">
+                <button type="button" class="v-btn v-btn--sm nw-w-ok"
+                        data-bruecke-an="${i}">Nährwerte hinterlegen</button>
+                <button type="button" class="v-btn v-btn--icon v-btn--ghost"
+                        data-bruecke-weg="${i}" title="Nicht nötig"
+                        aria-label="„${esc(v.name)}“ nicht vorschlagen">✕</button>
+            </span>
         </div>`).join('') + '</div>';
 
     karte.querySelectorAll('[data-bruecke-an]').forEach(b =>
@@ -2439,7 +2467,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.getElementById('nwZurueck').addEventListener('click', () => tagVerschieben(-1));
     document.getElementById('nwVor').addEventListener('click', () => tagVerschieben(1));
-    document.getElementById('nwAdd').addEventListener('click', () => eintragDialog(null));
+    // Zwei Knoepfe, eine Handlung: der eine steht am Rechner im Tageskopf,
+    // der andere schwebt am Handy über der Tab-Leiste. Beide rufen dasselbe.
+    ['nwAdd', 'nwFab'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', () => eintragDialog(null));
+    });
 
     document.getElementById('ernGerichtNeu').addEventListener('click', () => gerichtDialog(null));
     document.getElementById('ernItemNeu').addEventListener('click', () => itemDialog(null));

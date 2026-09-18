@@ -59,40 +59,52 @@
 
         <div id="nwTagInhalt">
             <div class="stat-card">
-                <div class="nw-tagkopf">
-                    <button type="button" class="nw-pfeil" id="nwZurueck"
-                            aria-label="Tag zurück">◀</button>
-                    <label class="nw-tagkopf-mitte">
-                        <strong id="nwTagName">Heute</strong>
-                        <span id="nwTagDatum"></span>
+                <div class="v-tagkopf">
+                    <button type="button" class="v-tagkopf-pfeil" id="nwZurueck"
+                            aria-label="Tag zurück">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                             stroke-linejoin="round" aria-hidden="true"><path d="M14.5 5 8 12l6.5 7"/></svg>
+                    </button>
+                    <label class="v-tagkopf-mitte">
+                        <span class="v-tagkopf-name" id="nwTagName">Heute</span>
+                        <span class="v-tagkopf-datum" id="nwTagDatum"></span>
                         <input type="date" id="nwDatumWahl" aria-label="Tag auswählen">
                     </label>
-                    <button type="button" class="nw-pfeil" id="nwVor"
-                            aria-label="Tag vor">▶</button>
-                    <button type="button" class="v-btn v-btn--primary nw-add" id="nwAdd">
+                    <button type="button" class="v-tagkopf-pfeil" id="nwVor"
+                            aria-label="Tag vor">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                             stroke-linejoin="round" aria-hidden="true"><path d="M9.5 5 16 12l-6.5 7"/></svg>
+                    </button>
+                    <button type="button" class="v-btn v-btn--primary v-tagkopf-aktion" id="nwAdd">
                         <span aria-hidden="true">＋</span> Eintragen</button>
                 </div>
 
                 <!-- Der Halbkreis: es gibt ein Maximum, und der freie Rest ist
-                     die eigentliche Auskunft. -->
+                     die eigentliche Auskunft. Am Rechner steht er links und
+                     die Makros rechts daneben — sonst schwebt eine 200-px-Form
+                     mittig in einer 1200 px breiten Karte, und rechts und
+                     links davon steht nichts. -->
                 <div class="nw-hero">
-                    <div class="v-ring v-ring--halb v-ring--hero" id="nwRingKcal"
-                         style="--ring-tone:var(--figure, var(--m-naehrwerte))">
-                        <svg viewBox="0 0 100 100" aria-hidden="true">
-                            <circle class="v-ring-track" cx="50" cy="50" r="42"/>
-                            <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
-                            <circle class="v-ring-over" cx="50" cy="50" r="42"/>
-                        </svg>
-                        <div class="v-ring-txt">
-                            <strong class="v-ring-val">–</strong>
-                            <span class="v-ring-unit">kcal</span>
-                            <span class="v-ring-lbl"></span>
+                    <div class="nw-hero-haupt">
+                        <div class="v-ring v-ring--halb v-ring--hero" id="nwRingKcal"
+                             style="--ring-tone:var(--figure, var(--m-naehrwerte))">
+                            <svg viewBox="0 0 100 100" aria-hidden="true">
+                                <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                                <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                                <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                            </svg>
+                            <div class="v-ring-txt">
+                                <strong class="v-ring-val">–</strong>
+                                <span class="v-ring-unit">kcal</span>
+                                <span class="v-ring-lbl"></span>
+                            </div>
                         </div>
+                        <p class="nw-ziel" id="nwZielZeile"></p>
                     </div>
-                    <p class="nw-ziel" id="nwZielZeile"></p>
+                    <div class="v-ring-reihe" id="nwMakros"></div>
                 </div>
-
-                <div class="v-ring-reihe" id="nwMakros"></div>
 
                 <div id="nwMahlzeiten"></div>
             </div>
@@ -231,6 +243,12 @@
     <datalist id="ernGroessenVorschlaege"></datalist>
     <div class="version-tag"></div>
 </main>
+
+<!-- Am Handy liegt die Hauptaktion dort, wo der Daumen ohnehin ist. Sie
+     steht nur über dem Tag — in den anderen Reitern gibt es nichts
+     einzutragen. -->
+<button type="button" class="v-fab" id="nwFab" hidden>
+    <span class="v-fab-plus" aria-hidden="true">＋</span> Eintragen</button>
 <script src="/naehrwerte/naehrwerte.js"></script>
 </body>
 </html>

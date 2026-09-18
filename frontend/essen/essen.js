@@ -73,6 +73,16 @@ function melde(text, art, versuche) {
 
 const TAG_NAMEN = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
                    'Freitag', 'Samstag'];
+const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
+                'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+/* Ausgeschrieben, ohne Wochentag -- den setzt der Kopf davor, wenn er nicht
+   ohnehin im grossen Namen steht. */
+function datumLang(iso) {
+    const d = new Date(iso + 'T12:00:00');
+    if (isNaN(d.getTime())) return iso;
+    return d.getDate() + '. ' + MONATE[d.getMonth()] + ' ' + d.getFullYear();
+}
 
 function datumKurz(iso) {
     const d = new Date(iso + 'T12:00:00');
@@ -158,9 +168,14 @@ function zeichneKopf() {
     const gesternIso = gestern.getFullYear() + '-'
         + String(gestern.getMonth() + 1).padStart(2, '0') + '-'
         + String(gestern.getDate()).padStart(2, '0');
-    document.getElementById('esTagName').textContent =
-        istHeute ? 'Heute' : (datum === gesternIso ? 'Gestern' : TAG_NAMEN[d.getDay()]);
-    document.getElementById('esTagDatum').textContent = datumKurz(datum);
+    const nahName = istHeute ? 'Heute' : (datum === gesternIso ? 'Gestern' : null);
+    document.getElementById('esTagName').textContent = nahName || TAG_NAMEN[d.getDay()];
+    // Unter dem grossen Namen steht das Datum ausgeschrieben. „Heute“ allein
+    // sagt nicht, welcher Tag das ist, und „18.09.2026“ allein sagt nicht,
+    // dass es heute ist -- erst beides zusammen beantwortet die Frage, die
+    // ein Tageskopf beantworten soll.
+    document.getElementById('esTagDatum').textContent =
+        (nahName ? TAG_NAMEN[d.getDay()] + ', ' : '') + datumLang(datum);
     document.getElementById('esVor').disabled = istHeute;
     // Die Auswahl steht auf dem gezeigten Tag und reicht nicht in die
     // Zukunft -- dieselbe Grenze wie am Pfeil daneben.
@@ -179,7 +194,8 @@ function zeichneSchnell() {
     const liste = (state.tag && state.tag.quick) || [];
     ziel.hidden = !liste.length;
     if (!liste.length) return;
-    ziel.innerHTML = liste.map((q, i) =>
+    ziel.innerHTML = '<span class="es-schnell-titel">Ein Tipp trägt ein</span>'
+        + liste.map((q, i) =>
         `<button type="button" class="es-chip" data-schnell="${i}"
             title="${esc(q.label)} eintragen — ${q.count}× notiert">${esc(q.label)}</button>`
     ).join('');
@@ -205,15 +221,21 @@ function zeichneMahlzeiten() {
         // sonst waere es eine fuenfte Mahlzeit, die niemand hat.
         if (m.key === 'ohne' && !eigene.length) return '';
         const plus = m.key === 'ohne' ? ''
-            : `<button type="button" class="es-mz-plus" data-add="${esc(m.key)}"
+            : `<button type="button" class="v-mz-plus" data-add="${esc(m.key)}"
                    aria-label="Zu ${esc(m.label)} eintragen"
                    title="Zu ${esc(m.label)} eintragen">＋</button>`;
-        return `<div class="es-mz${eigene.length ? '' : ' is-leer'}">
-            <div class="es-mz-kopf">
-                <span class="es-mz-name">${esc(m.label)}</span>
+        // Eine leere Mahlzeit laedt ein, statt blass dazustehen: die ganze
+        // Flaeche ist der Knopf, und der Ort sagt schon, wohin es geht.
+        const koerper = eigene.length
+            ? `<div class="v-mz-koerper">${eigene.map(zeile).join('')}</div>`
+            : (m.key === 'ohne' ? '' : `<button type="button" class="v-mz-leer"
+                   data-add="${esc(m.key)}">＋ ${esc(m.label)} eintragen</button>`);
+        return `<div class="v-mahlzeit${eigene.length ? '' : ' is-leer'}">
+            <div class="v-mz-kopf">
+                <span class="v-mz-name">${esc(m.label)}</span>
                 ${plus}
             </div>
-            ${eigene.map(zeile).join('')}
+            ${koerper}
         </div>`;
     }).join('');
 
@@ -238,12 +260,12 @@ function zeile(e) {
         e.logged_time || '',
         e.note ? esc(e.note) : '',
     ].filter(Boolean).join(' · ');
-    return `<div class="es-zeile"${e.meal_auto
+    return `<div class="v-mz-zeile"${e.meal_auto
             ? ' title="Mahlzeit automatisch nach Uhrzeit — Namen antippen zum Ändern"' : ''}>
         <span class="es-punkt is-${esc(e.level)}" aria-hidden="true"></span>
-        <button type="button" class="es-zeile-name" data-oeffnen="${e.id}">
+        <button type="button" class="v-mz-zeile-name" data-oeffnen="${e.id}">
             <strong>${esc(e.label)}</strong>
-            ${meta ? `<span class="es-zeile-meta">${meta}</span>` : ''}
+            ${meta ? `<span class="v-mz-zeile-meta">${meta}</span>` : ''}
         </button>
         <button type="button" class="es-stufe is-${esc(e.level)}"
                 data-stufe="${e.id}" data-neu="${gegen}"
@@ -252,17 +274,32 @@ function zeile(e) {
     </div>`;
 }
 
+/* Die Tagesbilanz. Sie zaehlt und bewertet nicht: „4 normal, 1 uebermaessig“
+   ist eine Auskunft, keine Note -- deshalb steht die zweite Zahl in --warn
+   und nicht in --danger, und deshalb steht darunter kein Urteil.
+
+   Bis v2.3.0 war das eine Textzeile mit Punkten darin. Als Abschluss eines
+   Tages, den man gerade durchgesehen hat, darf sie aussehen wie ein
+   Ergebnis. */
 function zeichneFuss() {
     const c = state.tag && state.tag.counts;
     const el = document.getElementById('esFuss');
     if (!c || !c.entries) {
+        el.className = 'es-fuss is-leer';
         el.textContent = state.tag
             ? 'Für diesen Tag steht noch nichts da — ein Wort reicht.' : '';
         return;
     }
-    el.innerHTML = `<span class="es-punkt is-normal" aria-hidden="true"></span> ${c.normal} normal`
-        + ` <span class="es-punkt is-viel" aria-hidden="true"></span> ${c.viel} übermäßig`
-        + ` · ${c.entries} ${c.entries === 1 ? 'Eintrag' : 'Einträge'}`;
+    el.className = 'es-fuss';
+    el.innerHTML = `
+        <span class="es-bilanz is-normal">
+            <strong>${c.normal}</strong><span>normal</span>
+        </span>
+        <span class="es-bilanz is-viel">
+            <strong>${c.viel}</strong><span>übermäßig</span>
+        </span>
+        <span class="es-bilanz-gesamt">${c.entries} ${
+            c.entries === 1 ? 'Eintrag' : 'Einträge'}</span>`;
 }
 
 function zeichneTag() {
@@ -611,7 +648,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.getElementById('esZurueck').addEventListener('click', () => tagVerschieben(-1));
     document.getElementById('esVor').addEventListener('click', () => tagVerschieben(1));
-    document.getElementById('esAdd').addEventListener('click', () => eintragDialog(null));
+    // Zwei Knoepfe, eine Handlung: der eine steht am Rechner im Tageskopf,
+    // der andere schwebt am Handy über der Tab-Leiste. Beide rufen dasselbe.
+    ['esAdd', 'esFab'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', () => eintragDialog(null));
+    });
 
     await ladeTag(heute());
     ladeHaeufig();

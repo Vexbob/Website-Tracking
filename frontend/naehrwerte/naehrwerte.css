@@ -34,83 +34,35 @@
    auszusehen. */
 .nw-ruht { border-color: var(--line-strong); }
 
-/* ---------- Der Tageskopf ---------- */
-.nw-tagkopf {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: var(--space-4);
-}
-.nw-tagkopf-mitte {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    min-width: 0;
-}
-.nw-tagkopf-mitte strong { font-size: 1.0625rem; color: var(--text-1); font-weight: 650; }
-/* Das Datum ist der Sprung. Ein durchsichtiges ``input type="date"``
-   liegt darueber und oeffnet die Auswahl des Betriebssystems -- die
-   kennt man schon, und sie ist auf jedem Geraet richtig gross. Der
-   gepunktete Strich ist der Hinweis, dass hier etwas passiert. */
-.nw-tagkopf-mitte {
-    position: relative;
-    cursor: pointer;
-    padding-block: 0.4rem;
-}
-.nw-tagkopf-mitte span { text-decoration: underline dotted var(--line-strong);
-                          text-underline-offset: 3px; }
-.nw-tagkopf-mitte input[type="date"] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    border: 0;
-    padding: 0;
-    margin: 0;
-    cursor: pointer;
-    font: inherit;
-}
-.nw-tagkopf-mitte:focus-within { outline: none; }
-.nw-tagkopf-mitte:focus-within span { text-decoration-color: var(--accent); }
-
-.nw-tagkopf-mitte span {
-    font-size: 0.8125rem;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-}
-.nw-pfeil {
-    flex: none;
-    width: 32px;
-    height: 32px;
-    margin: 0;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: 9px;
-    color: var(--text-2);
-    font-size: 0.75rem;
-    cursor: pointer;
-}
-.nw-pfeil:hover { color: var(--text-1); border-color: var(--line-strong); opacity: 1; }
-.nw-pfeil:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.nw-pfeil[disabled] { opacity: 0.35; cursor: default; }
-.nw-add { margin: 0 0 0 auto; width: auto; flex: none; }
-
 /* ---------- Die Kalorienkarte ----------
    Der Halbkreis liest sich wie ein Tank: es gibt ein Maximum, und der freie
    Rest ist die eigentliche Auskunft. Darunter steht, WORAN gemessen wird --
    eine Zahl ohne Herkunft waere eine Aussage ueber den Nutzer, die niemand
    getroffen hat. */
+/* Am Handy untereinander, am Rechner nebeneinander. Der Halbkreis ist
+   200 px breit; in einer 1200-px-Karte stand er bis v2.3.0 mittig allein,
+   mit einer halben Bildschirmbreite Nichts links und rechts davon. */
 .nw-hero {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+}
+.nw-hero-haupt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.625rem;
+}
+@media (min-width: 880px) {
+    .nw-hero {
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        gap: var(--space-6);
+    }
+    .nw-hero .v-ring-reihe { margin-top: 0; }
 }
 .nw-ziel {
     margin: 0;
@@ -153,90 +105,32 @@
 .nw-zielknopf.has-active { color: var(--accent); border-color: var(--accent); }
 .nw-zielknopf.has-active strong { color: var(--accent); }
 
-.v-ring-reihe { margin-top: var(--space-4); }
-
-/* ---------- Mahlzeiten ---------- */
-.nw-mz { margin-top: var(--space-4); }
-.nw-mz-kopf {
+/* Die drei kleinen Ringe. Sie brauchen Luft untereinander: ihre
+   Beschriftungen stehen UNTER dem Bogen (DESIGN 7a) und „KOHLENHYDRATE“ ist
+   breiter als sein eigener Ring. */
+.v-ring-reihe {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding-bottom: 0.25rem;
-    border-bottom: 1px solid var(--line);
-}
-.nw-mz-name {
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-4);
-}
-.nw-mz-summe {
-    margin-left: auto;
-    font-size: 0.75rem;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-}
-.nw-mz-summe + .nw-mz-plus { margin-left: 0; }
-.nw-mz-plus {
-    margin: 0 0 0 auto;
-    width: 28px;
-    height: 28px;
-    flex: none;
-    display: inline-flex;
-    align-items: center;
+    flex-wrap: wrap;
     justify-content: center;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    color: var(--text-3);
-    font-size: 0.8125rem;
-    line-height: 1;
-    cursor: pointer;
-    transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+    gap: var(--space-4) var(--space-5);
+    margin-top: var(--space-4);
 }
-.nw-mz-plus:hover { color: var(--nw-figur); border-color: var(--nw-figur); opacity: 1; }
-.nw-mz-plus:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.nw-mz.is-leer .nw-mz-kopf { border-bottom-color: transparent; }
-.nw-mz.is-leer .nw-mz-name { color: var(--text-4); opacity: 0.6; }
 
-/* Der Name ist der Knopf zum Verschieben; die Menge steht als Marke daneben
-   und ist bewusst NICHT anklickbar: sie wurde beim Eintragen umgerechnet. */
-.nw-zeile-name {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.05rem;
-    width: auto;
-    margin: 0;
-    padding: 0.35rem 0.4rem;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    text-align: left;
-    color: var(--text-1);
-    font-family: inherit;
-    font-size: 0.9375rem;
-    cursor: pointer;
+/* Der Modulton am geteilten Mahlzeitenblock (.v-mahlzeit in css/style.css). */
+#nwMahlzeiten .v-mahlzeit { --v-mz-ton: var(--nw-figur); }
+
+/* Ein Tag ist eine Spalte, die man von oben nach unten liest -- kein Raster.
+   Auf 1200 px auseinandergezogen lagen Name und Menge einer Zeile eine
+   Handbreit auseinander, und das Auge musste jedes Mal hinueberspringen.
+   Der Reiter „Tag“ bleibt deshalb eine mittige Spalte; die Reiter mit
+   Listen und Diagrammen nehmen weiter die volle Breite, dort ist sie
+   nuetzlich. */
+@media (min-width: 880px) {
+    #tab-tag > .stat-card,
+    #tab-tag #nwBruecke { max-width: 900px; margin-inline: auto; }
 }
-.nw-zeile-name:hover { opacity: 1; background: var(--surface-2); }
-.nw-zeile-name:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.nw-zeile-name strong { font-weight: 600; }
-.nw-zeile-meta { font-size: 0.75rem; color: var(--text-4); font-weight: 400; }
-.nw-menge-tag {
-    flex: none;
-    padding: 0.15rem 0.55rem;
-    border-radius: 999px;
-    background: var(--surface-3);
-    color: var(--text-2);
-    font-size: 0.75rem;
-    font-weight: 650;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
+
+/* Die Mengen-Marke liegt seit v2.5.0 als `.v-mz-tag` in css/style.css. */
 
 /* ---------- Portionen-Stepper ----------
    Halbe, ganze, anderthalb Portionen sind die Faelle -- dafuer muss niemand
@@ -278,23 +172,10 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* ---------- Eine Zeile (Eintrag, Zutat, Bestand) ---------- */
-.ern-zeile {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0;
-    border-bottom: 1px solid var(--line);
-}
-.ern-zeile:last-child { border-bottom: 0; }
-.ern-zeile-text { flex: 1; min-width: 0; }
-.ern-zeile-kopf {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-.ern-zeile-kopf strong { color: var(--text-1); font-weight: 600; }
+/* `.ern-zeile` ist mit v2.5.0 ersatzlos weg. Sie war die vierte Zeilenform
+   dieses Moduls und ist in drei aufgegangen: die Tageseintraege liegen auf
+   der geteilten `.v-mz-zeile` (css/style.css), Bestand, Gerichte und die
+   Bruecke auf `.rec-list`, die Zutaten im Dialog auf `.nw-g-zutat`. */
 
 .ern-note {
     margin: 0.5rem 0 0;
@@ -486,8 +367,31 @@
    „Kölln“ beantwortet „welches ist das“ und gehoert damit zum Titel. */
 .rec-title .ern-marke { font-weight: 500; }
 
-/* Der Ablehnen-Knopf der Bruecke steht klein neben der breiten Zusage. */
-.nw-br-weg { flex: none; }
+/* Die Bruecken-Zeile traegt zwei Knoepfe, und bei 390 px blieben dem Namen
+   daneben rund neunzig Pixel -- „Pasta mit Pesto“ wurde zu „Pasta mit …“.
+   Am Handy bricht sie deshalb um: erst der Name mit seiner Zeile, darunter
+   die beiden Knoepfe rechtsbuendig. Der Name ist die Auskunft, nach der man
+   entscheidet; er darf nicht der Teil sein, der weicht. */
+.nw-bruecke-liste .rec-row { flex-wrap: wrap; padding-block: 0.625rem; }
+.nw-bruecke-liste .rec-main { flex: 1 1 auto; }
+.nw-bruecke-liste .nw-br-tasten {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+}
+/* Umbrechen darf nur die Knopfgruppe, nicht die Marke: gaebe man dem
+   Textblock die volle Breite, schoebe er die Marke in eine eigene Zeile
+   darueber, und die stuende dann allein und ohne Bezug da. */
+@media (max-width: 520px) {
+    .nw-bruecke-liste .nw-br-tasten {
+        flex-basis: 100%;
+        margin-top: 0.5rem;
+        /* Rechtsbuendig: `margin-left: auto` zieht nichts mehr, sobald die
+           Gruppe die volle Breite hat. */
+        justify-content: flex-end;
+    }
+}
 
 /* Die Zusage EINER Zeile. Sie traegt den Modulton als Toenung, nicht den
    Verlauf der primaeren Aktion: bei acht Vorschlaegen waeren das acht
@@ -845,21 +749,13 @@
    Behauptung. Am breiten Rechnerfenster bleibt alles klein: dort waere ein
    44-px-Papierkorb neben einer 15-px-Zeile ein Klotz. */
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
-    .nw-pfeil { width: 44px; height: 44px; }
-    .nw-mz-plus { width: 44px; height: 44px; font-size: 0.9375rem; }
     .nw-stepper button { width: 40px; height: 40px; }
     .nw-g-einheit { min-width: 44px; height: 44px; }
-    .ern-zeile .v-btn--icon,
     .rec-row .v-btn--icon { width: 44px; height: 44px; }
-    .nw-zeile-name { min-height: 44px; }
 }
 
 @media (max-width: 640px) {
     .ern-feld--breit { grid-column: span 1; }
-    /* Der grosse Knopf bekommt eine eigene Zeile unter dem Datum, statt das
-       Datum auf ein Wort zu quetschen. */
-    .nw-tagkopf { flex-wrap: wrap; }
-    .nw-add { width: 100%; margin: 0.5rem 0 0; order: 9; }
     /* Auf dem Handy nimmt die Mengenzeile die volle Breite: sie steht ohnehin
        unter dem Namen, und ein Raster, das sich an seinem Inhalt festhaelt,
        liesse rechts einen Streifen ungenutzt. */

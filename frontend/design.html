@@ -487,6 +487,68 @@
     </section>
 
     <section class="sg-sec">
+        <h2>Tag, Mahlzeit, Schwebeknopf</h2>
+        <p class="sg-note">Die drei Bausteine einer Seite, die <strong>einen einzelnen Tag</strong>
+        zeigt — beide Ernährungsmodule benutzen sie. Der Kopf sagt zuerst, welcher Tag: Name
+        groß, Datum ausgeschrieben darunter, der ganze mittlere Block öffnet die Tagesauswahl
+        des Geräts. Jede Mahlzeit ist ein eigener Körper auf <code>--surface-2</code> mit
+        neutralem Kopfstreifen; der Modulton kommt über <code>--v-mz-ton</code> und steckt im
+        Plus, nicht in der Fläche. Eine leere Mahlzeit lädt ein, statt blass dazustehen.
+        Die Hauptaktion liegt am Handy als <code>.v-fab</code> über der Tab-Leiste — dort,
+        wo der Daumen ohnehin ist — und am Rechner im Kopf.</p>
+        <div class="v-card">
+            <div class="v-tagkopf">
+                <button type="button" class="v-tagkopf-pfeil" aria-label="Tag zurück">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true"><path d="M14.5 5 8 12l6.5 7"/></svg>
+                </button>
+                <span class="v-tagkopf-mitte">
+                    <span class="v-tagkopf-name">Heute</span>
+                    <span class="v-tagkopf-datum">Freitag, 18. September 2026</span>
+                </span>
+                <button type="button" class="v-tagkopf-pfeil" disabled aria-label="Tag vor">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true"><path d="M9.5 5 16 12l-6.5 7"/></svg>
+                </button>
+                <button type="button" class="v-btn v-btn--primary v-tagkopf-aktion">
+                    <span aria-hidden="true">＋</span> Eintragen</button>
+            </div>
+            <div class="v-mahlzeit" style="--v-mz-ton:var(--m-naehrwerte)">
+                <div class="v-mz-kopf">
+                    <span class="v-mz-name">Frühstück</span>
+                    <span class="v-mz-summe">397 kcal</span>
+                    <button type="button" class="v-mz-plus" aria-label="Zu Frühstück eintragen">＋</button>
+                </div>
+                <div class="v-mz-koerper">
+                    <div class="v-mz-zeile">
+                        <button type="button" class="v-mz-zeile-name">
+                            <strong>Haferflocken</strong>
+                            <span class="v-mz-zeile-meta">Kölln · 303 kcal · 08:12</span>
+                        </button>
+                        <span class="v-mz-tag">80 g</span>
+                    </div>
+                    <div class="v-mz-zeile">
+                        <button type="button" class="v-mz-zeile-name">
+                            <strong>Milch 1,5 %</strong>
+                            <span class="v-mz-zeile-meta">Weihenstephan · 94 kcal · 08:12</span>
+                        </button>
+                        <span class="v-mz-tag">200 ml</span>
+                    </div>
+                </div>
+            </div>
+            <div class="v-mahlzeit is-leer" style="--v-mz-ton:var(--m-naehrwerte)">
+                <div class="v-mz-kopf">
+                    <span class="v-mz-name">Abend</span>
+                    <button type="button" class="v-mz-plus" aria-label="Zu Abend eintragen">＋</button>
+                </div>
+                <button type="button" class="v-mz-leer">＋ Abend eintragen</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
         <h2>Zeichen an Bedienelementen</h2>
         <p class="sg-note">Lupe, Papierkorb, Kamera, Stift, Ziel — aus
         <code>VexIkon.svg(name, groesse)</code> (<code>js/ikon.js</code>), nie als Emoji.

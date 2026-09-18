@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.5.0', date: '2026-09-18', title: 'Essen und Nährwerte sehen aus wie eine App', notes: [
+        'Der Tageskopf sagt jetzt zuerst, welcher Tag: „Heute“ groß, darunter „Freitag, 18. September 2026“. Vorher stand beides klein in einer Zeile, und „18.09.2026“ allein sagt nicht, dass es heute ist. Die Pfeile sind runde Flächen, die man trifft.',
+        'Der Tag besteht aus vier Mahlzeiten, und jetzt sieht er auch so aus: jede ist ein eigener Block mit Kopfzeile, Teilsumme und Plus statt einer durchlaufenden Liste mit Zwischenüberschriften. Eine leere Mahlzeit steht nicht mehr blass da, sondern lädt ein — die ganze Fläche trägt dich in sie hinein.',
+        '„Eintragen“ schwebt am Handy über der Tab-Leiste, wo der Daumen liegt. Bisher war es eine volle Zeile unter dem Datum: sie hat den Tag eine Knopfhöhe nach unten geschoben, und wer unten in der Liste stand, musste erst wieder hochscrollen.',
+        'Die Kalorienzahl ist groß genug, um die Zahl der Seite zu sein, und am Rechner stehen die drei Makro-Ringe neben ihr statt darunter — vorher schwebte alles mittig in einer sehr breiten, sonst leeren Karte. Der Tag selbst steht dort jetzt als mittige Spalte: Name und Menge einer Zeile lagen auf 1200 Pixeln eine Handbreit auseinander.',
+        'Die Schnellwahl im Tagebuch trägt ein Pluszeichen und die Überschrift „Ein Tipp trägt ein“ — bisher stand dort eine Reihe Knöpfe, der man nicht ansah, ob sie filtert oder einträgt. Und die Tagesbilanz unten ist aus einer Textzeile ein Ergebnis geworden.',
+    ]},
     { v: 'v2.4.0', date: '2026-09-18', title: 'Essen und Nährwerte am Handy: das Springen hört auf', notes: [
         'Beim Tippen in den Eintragen-Fenstern sprang die Seite. Drei Gründe, alle drei weg: die Mengen- und Größenfelder waren kleiner als 16 Pixel, und darunter zoomt iPhone-Safari beim Antippen die ganze Seite heran und danach nicht zurück; das Fenster stand mittig und rückte bei jedem getippten Zeichen um die halbe Höhe der Vorschlagsliste; und die Katalogsuche riss eine halbe Sekunde nach dem letzten Zeichen die Liste ab — samt der Menge, die du gerade hineingeschrieben hattest. Am Handy ist das Fenster jetzt das ganze Bild, Mahlzeit und Suchfeld kleben oben, und der Katalog zeichnet in seinen eigenen Bereich.',
         'Die eigene Liste filtert sofort statt erst nach einer Sechstelsekunde — sie liegt ohnehin im Speicher, es gab nichts zu verzögern außer der Antwort auf deinen eigenen Finger.',

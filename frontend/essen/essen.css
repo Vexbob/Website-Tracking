@@ -23,187 +23,76 @@
     --es-eingabe: 1.0625rem;
 }
 
-/* ---------- Der Tageskopf ---------- */
-.es-tagkopf {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: var(--space-4);
-}
-.es-tagkopf-mitte {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    min-width: 0;
-}
-.es-tagkopf-mitte strong { font-size: 1.0625rem; color: var(--text-1); font-weight: 650; }
-/* Das Datum ist der Sprung. Ein durchsichtiges ``input type="date"``
-   liegt darueber und oeffnet die Auswahl des Betriebssystems -- die
-   kennt man schon, und sie ist auf jedem Geraet richtig gross. Der
-   gepunktete Strich ist der Hinweis, dass hier etwas passiert. */
-.es-tagkopf-mitte {
-    position: relative;
-    cursor: pointer;
-    padding-block: 0.4rem;
-}
-.es-tagkopf-mitte span { text-decoration: underline dotted var(--line-strong);
-                          text-underline-offset: 3px; }
-.es-tagkopf-mitte input[type="date"] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    border: 0;
-    padding: 0;
-    margin: 0;
-    cursor: pointer;
-    font: inherit;
-}
-.es-tagkopf-mitte:focus-within { outline: none; }
-.es-tagkopf-mitte:focus-within span { text-decoration-color: var(--accent); }
-
-.es-tagkopf-mitte span {
-    font-size: 0.8125rem;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-}
-.es-pfeil {
-    flex: none;
-    width: 32px;
-    height: 32px;
-    margin: 0;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: 9px;
-    color: var(--text-2);
-    font-size: 0.75rem;
-    cursor: pointer;
-}
-.es-pfeil:hover { color: var(--text-1); border-color: var(--line-strong); opacity: 1; }
-.es-pfeil:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.es-pfeil[disabled] { opacity: 0.35; cursor: default; }
-.es-add { margin: 0 0 0 auto; width: auto; flex: none; }
-
 /* ---------- Schnellwahl ----------
    Der kuerzeste Weg von "Seite offen" bis "steht drin". Grosse Tippflaechen,
    kein Menue davor, keine Nachfrage danach. */
 .es-schnell {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
-    padding-bottom: var(--space-4);
-    margin-bottom: var(--space-2);
-    border-bottom: 1px solid var(--line);
+    gap: 0.45rem;
+    margin-bottom: var(--space-5);
 }
+/* Ein Tipp, ein Eintrag. Das ist der kuerzeste Weg, den diese Seite kennt,
+   also traegt er den Modulton als Toenung und eine Flaeche, die man nicht
+   verfehlt -- nicht die Zurueckhaltung eines Filterchips. */
 .es-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     width: auto;
     margin: 0;
-    padding: 0.5rem 0.85rem;
+    padding: 0.625rem 1rem;
     background: color-mix(in srgb, var(--es-figur) 12%, var(--surface-2));
-    border: 1px solid color-mix(in srgb, var(--es-figur) 35%, transparent);
+    border: 1px solid color-mix(in srgb, var(--es-figur) 32%, transparent);
     border-radius: 999px;
     color: var(--text-1);
     font-size: 0.9375rem;
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
-    transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+    transition: background var(--dur-1) var(--ease),
+                border-color var(--dur-1) var(--ease),
+                transform var(--dur-1) var(--ease);
+}
+/* Das Pluszeichen sagt, dass ein Tipp eintraegt und nicht filtert. Es ist
+   Teil des Knopfes, kein eigenes Bedienelement. */
+.es-chip::before {
+    content: '＋';
+    color: var(--es-figur);
+    font-size: 0.8125rem;
+    line-height: 1;
 }
 .es-chip:hover {
     opacity: 1;
     background: color-mix(in srgb, var(--es-figur) 22%, var(--surface-2));
     border-color: var(--es-figur);
 }
+.es-chip:active { transform: scale(0.96); }
 .es-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-
-/* ---------- Mahlzeiten ----------
-   Jede traegt ihr eigenes Plus: wo man tippt, sagt schon, wohin der Eintrag
-   gehoert. Eine leere Mahlzeit bleibt als schmale Zeile stehen -- sie ist der
-   kuerzeste Weg zum naechsten Eintrag. */
-.es-mz { margin-top: var(--space-4); }
-.es-mz-kopf {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding-bottom: 0.25rem;
-    border-bottom: 1px solid var(--line);
-}
-.es-mz-name {
+/* Die Ueberschrift der Schnellwahl. Ohne sie steht eine Reihe Knoepfe da,
+   von der man nicht weiss, ob sie filtert oder eintraegt. */
+.es-schnell-titel {
+    flex-basis: 100%;
+    display: block;
+    margin: 0 0 var(--space-2);
     font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--text-4);
 }
-.es-mz-plus {
-    margin: 0 0 0 auto;
-    width: 28px;
-    height: 28px;
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    color: var(--text-3);
-    font-size: 0.8125rem;
-    line-height: 1;
-    cursor: pointer;
-    transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
-}
-.es-mz-plus:hover { color: var(--es-figur); border-color: var(--es-figur); opacity: 1; }
-.es-mz-plus:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.es-mz.is-leer .es-mz-kopf { border-bottom-color: transparent; }
-.es-mz.is-leer .es-mz-name { color: var(--text-4); opacity: 0.6; }
 
-/* ---------- Eine Zeile ---------- */
-.es-zeile {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0;
-    border-bottom: 1px solid var(--line);
+/* Der geteilte Mahlzeitenblock (.v-mahlzeit in css/style.css) bekommt hier
+   seinen Ton -- Blattgruen, die Identitaet dieses Moduls. */
+#esMahlzeiten .v-mahlzeit { --v-mz-ton: var(--es-figur); }
+
+/* Ein Tag ist eine Spalte, die man von oben nach unten liest -- kein Raster.
+   Auf 1200 px auseinandergezogen lagen Name und Stufe einer Zeile eine
+   Handbreit auseinander. */
+@media (min-width: 880px) {
+    #esInhalt > .stat-card { max-width: 900px; margin-inline: auto; }
 }
-.es-zeile:last-child { border-bottom: 0; }
-/* Der Name ist der Knopf zum Aendern: ein Ort fuer alles, was an einer Zeile
-   falsch sein kann. Die Stufe bleibt daneben ein eigener Tipp -- das ist der
-   haeufige Fall. */
-.es-zeile-name {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.05rem;
-    width: auto;
-    margin: 0;
-    padding: 0.35rem 0.4rem;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    text-align: left;
-    color: var(--text-1);
-    font-family: inherit;
-    font-size: 0.9375rem;
-    cursor: pointer;
-}
-.es-zeile-name:hover { opacity: 1; background: var(--surface-2); }
-.es-zeile-name:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.es-zeile-name strong { font-weight: 600; }
-.es-zeile-meta {
-    font-size: 0.75rem;
-    color: var(--text-4);
-    font-weight: 400;
-    font-variant-numeric: tabular-nums;
-}
+
 
 .es-punkt {
     display: inline-block;
@@ -242,15 +131,36 @@
 .es-fuss {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
-    margin: var(--space-4) 0 0;
-    padding-top: 0.75rem;
+    margin: var(--space-5) 0 0;
+    padding-top: var(--space-4);
     border-top: 1px solid var(--line);
     font-size: 0.8125rem;
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
 }
+.es-fuss.is-leer { display: block; line-height: 1.5; }
+/* Zwei Zaehler als getoente Marken -- helle Farbe traegt hier keinen
+   dunklen Text, sondern IST der Text auf einer 16-%-Toenung: dieselbe Regel
+   wie bei den Statusflaechen (DESIGN 3). */
+.es-bilanz {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--es-normal) 16%, transparent);
+    color: var(--es-normal);
+    font-variant-numeric: tabular-nums;
+}
+.es-bilanz strong { font-size: 0.9375rem; font-weight: 700; }
+.es-bilanz span { font-size: 0.75rem; font-weight: 600; opacity: 0.85; }
+.es-bilanz.is-viel {
+    background: color-mix(in srgb, var(--es-viel) 16%, transparent);
+    color: var(--es-viel);
+}
+.es-bilanz-gesamt { margin-left: auto; color: var(--text-4); }
 
 /* ---------- Eintragen-Dialog ---------- */
 .es-note { margin: 0; font-size: 0.75rem; color: var(--text-3); line-height: 1.5; }
@@ -438,16 +348,6 @@
    nachstellen laesst. Eine Regel, die man nicht ansehen kann, ist eine
    Behauptung. */
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
-    .es-pfeil { width: 44px; height: 44px; }
-    .es-mz-plus { width: 44px; height: 44px; font-size: 0.9375rem; }
-    .es-zeile .v-btn--icon { width: 44px; height: 44px; }
-    .es-zeile-name { min-height: 44px; }
     .es-stufe { min-height: 32px; padding-inline: 0.7rem; }
-}
-
-@media (max-width: 640px) {
-    /* Der grosse Knopf bekommt eine eigene Zeile unter dem Datum, statt das
-       Datum auf ein Wort zu quetschen. */
-    .es-tagkopf { flex-wrap: wrap; }
-    .es-add { width: 100%; margin: 0.5rem 0 0; order: 9; }
+    .es-chip { min-height: 44px; }
 }
