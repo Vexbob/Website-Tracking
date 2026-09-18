@@ -899,7 +899,12 @@ input[type="checkbox"] { display: inline; width: auto; }
     cursor: pointer; padding: 0; width: 28px; height: 28px; margin: 0;
 }
 .modal-close:hover { color: var(--text); }
-.modal-body { padding: 1rem; overflow: auto; }
+/* overscroll-behavior: contain -- ohne das scrollt am Ende der Liste die
+   SEITE dahinter weiter, und beim Schliessen steht man woanders. Auf dem
+   Handy ist das der haeufigste Griff ueberhaupt. Die Sperre am Body
+   (js/modal.js) faengt den Rest; beides zusammen, weil das eine nur den
+   Kettenlauf und das andere nur das Scrollen daneben abdeckt. */
+.modal-body { padding: 1rem; overflow: auto; overscroll-behavior: contain; }
 
 /* ==========================================================================
    v1.37.0 — UX-Layer: Mobile Tab-Bar + Global Toast + Confirm-Dialog

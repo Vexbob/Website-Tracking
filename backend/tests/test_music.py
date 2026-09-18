@@ -346,6 +346,25 @@ def test_fit_keeps_small_modules_finer_than_the_big_one(monkeypatch):
     assert levels.index(got["aggregate"]["sparziel"]) < levels.index(got["aggregate"]["musik"])
 
 
+def test_ein_modul_ohne_daten_verbraucht_kein_bau_budget(monkeypatch):
+    """Eine Gruppe, die nichts beitraegt, darf die anderen nicht grob halten.
+
+    Die Verfeinerung hat ein Budget von acht Bauten und geht die Gruppen
+    reihum durch, die kleinste zuerst. Ein leeres Modul steht damit ganz vorn
+    und misst sich durch die halbe Leiter, ohne dass sich etwas aendern kann
+    -- waehrend das Modul mit Daten grob bleibt. Mit Schach und Notizen
+    (v2.1.0) waren es sieben Gruppen statt fuenf, und genau das ist passiert.
+    """
+    got = _fit(monkeypatch, {"musik": 100, "sparziel": 1}, 9000)
+    assert got["fits"] is True
+    levels = fx.FIT_LADDER
+    # Die leeren Gruppen stehen auf der Stufe, die der Nutzer wollte ...
+    for leer in ("schach", "notizen", "health", "ausgaben", "ernaehrung"):
+        assert got["aggregate"][leer] == "none"
+    # ... und haben dafuer keinen einzigen Bau gekostet.
+    assert got["_builds"] <= 8
+
+
 def test_fit_never_drops_sections_or_columns(monkeypatch):
     """Kleiner wird die Datei ausschliesslich ueber die Zeit -- was drin ist,
     entscheidet der Nutzer."""

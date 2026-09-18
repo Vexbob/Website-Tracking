@@ -243,6 +243,28 @@ Eine Seite gehört dem, weswegen man sie aufruft. Alles, was man **selten** tut
 einspielen —, liegt hinter einem Knopf im Dialog (`.modal-overlay` /
 `.modal-box`), nicht als dauerhaft offene Maske darüber.
 
+**Den Dialog baut `js/modal.js` (`VexModal.open`), nicht das Modul.** Bis
+v2.1.0 lag `openModal` viermal kopiert in ausgaben, essen, nährwerte und
+schach, und keine der vier Fassungen sperrte das Scrollen dahinter — auf dem
+Handy scrollte am Ende der Liste die Seite weiter, und beim Schließen stand
+man woanders. Was die geteilte Fassung leistet und jede eigene wieder verlieren
+würde:
+
+- **Hintergrund gesperrt**, solange ein Dialog offen ist (`overflow: hidden`
+  am Body, gezählt — ein Dialog kann einen zweiten öffnen), dazu
+  `overscroll-behavior: contain` am `.modal-body` gegen den Kettenlauf.
+- **`role="dialog"`, `aria-modal="true"`** und der Titel als `aria-label`.
+- **Der Fokus bleibt drin**: Tab läuft im Kasten im Kreis und nach dem
+  Schließen zurück auf den Knopf, von dem aus geöffnet wurde. Das erste Feld
+  bekommt den Fokus **nicht** von selbst — auf dem Handy risse das die
+  Tastatur hoch und verdeckte die halbe Liste. Wer ein Feld vorn haben will,
+  setzt den Fokus selbst und nur am Rechner.
+- **Escape-Horcher sauber abgeräumt**, auf jedem Schließweg.
+
+Ein Modul behält seine Funktion `openModal` und leitet in einer Zeile dorthin
+— so bleiben die Aufrufstellen unberührt. Optionen: `breit`/`wide`, `voll`,
+`beimSchliessen`/`onClose`.
+
 Das Muster stammt aus der Ernährungsseite (v1.95.0): dort standen Eingabefeld,
 Mahlzeiten-Chips, Vorschlagsliste, Tagesbild und Eintragsliste als fünf Klötze
 untereinander — und das, weswegen man die Seite öffnet (was habe ich heute

@@ -168,3 +168,44 @@ def test_jede_export_sektion_gehoert_zu_einer_gruppe():
     gruppen = {g["key"] for g in fe.EXPORT_GROUPS}
     fehlt = sorted({s["group"] for s in fe.EXPORT_SECTIONS} - gruppen)
     assert not fehlt, "Gruppen ohne Eintrag in EXPORT_GROUPS: " + ", ".join(fehlt)
+
+
+# --------------------------------------------------------------------------
+# Geteilte Frontend-Bausteine (v2.1.0)
+# --------------------------------------------------------------------------
+# Ein Modul, das ``VexModal`` benutzt, muss /js/modal.js auch laden. Diese
+# Verknuepfung steht in zwei Dateien und bricht lautlos: das Skript wirft
+# ``VexModal is not defined`` erst in dem Moment, in dem jemand den Dialog
+# oeffnet -- nicht beim Laden der Seite. Bis dahin sieht alles richtig aus.
+#
+# Ein Waechter fuer alle drei Bausteine, weil der naechste dieselbe Falle
+# mitbringt.
+def test_wer_einen_geteilten_baustein_benutzt_laedt_ihn_auch():
+    bausteine = {"VexModal": "/js/modal.js",
+                 "VexRing": "/js/ring.js",
+                 "VexBild": "/js/bild.js"}
+    front = WURZEL / "frontend"
+    seiten = [(h, h.read_text(encoding="utf-8")) for h in front.rglob("*.html")]
+    fehler = []
+
+    for js in sorted(front.rglob("*.js")):
+        if js.parent.name == "js":          # die Bausteine selbst
+            continue
+        quelle = js.read_text(encoding="utf-8")
+        gebraucht = sorted(n for n in bausteine if (n + ".") in quelle)
+        if not gebraucht:
+            continue
+        pfad = "/" + js.relative_to(front).as_posix()
+        for seite, html in seiten:
+            if pfad not in html:
+                continue
+            for name in gebraucht:
+                if bausteine[name] in html:
+                    continue
+                fehler.append(
+                    "%s benutzt %s, aber %s bindet %s nicht ein"
+                    % (pfad, name,
+                       "/" + seite.relative_to(front).as_posix(),
+                       bausteine[name]))
+
+    assert not fehler, "\n".join(fehler)

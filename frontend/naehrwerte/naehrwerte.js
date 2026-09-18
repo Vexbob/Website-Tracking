@@ -192,30 +192,13 @@ function zeigeTagFehler(text) {
     });
 }
 
+/* Der Dialog liegt seit v2.1.0 in /js/modal.js -- eine Fassung fuer alle
+   Module, mit gesperrtem Hintergrund, Fokus im Kasten und role="dialog".
+   Der Name hier bleibt, damit die Aufrufstellen unveraendert bleiben. */
 function openModal(titel, inhalt, opts) {
-    const o = opts || {};
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal-box${o.breit ? ' wide' : ''}${
-        o.voll ? ' modal-box--voll' : ''}">
-        <div class="modal-head"><h3>${titel}</h3>
-            <button class="modal-close" aria-label="Schließen">✕</button></div>
-        <div class="modal-body">${inhalt}</div>
-    </div>`;
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add('show'));
-    const close = () => {
-        overlay.classList.remove('show');
-        setTimeout(() => overlay.remove(), 200);
-        document.removeEventListener('keydown', onKey);
-        if (typeof o.beimSchliessen === 'function') o.beimSchliessen();
-    };
-    const onKey = (e) => { if (e.key === 'Escape') close(); };
-    overlay.querySelector('.modal-close').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    document.addEventListener('keydown', onKey);
-    return { close, el: overlay };
+    return VexModal.open(titel, inhalt, opts || {});
 }
+
 
 /* Welche Mahlzeit jetzt gemeint sein duerfte. Die Grenzen kommen vom Server,
    damit hier kein zweiter Satz Zahlen steht: angezeigt wird derselbe

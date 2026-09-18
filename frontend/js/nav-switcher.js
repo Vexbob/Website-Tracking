@@ -34,16 +34,23 @@
         { href: '/blog/admin/', label: '📰 Blog',           public: false, admin: true, icon: 'news', short: 'Blog' },
         { href: '/admin/',      label: '👥 User-Verwaltung', public: false, admin: true, icon: 'users', short: 'User' },
 
-        // v1.82.0 -- Module im Bau. ``status: 'neu'`` ist das einzige, was sie
-        // von den fertigen unterscheidet: das Menue stellt sie unter eine
-        // eigene Ueberschrift, die Leiste am Rechner laesst sie weg (dort
-        // konkurrieren sie sonst um Platz mit dem, was laeuft), und das
-        // Dashboard baut daraus seinen Abschnitt "In Arbeit". Ein drittes
+        // v1.82.0 -- Module im Bau tragen ``status: 'neu'``. Das ist das
+        // einzige, was sie von den fertigen unterscheidet: das Menue stellt
+        // sie unter eine eigene Ueberschrift, die Leiste am Rechner laesst
+        // sie weg (dort konkurrieren sie sonst um Platz mit dem, was laeuft),
+        // und das Dashboard baut daraus seinen Abschnitt "In Arbeit". Ein
         // Modul im Bau braucht deshalb genau diese eine Zeile.
-        // ``tone`` und ``sub`` stehen hier, damit die Kachel auf dem
-        // Dashboard keine zweite Liste braucht.
+        //
+        // v2.1.0: Schach hat sie abgelegt. Es war seit v1.95.0 fertig und
+        // wurde benutzt, stand aber weiter unter "In Arbeit" -- eine
+        // Beschriftung, die etwas Falsches behauptet, ist schlimmer als gar
+        // keine. Wer das hier wieder setzt, braucht dann auch die Kachel in
+        // frontend/index.html wieder weg: fertige Module stehen dort von
+        // Hand, erzeugt wird nur der Abschnitt "In Arbeit".
+        // ``tone`` und ``sub`` bleiben, damit die Kachel auf dem Dashboard
+        // keine zweite Liste braucht.
         { href: '/schach/',     label: '♟️ Schach',          public: false, icon: 'chess', short: 'Schach',
-          status: 'neu', tone: '--m-schach',
+          tone: '--m-schach',
           sub: 'Rating und Partien von Lichess und Chess.com' },
         { href: '/naehrwerte/', label: '📊 Nährwerte',       public: false, icon: 'ring',  short: 'Werte',
           tone: '--m-naehrwerte',

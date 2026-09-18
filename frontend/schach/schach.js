@@ -1192,27 +1192,13 @@ function zeigePartie(g) {
 
 /* Dasselbe Muster wie im Ausgaben-Modul: Overlay, Kopf, Koerper, Escape und
    Klick daneben schliessen. Native Dialoge sind in dieser App raus. */
+/* Der Dialog liegt seit v2.1.0 in /js/modal.js -- eine Fassung fuer alle
+   Module, mit gesperrtem Hintergrund, Fokus im Kasten und role="dialog".
+   Der Name hier bleibt, damit die Aufrufstellen unveraendert bleiben. */
 function openModal(titel, inhalt) {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal-box">
-        <div class="modal-head"><h3>${titel}</h3>
-            <button class="modal-close" aria-label="Schließen">✕</button></div>
-        <div class="modal-body">${inhalt}</div>
-    </div>`;
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add('show'));
-    const close = () => {
-        overlay.classList.remove('show');
-        setTimeout(() => overlay.remove(), 200);
-        document.removeEventListener('keydown', onKey);
-    };
-    const onKey = (e) => { if (e.key === 'Escape') close(); };
-    overlay.querySelector('.modal-close').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    document.addEventListener('keydown', onKey);
-    return { close };
+    return VexModal.open(titel, inhalt);
 }
+
 
 /* ---------------------------------------------------------------- Filter */
 

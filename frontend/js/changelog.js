@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.1.0', date: '2026-09-18', title: 'Schach ist fertig — und Dialoge sind es auch', notes: [
+        'Schach steht nicht mehr unter „In Arbeit“, sondern als eigene Kachel auf dem Dashboard. Es war seit Wochen fertig und wurde benutzt — eine Beschriftung, die etwas Falsches behauptet, ist schlimmer als gar keine.',
+        'Schach und Notizen wandern in den Gesamt-Export. Partien mit Ergebnis, Gegner, Wertung und Eröffnung; die Zugfolgen als PGN in einer eigenen Sektion (ein PGN ist ein Dokument, in der Partienliste hätte es jede Tabelle unlesbar gemacht); und der Wertungsverlauf — die Reihe, die es sonst nirgends gibt, weil Lichess und Chess.com nur den aktuellen Stand herausgeben.',
+        'Dialoge sperren jetzt die Seite dahinter. Bisher scrolltest du im Dialog bis ans Ende der Liste und die Seite darunter lief weiter — beim Schließen standest du woanders. Am deutlichsten auf dem Handy, in genau dem Fenster, das du täglich benutzt. Dazu bleibt der Tastaturfokus im Dialog und kehrt beim Schließen auf den Knopf zurück, von dem aus du ihn geöffnet hast.',
+        'Der Reiter steht jetzt in allen Modulen in der Adresse — Gesundheit und Musik fehlten noch. Ein Neuladen landet, wo du warst; /health/#schlaf ist ein Link auf die Schlafdaten.',
+        'Behoben: hat die automatische Größenanpassung des Exports ein Modul gefunden, in dem gar nichts liegt, hat sie ihr Budget darauf verbraucht — und die Module mit Daten blieben gröber zusammengefasst als nötig.',
+    ]},
     { v: 'v2.0.1', date: '2026-09-18', title: 'Feinschliff an beiden Ernährungs-Modulen', notes: [
         'Das Suchfeld im Eintragen-Fenster der Nährwerte durchsucht jetzt auch den Katalog — bisher nur deinen eigenen Bestand. Was nicht darin stand, hieß: Fenster schließen, Reiter wechseln, noch einmal suchen, aufnehmen, zurückwechseln, Namen ein drittes Mal tippen. Genau diesen Umweg hatte der Gerichte-Dialog schon nicht mehr; der Weg, den du jeden Tag gehst, hatte ihn noch.',
         'Der Reiter steht in der Adresse: ein Neuladen landet dort, wo du warst, und ein Link auf die Ziele ist ein Link auf die Ziele.',

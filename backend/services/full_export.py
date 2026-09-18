@@ -247,6 +247,18 @@ EXPORT_SECTIONS: list[dict] = [
      "label": "Eigener Bestand samt eigenen Groessen"},
     {"key": "food_dishes", "group": "ernaehrung", "aggregatable": False, "dated": False,
      "label": "Eigene Gerichte (eine Zeile je Zutat)"},
+    # Schach (v2.1.0). Die Zugfolge steht bewusst in einer EIGENEN Sektion:
+    # ein PGN ist ein mehrzeiliges Dokument, das hier zu einer sehr langen
+    # Zelle wird. In der Partienliste haette es jede Tabellenkalkulation
+    # unlesbar gemacht -- getrennt nimmt es mit, wer es braucht.
+    {"key": "chess_games", "group": "schach", "aggregatable": True, "dated": True,
+     "label": "Partien (Ergebnis, Gegner, Wertung, Eroeffnung)"},
+    {"key": "chess_pgn", "group": "schach", "aggregatable": False, "dated": True,
+     "label": "Zugfolgen als PGN (eine Zeile je Partie)"},
+    {"key": "chess_ratings", "group": "schach", "aggregatable": False, "dated": True,
+     "label": "Wertungsverlauf (ein Tag je Disziplin)"},
+    {"key": "notes", "group": "notizen", "aggregatable": False, "dated": False,
+     "label": "Notizen samt Text, Farbe und Schlagworten"},
 ]
 
 EXPORT_GROUPS: list[dict] = [
@@ -255,6 +267,8 @@ EXPORT_GROUPS: list[dict] = [
     {"key": "health", "label": "Gesundheit"},
     {"key": "musik", "label": "Musik"},
     {"key": "ernaehrung", "label": "Ernährung"},
+    {"key": "schach", "label": "Schach"},
+    {"key": "notizen", "label": "Notizen"},
 ]
 
 ALL_SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS]
@@ -684,6 +698,164 @@ async def _sec_food_dishes(db, user_id: int) -> list[str]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Schach (v2.1.0)
+# ---------------------------------------------------------------------------
+# Drei Sektionen, weil es drei verschiedene Dinge sind: eine Partienliste, die
+# man in einer Tabellenkalkulation auswertet; die Zugfolgen, die man in ein
+# Schachprogramm laedt; und die Wertungskurve, die aus taeglichem Nachsehen
+# entstanden ist und die es auf keiner Plattform gibt -- Lichess und
+# Chess.com geben nur den aktuellen Stand heraus. Diese Kurve existiert
+# ausschliesslich hier, und deshalb gehoert sie als Erstes in einen Export.
+
+
+def _chess_zeitfilter(spalte: str, werte: list, date_from, date_to) -> str:
+    """Die Zeitbedingung fuer eine der Schach-Sektionen.
+
+    Die Platzhalternummern haengen davon ab, was schon in ``werte`` steht --
+    deshalb baut das hier eine Zeichenkette und fuellt ``werte`` nebenher,
+    statt feste $2/$3 anzunehmen.
+    """
+    teile = []
+    if date_from:
+        werte.append(date_from)
+        teile.append(f"{spalte} >= ${len(werte)}")
+    if date_to:
+        werte.append(date_to)
+        teile.append(f"{spalte} <= ${len(werte)}")
+    return ("" if not teile else " AND " + " AND ".join(teile))
+
+
+ERGEBNIS_LABEL = {"sieg": "Sieg", "remis": "Remis", "niederlage": "Niederlage"}
+FARBE_LABEL = {"weiss": "Weiss", "schwarz": "Schwarz"}
+PLATTFORM_LABEL = {"lichess": "Lichess", "chesscom": "Chess.com"}
+
+
+async def _sec_chess_games(db, user_id: int, date_from, date_to) -> list[str]:
+    """Eine Zeile je Partie -- ohne Zugfolge, die steht nebenan.
+
+    ``rating_diff`` bleibt leer statt null, wenn die Plattform nichts gemeldet
+    hat: eine Null hiesse „unveraendert“ und waere eine Behauptung.
+    """
+    werte = [user_id]
+    bed = _chess_zeitfilter("g.played_at::date", werte, date_from, date_to)
+    rows = await db.fetch(
+        "SELECT g.played_at, g.platform, a.username, g.perf, g.variant, "
+        "       g.rated, g.color, g.result, g.end_reason, g.own_rating, "
+        "       g.rating_diff, g.opponent, g.opponent_rating, g.opening, "
+        "       g.eco, g.moves, g.url "
+        "  FROM chess_games g "
+        "  JOIN chess_accounts a ON a.id = g.account_id "
+        f" WHERE g.user_id=$1{bed} ORDER BY g.played_at", *werte)
+
+    out = ["# SEKTION: Schach - Partien",
+           "Gespielt am;Uhrzeit;Plattform;Konto;Disziplin;Variante;Gewertet;"
+           "Farbe;Ergebnis;Ende;Eigene Wertung;Wertungsaenderung;Gegner;"
+           "Wertung Gegner;Eroeffnung;ECO;Zuege;Link"]
+    for r in rows:
+        z = r["played_at"]
+        out.append(
+            f'{z.date().isoformat()};{z.strftime("%H:%M")};'
+            f'{_f(PLATTFORM_LABEL.get(r["platform"], r["platform"] or ""))};'
+            f'{_f(r["username"] or "")};{_f(r["perf"] or "")};'
+            f'{_f(r["variant"] or "")};'
+            f'{"ja" if r["rated"] else "nein" if r["rated"] is not None else ""};'
+            f'{_f(FARBE_LABEL.get(r["color"], r["color"] or ""))};'
+            f'{_f(ERGEBNIS_LABEL.get(r["result"], r["result"] or ""))};'
+            f'{_f(r["end_reason"] or "")};'
+            f'{"" if r["own_rating"] is None else r["own_rating"]};'
+            f'{"" if r["rating_diff"] is None else r["rating_diff"]};'
+            f'{_f(r["opponent"] or "")};'
+            f'{"" if r["opponent_rating"] is None else r["opponent_rating"]};'
+            f'{_f(r["opening"] or "")};{_f(r["eco"] or "")};'
+            f'{"" if r["moves"] is None else r["moves"]};{_f(r["url"] or "")}')
+    out.append("")
+    return out
+
+
+async def _sec_chess_pgn(db, user_id: int, date_from, date_to) -> list[str]:
+    """Die Zugfolgen. Der einzige Teil, den die Spalten nebenan nicht ersetzen.
+
+    Partien ohne PGN kommen gar nicht erst vor: eine Zeile mit leerem Feld
+    saehe aus wie eine Partie ohne Zuege, und das ist keine.
+    """
+    werte = [user_id]
+    bed = _chess_zeitfilter("played_at::date", werte, date_from, date_to)
+    rows = await db.fetch(
+        "SELECT played_at, platform, ext_id, pgn FROM chess_games "
+        f" WHERE user_id=$1 AND pgn IS NOT NULL AND btrim(pgn) <> ''{bed} "
+        " ORDER BY played_at", *werte)
+    out = ["# SEKTION: Schach - Zugfolgen (PGN)",
+           "Gespielt am;Plattform;Partie-ID;PGN"]
+    for r in rows:
+        out.append(
+            f'{r["played_at"].date().isoformat()};'
+            f'{_f(PLATTFORM_LABEL.get(r["platform"], r["platform"] or ""))};'
+            f'{_f(r["ext_id"] or "")};{_f(r["pgn"])}')
+    out.append("")
+    return out
+
+
+async def _sec_chess_ratings(db, user_id: int, date_from, date_to) -> list[str]:
+    """Der Wertungsverlauf -- die Reihe, die es sonst nirgends gibt.
+
+    Bestwerte (``is_best``) stehen in derselben Tabelle wie Tagesstaende, sind
+    aber etwas anderes: „jemals“ gegen „heute“. Der Export sagt das in einer
+    eigenen Spalte, statt beides als eine Kurve auszugeben.
+    """
+    werte = [user_id]
+    bed = _chess_zeitfilter("r.taken_on", werte, date_from, date_to)
+    rows = await db.fetch(
+        "SELECT r.taken_on, a.platform, a.username, r.perf, r.rating, "
+        "       r.rd, r.games, r.is_best "
+        "  FROM chess_ratings r "
+        "  JOIN chess_accounts a ON a.id = r.account_id "
+        f" WHERE a.user_id=$1{bed} "
+        " ORDER BY r.taken_on, a.platform, r.perf", *werte)
+    out = ["# SEKTION: Schach - Wertungsverlauf",
+           "Datum;Plattform;Konto;Disziplin;Wertung;Abweichung;Partien;Art"]
+    for r in rows:
+        out.append(
+            f'{r["taken_on"].isoformat()};'
+            f'{_f(PLATTFORM_LABEL.get(r["platform"], r["platform"] or ""))};'
+            f'{_f(r["username"] or "")};{_f(r["perf"] or "")};{r["rating"]};'
+            f'{"" if r["rd"] is None else r["rd"]};'
+            f'{"" if r["games"] is None else r["games"]};'
+            f'{_f("Bestwert" if r["is_best"] else "Tagesstand")}')
+    out.append("")
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Notizen (v2.1.0)
+# ---------------------------------------------------------------------------
+async def _sec_notes(db, user_id: int) -> list[str]:
+    """Notizen samt Text.
+
+    Ein mehrzeiliger Text wird vom CSV-Feld auf eine Zeile gebracht -- das ist
+    der Preis dieses Formats und gilt hier wie ueberall. Die Alternative waere,
+    den Text wegzulassen, und dann exportiert man Ueberschriften.
+    """
+    rows = await db.fetch(
+        "SELECT title, content, color, pinned, archived, tags, "
+        "       created_at, updated_at "
+        "  FROM notes WHERE user_id=$1 "
+        " ORDER BY pinned DESC, updated_at DESC", user_id)
+    out = ["# SEKTION: Notizen",
+           "Titel;Text;Farbe;Angeheftet;Archiviert;Schlagworte;Angelegt;Geaendert"]
+    for r in rows:
+        out.append(
+            f'{_f(r["title"] or "")};{_f(r["content"] or "")};'
+            f'{_f(r["color"] or "default")};'
+            f'{"ja" if r["pinned"] else "nein"};'
+            f'{"ja" if r["archived"] else "nein"};'
+            f'{_f(" ".join(r["tags"] or []))};'
+            f'{r["created_at"].date().isoformat()};'
+            f'{r["updated_at"].date().isoformat()}')
+    out.append("")
+    return out
+
+
 async def _build_sections(db, user, picked: list[str], date_from, date_to,
                           agg_map: dict) -> list[tuple]:
     """Baut die gewaehlten Sektionen einzeln. Getrennt gehalten, damit die
@@ -749,6 +921,22 @@ async def _build_sections(db, user, picked: list[str], date_from, date_to,
         out.append(("food_stock", await _sec_food_stock(db, uid)))
     if "food_dishes" in want:
         out.append(("food_dishes", await _sec_food_dishes(db, uid)))
+
+    # Schach: alle drei mit Zeitraum. Die Wertungskurve ist datiert, obwohl
+    # sie sich nicht zusammenfassen laesst -- ein Mittelwert ueber Wertungen
+    # verschiedener Disziplinen waere eine Zahl ohne Bedeutung.
+    if "chess_games" in want:
+        out.append(("chess_games",
+                    await _sec_chess_games(db, uid, date_from, date_to)))
+    if "chess_pgn" in want:
+        out.append(("chess_pgn",
+                    await _sec_chess_pgn(db, uid, date_from, date_to)))
+    if "chess_ratings" in want:
+        out.append(("chess_ratings",
+                    await _sec_chess_ratings(db, uid, date_from, date_to)))
+
+    if "notes" in want:
+        out.append(("notes", await _sec_notes(db, uid)))
     return out
 
 
@@ -956,7 +1144,19 @@ async def fit_export_to_size(
     # bleiben grob, obwohl sie fast nichts kosten. Wer einmal nicht mehr
     # passt, ist fertig -- feiner wird er danach auch nicht.
     shares = _group_bytes(preview)
-    order = sorted(groups, key=lambda g: shares.get(g, 0))
+    # Eine Gruppe, die nichts zur Datei beitraegt, braucht keine Messung: sie
+    # feiner zu stellen kann die Datei nicht groesser machen. Sie bekommt
+    # sofort die Stufe zurueck, die der Nutzer wollte, und kostet keinen Bau.
+    # Ohne das verbraucht ein Modul, in dem gar nichts liegt, das Budget, und
+    # die Module mit Daten bleiben grob -- beim Hinzukommen von Schach und
+    # Notizen (v2.1.0) ist genau das passiert.
+    order = []
+    for g in groups:
+        if shares.get(g, 0) > 0:
+            order.append(g)
+        else:
+            agg[g] = base.get(g, "none")
+    order.sort(key=lambda g: shares.get(g, 0))
     done: set = set()
     while builds < max_builds and len(done) < len(order):
         improved = False
@@ -980,8 +1180,12 @@ async def fit_export_to_size(
         if not improved:
             break
 
-    same = all(agg[g] == agg[groups[0]] for g in groups)
-    note = ("Zeit zusammengefasst auf %s." % _period_adverb(agg[groups[0]])
+    # Fuer den Vermerk zaehlen nur die Gruppen, die wirklich etwas beitragen:
+    # ein Modul ohne Daten wuerde sonst behaupten, es sei zusammengefasst
+    # worden.
+    massgeblich = order or groups
+    same = all(agg[g] == agg[massgeblich[0]] for g in massgeblich)
+    note = ("Zeit zusammengefasst auf %s." % _period_adverb(agg[massgeblich[0]])
             if same else "Je Modul die feinste Stufe, die noch passt.")
     return result(agg, preview, True, note)
 

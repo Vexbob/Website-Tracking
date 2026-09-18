@@ -83,7 +83,7 @@ Das einzige nach außen sichtbare Modul: `/blog/` ist ohne Anmeldung lesbar, ges
 - **XSS-Schutz** — der gespeicherte HTML-Inhalt läuft vor der Ausgabe durch einen Whitelist-Sanitizer, weil die Seite öffentlich erreichbar ist.
 
 ### ⬇️ Gesamt-Export
-Eine Dashboard-Kachel exportiert alle Module gemeinsam als eine CSV (`GET /api/export/all`), abschnittsweise gegliedert mit erklärenden Kommentarzeilen — gedacht als Archiv und als Futter für externe Auswertungen.
+Eine Dashboard-Kachel exportiert alle Module gemeinsam als eine CSV (`GET /api/export/all`), abschnittsweise gegliedert mit erklärenden Kommentarzeilen — gedacht als Archiv und als Futter für externe Auswertungen. Dabei sind: Sparziel, Ausgaben, Gesundheit, Musik, Ernährung (Tagebuch und Nährwerte getrennt), Schach und Notizen. Die Sektionsliste steht in `backend/services/full_export.py` (`EXPORT_SECTIONS`); ein Test hält fest, dass jede Sektion dort auch wirklich gebaut wird.
 
 - **Zeitraumfilter** — Presets (30 Tage, 3 bzw. 12 Monate, laufendes Jahr) oder freie Von-Bis-Auswahl.
 - **Wochen-/Monats-Aggregation** — fasst Ausgaben und Vitalwerte zu Perioden zusammen. Ausgaben behalten dabei eine Zeile je Einkauf (Datum, Laden, Typ, Anzahl Positionen, Summe, Kategorien-Split); nur die Einzelpositionen entfallen, damit ein Jahresexport lesbar bleibt.

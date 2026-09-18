@@ -252,12 +252,19 @@ function sparkOptions(color) {
 }
 
 // ---------- Tabs ----------
+const H_TABS = ['dashboard', 'vitalwerte', 'schlaf', 'workouts', 'einstellungen'];
+
 function activateTab(t) {
+    if (H_TABS.indexOf(t) < 0) t = H_TABS[0];
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
-    ['dashboard', 'vitalwerte', 'schlaf', 'workouts', 'einstellungen'].forEach(id => {
+    H_TABS.forEach(id => {
         const el = document.getElementById('tab-' + id);
         if (el) el.style.display = (id === t) ? '' : 'none';
     });
+    // Der Reiter steht in der Adresse -- wie im Schachmodul. Ein Neuladen
+    // landet dort, wo man war, und ein Link auf die Schlafdaten ist ein Link
+    // auf die Schlafdaten. Der erste Reiter bleibt ohne Anhaengsel.
+    history.replaceState(null, '', t === H_TABS[0] ? location.pathname : '#' + t);
     if (t === 'vitalwerte' && !state.vitalInit) initVitalwerte();
     if (t === 'schlaf' && !state.sleepInit) initSchlaf();
     if (t === 'workouts' && !state.workoutsLoaded) initWorkouts();
@@ -1798,6 +1805,9 @@ async function uploadHealthFile() {
         () => { clearToken(); location.href = '/private/login.html'; });
     document.querySelectorAll('.tab-btn').forEach(b =>
         b.addEventListener('click', () => activateTab(b.dataset.tab)));
+    // Steht ein Reiter in der Adresse, wird er geoeffnet -- samt seiner
+    // Nachladung. Ohne Anhaengsel bleibt es beim ersten.
+    activateTab((location.hash || '').replace('#', '') || H_TABS[0]);
 
     // Activity-Chart Toggle
     document.querySelectorAll('#hActivityToggle button').forEach(b => {

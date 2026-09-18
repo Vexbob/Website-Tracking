@@ -220,22 +220,13 @@ function showUndoToast(msg, onUndo, ms=3000) {
 function openImageFullscreen(src) { return VexBild.vollbild(src, 'Bon'); }
 
 /* ---------- Modal (generisch) ---------- */
-function openModal(title, contentHtml, opts={}) {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal-box${opts.wide ? ' wide' : ''}">
-        <div class="modal-head"><h3>${title}</h3><button class="modal-close" aria-label="Schließen">✕</button></div>
-        <div class="modal-body">${contentHtml}</div>
-    </div>`;
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add('show'));
-    const close = () => { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 200); if (opts.onClose) opts.onClose(); };
-    overlay.querySelector('.modal-close').onclick = close;
-    overlay.onclick = (e) => { if (e.target === overlay) close(); };
-    const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
-    document.addEventListener('keydown', onKey);
-    return { close, root: overlay.querySelector('.modal-body') };
+/* Der Dialog liegt seit v2.1.0 in /js/modal.js -- eine Fassung fuer alle
+   Module, mit gesperrtem Hintergrund, Fokus im Kasten und role="dialog".
+   Der Name hier bleibt, damit die Aufrufstellen unveraendert bleiben. */
+function openModal(title, contentHtml, opts) {
+    return VexModal.open(title, contentHtml, opts || {});
 }
+
 
 /* ---------- Bild-Kompression ---------- */
 async function compressImage(file, maxDim = 1600, quality = 0.85) {

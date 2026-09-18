@@ -816,13 +816,19 @@ async function loadFacets() {
     } catch (e) { /* Filter bleiben dann eben schmaler */ }
 }
 
+const M_TABS = ['ueberblick', 'register', 'import'];
+
 function activateTab(tab) {
+    if (M_TABS.indexOf(tab) < 0) tab = M_TABS[0];
     state.tab = tab;
     document.querySelectorAll('.tab-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.tab === tab));
-    ['ueberblick', 'register', 'import'].forEach(t => {
+    M_TABS.forEach(t => {
         document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
     });
+    // Der Reiter steht in der Adresse -- wie im Schachmodul. Der erste
+    // bleibt ohne Anhaengsel, damit die blanke Adresse blank bleibt.
+    history.replaceState(null, '', tab === M_TABS[0] ? location.pathname : '#' + tab);
     // Der Import kennt keinen Zeitraum: eine Filterleiste ohne Wirkung wäre
     // eine Behauptung.
     document.getElementById('mFilterbar').style.display = tab === 'import' ? 'none' : '';
@@ -854,6 +860,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.querySelectorAll('.tab-btn').forEach(b =>
         b.addEventListener('click', () => activateTab(b.dataset.tab)));
+    const gewuenscht = (location.hash || '').replace('#', '');
+    if (gewuenscht && M_TABS.indexOf(gewuenscht) >= 0) activateTab(gewuenscht);
 
     moreFilter = mountMoreFilter(document.getElementById('mMoreFilter'));
 
