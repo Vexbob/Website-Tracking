@@ -19,6 +19,7 @@ und eine Zeile, kein neues Endpoint-Paar. Die Tab-Leiste behaelt ihre eigenen
 Endpoints, weil das Frontend dort auch Grenzen und erlaubte Ziele abholt.
 """
 import json
+from datetime import date
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -297,6 +298,48 @@ def _check_themes(value: Any) -> List[dict]:
     return out
 
 
+# ---------- Export-Voreinstellung (v2.8.0) ----------
+# Der Export-Dialog machte bisher jedes Mal mit "Einzeln" auf, obwohl die
+# Antwort auf "wie haette ich es gern" bei einem persoenlichen Tracker immer
+# dieselbe ist. Hier steht sie: die Stufe je Modul und die Grenze, vor der
+# alles verdichtet wird.
+#
+# Die erlaubten Schluessel kommen aus der Export-Registry und werden NICHT
+# hier ein zweites Mal aufgezaehlt -- eine neue Gruppe oder eine neue Stufe
+# waere sonst zwei Aenderungen an zwei Orten.
+EXPORT_PREF = "ui_export"
+
+
+def _check_export(value: Any) -> dict:
+    """Voreinstellung fuer den Gesamt-Export.
+
+    ``aggregate``: Stufe je Modulgruppe. ``compact_before``: ab wann die
+    gewaehlte Stufe gilt -- alles davor steht monatsweise in der Datei.
+    Unbekannte Gruppen und Stufen fliegen still raus; ein falsches Datum
+    nicht, denn es waere die eine Angabe, deren Fehlen man am Ergebnis nicht
+    sieht.
+    """
+    from services.full_export import AGG_KEYS, EXPORT_GROUPS
+
+    if not isinstance(value, dict):
+        raise ValueError("erwartet ein Objekt")
+    gruppen = {g["key"] for g in EXPORT_GROUPS}
+    roh = value.get("aggregate") or {}
+    if not isinstance(roh, dict):
+        raise ValueError("'aggregate' ist ein Objekt aus Gruppe und Stufe")
+    agg = {k: v for k, v in roh.items() if k in gruppen and v in AGG_KEYS}
+
+    grenze = value.get("compact_before")
+    if grenze in (None, ""):
+        grenze = None
+    else:
+        try:
+            grenze = date.fromisoformat(str(grenze)).isoformat()
+        except ValueError:
+            raise ValueError("'compact_before' muss im Format YYYY-MM-DD sein")
+    return {"aggregate": agg, "compact_before": grenze}
+
+
 UI_PREFS = {
     DESKTOP_NAV_PREF: _check_nav_desktop,
     NAV_HIDDEN_PREF: _check_nav_hidden,
@@ -307,6 +350,7 @@ UI_PREFS = {
     GRAD_FIGURE_PREF: _one_of(ALLOWED_FIGURES),
     GRAD_BACKDROP_PREF: _one_of(ALLOWED_BACKDROPS),
     THEMES_PREF: _check_themes,
+    EXPORT_PREF: _check_export,
 }
 
 

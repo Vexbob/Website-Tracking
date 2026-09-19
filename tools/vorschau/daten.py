@@ -21,6 +21,7 @@ sys.path.insert(0, str(BACKEND))
 
 from services import food_calc as calc          # noqa: E402
 from services import food_mahlzeit as mz        # noqa: E402
+from services import full_export as _export    # noqa: E402
 
 HEUTE = datetime.date.today()
 ICH = {"id": 1, "username": "etienne", "is_admin": True}
@@ -239,6 +240,11 @@ def _verlauf():
 
 ANTWORTEN = {
     "/api/me": ICH,
+    # Die Export-Registry kommt aus dem echten Modul -- eine nachgebaute
+    # Liste waere beim naechsten neuen Modul falsch.
+    "/api/export/sections": {"sections": _export.EXPORT_SECTIONS,
+                             "groups": _export.EXPORT_GROUPS,
+                             "aggregates": _export.EXPORT_AGGREGATES},
     # Leere Liste heisst ausdruecklich 'alle an' -- ein fehlender
     # Schluessel waere die Werkseinstellung, und die laesst die
     # Naehrwerte ruhen.

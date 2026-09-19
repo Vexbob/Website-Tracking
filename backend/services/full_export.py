@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from services import food_mahlzeit as mahlzeiten
@@ -410,6 +410,7 @@ async def build_full_export_csv(
     sections: Optional[list] = None,
     aggregate_map: Optional[dict] = None,
     column_map: Optional[dict] = None,
+    compact_before: Optional[date] = None,
 ) -> str:
     """Baut die komplette CSV als String. Gibt Zeilen (``\\n``-getrennt) zurueck.
 
@@ -431,10 +432,12 @@ async def build_full_export_csv(
     picked = clean_sections(sections)
     agg_map = clean_aggregate_map(aggregate_map, aggregate, date_from, date_to)
     cols = clean_column_map(column_map)
-    built = await _build_sections(db, user, picked, date_from, date_to, agg_map)
+    built = await _build_sections(db, user, picked, date_from, date_to, agg_map,
+                                  compact_before)
 
     backlog = await _backlog_facts(db, user["id"]) if "ausgaben" in picked else None
-    lines = _export_header(user, picked, date_from, date_to, agg_map, backlog)
+    lines = _export_header(user, picked, date_from, date_to, agg_map, backlog,
+                           compact_before)
     for key, section_lines in built:
         lines.extend(_filter_columns(section_lines, cols.get(key)))
     return _compact_timestamps("\n".join(lines) + "\n")
@@ -485,7 +488,8 @@ async def _backlog_facts(db, user_id: int) -> Optional[dict]:
 
 
 def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
-                   backlog: Optional[dict] = None) -> list[str]:
+                   backlog: Optional[dict] = None,
+                   compact_before: Optional[date] = None) -> list[str]:
     """Der Vorspann dokumentiert die Zusammenstellung in der Datei selbst --
     ein halber Export ohne diese Zeilen sieht ein Jahr spaeter aus wie
     fehlende Daten."""
@@ -500,6 +504,15 @@ def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
         f"# Optionen: zeitraum={opt_from} bis {opt_to}; aggregation: {agg_txt}",
         "# Enthaltene Sektionen: " + "; ".join(labels.get(k, k) for k in picked),
     ]
+    if compact_before:
+        # Ohne diese Zeile sieht die Datei aus, als sei sie an einer
+        # willkuerlichen Stelle grober geworden.
+        lines.append(
+            f"# Verdichtet: alles vor {compact_before.isoformat()} steht "
+            "monatsweise zusammengefasst (bei jahresweiser Aggregation "
+            "jahresweise); ab diesem Tag gilt die oben genannte Stufe. "
+            "Sektionen ohne Datum und solche, die sich nicht zusammenfassen "
+            "lassen, sind unberuehrt.")
     if len(picked) < len(ALL_SECTION_KEYS):
         fehlt = [labels.get(k, k) for k in ALL_SECTION_KEYS if k not in picked]
         lines.append("# BEWUSST NICHT enthalten: " + "; ".join(fehlt))
@@ -1034,8 +1047,93 @@ async def _sec_notes(db, user_id: int) -> list[str]:
     return out
 
 
+# ---------- Die Verdichtungsgrenze (v2.8.0) ----------
+#
+# "Alles vor August 2026 monatlich" ist keine Aggregationsstufe, sondern eine
+# Grenze quer durch die Zeit: davor will man eine Kurve, danach die Eintraege.
+# Eine Datei, die beides kann, ist deshalb zwei Durchgaenge durch dieselben
+# Sektionen mit verschiedenen Fenstern und Stufen -- und nicht eine neue Stufe
+# neben `week` und `month`, die dann in jeder Sektion ein zweites Mal
+# ausgerechnet werden muesste.
+
+# Nur Sektionen, die BEIDES sind: datiert (ein Fenster greift) und
+# zusammenfassbar (eine Stufe greift). Die Zugfolgen einer Partie lassen sich
+# nicht verdichten, und Stammdaten haben kein Datum.
+def _teilbare_sektionen() -> set:
+    return {s["key"] for s in EXPORT_SECTIONS
+            if s.get("dated") and s.get("aggregatable")}
+
+
+def _mindestens_monat(stufe: str) -> str:
+    """Die Stufe fuer den alten Teil. Groeber als der Monat bleibt groeber --
+    wer jahresweise exportiert, will vor der Grenze keine feineren Zeilen."""
+    return "year" if stufe == "year" else "month"
+
+
+def _hat_daten(zeilen: list[str]) -> bool:
+    """Steht in diesem Block mehr als der Kopf? Ein leerer alter Teil bekommt
+    sonst eine Ueberschrift ueber nichts, und die Datei behauptet einen
+    Zeitraum, aus dem sie nichts hat."""
+    kopf_gesehen = False
+    for z in zeilen:
+        if not z.strip() or z.startswith("#"):
+            continue
+        if not kopf_gesehen:
+            kopf_gesehen = True
+            continue
+        return True
+    return False
+
+
 async def _build_sections(db, user, picked: list[str], date_from, date_to,
-                          agg_map: dict) -> list[tuple]:
+                          agg_map: dict, grenze: Optional[date] = None) -> list[tuple]:
+    """Die gewaehlten Sektionen, bei gesetzter Grenze in zwei Teilen.
+
+    Vor ``grenze`` wird monatsweise verdichtet, ab ``grenze`` gilt die
+    gewaehlte Stufe. Beide Teile stehen in derselben Sektion untereinander --
+    das Format traegt das, eine Sektion darf mehrere Bloecke haben.
+    """
+    if grenze is None or (date_from and date_from >= grenze):
+        return await _build_sections_teil(db, user, picked, date_from, date_to, agg_map)
+    if date_to and date_to < grenze:
+        # Alles liegt vor der Grenze: ein Durchgang, monatsweise.
+        alt_map = {g: _mindestens_monat(s) for g, s in agg_map.items()}
+        return await _build_sections_teil(db, user, picked, date_from, date_to, alt_map)
+
+    teilbar = _teilbare_sektionen()
+    geteilt = [k for k in picked if k in teilbar]
+    unteilbar = [k for k in picked if k not in teilbar]
+
+    # Der unteilbare Rest sieht das ganze Fenster -- sonst stuende eine
+    # Partie-Zugfolge zweimal unter zwei gleichen Ueberschriften.
+    fertig: dict[str, list[str]] = {}
+    if unteilbar:
+        for key, zeilen in await _build_sections_teil(
+                db, user, unteilbar, date_from, date_to, agg_map):
+            fertig[key] = zeilen
+
+    if geteilt:
+        alt_map = {g: _mindestens_monat(s) for g, s in agg_map.items()}
+        alt_bis = grenze - timedelta(days=1)
+        if date_to and date_to < alt_bis:
+            alt_bis = date_to
+        alt = dict(await _build_sections_teil(
+            db, user, geteilt, date_from, alt_bis, alt_map))
+        neu_von = grenze if not date_from or date_from < grenze else date_from
+        neu = dict(await _build_sections_teil(
+            db, user, geteilt, neu_von, date_to, agg_map))
+        for key in geteilt:
+            teile = []
+            if _hat_daten(alt.get(key, [])):
+                teile.extend(alt[key])
+            teile.extend(neu.get(key, []))
+            fertig[key] = teile
+
+    return [(k, fertig[k]) for k in picked if k in fertig]
+
+
+async def _build_sections_teil(db, user, picked: list[str], date_from, date_to,
+                               agg_map: dict) -> list[tuple]:
     """Baut die gewaehlten Sektionen einzeln. Getrennt gehalten, damit die
     Vorschau dieselben Zeilen zaehlen kann, die spaeter in der Datei stehen --
     eine zweite Schaetzformel waere garantiert irgendwann falsch."""
@@ -1136,6 +1234,7 @@ async def build_export_preview(
     sections: Optional[list] = None,
     aggregate_map: Optional[dict] = None,
     column_map: Optional[dict] = None,
+    compact_before: Optional[date] = None,
     sample_lines: int = 40,
 ) -> dict:
     """Was der Export enthalten wuerde: je Sektion die Zeilenzahl und ihr
@@ -1149,9 +1248,11 @@ async def build_export_preview(
     picked = clean_sections(sections)
     agg_map = clean_aggregate_map(aggregate_map, aggregate, date_from, date_to)
     cols = clean_column_map(column_map)
-    built = await _build_sections(db, user, picked, date_from, date_to, agg_map)
+    built = await _build_sections(db, user, picked, date_from, date_to, agg_map,
+                                  compact_before)
 
-    header = _export_header(user, picked, date_from, date_to, agg_map)
+    header = _export_header(user, picked, date_from, date_to, agg_map, None,
+                            compact_before)
     all_lines = list(header)
     labels = {s["key"]: s["label"] for s in EXPORT_SECTIONS}
     detail = []
@@ -1180,6 +1281,7 @@ async def build_export_preview(
         "bytes": len(body),
         "lines": csv.count("\n"),
         "aggregate": agg_map,
+        "compact_before": compact_before.isoformat() if compact_before else None,
         "sample": "\n".join(sample),
         "truncated": csv.count("\n") > len(sample),
     }
@@ -1239,6 +1341,7 @@ async def fit_export_to_size(
     sections: Optional[list] = None,
     aggregate_map: Optional[dict] = None,
     column_map: Optional[dict] = None,
+    compact_before: Optional[date] = None,
     max_builds: int = 8,
 ) -> dict:
     """Sucht die FEINSTE Einstellung, mit der die Datei unter ``max_bytes``
@@ -1259,7 +1362,8 @@ async def fit_export_to_size(
         builds += 1
         return await build_export_preview(
             db, user, date_from=date_from, date_to=date_to, sections=picked,
-            aggregate_map=agg, column_map=column_map)
+            aggregate_map=agg, column_map=column_map,
+            compact_before=compact_before)
 
     def result(agg, preview, fits, note=""):
         biggest = max(preview.get("sections", []),

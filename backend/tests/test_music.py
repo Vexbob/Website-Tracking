@@ -263,7 +263,7 @@ def _fake_preview(sizes, counter):
     Gruppe, ``counter`` zaehlt die Bauten."""
     async def preview(db, user, date_from=None, date_to=None, aggregate="none",
                       sections=None, aggregate_map=None, column_map=None,
-                      sample_lines=40):
+                      compact_before=None, sample_lines=40):
         counter.append(1)
         agg = aggregate_map or {}
         detail = []

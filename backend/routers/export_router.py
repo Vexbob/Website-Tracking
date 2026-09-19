@@ -36,8 +36,16 @@ v1.67.0: Der Export ist dynamisch statt fest verdrahtet.
 v1.68.0: ``GET /api/export/fit?max_bytes=...`` stellt die Aggregation selbst
     so ein, dass die Datei eine Hoechstgroesse nicht ueberschreitet. Gedreht
     wird nur an der Zeit; Sektionen und Spalten bleiben unangetastet.
+
+v2.8.0: ``compact_before=YYYY-MM-DD`` verdichtet alles VOR diesem Tag
+    monatsweise, waehrend ab diesem Tag die gewaehlte Stufe gilt. Fehlt der
+    Parameter, gilt die Voreinstellung des Nutzers (``ui_export``) -- sie ist
+    der Grund, warum es sie gibt: eine Regel, die man einmal setzt, darf man
+    nicht bei jedem Aufruf wiederholen muessen. ``compact_before=`` (leer)
+    schaltet sie fuer diesen einen Aufruf ab.
 """
 import gzip
+import json
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -124,6 +132,42 @@ def _validated_range(date_from: str | None, date_to: str | None):
     return d_from, d_to
 
 
+async def _export_prefs(db, user) -> dict:
+    """Die gespeicherte Voreinstellung. Fehlt oder taugt sie nicht, ist sie
+    leer -- eine kaputte Einstellung darf keinen Export verhindern."""
+    row = await db.fetchrow(
+        "SELECT value FROM user_prefs WHERE user_id=$1 AND key='ui_export'",
+        user["id"])
+    if not row:
+        return {}
+    try:
+        wert = json.loads(row["value"])
+        return wert if isinstance(wert, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+async def _compact_before(request: Request, db, user) -> date | None:
+    """Ab wann die gewaehlte Stufe gilt. Die Anfrage schlaegt die
+    Voreinstellung -- auch mit einem leeren Wert, der sie ausdruecklich
+    abschaltet."""
+    if "compact_before" in request.query_params:
+        return _parse_date(request.query_params["compact_before"], "compact_before")
+    gespeichert = (await _export_prefs(db, user)).get("compact_before")
+    return _parse_date(gespeichert, "compact_before") if gespeichert else None
+
+
+async def _agg_map_mit_vorgabe(request: Request, db, user) -> dict:
+    """``agg_<gruppe>`` aus der Anfrage, sonst die Voreinstellung. Eine
+    Gruppe, die in der Anfrage steht, bleibt wie sie dort steht."""
+    aus_anfrage = _agg_map(request)
+    vorgabe = (await _export_prefs(db, user)).get("aggregate") or {}
+    out = {g: s for g, s in vorgabe.items()
+           if g in GROUP_KEYS and s in AGG_KEYS}
+    out.update(aus_anfrage)
+    return out
+
+
 def _validated_aggregate(value: str) -> str:
     if value not in AGG_KEYS:
         raise HTTPException(400, "Unbekannte Aggregation: " + str(value))
@@ -156,8 +200,9 @@ async def export_preview(
         db, user, date_from=d_from, date_to=d_to,
         aggregate=_validated_aggregate(aggregate),
         sections=_parse_sections(sections),
-        aggregate_map=_agg_map(request),
-        column_map=_column_map(request))
+        aggregate_map=await _agg_map_mit_vorgabe(request, db, user),
+        column_map=_column_map(request),
+        compact_before=await _compact_before(request, db, user))
 
 
 @router.get("/api/export/fit")
@@ -188,7 +233,9 @@ async def export_fit(
     return await fit_export_to_size(
         db, user, max_bytes, date_from=d_from, date_to=d_to,
         sections=_parse_sections(sections),
-        aggregate_map=_agg_map(request), column_map=_column_map(request))
+        aggregate_map=await _agg_map_mit_vorgabe(request, db, user),
+        column_map=_column_map(request),
+        compact_before=await _compact_before(request, db, user))
 
 
 @router.get("/api/export/all")
@@ -207,12 +254,14 @@ async def export_all(
     d_from, d_to = _validated_range(date_from, date_to)
     picked = _parse_sections(sections)
     agg = _validated_aggregate(aggregate)
-    agg_map = _agg_map(request)
+    agg_map = await _agg_map_mit_vorgabe(request, db, user)
     col_map = _column_map(request)
+    grenze = await _compact_before(request, db, user)
 
     csv = await build_full_export_csv(
         db, user, date_from=d_from, date_to=d_to, aggregate=agg,
-        sections=picked, aggregate_map=agg_map, column_map=col_map)
+        sections=picked, aggregate_map=agg_map, column_map=col_map,
+        compact_before=grenze)
     # UTF-8 mit BOM, damit Excel Umlaute (ä/ö/ü/ß) korrekt darstellt
     body = ("﻿" + csv).encode("utf-8")
 
@@ -233,6 +282,8 @@ async def export_all(
         parts.append("auswahl")
     if col_map:
         parts.append("spalten")
+    if grenze:
+        parts.append("verdichtet-ab-" + grenze.isoformat())
     filename = "-".join(parts) + ".csv"
 
     headers = {

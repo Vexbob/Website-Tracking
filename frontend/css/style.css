@@ -1075,13 +1075,18 @@ input[type="checkbox"] { display: inline; width: auto; }
 .exp-custom {
     display: none; gap: 0.5rem; margin-top: 0.5rem;
 }
+/* Die Verdichtungsgrenze haengt an keinem Voreinstellungsknopf -- sie steht
+   immer offen, weil sie immer gilt. */
+.exp-custom--offen { display: flex; }
 .exp-custom label {
     flex: 1; display: flex; flex-direction: column; gap: 0.25rem;
     font-size: 0.75rem; color: var(--text-muted);
 }
 .exp-custom input[type="date"],
 .exp-custom input[type="number"] {
-    padding: 0.4375rem 0.625rem; font-size: 0.875rem;
+    /* 16 px, nicht 14: darunter zoomt iPhone-Safari beim Antippen die ganze
+       Seite heran und danach nicht zurueck. */
+    padding: 0.4375rem 0.625rem; font-size: 1rem;
     background: var(--surface-2); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px;
     font-family: inherit; margin: 0; width: 100%;

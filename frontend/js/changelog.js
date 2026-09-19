@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.8.0', date: '2026-09-19', title: 'Der Export merkt sich, wie du ihn willst', notes: [
+        'In den Einstellungen steht jetzt, womit der Export-Dialog aufmacht: die Zusammenfassung je Modul und die Grenze, vor der verdichtet wird.',
+        'Neu: „Alles davor monatlich“. Setzt du dort den 01.08.2026, steht alles Ältere monatsweise in der Datei und ab diesem Tag gilt die Stufe des jeweiligen Moduls.',
+        'Das gilt für jedes Modul mit Datum — Ausgaben, Gesundheit, Musik, Sparziel, Ernährung, Schach. Stammdaten und Zugfolgen bleiben unberührt.',
+        'Der Dateikopf sagt, dass und ab wann verdichtet wurde, und der Dateiname trägt es mit.',
+        'Im Dialog lässt sich die Grenze für einen einzelnen Export überschreiben.',
+    ]},
     { v: 'v2.7.0', date: '2026-09-19', title: 'Der Ring sagt es, der Export fasst zusammen', notes: [
         'Die Zeile „Richtwert 2.400 kcal“ unter dem Kalorienring ist weg — die Zahl steht im Ring und im Zielfenster. Das Tagesziel öffnet jetzt der Ring selbst.',
         'Ist der Tag über dem Richtwert, färbt sich der ganze Bogen gelb. Vorher lag das Gelb als Stück am linken Ende, wo sonst die leere Spur anfängt, und sah aus wie ein Rest statt wie ein Mehr.',

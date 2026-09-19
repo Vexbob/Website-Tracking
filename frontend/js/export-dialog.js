@@ -68,9 +68,17 @@
         const groups = meta.groups || [];
         const aggregates = meta.aggregates ||
             [{ key: 'none', label: 'Einzeln', hint: '' }];
+        // Die Voreinstellung aus /einstellungen. Der Dialog machte bis
+        // v2.8.0 jedes Mal mit „Einzeln“ auf, obwohl die Antwort auf „wie
+        // haettest du es gern“ dieselbe bleibt.
+        const vorgabe = (window.VexPrefs && VexPrefs.get('ui_export', null)) || {};
+        const vorAgg = vorgabe.aggregate || {};
         const agg = {};
-        groups.forEach(g => { agg[g.key] = 'none'; });
+        groups.forEach(g => { agg[g.key] = vorAgg[g.key] || 'none'; });
         return {
+            // Vor diesem Tag steht alles monatsweise in der Datei. Leer
+            // heisst: keine Grenze.
+            compactBefore: vorgabe.compact_before || '',
             preset: 'all',
             from: '',
             to: '',
@@ -117,6 +125,10 @@
         Object.keys(state.agg).forEach(g => {
             if (state.agg[g] !== 'none') p.set('agg_' + g, state.agg[g]);
         });
+        // Immer mitschicken, auch leer: ein fehlender Parameter hiesse „nimm
+        // die Voreinstellung“, und dann zeigte die Vorschau etwas anderes an,
+        // als hier eingestellt ist.
+        p.set('compact_before', state.compactBefore || '');
         Object.keys(state.chosen).forEach(key => {
             const all = state.columns[key] || [];
             const pickedCols = state.chosen[key];
@@ -157,6 +169,12 @@
             '          <button type="button" class="v-btn v-btn--sm" id="expLimitApply">Anpassen</button>',
             '        </div>',
             '        <p class="exp-hint" id="expLimitNote"></p>',
+            '        <div class="exp-label" style="margin-top:1.15rem">Verdichten</div>',
+            '        <div class="exp-custom exp-custom--offen">',
+            '          <label>Alles davor monatlich<input type="date" id="expCompact"></label>',
+            '        </div>',
+            '        <p class="exp-hint">Ab diesem Tag gilt die Stufe des Moduls. '
+            + 'Leer heißt: keine Grenze.</p>',
             '        <div class="exp-label" style="margin-top:1.15rem">Was soll hinein?</div>',
             '        <div id="expSections" class="exp-sections"><span class="skel skel-block"></span></div>',
             '      </div>',
@@ -324,6 +342,7 @@
         const sectionBox = overlay.querySelector('#expSections');
         const fromEl = overlay.querySelector('#expFrom');
         const toEl = overlay.querySelector('#expTo');
+        const compactEl = overlay.querySelector('#expCompact');
         let previewTimer = null;
         let previewSeq = 0;
 
@@ -488,6 +507,11 @@
             state.preset = b.dataset.preset;
             paintRange();
             if (state.preset !== 'custom' || (state.from || state.to)) refreshPreview();
+        });
+        compactEl.value = state.compactBefore || '';
+        compactEl.addEventListener('change', () => {
+            state.compactBefore = compactEl.value || '';
+            refreshPreview();
         });
         [fromEl, toEl].forEach(el => el.addEventListener('change', () => {
             state.from = fromEl.value;

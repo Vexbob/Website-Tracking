@@ -169,3 +169,67 @@ def test_wertungsverlauf_bleibt_bewusst_unaggregierbar():
     # ohne Bedeutung.
     assert nach_key["chess_ratings"]["aggregatable"] is False
     assert nach_key["chess_pgn"]["aggregatable"] is False
+
+
+# ------------------------------------------- Verdichtungsgrenze (v2.8.0)
+
+def test_vor_der_grenze_wird_mindestens_monatlich_verdichtet():
+    # Feiner als der Monat wird auf den Monat angehoben ...
+    assert fx._mindestens_monat("none") == "month"
+    assert fx._mindestens_monat("day") == "month"
+    assert fx._mindestens_monat("week") == "month"
+    assert fx._mindestens_monat("month") == "month"
+    # ... groeber bleibt groeber: wer jahresweise exportiert, will vor der
+    # Grenze keine feineren Zeilen.
+    assert fx._mindestens_monat("year") == "year"
+
+
+def test_nur_datierte_und_zusammenfassbare_sektionen_werden_geteilt():
+    teilbar = fx._teilbare_sektionen()
+    assert "chess_games" in teilbar
+    assert "diary_log" in teilbar
+    assert "ausgaben" in teilbar
+    # Zugfolgen lassen sich nicht verdichten, Stammdaten haben kein Datum.
+    assert "chess_pgn" not in teilbar
+    assert "food_stock" not in teilbar
+    assert "sparziel_meta" not in teilbar
+
+
+def test_ein_block_ohne_zeilen_gilt_als_leer():
+    leer = ["# SEKTION: Irgendwas", "Datum;Wert", ""]
+    voll = ["# SEKTION: Irgendwas", "Datum;Wert", "2026-01-01;3", ""]
+    assert fx._hat_daten(leer) is False
+    assert fx._hat_daten(voll) is True
+
+
+def test_der_vorspann_nennt_die_grenze():
+    user = {"username": "test"}
+    kopf = fx._export_header(user, fx.ALL_SECTION_KEYS, None, None,
+                             {g["key"]: "none" for g in fx.EXPORT_GROUPS},
+                             None, date(2026, 8, 1))
+    assert any("2026-08-01" in z and "Verdichtet" in z for z in kopf)
+    # Ohne Grenze steht die Zeile nicht da.
+    ohne = fx._export_header(user, fx.ALL_SECTION_KEYS, None, None,
+                             {g["key"]: "none" for g in fx.EXPORT_GROUPS})
+    assert not any("Verdichtet" in z for z in ohne)
+
+
+# ------------------------------------------ Voreinstellung (v2.8.0)
+
+def test_export_voreinstellung_nimmt_nur_bekannte_gruppen_und_stufen():
+    from routers.ui_router import _check_export
+    wert = _check_export({"aggregate": {"schach": "week", "erfunden": "week",
+                                        "musik": "quatsch"},
+                          "compact_before": "2026-08-01"})
+    assert wert["aggregate"] == {"schach": "week"}
+    assert wert["compact_before"] == "2026-08-01"
+
+
+def test_export_voreinstellung_weist_ein_kaputtes_datum_zurueck():
+    import pytest
+    from routers.ui_router import _check_export
+    # Eine stillschweigend verworfene Grenze saehe am Ergebnis genauso aus
+    # wie eine, die es nie gab.
+    with pytest.raises(ValueError):
+        _check_export({"compact_before": "August 2026"})
+    assert _check_export({"compact_before": ""})["compact_before"] is None

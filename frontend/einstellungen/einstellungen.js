@@ -275,6 +275,80 @@ async function saveRange(preset) {
     }
 }
 
+/* ---------- Export-Voreinstellung (v2.8.0) ----------
+ * Der Export-Dialog machte jedes Mal mit „Einzeln“ auf, obwohl die Antwort
+ * auf „wie haettest du es gern“ bei einem persoenlichen Tracker immer
+ * dieselbe ist. Die Gruppen und die Stufen holt diese Karte vom Server
+ * (/api/export/sections) und fuehrt sie NICHT als zweite Liste: ein neues
+ * Modul steht hier von selbst drin. */
+const EXPORT_PREF = 'ui_export';
+const EXP = { groups: [], aggregates: [], wert: { aggregate: {}, compact_before: null } };
+
+function renderExportCfg() {
+    const box = document.getElementById('expCfg');
+    if (!box) return;
+    if (!EXP.groups.length) { box.innerHTML = ''; return; }
+    const agg = EXP.wert.aggregate || {};
+    const opt = (gewaehlt) => EXP.aggregates.map(a =>
+        '<option value="' + a.key + '"' + (a.key === gewaehlt ? ' selected' : '') +
+        '>' + a.label + '</option>').join('');
+    box.innerHTML = EXP.groups.map(g =>
+        '<div class="set-exp-row">' +
+            '<span class="set-exp-name">' + g.label + '</span>' +
+            '<select data-gruppe="' + g.key + '" aria-label="Zusammenfassung für ' +
+                g.label + '">' + opt(agg[g.key] || 'none') + '</select>' +
+        '</div>').join('')
+        + '<div class="set-exp-row set-exp-grenze">' +
+              '<span class="set-exp-name">Alles davor monatlich zusammenfassen' +
+                  '<span class="set-modsub">Leer lassen heißt: keine Grenze, ' +
+                  'überall gilt die Stufe von oben.</span></span>' +
+              '<input type="date" id="expGrenze" aria-label="Verdichten vor" value="' +
+                  (EXP.wert.compact_before || '') + '">' +
+          '</div>';
+}
+
+async function saveExportCfg(btn) {
+    const box = document.getElementById('expCfg');
+    if (!box) return;
+    const agg = {};
+    box.querySelectorAll('[data-gruppe]').forEach(s => {
+        if (s.value !== 'none') agg[s.dataset.gruppe] = s.value;
+    });
+    const grenze = (document.getElementById('expGrenze') || {}).value || null;
+    if (btn) btn.classList.add('is-loading');
+    try {
+        await VexPrefs.set(EXPORT_PREF, { aggregate: agg, compact_before: grenze });
+        EXP.wert = { aggregate: agg, compact_before: grenze };
+        if (window.Toast) Toast.success('Voreinstellung gespeichert');
+    } catch (e) {
+        // Der Server hat es nicht -- die Anzeige muss zurueck auf den Stand,
+        // der wirklich gespeichert ist.
+        renderExportCfg();
+        if (window.Toast) Toast.error(e.message || String(e));
+    } finally {
+        if (btn) btn.classList.remove('is-loading');
+    }
+}
+
+async function ladeExportCfg() {
+    try {
+        const meta = await apiCall('/api/export/sections');
+        // Nur Module, in denen sich ueberhaupt etwas zusammenfassen laesst.
+        // Notizen haben kein Datum -- ein Auswahlfeld daneben waere ein
+        // Bedienelement, das nichts tut.
+        const kann = new Set((meta.sections || [])
+            .filter(s => s.aggregatable).map(s => s.group));
+        EXP.groups = (meta.groups || []).filter(g => kann.has(g.key));
+        EXP.aggregates = meta.aggregates || [];
+    } catch (e) {
+        EXP.groups = [];
+    }
+    const gespeichert = VexPrefs.get(EXPORT_PREF, null) || {};
+    EXP.wert = { aggregate: gespeichert.aggregate || {},
+                 compact_before: gespeichert.compact_before || null };
+    renderExportCfg();
+}
+
 (async function init() {
     if (!isLoggedIn()) { location.href = '/private/login.html'; return; }
     try {
@@ -334,4 +408,6 @@ async function saveRange(preset) {
     document.getElementById('themeSave').onclick = () => saveOwnTheme();
     document.getElementById('tabCfg').onclick = () => VexNav.openTabBarSettings();
     document.getElementById('expBtn').onclick = () => exportAll();
+    document.getElementById('expSave').onclick = (e) => saveExportCfg(e.currentTarget);
+    ladeExportCfg();
 })();
