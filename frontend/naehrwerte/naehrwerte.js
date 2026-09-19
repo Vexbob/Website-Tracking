@@ -560,7 +560,7 @@ function eintragDialog(mahlzeit) {
     // waechst und schrumpft.
     const inhalt = `
         <div class="nw-dlg-kopf">
-            <div class="ern-dlg-mahlzeiten" id="nwDlgMahlzeiten"></div>
+            <div class="v-mzwahl" id="nwDlgMahlzeiten"></div>
             <label class="ern-suche">
                 <span class="ern-suche-ico" aria-hidden="true">${ICON.lupe}</span>
                 <input type="search" id="nwDlgSuche" autocomplete="off"
@@ -572,7 +572,7 @@ function eintragDialog(mahlzeit) {
         <div id="nwDlgKat"></div>
         <div class="ern-dlg-fuss">
             <span class="ern-note" id="nwDlgZuletzt"></span>
-            <button type="button" class="v-btn v-btn--primary" id="nwDlgFertig">Fertig</button>
+            <button type="button" class="v-btn" id="nwDlgFertig">Fertig</button>
         </div>`;
 
     state.dialog = openModal(titel, inhalt, {
@@ -616,17 +616,17 @@ function zeichneDlgMahlzeiten() {
     const ziel = document.getElementById('nwDlgMahlzeiten');
     if (!ziel || !state.dlg) return;
     const vorschlag = mahlzeitJetzt();
-    ziel.innerHTML = ((state.tag && state.tag.meals) || []).map(m => {
-        const aktiv = (state.dlg.mahlzeit || 'ohne') === m.key;
-        const jetztHin = m.key === vorschlag
-            ? '<span class="v-chip-jetzt">jetzt</span>' : '';
-        return `<button type="button" class="v-chip${aktiv ? ' is-active' : ''}"
-            data-mahlzeit="${esc(m.key)}">${esc(m.label)}${jetztHin}</button>`;
-    }).join('');
-    ziel.querySelectorAll('[data-mahlzeit]').forEach(b => b.addEventListener('click', () => {
-        state.dlg.mahlzeit = b.dataset.mahlzeit === 'ohne' ? null : b.dataset.mahlzeit;
-        zeichneDlgMahlzeiten();
-    }));
+    const gewaehlt = state.dlg.mahlzeit || 'ohne';
+    ziel.innerHTML = `<select aria-label="Mahlzeit">${
+        ((state.tag && state.tag.meals) || []).map(m =>
+            `<option value="${esc(m.key)}"${m.key === gewaehlt ? ' selected' : ''}>${
+                esc(m.label)}${m.key === vorschlag ? ' · jetzt' : ''}</option>`
+        ).join('')}</select>`;
+    ziel.querySelector('select').addEventListener('change', (e) => {
+        // Von Hand gewaehlt schlaegt die Uhr: der Server raet nur, wo keine
+        // Mahlzeit mitkommt.
+        state.dlg.mahlzeit = e.target.value === 'ohne' ? null : e.target.value;
+    });
 }
 
 /* Woraus die Liste besteht: Gerichte, Lebensmittel und was man oft eintraegt.
@@ -1827,7 +1827,7 @@ function zeichneGerichte() {
                 <span class="rec-val">${g.portion.kcal != null
                     ? (luecke ? 'mind. ' : '') + zahlKurz(g.portion.kcal) + ' kcal'
                     : 'ohne Nährwerte'}</span>
-                <span class="rec-sub">je Portion (${g.portion.grams} g)</span>
+                <span class="rec-sub">je Portion</span>
             </span>
             <span class="rec-go" aria-hidden="true">›</span>
         </button>`;

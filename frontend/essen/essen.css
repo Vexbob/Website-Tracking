@@ -94,16 +94,6 @@
 }
 
 
-.es-punkt {
-    display: inline-block;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    flex: none;
-    background: var(--es-normal);
-}
-.es-punkt.is-viel { background: var(--es-viel); }
-
 /* Die Stufe ist anklickbar: „das war doch eher uebermaessig“ soll kein
    Loeschen und Neueintragen kosten, sonst steht es am Ende gar nicht da. */
 .es-stufe {
@@ -118,8 +108,13 @@
     font-family: inherit;
     line-height: 1.5;
     cursor: pointer;
-    background: color-mix(in srgb, var(--es-normal) 18%, transparent);
-    color: var(--es-normal);
+    /* „normal“ steht an fast jeder Zeile. Als grüne Pille war das Farbe
+       ohne Aussage: sechs Zeilen, sechs grüne Flecken, und der Name daneben
+       hatte weniger Gewicht als die Einstufung. Grundzustand heißt jetzt
+       stille Schrift; auffällig wird die Stufe nur dort, wo sie etwas
+       bedeutet. Anklickbar bleibt sie. */
+    background: transparent;
+    color: var(--text-4);
 }
 .es-stufe:hover { opacity: 1; border-color: currentColor; }
 .es-stufe:focus-visible { outline: none; box-shadow: var(--focus-ring); }
@@ -291,9 +286,13 @@
     margin: 0;
     padding: 0 0.7rem;
     background: transparent;
-    border: 1px solid var(--line);
+    /* Ohne Rahmen. Bei acht Vorschlägen standen hier acht gleich große
+       Kästen für den Fall, der seltener eintritt als der andere — die
+       Liste sah aus, als müsse man sich jedes Mal entscheiden. Der Name
+       ist die Hauptsache, das hier ein Angebot am Rand. */
+    border: 1px solid transparent;
     border-radius: var(--radius);
-    color: var(--text-3);
+    color: var(--text-4);
     font-size: 0.75rem;
     font-weight: 600;
     font-family: inherit;

@@ -2361,3 +2361,52 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
         padding-bottom: calc(58px + 4.25rem + env(safe-area-inset-bottom, 0px));
     }
 }
+
+/* ---------- Die Mahlzeitenwahl im Eintragen-Fenster — v2.6.0 ----------
+   Beide Module hatten hier fünf Chips, die bei 390 px in zwei Reihen
+   umbrachen und rund neunzig Pixel über dem Suchfeld standen — über dem
+   Feld also, in das man eigentlich tippen will. Dabei stimmt die Mahlzeit
+   fast immer schon: entweder hat man sie durch das Plus an ihrem Block
+   gewählt, oder die Uhr hat richtig geraten.
+
+   Eine Zeile mit dem Namen der Mahlzeit sagt dasselbe und lässt sie ändern.
+   Am Handy öffnet sich dabei die Auswahl des Geräts. */
+.v-mzwahl {
+    position: relative;
+    display: block;
+    margin-bottom: 0.625rem;
+}
+.v-mzwahl select {
+    appearance: none;
+    -webkit-appearance: none;
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 2.5rem 0 0.875rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text-1);
+    font-family: inherit;
+    /* Nie unter 16 px: darunter zoomt iPhone-Safari beim Antippen die ganze
+       Seite heran und danach nicht zurück. */
+    font-size: 1.0625rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.v-mzwahl select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.v-mzwahl:hover select { border-color: var(--line-strong); }
+.v-mzwahl::after {
+    content: '';
+    position: absolute;
+    right: 1.125rem;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    margin-top: -5px;
+    border-right: 1.7px solid var(--text-3);
+    border-bottom: 1.7px solid var(--text-3);
+    transform: rotate(45deg);
+    pointer-events: none;
+}

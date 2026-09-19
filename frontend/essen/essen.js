@@ -191,7 +191,12 @@ function zeichneKopf() {
    Zeile darunter an. */
 function zeichneSchnell() {
     const ziel = document.getElementById('esSchnell');
-    const liste = (state.tag && state.tag.quick) || [];
+    // Höchstens vier. Der Server schickt alles, was oft vorkommt, und bei
+    // sieben Vorschlägen füllte die Abkürzung fünf Reihen und damit die
+    // ganze erste Ansicht — der Tag, wegen dem man die Seite öffnet, fing
+    // erst darunter an. Vier passen in zwei Reihen und bleiben eine
+    // Abkürzung. Wer etwas anderes sucht, tippt es im Fenster.
+    const liste = ((state.tag && state.tag.quick) || []).slice(0, 4);
     ziel.hidden = !liste.length;
     if (!liste.length) return;
     ziel.innerHTML = '<span class="es-schnell-titel">Ein Tipp trägt ein</span>'
@@ -254,6 +259,10 @@ function zeichneMahlzeiten() {
    den derselbe Name mit einem Tipp oeffnet: einen Griff tiefer, dafuer nicht
    mehr aus Versehen. Die Zeile hat den Platz an den Namen zurueckgegeben, der
    vorher umbrach. */
+/* Ein Zeichen je Zeile, nicht zwei. Der farbige Punkt links und das Wort
+   rechts sagten dasselbe -- „normal“ stand grün gepunktet UND grün
+   beschriftet da. Geblieben ist das Wort, weil es zugleich der Schalter
+   ist. Damit sehen die Zeilen hier aus wie die im Tracker. */
 function zeile(e) {
     const gegen = e.level === 'viel' ? 'normal' : 'viel';
     const meta = [
@@ -262,7 +271,6 @@ function zeile(e) {
     ].filter(Boolean).join(' · ');
     return `<div class="v-mz-zeile"${e.meal_auto
             ? ' title="Mahlzeit automatisch nach Uhrzeit — Namen antippen zum Ändern"' : ''}>
-        <span class="es-punkt is-${esc(e.level)}" aria-hidden="true"></span>
         <button type="button" class="v-mz-zeile-name" data-oeffnen="${e.id}">
             <strong>${esc(e.label)}</strong>
             ${meta ? `<span class="v-mz-zeile-meta">${meta}</span>` : ''}
@@ -353,18 +361,18 @@ function eintragDialog(mahlzeit) {
     // waechst und schrumpft.
     const inhalt = `
         <div class="es-dlg-kopf">
-            <div class="es-dlg-mahlzeiten" id="esDlgMahlzeiten"></div>
+            <div class="v-mzwahl" id="esDlgMahlzeiten"></div>
             <label class="es-suche">
                 <span class="es-suche-ico" aria-hidden="true">${ICON.lupe}</span>
                 <input type="search" id="esDlgSuche" autocomplete="off"
                        aria-label="Was gab es?"
-                       placeholder="Tippen, was es gab — „Pizza“, „Müsli“">
+                       placeholder="Was gab es?">
             </label>
         </div>
         <div id="esDlgListe"></div>
         <div class="es-dlg-fuss">
             <span class="es-note" id="esDlgZuletzt"></span>
-            <button type="button" class="v-btn v-btn--primary" id="esDlgFertig">Fertig</button>
+            <button type="button" class="v-btn" id="esDlgFertig">Fertig</button>
         </div>`;
 
     state.dialog = openModal(titel, inhalt, {
@@ -413,21 +421,17 @@ function zeichneDlgMahlzeiten() {
     const ziel = document.getElementById('esDlgMahlzeiten');
     if (!ziel || !state.dlg) return;
     const vorschlag = mahlzeitJetzt();
-    ziel.innerHTML = ((state.tag && state.tag.meals) || []).map(m => {
-        const aktiv = (state.dlg.mahlzeit || 'ohne') === m.key;
-        // Der Vorschlag traegt sein Wort: man sieht die Entscheidung, bevor
-        // man tippt, und ein anderer Chip ueberstimmt sie mit einem Tipp.
-        const jetztHin = m.key === vorschlag ? '<span class="v-chip-jetzt">jetzt</span>' : '';
-        return `<button type="button" class="v-chip${aktiv ? ' is-active' : ''}"
-            data-mahlzeit="${esc(m.key)}">${esc(m.label)}${jetztHin}</button>`;
-    }).join('');
-    ziel.querySelectorAll('[data-mahlzeit]').forEach(b => b.addEventListener('click', () => {
+    const gewaehlt = state.dlg.mahlzeit || 'ohne';
+    ziel.innerHTML = `<select aria-label="Mahlzeit">${
+        ((state.tag && state.tag.meals) || []).map(m =>
+            `<option value="${esc(m.key)}"${m.key === gewaehlt ? ' selected' : ''}>${
+                esc(m.label)}${m.key === vorschlag ? ' · jetzt' : ''}</option>`
+        ).join('')}</select>`;
+    ziel.querySelector('select').addEventListener('change', (e) => {
         // Von Hand gewaehlt schlaegt die Uhr: der Server raet nur, wo keine
-        // Mahlzeit mitkommt. Die Uhrzeit geht trotzdem mit -- sie steht an
-        // der Zeile und sagt, wann es war.
-        state.dlg.mahlzeit = b.dataset.mahlzeit === 'ohne' ? null : b.dataset.mahlzeit;
-        zeichneDlgMahlzeiten();
-    }));
+        // Mahlzeit mitkommt.
+        state.dlg.mahlzeit = e.target.value === 'ohne' ? null : e.target.value;
+    });
 }
 
 /* Zwei Quellen, nicht vier: der frei getippte Text und das, was man oft

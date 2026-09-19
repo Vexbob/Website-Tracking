@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.6.0', date: '2026-09-19', title: 'Weniger auf dem Bild, mehr zu sehen', notes: [
+        'Das Eintragen-Fenster fängt jetzt mit dem Suchfeld an. Die Mahlzeit steht als eine Zeile darüber statt als fünf Chips in zwei Reihen — sie stimmt ohnehin fast immer schon.',
+        '„normal“ ist still geworden, „übermäßig“ fällt auf. Vorher trug jede Zeile einen grünen Punkt und daneben noch eine grüne Pille, die beide dasselbe sagten.',
+        'In der Vorschlagsliste ist „übermäßig“ ein Wort am Rand statt acht gleich großer Kästen untereinander.',
+        'Die Schnellwahl im Tagebuch zeigt höchstens vier Vorschläge — bei sieben füllte sie die ganze erste Ansicht, und der Tag fing erst darunter an.',
+        'Am Rechner steht der Tag im Tracker als mittige Spalte. Die Regel dafür gibt es seit v2.5.0, sie hat nur nie gegriffen.',
+    ]},
     { v: 'v2.5.1', date: '2026-09-19', title: 'Essen und Nährwerte sehen aus wie eine App', notes: [
         'Nachgezogen: Der Verlauf war nie angesehen worden — die Vorschau hatte ihn wegen einer falsch gebauten Testantwort gar nicht gezeichnet. Jetzt ohne Emoji auf den Kennzahlen, und der Erklärsatz steht unter einem Diagramm statt wortgleich unter beiden.',
         'Nachgezogen: Der Schwebeknopf verdeckte am Ende der Liste dauerhaft die letzte Zeile, und der Modulname stand am Handy zweimal untereinander — in der Leiste und als Überschrift. Der Tag fängt jetzt oben an.',

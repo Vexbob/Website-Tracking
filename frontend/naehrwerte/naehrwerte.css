@@ -126,8 +126,10 @@
    Listen und Diagrammen nehmen weiter die volle Breite, dort ist sie
    nuetzlich. */
 @media (min-width: 880px) {
-    #tab-tag > .stat-card,
-    #tab-tag #nwBruecke { max-width: 900px; margin-inline: auto; }
+    /* Die Karten liegen in #nwTagInhalt, nicht direkt unter dem Reiter --
+       mit `>` griff die Regel nie, und der Tag stand weiter ueber die volle
+       Breite gezogen da. */
+    #tab-tag #nwTagInhalt > .stat-card { max-width: 900px; margin-inline: auto; }
 }
 
 /* Die Mengen-Marke liegt seit v2.5.0 als `.v-mz-tag` in css/style.css. */
@@ -323,7 +325,12 @@
    seiner eigenen Zeile. */
 .ern-menge {
     display: grid;
-    grid-template-columns: 4.5rem auto minmax(0, 1fr);
+    /* Zahl, Einheit, Zusage. Die Zusage steht zuletzt und bekommt ihre
+       natürliche Breite, die Einheit dazwischen den Rest: so haben alle
+       „Eintragen“ untereinander dieselbe Breite und dieselbe Kante. Vorher
+       nahm die Zusage den Rest, und weil „Portion“ breiter ist als „Glas“,
+       endete jede Zeile woanders. */
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.375rem;
     flex: none;
@@ -360,7 +367,16 @@
 .nw-liste .rec-meta .sep { margin: 0 0.3rem; }
 /* Der Wert am Rand darf der Titelzeile keinen Platz nehmen, den sie braucht:
    waechst die Liste, kuerzt der Titel, nicht die Zahl. */
-.nw-liste .rec-side { max-width: 45%; }
+.nw-liste .rec-side { max-width: 38%; }
+/* Das Portionsgewicht stand bis v2.5.1 in der Zeile („je Portion (300 g)“)
+   und nahm dem Namen bei 390 px die letzten Zeichen. Es steht im Gericht
+   selbst, das die Zeile mit einem Tipp öffnet. */
+/* In der geteilten Zeile sind Titel und Wert fast gleich schwer, und der
+   Wert war sogar der fettere von beiden. In einer Liste von Gerichten sucht
+   man das Gericht -- „Wraps mit Haehnchen“ brach ab, waehrend „mind. 413
+   kcal“ in Weiss danebenstand. Hier fuehrt der Name. */
+.nw-liste .rec-title { font-size: 0.9375rem; font-weight: 650; }
+.nw-liste .rec-val { font-size: 0.8125rem; font-weight: 600; color: var(--text-2); }
 .nw-liste .rec-sub { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
 /* Die Marke im Bestand traegt den Markennamen mit, nicht die Meta-Zeile:
