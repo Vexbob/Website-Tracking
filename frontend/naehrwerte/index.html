@@ -88,7 +88,12 @@
                      links davon steht nichts. -->
                 <div class="nw-hero">
                     <div class="nw-hero-haupt">
+                        <!-- Der Ring ist zugleich der Weg zum Tagesziel: die
+                             Zahl, die gemessen wird, und die Stelle, an der
+                             man den Maßstab ändert, sind dasselbe Ding. -->
                         <div class="v-ring v-ring--halb v-ring--hero" id="nwRingKcal"
+                             role="button" tabindex="0" data-zu-zielen
+                             aria-label="Tagesziel ändern"
                              style="--ring-tone:var(--figure, var(--m-naehrwerte))">
                             <svg viewBox="0 0 100 100" aria-hidden="true">
                                 <circle class="v-ring-track" cx="50" cy="50" r="42"/>
@@ -101,7 +106,6 @@
                                 <span class="v-ring-lbl"></span>
                             </div>
                         </div>
-                        <p class="nw-ziel" id="nwZielZeile"></p>
                     </div>
                     <div class="v-ring-reihe" id="nwMakros"></div>
                 </div>

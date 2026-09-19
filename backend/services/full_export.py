@@ -552,11 +552,17 @@ def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
 # Rezepte als Stammdaten.
 
 
-async def _sec_diary(db, user_id: int, date_from, date_to) -> list[str]:
+async def _sec_diary(db, user_id: int, date_from, date_to,
+                     aggregate: str = "none") -> list[str]:
     """Essenstagebuch: was gab es, normal oder uebermaessig.
 
     Hier steht bewusst KEINE Kalorienzahl. Das Tagebuch kennt keine, und eine
     im Export zu ergaenzen hiesse, sie zu erfinden.
+
+    Zusammengefasst zaehlt es: wie viele Eintraege, wie viele davon
+    uebermaessig, an wie vielen Tagen ueberhaupt etwas notiert wurde. Die
+    Namen der Speisen fallen dabei weg -- ueber eine Woche summiert waere
+    „Pizza“ keine Kennzahl, sondern eine Liste.
     """
     bedingungen, werte = ["user_id=$1"], [user_id]
     if date_from:
@@ -569,6 +575,9 @@ async def _sec_diary(db, user_id: int, date_from, date_to) -> list[str]:
         f"SELECT day, meal, label, level, note, logged_time, meal_auto "
         f"  FROM food_diary WHERE {' AND '.join(bedingungen)} "
         f" ORDER BY day, created_at", *werte)
+
+    if _agg_on(aggregate):
+        return _diary_aggregiert(rows, aggregate)
 
     out = ["# SEKTION: Essenstagebuch - was gab es (ohne Mengen, ohne Naehrwerte)",
            "Datum;Mahlzeit;Was;Stufe;Uhrzeit;Mahlzeit geraten;Notiz"]
@@ -584,12 +593,47 @@ async def _sec_diary(db, user_id: int, date_from, date_to) -> list[str]:
     return out
 
 
-async def _sec_track_log(db, user_id: int, date_from, date_to) -> list[str]:
+def _diary_aggregiert(rows, aggregate: str) -> list[str]:
+    """Je Periode eine Zeile: wie oft notiert, und wie oft uebermaessig."""
+    label = _period_label(aggregate)
+    toepfe: dict[str, dict] = {}
+    for r in rows:
+        tag = r["day"]
+        b = toepfe.setdefault(_period_key(tag, aggregate), {
+            "von": tag, "bis": tag, "eintraege": 0, "normal": 0, "viel": 0,
+            "tage": set(),
+        })
+        b["von"] = min(b["von"], tag)
+        b["bis"] = max(b["bis"], tag)
+        b["eintraege"] += 1
+        b["viel" if r["level"] == "viel" else "normal"] += 1
+        b["tage"].add(tag)
+
+    out = [f"# SEKTION: Essenstagebuch - {_period_prefix(aggregate)}-Bilanz "
+           f"({_period_adverb(aggregate)} aggregiert). Was es gab, steht nur "
+           "ohne Zusammenfassung in der Datei.",
+           f"{label};Von;Bis;Tage mit Eintrag;Eintraege;normal;uebermaessig"]
+    for key in sorted(toepfe.keys()):
+        b = toepfe[key]
+        out.append(
+            f'{key};{b["von"].isoformat()};{b["bis"].isoformat()};'
+            f'{len(b["tage"])};{b["eintraege"]};{b["normal"]};{b["viel"]}')
+    out.append("")
+    return out
+
+
+async def _sec_track_log(db, user_id: int, date_from, date_to,
+                         aggregate: str = "none") -> list[str]:
     """Naehrwerte: Mengen und was daraus folgt.
 
     Die Naehrwerte stehen als Zahl je Zeile und nicht als Tagessumme: eine
     Summe laesst sich aus Zeilen bilden, aus einer Summe aber keine Zeilen.
     Fehlt eine Angabe, bleibt das Feld LEER -- eine Null waere eine Behauptung.
+
+    Zusammengefasst wird daraus je Periode eine Summe samt Tagesschnitt. Der
+    Schnitt teilt durch die Tage MIT Eintrag und nicht durch die Tage der
+    Periode: eine Woche mit zwei notierten Tagen haette sonst einen sehr
+    gesunden Durchschnitt.
     """
     bedingungen, werte = ["l.user_id=$1"], [user_id]
     if date_from:
@@ -606,6 +650,9 @@ async def _sec_track_log(db, user_id: int, date_from, date_to) -> list[str]:
         f"  LEFT JOIN food_dishes d ON d.id = l.dish_id "
         f"  LEFT JOIN food_items  i ON i.id = l.item_id "
         f" WHERE {' AND '.join(bedingungen)} ORDER BY l.day, l.created_at", *werte)
+
+    if _agg_on(aggregate):
+        return _track_log_aggregiert(rows, aggregate)
 
     out = ["# SEKTION: Naehrwerte - Eintraege mit Menge",
            "Datum;Mahlzeit;Was;Art;Menge;Einheit;Gramm;kcal;Eiweiss_g;"
@@ -636,6 +683,58 @@ async def _sec_track_log(db, user_id: int, date_from, date_to) -> list[str]:
             f'{werte_text};'
             f'{r["logged_time"].strftime("%H:%M") if r["logged_time"] else ""};'
             f'{_f(r["note"] or "")}')
+    out.append("")
+    return out
+
+
+_TRACK_MAKROS = [("kcal", "kcal"), ("protein_g", "Eiweiss_g"),
+                 ("fiber_g", "Ballaststoffe_g"), ("carbs_g", "Kohlenhydrate_g"),
+                 ("fat_g", "Fett_g")]
+
+
+def _track_log_aggregiert(rows, aggregate: str) -> list[str]:
+    """Je Periode eine Summenzeile samt Tagesschnitt.
+
+    Ein Gericht traegt seine Naehrwerte im Rezept und nicht an der Zeile --
+    genau wie in der Einzelansicht zaehlt es deshalb als Eintrag, aber nicht
+    in die Summe. Wie viele das waren, sagt eine eigene Spalte: eine Summe,
+    der Eintraege fehlen, ist zu niedrig, und das muss dranstehen.
+    """
+    label = _period_label(aggregate)
+    toepfe: dict[str, dict] = {}
+    for r in rows:
+        tag = r["day"]
+        b = toepfe.setdefault(_period_key(tag, aggregate), {
+            "von": tag, "bis": tag, "eintraege": 0, "ohne": 0, "tage": set(),
+            "summe": {k: 0.0 for k, _ in _TRACK_MAKROS},
+        })
+        b["von"] = min(b["von"], tag)
+        b["bis"] = max(b["bis"], tag)
+        b["eintraege"] += 1
+        b["tage"].add(tag)
+        if r["dish_name"] is not None or r["kcal"] is None:
+            b["ohne"] += 1
+            continue
+        gramm = float(r["grams"] or 0)
+        for makro, _spalte in _TRACK_MAKROS:
+            roh = r[makro]
+            if roh is not None:
+                b["summe"][makro] += float(roh) * gramm / 100.0
+
+    spalten = ";".join(s for _k, s in _TRACK_MAKROS)
+    out = [f"# SEKTION: Naehrwerte - {_period_prefix(aggregate)}-Summe "
+           f"({_period_adverb(aggregate)} aggregiert). Einzelne Eintraege "
+           "stehen nur ohne Zusammenfassung in der Datei.",
+           f"{label};Von;Bis;Tage mit Eintrag;Eintraege;{spalten};"
+           "kcal je Tag;Eintraege ohne Naehrwerte"]
+    for key in sorted(toepfe.keys()):
+        b = toepfe[key]
+        tage = len(b["tage"]) or 1
+        summen = ";".join(_num(b["summe"][k]) for k, _s in _TRACK_MAKROS)
+        out.append(
+            f'{key};{b["von"].isoformat()};{b["bis"].isoformat()};'
+            f'{len(b["tage"])};{b["eintraege"]};{summen};'
+            f'{_num(b["summe"]["kcal"] / tage)};{b["ohne"]}')
     out.append("")
     return out
 
@@ -731,11 +830,20 @@ FARBE_LABEL = {"weiss": "Weiss", "schwarz": "Schwarz"}
 PLATTFORM_LABEL = {"lichess": "Lichess", "chesscom": "Chess.com"}
 
 
-async def _sec_chess_games(db, user_id: int, date_from, date_to) -> list[str]:
-    """Eine Zeile je Partie -- ohne Zugfolge, die steht nebenan.
+async def _sec_chess_games(db, user_id: int, date_from, date_to,
+                           aggregate: str = "none") -> list[str]:
+    """Die Partien -- einzeln oder als Periodenbilanz.
 
+    Ohne Aggregation eine Zeile je Partie, ohne Zugfolge (die steht nebenan).
     ``rating_diff`` bleibt leer statt null, wenn die Plattform nichts gemeldet
     hat: eine Null hiesse „unveraendert“ und waere eine Behauptung.
+
+    Mit Aggregation je Periode eine Zeile *pro Plattform und Disziplin* --
+    Anzahl der Partien und die Wertungsaenderung. Das ist die Form, in der man
+    einen Verlauf liest; Gegner, Eroeffnung und Endgrund gehoeren zur einzelnen
+    Partie und verschwinden mit ihr. Zusammengefasst wird NICHT ueber
+    Disziplinen hinweg: Bullet und Rapid sind zwei Wertungen, und ihre Summe
+    waere keine.
     """
     werte = [user_id]
     bed = _chess_zeitfilter("g.played_at::date", werte, date_from, date_to)
@@ -747,6 +855,9 @@ async def _sec_chess_games(db, user_id: int, date_from, date_to) -> list[str]:
         "  FROM chess_games g "
         "  JOIN chess_accounts a ON a.id = g.account_id "
         f" WHERE g.user_id=$1{bed} ORDER BY g.played_at", *werte)
+
+    if _agg_on(aggregate):
+        return _chess_games_aggregiert(rows, aggregate)
 
     out = ["# SEKTION: Schach - Partien",
            "Gespielt am;Uhrzeit;Plattform;Konto;Disziplin;Variante;Gewertet;"
@@ -771,6 +882,73 @@ async def _sec_chess_games(db, user_id: int, date_from, date_to) -> list[str]:
             f'{"" if r["moves"] is None else r["moves"]};{_f(r["url"] or "")}')
     out.append("")
     return out
+
+
+def _chess_games_aggregiert(rows, aggregate: str) -> list[str]:
+    """Je Periode, Plattform und Disziplin eine Zeile.
+
+    Die Wertungsaenderung ist die Summe der von der Plattform gemeldeten
+    Differenzen. Partien, zu denen keine kam, zaehlen in einer eigenen Spalte
+    -- sonst saehe eine unvollstaendige Summe aus wie eine vollstaendige.
+    ``Wertung Anfang`` und ``Wertung Ende`` stehen daneben, weil sie auch dann
+    noch etwas sagen, wenn Differenzen fehlen.
+    """
+    label = _period_label(aggregate)
+    toepfe: dict[tuple, dict] = {}
+    for r in rows:
+        tag = r["played_at"].date()
+        key = (_period_key(tag, aggregate),
+               PLATTFORM_LABEL.get(r["platform"], r["platform"] or ""),
+               r["perf"] or "")
+        b = toepfe.setdefault(key, {
+            "von": tag, "bis": tag, "partien": 0,
+            "sieg": 0, "remis": 0, "niederlage": 0,
+            "diff": 0, "ohne_diff": 0,
+            "erste": None, "letzte": None,
+        })
+        b["von"] = min(b["von"], tag)
+        b["bis"] = max(b["bis"], tag)
+        b["partien"] += 1
+        if r["result"] in ("sieg", "remis", "niederlage"):
+            b[r["result"]] += 1
+        if r["rating_diff"] is None:
+            b["ohne_diff"] += 1
+        else:
+            b["diff"] += int(r["rating_diff"])
+        if r["own_rating"] is not None:
+            # Die Zeilen kommen nach Zeit sortiert -- die erste gesehene ist
+            # die erste der Periode, die letzte gesehene die letzte.
+            if b["erste"] is None:
+                b["erste"] = int(r["own_rating"])
+            b["letzte"] = int(r["own_rating"])
+
+    out = [f"# SEKTION: Schach - {_period_prefix(aggregate)}-Bilanz "
+           f"({_period_adverb(aggregate)} aggregiert, je Plattform und "
+           "Disziplin eine Zeile). Einzelne Partien stehen nur ohne "
+           "Zusammenfassung in der Datei.",
+           f"{label};Von;Bis;Plattform;Disziplin;Partien;Siege;Remis;"
+           "Niederlagen;Wertung Anfang;Wertung Ende;Wertungsaenderung;"
+           "Partien ohne Wertungsangabe"]
+    for key in sorted(toepfe.keys()):
+        b = toepfe[key]
+        # Eine Summe, zu der Partien fehlen, ist keine Summe. Dann bleibt die
+        # Spalte leer, und die Spalte daneben sagt, wie viele fehlten.
+        aenderung = "" if b["ohne_diff"] else _vorzeichen(b["diff"])
+        out.append(
+            f'{key[0]};{b["von"].isoformat()};{b["bis"].isoformat()};'
+            f'{_f(key[1])};{_f(key[2])};{b["partien"]};'
+            f'{b["sieg"]};{b["remis"]};{b["niederlage"]};'
+            f'{"" if b["erste"] is None else b["erste"]};'
+            f'{"" if b["letzte"] is None else b["letzte"]};'
+            f'{aenderung};{b["ohne_diff"]}')
+    out.append("")
+    return out
+
+
+def _vorzeichen(n: int) -> str:
+    """Eine Wertungsaenderung traegt ihr Plus mit. ``12`` und ``-12`` sehen in
+    einer Spalte sonst aus wie zwei verschiedene Arten von Zahl."""
+    return f"+{n}" if n > 0 else str(n)
 
 
 async def _sec_chess_pgn(db, user_id: int, date_from, date_to) -> list[str]:
@@ -913,10 +1091,16 @@ async def _build_sections(db, user, picked: list[str], date_from, date_to,
         out.append(("music_imports", await _music_imports_section(db, uid)))
 
     # Ernaehrung: zwei Protokolle mit Zeitraum, zwei Stammdaten-Sektionen ohne.
+    # Beide tragen `aggregatable: True` in der Registry -- bis v2.6.0 bekamen
+    # sie die gewaehlte Stufe trotzdem nicht, und "Pro Woche" liess die Datei
+    # unveraendert. Eine Sektion, die eine Einstellung anbietet und ignoriert,
+    # ist schlimmer als eine, die sie gar nicht hat.
     if "diary_log" in want:
-        out.append(("diary_log", await _sec_diary(db, uid, date_from, date_to)))
+        out.append(("diary_log", await _sec_diary(
+            db, uid, date_from, date_to, agg_map.get("ernaehrung", "none"))))
     if "track_log" in want:
-        out.append(("track_log", await _sec_track_log(db, uid, date_from, date_to)))
+        out.append(("track_log", await _sec_track_log(
+            db, uid, date_from, date_to, agg_map.get("ernaehrung", "none"))))
     if "food_stock" in want:
         out.append(("food_stock", await _sec_food_stock(db, uid)))
     if "food_dishes" in want:
@@ -924,10 +1108,13 @@ async def _build_sections(db, user, picked: list[str], date_from, date_to,
 
     # Schach: alle drei mit Zeitraum. Die Wertungskurve ist datiert, obwohl
     # sie sich nicht zusammenfassen laesst -- ein Mittelwert ueber Wertungen
-    # verschiedener Disziplinen waere eine Zahl ohne Bedeutung.
+    # verschiedener Disziplinen waere eine Zahl ohne Bedeutung. Die Partien
+    # dagegen fassen sich sehr wohl zusammen, und das ist die Form, in der man
+    # sie meistens will: Anzahl und Wertungsaenderung je Disziplin.
     if "chess_games" in want:
         out.append(("chess_games",
-                    await _sec_chess_games(db, uid, date_from, date_to)))
+                    await _sec_chess_games(db, uid, date_from, date_to,
+                                           agg_map.get("schach", "none"))))
     if "chess_pgn" in want:
         out.append(("chess_pgn",
                     await _sec_chess_pgn(db, uid, date_from, date_to)))

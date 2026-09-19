@@ -1965,6 +1965,14 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 .v-ring--halb .v-ring-fill { stroke-dashoffset: calc(var(--ring-c) / 2 * (1 - var(--ring-val))); }
 .v-ring--halb .v-ring-over { stroke-dashoffset: calc(var(--ring-c) / 2 * (1 - var(--ring-over))); }
 .v-ring--halb .v-ring-txt { inset: 22% 0 0 0; justify-content: center; }
+/* Der Überschuss am Halbring: keine eigene Strecke, sondern die Farbe des
+   ganzen Bogens. Beim vollen Ring legt sich das Mehr sichtbar als zweite
+   Runde darüber; hier gibt es keine zweite Runde, und das gelbe Stück saß
+   am linken Ende genau dort, wo sonst die leere Spur anfängt — es las sich
+   wie ein Rest und nicht wie ein Mehr. Voll und gelb sagt beides in einem,
+   und die Zahl daneben sagt, um wie viel. */
+.v-ring--halb .v-ring-over { display: none; }
+.v-ring--halb.is-drueber .v-ring-fill { stroke: var(--warn); }
 
 /* Der Hero-Ring: die eine grosse Zahl der Seite, und der einzige Ort, an dem
    die Display-Stufe (--fs-display) steht.

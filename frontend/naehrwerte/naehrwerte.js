@@ -67,7 +67,6 @@ const ICON = {
     lupe:   VexIkon.svg('lupe', 17),
     muell:  VexIkon.svg('muell', 17),
     kamera: VexIkon.svg('kamera', 17),
-    ziel:   VexIkon.svg('ziel', 16),
 };
 
 /* Vier Reiter, ohne Emoji. Fuenf mit Emoji passten bei 390 px nicht in die
@@ -329,22 +328,6 @@ function zeichneRinge() {
         text: drueber ? `${zahlKurz(kcal.over)} darüber`
                       : `noch ${zahlKurz(kcal.remaining)}`,
     });
-
-    // EIN Knopf, der seinen eigenen Stand benennt -- dieselbe Form wie beim
-    // Zeitraum-Filter (DESIGN 6b). Bis v2.3.0 standen hier zwei Zeilen Prosa
-    // („das ist keine Zahl ueber dich“) und darunter ein unterstrichener
-    // Link. Die Auskunft, WORAN gemessen wird, bleibt -- sie passt in die
-    // Beschriftung. Der Absatz war das Warnzeichen dafuer, dass das
-    // Bedienelement fehlte.
-    const zeile = document.getElementById('nwZielZeile');
-    zeile.innerHTML = `<button type="button" class="nw-zielknopf${
-            kcal.own_target ? ' has-active' : ''}" data-zu-zielen>
-        ${ICON.ziel}
-        <span>${kcal.own_target ? 'Dein Tagesziel' : 'Richtwert'}
-            <strong>${zahlKurz(kcal.reference)} kcal</strong></span>
-    </button>`;
-    zeile.querySelectorAll('[data-zu-zielen]').forEach(b =>
-        b.addEventListener('click', zieleDialog));
 
     // Ballaststoffe bekommen nur dann einen Ring, wenn dafuer ein eigenes
     // Ziel steht: vier Ringe ohne Anlass waeren einer zu viel.
@@ -2478,6 +2461,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('click', () => eintragDialog(null));
     });
+
+    // Der Kalorienring öffnet das Tagesziel. Bis v2.6.0 stand darunter eine
+    // Zeile „Richtwert 2.400 kcal“ — die Zahl steht aber schon im Ring (Wert
+    // plus Rest ergibt sie) und im Zielfenster selbst, und dreimal dieselbe
+    // Auskunft ist zweimal zu viel.
+    const ring = document.getElementById('nwRingKcal');
+    if (ring) {
+        ring.addEventListener('click', zieleDialog);
+        ring.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zieleDialog(); }
+        });
+    }
 
     document.getElementById('ernGerichtNeu').addEventListener('click', () => gerichtDialog(null));
     document.getElementById('ernItemNeu').addEventListener('click', () => itemDialog(null));

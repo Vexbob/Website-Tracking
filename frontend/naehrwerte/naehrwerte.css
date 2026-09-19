@@ -64,46 +64,12 @@
     }
     .nw-hero .v-ring-reihe { margin-top: 0; }
 }
-.nw-ziel {
-    margin: 0;
-    text-align: center;
-    font-size: 0.8125rem;
-    color: var(--text-3);
-    line-height: 1.5;
-    max-width: 34rem;
-}
-.nw-ziel strong { color: var(--text-1); font-variant-numeric: tabular-nums; }
-
-/* Der Knopf unter dem Ring benennt seinen eigenen Stand -- „Richtwert 2.400
-   kcal“ oder „Dein Tagesziel 2.100 kcal“ -- und dahinter geht der Dialog auf.
-   Dieselbe Form wie der Zeitraum-Filter (DESIGN 6b): ein Filter zeigt im
-   Ruhezustand seinen Stand, nicht seine Moeglichkeiten. Hat man ein eigenes
-   Ziel gesetzt, traegt er den Akzent -- ein Stand, den man nicht sieht,
-   waere eine Falle. */
-.nw-zielknopf {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    width: auto;
-    margin: 0;
-    min-height: 40px;
-    padding: 0.4rem 0.85rem;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    color: var(--text-3);
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
-}
-.nw-zielknopf strong { color: var(--text-1); font-variant-numeric: tabular-nums; }
-.nw-zielknopf svg { flex: none; opacity: 0.8; }
-.nw-zielknopf:hover { opacity: 1; color: var(--text-2); border-color: var(--line-strong); }
-.nw-zielknopf:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.nw-zielknopf.has-active { color: var(--accent); border-color: var(--accent); }
-.nw-zielknopf.has-active strong { color: var(--accent); }
+/* Der Ring ist der Griff zum Tagesziel. Die Zeile darunter, die den
+   Richtwert noch einmal als Zahl nannte, ist mit v2.6.0 weg: der Ring trägt
+   sie schon (Wert plus Rest), und im Zielfenster steht sie ohnehin. Sichtbar
+   bleibt der Griff über den Zeiger und den Fokusrahmen. */
+.v-ring--hero[data-zu-zielen] { cursor: pointer; border-radius: var(--radius-lg); }
+.v-ring--hero[data-zu-zielen]:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* Die drei kleinen Ringe. Sie brauchen Luft untereinander: ihre
    Beschriftungen stehen UNTER dem Bogen (DESIGN 7a) und „KOHLENHYDRATE“ ist

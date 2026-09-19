@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.7.0', date: '2026-09-19', title: 'Der Ring sagt es, der Export fasst zusammen', notes: [
+        'Die Zeile „Richtwert 2.400 kcal“ unter dem Kalorienring ist weg — die Zahl steht im Ring und im Zielfenster. Das Tagesziel öffnet jetzt der Ring selbst.',
+        'Ist der Tag über dem Richtwert, färbt sich der ganze Bogen gelb. Vorher lag das Gelb als Stück am linken Ende, wo sonst die leere Spur anfängt, und sah aus wie ein Rest statt wie ein Mehr.',
+        'Der Export fasst Schach jetzt wirklich zusammen: je Woche eine Zeile pro Plattform und Disziplin mit Partien, Siegen und Wertungsänderung. Einzelne Partien nur noch ohne Zusammenfassung.',
+        'Dasselbe für Essenstagebuch und Nährwerte: Eintragszahlen und Stufen je Periode, Nährwert-Summen samt Schnitt je Tag.',
+        'Diese drei Sektionen boten die Stufe seit v1.60.0 zur Auswahl an und haben sie ignoriert — „Pro Woche“ ließ die Datei unverändert.',
+    ]},
     { v: 'v2.6.0', date: '2026-09-19', title: 'Weniger auf dem Bild, mehr zu sehen', notes: [
         'Das Eintragen-Fenster fängt jetzt mit dem Suchfeld an. Die Mahlzeit steht als eine Zeile darüber statt als fünf Chips in zwei Reihen — sie stimmt ohnehin fast immer schon.',
         '„normal“ ist still geworden, „übermäßig“ fällt auf. Vorher trug jede Zeile einen grünen Punkt und daneben noch eine grüne Pille, die beide dasselbe sagten.',
