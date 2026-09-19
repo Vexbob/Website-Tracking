@@ -330,10 +330,15 @@ async def _build_export_metadata(db, user_id: int) -> list[str]:
 
     # Achievements
     out.append("# SEKTION: Achievements")
-    out.append("id;title;unit;start_value;current_value;threshold_increment;step_amount;target_value;direction;reward_amount;credited_milestones;is_completed")
+    # v2.9.0: ``auto_source``/``auto_params`` gehoeren dazu. Eine Kachel, die
+    # ihren Stand aus einem anderen Modul holt, ist ohne diese beiden Spalten
+    # nicht dieselbe Kachel -- der Export waere eine Beschreibung, aus der man
+    # sie nicht wieder aufbauen kann.
+    out.append("id;title;unit;start_value;current_value;threshold_increment;step_amount;target_value;direction;reward_amount;credited_milestones;is_completed;auto_source;auto_params")
     for r in await db.fetch(
         "SELECT id, title, unit, start_value, current_value, threshold_increment, step_amount, "
-        "target_value, direction, reward_amount, credited_milestones, is_completed "
+        "target_value, direction, reward_amount, credited_milestones, is_completed, "
+        "auto_source, auto_params "
         "FROM achievements WHERE user_id=$1 ORDER BY sort_order NULLS LAST, id", user_id):
         out.append(
             f'{r["id"]};{_export_csv_field(r["title"] or "")};{_export_csv_field(r["unit"] or "")};'
@@ -342,7 +347,9 @@ async def _build_export_metadata(db, user_id: int) -> list[str]:
             f'{_export_amt(r["target_value"]) if r["target_value"] is not None else ""};'
             f'{r["direction"] or ""};{_export_amt(r["reward_amount"])};'
             f'{int(r["credited_milestones"] or 0)};'
-            f'{"true" if r["is_completed"] else "false"}'
+            f'{"true" if r["is_completed"] else "false"};'
+            f'{r["auto_source"] or ""};'
+            f'{_export_csv_field(r["auto_params"] or "") if r["auto_source"] else ""}'
         )
     out.append("")
 

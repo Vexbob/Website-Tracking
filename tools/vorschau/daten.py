@@ -22,6 +22,7 @@ sys.path.insert(0, str(BACKEND))
 from services import food_calc as calc          # noqa: E402
 from services import food_mahlzeit as mz        # noqa: E402
 from services import full_export as _export    # noqa: E402
+from services import achievement_sources as _quellen  # noqa: E402
 
 HEUTE = datetime.date.today()
 ICH = {"id": 1, "username": "etienne", "is_admin": True}
@@ -238,6 +239,93 @@ def _verlauf():
     }
 
 
+# ---------------------------------------------------------------- Sparziel
+# Der Katalog der Meilenstein-Quellen kommt aus dem ECHTEN Register, nicht aus
+# einer abgetippten Liste -- sonst faellt beim naechsten neuen Modul genau der
+# Fehler nicht auf, den die Vorschau finden soll. Gefuellt wird er hier nur um
+# die Optionen, die im Betrieb aus der Datenbank kaemen (Schachkonten usw.).
+def _quellen_katalog():
+    live = {
+        ("chess.wertung", "disziplin"): [{"wert": "blitz", "label": "Blitz"},
+                                         {"wert": "rapid", "label": "Rapid"}],
+        ("chess.wertung", "konto"): [{"wert": "1", "label": "lichess · etienne"}],
+        ("chess.partien", "disziplin"): [{"wert": "blitz", "label": "Blitz"}],
+        ("musik.hoeren", "art"): [{"wert": "Musik", "label": "Musik"},
+                                  {"wert": "Podcast", "label": "Podcast"}],
+    }
+    raus = []
+    for key, q in _quellen.QUELLEN.items():
+        felder = []
+        for feld in q["params"]:
+            kopie = dict(feld)
+            if (key, feld["key"]) in live:
+                kopie["optionen"] = live[(key, feld["key"])]
+            felder.append(kopie)
+        raus.append({"key": key, "label": q["label"], "modul": q["modul"],
+                     "hinweis": q.get("hinweis"), "params": felder,
+                     "verfuegbar": True, "grund": None})
+    return raus
+
+
+SPARZIEL = {
+    "goal": {"id": 1, "name": "Neues Rennrad", "target_amount": 2400,
+             "is_active": True, "is_general": False},
+    "total_saved": 1465.5,
+    "buffer": {"id": 9, "name": "Allgemein", "saved_amount": 212.0},
+}
+
+SPARZIELE = [
+    {"id": 1, "name": "Neues Rennrad", "target_amount": 2400, "saved_amount": 1465.5,
+     "is_active": True, "is_general": False},
+    {"id": 2, "name": "Städtereise", "target_amount": 900, "saved_amount": 340.0,
+     "is_active": False, "is_general": False},
+    {"id": 9, "name": "Allgemein", "target_amount": None, "saved_amount": 212.0,
+     "is_active": False, "is_general": True},
+]
+
+# Drei Kacheln, die zusammen alle drei Zustaende zeigen, die es geben kann:
+# eine Quelle mit faelligem Meilenstein, eine Quelle ohne, und eine von Hand.
+ACHIEVEMENTS = [
+    {"id": 1, "title": "Abnehmen", "reward_amount": 20, "unit": "kg",
+     "current_value": 145, "start_value": 150, "threshold_increment": 5,
+     "step_amount": 1, "target_value": 120, "direction": "decrease",
+     "credited_milestones": 1, "is_completed": False, "sort_order": 1,
+     "reward_goal_id": None, "auto_source": "health.metrik",
+     "auto_params": {"metrik": "weight", "modus": "mittel", "tage": "7"}},
+    {"id": 2, "title": "Blitz-Wertung", "reward_amount": 15, "unit": "Punkte",
+     "current_value": 1600, "start_value": 1500, "threshold_increment": 50,
+     "step_amount": 10, "target_value": 1800, "direction": "increase",
+     "credited_milestones": 2, "is_completed": False, "sort_order": 2,
+     "reward_goal_id": None, "auto_source": "chess.wertung",
+     "auto_params": {"disziplin": "blitz", "konto": "1"}},
+    {"id": 3, "title": "Bücher gelesen", "reward_amount": 10, "unit": "Bücher",
+     "current_value": 7, "start_value": 0, "threshold_increment": 2,
+     "step_amount": 1, "target_value": 24, "direction": "increase",
+     "credited_milestones": 3, "is_completed": False, "sort_order": 3,
+     "reward_goal_id": None, "auto_source": None, "auto_params": {}},
+]
+
+AUTO_STATUS = [
+    # 139,4 kg: unter 140 und damit ein faelliger Meilenstein -- das Band.
+    {"achievement_id": 1, "quelle": "health.metrik",
+     "quelle_label": "Gesundheit · Vitalwert", "wert": 139.4, "einheit": "kg",
+     "beschriftung": "Gewicht · Ø 7 Tage (6 Messtage)", "stand": str(HEUTE),
+     "offene_meilensteine": 1, "gutschrift": 20.0, "abweichung": -5.6},
+    # 1624 Punkte: ueber dem gebuchten Stand, aber unter der naechsten Schwelle.
+    {"achievement_id": 2, "quelle": "chess.wertung",
+     "quelle_label": "Schach · Wertung", "wert": 1624, "einheit": "Punkte",
+     "beschriftung": "Blitz · lichess · etienne", "stand": str(HEUTE),
+     "offene_meilensteine": 0, "gutschrift": 0.0, "abweichung": 24.0},
+]
+
+PROGRESS_GOALS = [
+    {"id": 1, "title": "Dreimal Sport", "reward_amount": 5, "rhythm_type": "weekly",
+     "target_count": 3, "current_count": 2, "streak": 4, "streak_bonus_amount": 10,
+     "streak_bonus_threshold": 4, "period_key": "2026-KW38", "sort_order": 1,
+     "reward_goal_id": None, "is_completed": False},
+]
+
+
 ANTWORTEN = {
     "/api/me": ICH,
     # Die Export-Registry kommt aus dem echten Modul -- eine nachgebaute
@@ -264,4 +352,16 @@ ANTWORTEN = {
     "/api/food/catalog": {"count": 372814, "newest": 1758000000,
                           "may_import": True},
     "/api/food/search": {"results": [], "origin": "katalog"},
+
+    "/api/savings-goal": SPARZIEL,
+    "/api/savings-goals": SPARZIELE,
+    "/api/achievements": ACHIEVEMENTS,
+    "/api/achievements/auto-status": AUTO_STATUS,
+    "/api/achievements/auto-sources": _quellen_katalog(),
+    "/api/progress-goals": PROGRESS_GOALS,
+    "/api/potential-goals": [],
+    "/api/future-ideas": [],
+    "/api/trophies": [],
+    "/api/activity-log": {"entries": []},
+    "/api/stats/savings-progress": {"points": []},
 }

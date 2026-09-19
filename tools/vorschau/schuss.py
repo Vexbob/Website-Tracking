@@ -54,7 +54,7 @@ PORT = 8787
 # eine Antwort dafuer in daten.py -- fehlt sie, bleibt die Seite leer, und
 # genau das soll sie dann auch.
 SEITEN = ["/", "/essen/", "/naehrwerte/", "/naehrwerte/#gerichte",
-          "/naehrwerte/#vorrat", "/schach/", "/einstellungen/",
+          "/naehrwerte/#vorrat", "/schach/", "/sparziel/", "/einstellungen/",
           "/design.html",
           # Die beiden Dialoge, in denen die eigentliche Arbeit steckt.
           # Ohne Griff endet die Vorschau davor.

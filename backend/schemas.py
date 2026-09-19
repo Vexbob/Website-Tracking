@@ -43,6 +43,10 @@ class AchCreate(BaseModel):
     direction: str = "increase"
     # v1.18.2: optionale Zuweisung an ein Sparziel (sonst Auto-Routing)
     reward_goal_id: Optional[int] = None
+    # v2.9.0: Kachel an eine Quelle aus einem anderen Modul haengen. Die
+    # Quelle liest nur -- gebucht wird erst, wenn bestaetigt wird.
+    auto_source: Optional[str] = None
+    auto_params: Optional[dict] = None
 
 
 class AchUpd(BaseModel):
@@ -62,6 +66,17 @@ class AchEdit(BaseModel):
     target_value: Optional[float] = None
     direction: Optional[str] = None
     reward_goal_id: Optional[int] = None  # v1.18.2
+    auto_source: Optional[str] = None     # v2.9.0, "" oder None loest die Bindung
+    auto_params: Optional[dict] = None
+
+
+class AchAutoConfirm(BaseModel):
+    """Bestaetigung eines Stands aus einer verbundenen Quelle.
+
+    Bewusst OHNE Wert: den liest der Server selbst aus der Quelle. Ein Wert im
+    Body waere eine Gutschrift ueber eine Zahl, die in keiner Messung steht.
+    """
+    note: Optional[str] = None
 
 
 # ---------- Progress-/Wochen-/Monatsziele ----------

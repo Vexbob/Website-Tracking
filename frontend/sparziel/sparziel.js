@@ -3,6 +3,13 @@ let achData=[], pgData=[], logRaw=[], logFilter='all', logView='weekly';
 let trophyData=[];
 let bufferInfo=null;            // v1.43.0: Puffer-Konto {id,name,saved_amount}
 let loadErrors={ach:false,pg:false,log:false,trophies:false};
+// v2.9.0: Kacheln, die ihren Stand aus einem anderen Modul holen.
+// ``autoSources`` ist der Katalog aus dem Backend -- die Vorlage, aus der
+// sich der Bearbeiten-Dialog baut. Hier steht bewusst KEINE eigene Liste der
+// Quellen: ein neues Modul soll ein Eintrag im Register sein und sonst nichts.
+// ``autoStatus`` ist, was die verbundenen Quellen gerade sagen, nach
+// Achievement-ID abgelegt.
+let autoSources=[], autoStatus={};
 const pendingDeletes = new Map();
 let toastTimer=null;
 let msTargetId=null;
@@ -282,7 +289,7 @@ function toggleHeroEdit(){
         document.getElementById('sgTarget').value=glTarget;
     }
 }
-async function loadAll(){await Promise.all([loadSparziel(),loadAchievements(),loadProgressGoals(),loadSavingsGoals()]);updatePeriodLabel();}
+async function loadAll(){await Promise.all([loadSparziel(),loadAchievements(),loadProgressGoals(),loadSavingsGoals(),loadAutoSources()]);updatePeriodLabel();}
 
 async function loadSparziel(){
     try{
@@ -463,8 +470,31 @@ function achColor(i){return ACH_COLORS[i%ACH_COLORS.length];}
 function colorHex(name){return{green:'#22c55e',blue:'#3b82f6',purple:'#8b5cf6',orange:'#f59e0b',teal:'#14b8a6',pink:'#ec4899',red:'#ef4444'}[name]||'#22c55e';}
 
 async function loadAchievements(){
-    try{achData=await apiCall('/api/achievements')||[];loadErrors.ach=false;renderAchievements();}
+    try{
+        // Der Stand der Quellen kommt mit demselben Ladevorgang: eine Kachel,
+        // die ihren Messwert erst eine Antwort spaeter bekommt, zeichnet sich
+        // zweimal -- und beim zweiten Mal springt die Zeile darunter.
+        const [ziele, stand] = await Promise.all([
+            apiCall('/api/achievements'),
+            apiCall('/api/achievements/auto-status').catch(()=>[]),
+        ]);
+        achData = ziele || [];
+        autoStatus = {};
+        (stand||[]).forEach(z => { autoStatus[z.achievement_id] = z; });
+        loadErrors.ach=false;renderAchievements();
+    }
     catch(e){loadErrors.ach=true;renderAchievements();showToast('Achievements laden fehlgeschlagen',true);console.error(e);}
+}
+
+// Der Katalog aendert sich selten (er haengt am Bestand der anderen Module),
+// wird aber fuer jeden Bearbeiten-Dialog gebraucht. Einmal laden reicht.
+async function loadAutoSources(){
+    try{ autoSources = await apiCall('/api/achievements/auto-sources') || []; }
+    catch(e){ autoSources = []; console.error(e); }
+    // Der Katalog kommt parallel zu den Kacheln. Kommt er spaeter an, muss
+    // neu gezeichnet werden -- sonst steht im Bearbeiten-Dialog eine leere
+    // Auswahl, und zwar bis zum naechsten Laden der Seite.
+    if(achData.length) renderAchievements();
 }
 function renderAchievements(){
     const g=document.getElementById('achGrid');
@@ -472,23 +502,33 @@ function renderAchievements(){
     if(loadErrors.ach){g.innerHTML='<div class="retry-empty">Laden fehlgeschlagen.<br><button onclick="loadAchievements()">Nochmal versuchen</button></div>';return;}
     if(!achData.length){g.innerHTML='<div class="retry-empty">Noch keine Achievements.</div>';return;}
     g.innerHTML=achData.map((a,i)=>{
-        const p=achProgress(a),c=achColor(i),nm=nextMilestone(a),cv=Number(a.current_value||0),isDone=a.is_completed;
+        const st=autoStatus[a.id];
+        // Ist eine Quelle verbunden und liefert sie etwas, zeigt die Kachel
+        // DEREN Stand -- das ist die Zahl, die man tatsaechlich wiegt. Der
+        // gebuchte Stand steckt in den Meilensteinen, nicht in der grossen
+        // Zahl; ihn daneben zu stellen waere die zweite Zahl, von der man
+        // nicht weiss, welche gerade gilt.
+        const live=(a.auto_source && st && st.wert!=null) ? Number(st.wert) : null;
+        const view=live!=null ? Object.assign({}, a, {current_value:live}) : a;
+        const p=achProgress(view),c=achColor(i),nm=nextMilestone(view),cv=Number(view.current_value||0),isDone=a.is_completed;
         const tgt=a.target_value==null?null:Number(a.target_value);
         const valStr=fmtNum(cv,cv%1?2:0),nmStr=fmtNum(nm,nm%1?2:0);
-        return `<div class="ach-card${isDone?' done':''}" id="achCard_${a.id}">
+        return `<div class="ach-card${isDone?' done':''}${a.auto_source?' auto':''}" id="achCard_${a.id}">
             ${isDone?'<span class="ach-badge">✓ Erreicht</span>':''}
             <div class="ach-head"><span class="drag-handle" title="Ziehen zum Sortieren">⠿</span><div class="ach-title">${esc(a.title)}</div><div class="ach-reward-pill">+${fmtEur(a.reward_amount)}</div></div>
             <div class="ach-value">${valStr}<small>${esc(a.unit||'')}</small>${tgt!=null?` <span class="target">/ ${fmtNum(tgt)}</span>`:''}</div>
+            ${autoQuelleHTML(a)}
             <div class="ach-next">Nächster Meilenstein: ${nmStr} ${esc(a.unit||'')}</div>
             <div class="ach-bar"><div class="ach-bar-fill" style="width:${p}%;background:linear-gradient(90deg,${colorHex(c)}dd,${colorHex(c)})"></div></div>
-            <div class="ach-actions">
-                <button class="ach-btn-plus" data-ach-id="${a.id}" onclick="milestonePlus(${a.id})" title="Kurz tippen: +${fmtNum(a.step_amount||a.threshold_increment)} · Lang halten: Datum wählen · Nächster Meilenstein alle ${fmtNum(a.threshold_increment)}">+${fmtNum(a.step_amount||a.threshold_increment)} ${esc(a.unit||'')}</button>
+            ${autoBandHTML(a)}
+            <div class="ach-actions${live!=null?' nur-mehr':''}">
+                ${live!=null ? '' : `<button class="ach-btn-plus" data-ach-id="${a.id}" onclick="milestonePlus(${a.id})" title="Kurz tippen: +${fmtNum(a.step_amount||a.threshold_increment)} · Lang halten: Datum wählen · Nächster Meilenstein alle ${fmtNum(a.threshold_increment)}">+${fmtNum(a.step_amount||a.threshold_increment)} ${esc(a.unit||'')}</button>
                 <input type="number" step="0.01" class="ach-inline-input" id="achInput_${a.id}" placeholder="Wert" title="Wert setzen">
-                <button class="ach-btn-set" onclick="updateAchievement(${a.id})" title="Wert übernehmen">Setzen</button>
+                <button class="ach-btn-set" onclick="updateAchievement(${a.id})" title="Wert übernehmen">Setzen</button>`}
                 <button class="ach-btn-more" onclick="toggleAchExpand(${a.id})" title="Mehr">⋮</button>
             </div>
             <div class="ach-expand" id="achExpand_${a.id}">
-                <div class="ach-expand-actions"><button onclick="toggleAchEdit(${a.id})">Bearbeiten</button><button onclick="openMilestoneModal(${a.id})">Backdate…</button><button onclick="resetAchievement(${a.id})">Reset</button><button class="danger" onclick="deleteAchievement(${a.id})">Löschen</button></div>
+                <div class="ach-expand-actions"><button onclick="toggleAchEdit(${a.id})">Bearbeiten</button>${a.auto_source?`<button onclick="pruefeQuelle(${a.id})">Quelle prüfen</button>`:`<button onclick="openMilestoneModal(${a.id})">Backdate…</button>`}<button onclick="resetAchievement(${a.id})">Reset</button><button class="danger" onclick="deleteAchievement(${a.id})">Löschen</button></div>
                 <div class="ach-edit-form" id="achEdit_${a.id}">${editFormHTML(a)}</div>
             </div>
         </div>`;
@@ -516,6 +556,132 @@ function renderAchievements(){
         btn.addEventListener('click', (e) => { if(triggered){ e.preventDefault(); e.stopPropagation(); }}, true);
     });
 }
+// ---- Kacheln aus anderen Modulen (v2.9.0) --------------------------------
+// Zwei Bausteine auf der Kachel: eine Zeile, die sagt WOHER die Zahl kommt,
+// und ein Band, das erscheint, sobald ein Meilenstein faellig waere. Das Band
+// ist die einzige Stelle, an der Geld fliesst -- die Quelle selbst bucht nie,
+// sie liest nur.
+function autoQuelleHTML(a){
+    if(!a.auto_source) return '';
+    const st=autoStatus[a.id];
+    if(!st || st.wert==null){
+        return `<div class="ach-quelle leer">${esc(st?st.quelle_label:'Verbundene Quelle')} — liefert gerade keinen Wert</div>`;
+    }
+    const stand=st.stand?' · Stand '+fmtShortDate(st.stand):'';
+    return `<div class="ach-quelle">${esc(st.beschriftung||st.quelle_label)}${stand}</div>`;
+}
+
+function autoBandHTML(a){
+    const st=autoStatus[a.id];
+    if(!a.auto_source || !st || !st.offene_meilensteine) return '';
+    const n=st.offene_meilensteine;
+    const wie=n===1?'Ein Meilenstein':`${n} Meilensteine`;
+    return `<div class="ach-treffer">
+        <div class="ach-treffer-text"><strong>${wie} erreicht</strong>
+            <span>${fmtNum(st.wert)} ${esc(st.einheit||a.unit||'')} · Gutschrift ${fmtEur(st.gutschrift)}</span></div>
+        <button onclick="bestaetigeQuelle(${a.id})">Gutschreiben</button>
+    </div>`;
+}
+
+// Die Bestaetigung schickt KEINEN Wert mit: den liest der Server noch einmal
+// selbst aus der Quelle. Eine Zahl aus dem Browser waere eine Gutschrift ueber
+// etwas, das in keiner Messung steht.
+async function bestaetigeQuelle(id){
+    const a=achData.find(x=>x.id==id), st=autoStatus[id];
+    if(!a||!st)return;
+    if(!await askConfirm({title:'Meilenstein gutschreiben?',
+        text:`${fmtNum(st.wert)} ${st.einheit||a.unit||''} aus ${st.beschriftung||st.quelle_label}. `
+            +`Das schreibt ${fmtEur(st.gutschrift)} gut und setzt den Stand der Kachel auf diesen Wert.`,
+        ok:'Gutschreiben'}))return;
+    const card=document.getElementById('achCard_'+id);
+    if(card){card.classList.remove('pulsing');void card.offsetWidth;card.classList.add('pulsing');}
+    try{
+        await apiCall('/api/achievements/'+id+'/auto-confirm',
+            {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+        haptic('success');
+        showToast('Gutgeschrieben: '+fmtEur(st.gutschrift));
+        await Promise.all([loadAchievements(),loadSparziel(),loadSavingsGoals()]);
+    }catch(e){haptic('error');showToast(e.message||'Gutschrift fehlgeschlagen',true);}
+}
+
+async function pruefeQuelle(id){
+    try{
+        const stand=await apiCall('/api/achievements/auto-status')||[];
+        autoStatus={};stand.forEach(z=>{autoStatus[z.achievement_id]=z;});
+        const st=autoStatus[id];
+        renderAchievements();
+        haptic('tap');
+        showToast(st&&st.wert!=null
+            ? 'Stand: '+fmtNum(st.wert)+' '+(st.einheit||'')
+            : 'Die Quelle liefert gerade keinen Wert');
+    }catch(e){haptic('error');showToast('Quelle prüfen fehlgeschlagen',true);}
+}
+
+// ---- Bearbeiten: Quelle und ihre Parameter -------------------------------
+// Die Felder stehen NICHT hier, sondern kommen aus dem Katalog des Backends
+// (``/api/achievements/auto-sources``). Eine Quelle beschreibt ihre Parameter
+// selbst, der Dialog zeichnet nur, was dasteht -- so ist ein neues Modul ein
+// Eintrag im Register und keine zweite Liste, die man hier vergisst.
+function autoEditHTML(a){
+    const opts=['<option value="">Kein — Wert von Hand eintragen</option>'];
+    autoSources.forEach(q=>{
+        const sel=q.key===a.auto_source?' selected':'';
+        opts.push(`<option value="${esc(q.key)}"${sel}>${esc(q.label)}${q.verfuegbar?'':' (noch keine Daten)'}</option>`);
+    });
+    return `<label>Wert kommt aus</label>
+        <select id="ef_auto_${a.id}" onchange="autoQuelleGewechselt(${a.id})">${opts.join('')}</select>
+        <div class="ach-quelle-felder" id="ef_autoparams_${a.id}">${autoParamsHTML(a.id,a.auto_source,a.auto_params||{})}</div>`;
+}
+
+function autoWert(q,params,key){
+    if(params && params[key]!=null && params[key]!=='') return params[key];
+    const feld=(q.params||[]).find(f=>f.key===key);
+    return (feld && feld.standard!=null) ? feld.standard : '';
+}
+
+function autoParamsHTML(id,key,params){
+    const q=autoSources.find(x=>x.key===key);
+    if(!q) return '';
+    const teile=[];
+    if(!q.verfuegbar && q.grund) teile.push(`<div class="ach-quelle-hinweis warn">${esc(q.grund)}</div>`);
+    else if(q.hinweis) teile.push(`<div class="ach-quelle-hinweis">${esc(q.hinweis)}</div>`);
+    (q.params||[]).forEach(feld=>{
+        // ``wenn`` blendet ein Feld aus, solange ein anderes nicht passt --
+        // "über wie viele Tage" hat neben "letzter Messwert" keinen Sinn.
+        const gilt=!feld.wenn||Object.keys(feld.wenn).every(
+            k=>String(autoWert(q,params,k))===String(feld.wenn[k]));
+        if(!gilt) return;
+        const jetzt=autoWert(q,params,feld.key);
+        const opts=[];
+        if(!feld.pflicht) opts.push(`<option value="">${esc(feld.leer_label||'Alle')}</option>`);
+        (feld.optionen||[]).forEach(o=>{
+            opts.push(`<option value="${esc(o.wert)}"${String(o.wert)===String(jetzt)?' selected':''}>${esc(o.label)}</option>`);
+        });
+        if(!(feld.optionen||[]).length && feld.pflicht) opts.push('<option value="">— nichts vorhanden —</option>');
+        teile.push(`<label>${esc(feld.label)}</label>`
+            +`<select data-auto-param="${esc(feld.key)}" onchange="autoParamsNeu(${id})">${opts.join('')}</select>`);
+    });
+    return teile.join('');
+}
+
+function autoParamsLesen(id){
+    const box=document.getElementById('ef_autoparams_'+id);
+    const raus={};
+    if(box) box.querySelectorAll('[data-auto-param]').forEach(el=>{
+        if(el.value!=='') raus[el.dataset.autoParam]=el.value;
+    });
+    return raus;
+}
+function autoQuelleGewechselt(id){
+    const key=document.getElementById('ef_auto_'+id).value;
+    document.getElementById('ef_autoparams_'+id).innerHTML=autoParamsHTML(id,key,{});
+}
+function autoParamsNeu(id){
+    const key=document.getElementById('ef_auto_'+id).value;
+    document.getElementById('ef_autoparams_'+id).innerHTML=
+        autoParamsHTML(id,key,autoParamsLesen(id));
+}
+
 function editFormHTML(a){
     const stepVal = a.step_amount!=null ? a.step_amount : a.threshold_increment;
     return `<label>Titel</label><input id="ef_title_${a.id}" value="${esc(a.title||'')}">
@@ -523,6 +689,7 @@ function editFormHTML(a){
         <div class="grid2"><div><label>Startwert</label><input id="ef_start_${a.id}" type="number" step="0.01" value="${a.start_value||''}"></div><div><label>Meilenstein alle</label><input id="ef_incr_${a.id}" type="number" step="0.01" value="${a.threshold_increment||''}" title="Auszahlung nach jeder x-ten Einheit"></div></div>
         <div class="grid2"><div><label>Klick-Schritt</label><input id="ef_step_${a.id}" type="number" step="0.01" value="${stepVal||''}" title="Wert, den der grüne +Button hinzufügt"></div><div><label>Zielwert</label><input id="ef_target_${a.id}" type="number" step="0.01" value="${a.target_value==null?'':a.target_value}"></div></div>
         <div class="grid2"><div><label>Richtung</label><select id="ef_dir_${a.id}"><option value="increase" ${a.direction==='increase'?'selected':''}>Steigend</option><option value="decrease" ${a.direction==='decrease'?'selected':''}>Fallend</option></select></div><div><label>Belohnung geht an</label><select id="ef_rgid_${a.id}">${rewardGoalOptionsHTML(a.reward_goal_id)}</select></div></div>
+        ${autoEditHTML(a)}
         <div class="save-btns"><button class="save" onclick="saveAchEdit(${a.id})">Speichern</button><button class="cancel" onclick="toggleAchEdit(${a.id})">Abbrechen</button></div>`;
 }
 function toggleAchExpand(id){document.getElementById('achExpand_'+id).classList.toggle('open');}
@@ -551,6 +718,10 @@ async function saveAchEdit(id){
     // v1.18.2: Reward-Goal-Zuweisung
     const rgEl=document.getElementById('ef_rgid_'+id);
     if(rgEl){ b.reward_goal_id = rgEl.value === '' ? null : parseInt(rgEl.value,10); }
+    // v2.9.0: Quelle und Parameter gehen immer zusammen mit. "Kein" loest die
+    // Bindung; der Server raeumt die Parameter dann selbst weg.
+    const qEl=document.getElementById('ef_auto_'+id);
+    if(qEl){ b.auto_source = qEl.value || null; b.auto_params = qEl.value ? autoParamsLesen(id) : {}; }
     try{await apiCall('/api/achievements/'+id+'/edit',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});haptic('success');showToast('Aktualisiert');await Promise.all([loadAchievements(),loadSparziel(),loadSavingsGoals()]);}
     catch(e){haptic('error');showToast(e.message||'Bearbeiten fehlgeschlagen',true);}
 }

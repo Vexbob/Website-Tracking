@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import asyncio
 from contextlib import asynccontextmanager
@@ -25,6 +26,7 @@ from auth import (
     _invalidate_user_cache, verify_password_ct,
 )
 from services.backup import create_snapshot, restore_snapshot, prune_snapshots
+from services import achievement_sources as ach_quellen
 
 # Zentrale Utilities & Konstanten (auch von routers/* genutzt)
 from deps import (
@@ -39,6 +41,7 @@ from schemas import (
     PGCreate, PGUpd, CheckinBody, NoteBody,
     PotCreate, FICreate, ReorderBody, RestoreBody,
     UserCreate, UserPasswordReset, UserCreateInvite, ActivateBody, TrophyCreate,
+    AchAutoConfirm,
 )
 
 # Ausgelagerte Utility-Funktionen (v1.15.1)
@@ -762,9 +765,39 @@ async def upd_sg(request: Request, gid: int, b: SavGoalUpd, db=Depends(get_db), 
 # ---------- Achievements ----------
 # ``_milestones_at`` lebt in ``helpers.py`` (ausgelagert v1.15.1)
 
+def _auto_quelle_pruefen(quelle, params):
+    """``(auto_source, auto_params als JSON)`` -- oder ein Fehler, wenn es die Quelle nicht gibt.
+
+    Geprueft wird nur der Schluessel, nicht jeder einzelne Parameter: die
+    Quellen gehen mit fehlenden oder unsinnigen Parametern von sich aus auf
+    "kein Stand" (siehe ``wert_lesen``), und eine zweite Pruefliste hier waere
+    eine, die beim naechsten neuen Parameter vergessen wird.
+    """
+    schluessel = (quelle or "").strip()
+    if not schluessel:
+        return None, "{}"
+    if schluessel not in ach_quellen.QUELLEN:
+        raise HTTPException(400, f"Unbekannte Quelle: {schluessel}")
+    return schluessel, json.dumps(params or {}, ensure_ascii=False)
+
+
+def _ach_out(row):
+    """Eine Achievement-Zeile, wie die Seite sie braucht.
+
+    ``ser`` allein reicht seit v2.9.0 nicht mehr: ``auto_params`` ist TEXT mit
+    JSON darin (Begruendung in Migration 050). Ein String, den das Frontend
+    selbst auspacken muesste, waere genau die zweite Stelle, an der das Format
+    bekannt sein muss -- und die erste, die man beim Aendern vergisst.
+    """
+    d = ser(row)
+    if "auto_params" in d:
+        d["auto_params"] = ach_quellen.params_lesen(d.get("auto_params"))
+    return d
+
+
 @app.get("/api/achievements")
 async def list_ach(db=Depends(get_db), user=Depends(get_current_user)):
-    return [ser(r) for r in await db.fetch(
+    return [_ach_out(r) for r in await db.fetch(
         "SELECT * FROM achievements WHERE user_id=$1 ORDER BY sort_order NULLS LAST, id",
         user["id"])]
 
@@ -785,12 +818,29 @@ async def create_ach(request: Request, b: AchCreate, db=Depends(get_db), user=De
         if not ok:
             raise HTTPException(400, "reward_goal_id gehört nicht zum User")
         rgid = b.reward_goal_id
-    return ser(await db.fetchrow(
+    quelle, quell_params = _auto_quelle_pruefen(b.auto_source, b.auto_params)
+    return _ach_out(await db.fetchrow(
         "INSERT INTO achievements "
-        "(user_id,title,reward_amount,unit,current_value,start_value,threshold_increment,step_amount,target_value,direction,reward_goal_id) "
-        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *",
+        "(user_id,title,reward_amount,unit,current_value,start_value,threshold_increment,step_amount,target_value,direction,reward_goal_id,auto_source,auto_params) "
+        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *",
         user["id"], b.title, b.reward_amount, b.unit, b.start_value, b.start_value,
-        b.threshold_increment, step, b.target_value, b.direction, rgid))
+        b.threshold_increment, step, b.target_value, b.direction, rgid,
+        quelle, quell_params))
+
+def _achieved_at_parsen(roh: Optional[str]):
+    """``achieved_at`` aus dem Body zu einem Zeitpunkt -- oder ``None``."""
+    if not roh:
+        return None
+    try:
+        parsed = datetime.fromisoformat(roh)
+    except ValueError:
+        raise HTTPException(400, "achieved_at muss ISO-Format sein (YYYY-MM-DD)")
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    if parsed > datetime.now(timezone.utc):
+        raise HTTPException(400, "achieved_at darf nicht in der Zukunft liegen")
+    return parsed
+
 
 @app.put("/api/achievements/{aid}")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
@@ -798,28 +848,36 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
     a = await db.fetchrow("SELECT * FROM achievements WHERE id=$1 AND user_id=$2", aid, user["id"])
     if not a:
         raise HTTPException(404, "Not found")
+    return await _wert_setzen(db, user["id"], a, float(b.current_value),
+                              _achieved_at_parsen(b.achieved_at),
+                              (b.note or "").strip() or None)
+
+
+async def _wert_setzen(db, user_id: int, a, nv: float, when, note_val):
+    """Traegt einen neuen Stand ein und bucht, was dabei faellig wird.
+
+    v2.9.0: Aus ``upd_ach`` herausgeloest, weil es seither zwei Wege zu
+    einem neuen Stand gibt -- den Knopf "Setzen" und die Bestaetigung eines
+    Meilensteins aus einem anderen Modul (``auto-confirm``). Beide muessen
+    durch DIESELBE Stelle, sonst gaebe es zwei Regeln dafuer, wann Geld
+    fliesst, und die zweite wuerde beim naechsten Fix vergessen.
+
+    Hier steht damit auch der Schutz gegen Doppelzahlung, und er ist derselbe
+    wie vorher: gebucht wird nur, was ueber ``credited_milestones``
+    hinausgeht, und dieser Zaehler geht nie zurueck. Wer von 143 auf 146 kg
+    zunimmt und wieder unter 145 faellt, hat den Meilenstein deshalb nicht ein
+    zweites Mal -- egal ob der Wert von Hand kam oder aus Health.
+    """
+    aid = a["id"]
     inc = float(a["threshold_increment"])
     if inc <= 0:
         raise HTTPException(400, "Schrittweite muss > 0 sein")
-    nv = float(b.current_value); sv = float(a["start_value"]); rew = float(a["reward_amount"])
+    sv = float(a["start_value"]); rew = float(a["reward_amount"])
     dirn = a["direction"]; cred = int(a["credited_milestones"]); tv = a["target_value"]
 
-    when = None
-    if b.achieved_at:
-        try:
-            parsed = datetime.fromisoformat(b.achieved_at)
-            if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
-            when = parsed
-        except ValueError:
-            raise HTTPException(400, "achieved_at muss ISO-Format sein (YYYY-MM-DD)")
-        if when > datetime.now(timezone.utc):
-            raise HTTPException(400, "achieved_at darf nicht in der Zukunft liegen")
-
-    note_val = (b.note or "").strip() or None
     tm = _milestones_at(sv, nv, inc, dirn)
     logger.info(
-        f"upd_ach: aid={aid} user={user['id']} title='{a['title']}' "
+        f"wert_setzen: aid={aid} user={user_id} title='{a['title']}' "
         f"dir={dirn} sv={sv} cv_old={a['current_value']} cv_new={nv} inc={inc} "
         f"cred_old={cred} tm={tm} → {'MILESTONE' if tm > cred else 'no-op'}")
     if tm > cred:
@@ -834,27 +892,27 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
             milestone_value = sv + step * inc if dirn == "increase" else sv - step * inc
             desc = f"Meilenstein: {a['title']} ({fmt_de_num(milestone_value)} {a['unit']})"
             step_note = note_val if step == last_step else None
-            sg_id = await _reward_goal_for(db, user["id"], pref_goal, rew)
+            sg_id = await _reward_goal_for(db, user_id, pref_goal, rew)
             if when:
                 await db.execute(
                     "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount,date_achieved,note) "
                     "VALUES ($1,$2,$3,$4,$5,$6)",
-                    user["id"], aid, milestone_value, rew, when, step_note)
+                    user_id, aid, milestone_value, rew, when, step_note)
                 await db.execute(
                     "INSERT INTO savings_transactions "
                     "(user_id,amount,source_type,source_id,description,created_at,note,savings_goal_id) "
                     "VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-                    user["id"], rew, "achievement", aid, desc, when, step_note, sg_id)
+                    user_id, rew, "achievement", aid, desc, when, step_note, sg_id)
             else:
                 await db.execute(
                     "INSERT INTO achievement_logs (user_id,achievement_id,achieved_value,reward_amount,note) "
                     "VALUES ($1,$2,$3,$4,$5)",
-                    user["id"], aid, milestone_value, rew, step_note)
+                    user_id, aid, milestone_value, rew, step_note)
                 await db.execute(
                     "INSERT INTO savings_transactions "
                     "(user_id,amount,source_type,source_id,description,note,savings_goal_id) "
                     "VALUES ($1,$2,$3,$4,$5,$6,$7)",
-                    user["id"], rew, "achievement", aid, desc, step_note, sg_id)
+                    user_id, rew, "achievement", aid, desc, step_note, sg_id)
         new_cred = tm
     else:
         new_cred = cred
@@ -872,7 +930,7 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
                 "INSERT INTO achievement_progress_logs "
                 "(user_id, achievement_id, old_value, new_value, delta, hit_milestone, note, created_at) "
                 "VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8::timestamptz, NOW()))",
-                user["id"], aid, old_val, nv, delta, tm > cred,
+                user_id, aid, old_val, nv, delta, tm > cred,
                 None if tm > cred else note_val, when)
         except Exception as e:
             # Historie ist wichtig, aber nicht wichtiger als die Wertaenderung
@@ -887,8 +945,8 @@ async def upd_ach(request: Request, aid: int, b: AchUpd, db=Depends(get_db), use
             comp = True
     await db.execute(
         "UPDATE achievements SET current_value=$1, credited_milestones=$2, is_completed=$3 WHERE id=$4 AND user_id=$5",
-        nv, new_cred, comp, aid, user["id"])
-    return ser(await db.fetchrow("SELECT * FROM achievements WHERE id=$1", aid))
+        nv, new_cred, comp, aid, user_id)
+    return _ach_out(await db.fetchrow("SELECT * FROM achievements WHERE id=$1", aid))
 
 @app.put("/api/achievements/{aid}/edit")
 @limiter.limit(LIMIT_WRITE_STANDARD)
@@ -918,6 +976,18 @@ async def edit_ach(request: Request, aid: int, b: AchEdit, db=Depends(get_db), u
         if field in ("start_value","threshold_increment","direction"):
             milestone_affecting = True
         sets.append(f"{field}=${idx}"); vals.append(val); idx += 1
+    # v2.9.0: Quelle und Parameter gehen nicht durch die Schleife oben. Sie
+    # gehoeren zusammen -- eine Quelle ohne ihre Parameter waere eine halbe
+    # Einstellung --, und ``auto_params`` muss als JSON in die TEXT-Spalte.
+    # ``auto_source`` auf null oder "" loest die Bindung, die Parameter fallen
+    # dabei mit weg.
+    if "auto_source" in provided or "auto_params" in provided:
+        quelle = b.auto_source if "auto_source" in provided else old["auto_source"]
+        params = (b.auto_params if "auto_params" in provided
+                  else ach_quellen.params_lesen(old["auto_params"]))
+        quelle, quell_params = _auto_quelle_pruefen(quelle, params)
+        sets.append(f"auto_source=${idx}"); vals.append(quelle); idx += 1
+        sets.append(f"auto_params=${idx}"); vals.append(quell_params); idx += 1
     if sets:
         vals.append(aid); vals.append(user["id"])
         await db.execute(
@@ -932,7 +1002,105 @@ async def edit_ach(request: Request, aid: int, b: AchEdit, db=Depends(get_db), u
             user["id"], aid))
         new_cred = max(paid, new_tm)
         await db.execute("UPDATE achievements SET credited_milestones=$1 WHERE id=$2", new_cred, aid)
-    return ser(await db.fetchrow("SELECT * FROM achievements WHERE id=$1", aid))
+    return _ach_out(await db.fetchrow("SELECT * FROM achievements WHERE id=$1", aid))
+
+# ---------- Meilensteine aus anderen Modulen (v2.9.0) ----------
+# Das Register steht in ``services/achievement_sources.py`` und beschreibt
+# dort auch, warum eine Quelle nur liest. Hier stehen bloss die drei Wege
+# dorthin: was es gibt, was es gerade sagt, und die Bestaetigung.
+
+@app.get("/api/achievements/auto-sources")
+async def ach_auto_sources(db=Depends(get_db), user=Depends(get_current_user)):
+    """Alle Quellen samt Parameterfeldern -- die Vorlage fuer den Dialog.
+
+    Das Frontend fuehrt bewusst keine eigene Liste: ein neues Modul soll ein
+    Eintrag im Register sein und sonst nichts, sonst gibt es eine zweite
+    Liste, die man beim Ergaenzen vergisst (dieselbe Regel wie bei den
+    Export-Sektionen).
+    """
+    return await ach_quellen.katalog(db, user["id"])
+
+
+@app.get("/api/achievements/auto-status")
+async def ach_auto_status(db=Depends(get_db), user=Depends(get_current_user)):
+    """Was die verbundenen Quellen gerade sagen -- und was das kosten wuerde.
+
+    Rein lesend. ``offene_meilensteine`` ist die Zahl der Schwellen, die der
+    Stand der Quelle ueberschreitet und die noch nicht gebucht sind; sie
+    rechnet mit demselben ``_milestones_at`` und demselben
+    ``credited_milestones`` wie die Buchung selbst. Eine Kachel kann hier
+    also nie mehr versprechen, als beim Bestaetigen wirklich fliesst.
+    """
+    zeilen = await db.fetch(
+        "SELECT * FROM achievements WHERE user_id=$1 "
+        "   AND auto_source IS NOT NULL AND auto_source <> '' "
+        " ORDER BY sort_order NULLS LAST, id", user["id"])
+    raus = []
+    for a in zeilen:
+        quelle = a["auto_source"]
+        eintrag = {
+            "achievement_id": a["id"],
+            "quelle": quelle,
+            "quelle_label": (ach_quellen.QUELLEN.get(quelle) or {}).get("label", quelle),
+            "wert": None, "einheit": None, "beschriftung": None, "stand": None,
+            "offene_meilensteine": 0, "gutschrift": 0.0, "abweichung": 0.0,
+        }
+        stand = await ach_quellen.wert_lesen(db, user["id"], quelle, a["auto_params"])
+        if stand:
+            inc = float(a["threshold_increment"] or 0)
+            erreicht = (_milestones_at(float(a["start_value"]), stand["wert"], inc,
+                                       a["direction"]) if inc > 0 else 0)
+            offen = max(0, erreicht - int(a["credited_milestones"] or 0))
+            eintrag.update({
+                "wert": stand["wert"],
+                "einheit": stand["einheit"],
+                "beschriftung": stand["beschriftung"],
+                "stand": stand["stand"],
+                "offene_meilensteine": offen,
+                "gutschrift": round(offen * float(a["reward_amount"] or 0), 2),
+                "abweichung": round(stand["wert"] - float(a["current_value"] or 0), 4),
+            })
+        raus.append(eintrag)
+    return raus
+
+
+@app.post("/api/achievements/{aid}/auto-confirm")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def ach_auto_confirm(request: Request, aid: int, b: AchAutoConfirm,
+                            db=Depends(get_db), user=Depends(get_current_user)):
+    """Uebernimmt den Stand der verbundenen Quelle -- und bucht, was faellig ist.
+
+    Der Wert wird HIER neu aus der Quelle gelesen und nicht aus dem Body
+    genommen. Sonst waere die Automatik ein Eingabefeld mit Umweg, und die
+    Seite koennte eine Gutschrift ueber eine Zahl ausloesen, die in keiner
+    Messung steht.
+
+    Gebucht wird ueber ``_wert_setzen`` -- dieselbe Stelle wie beim Knopf
+    "Setzen". Damit gilt hier unveraendert, dass ``credited_milestones`` nur
+    vorwaerts zaehlt: ein Gewicht, das wieder steigt und dieselbe Schwelle ein
+    zweites Mal unterschreitet, zahlt nicht noch einmal.
+    """
+    a = await db.fetchrow("SELECT * FROM achievements WHERE id=$1 AND user_id=$2",
+                          aid, user["id"])
+    if not a:
+        raise HTTPException(404, "Not found")
+    if not a["auto_source"]:
+        raise HTTPException(400, "Diese Kachel ist mit keiner Quelle verbunden.")
+    stand = await ach_quellen.wert_lesen(db, user["id"], a["auto_source"], a["auto_params"])
+    if not stand:
+        raise HTTPException(400, "Die Quelle liefert gerade keinen Wert.")
+    # Woher der Wert kam, gehoert in die Zeile: im Journal steht spaeter nur
+    # noch die Zahl, und "84,2 kg" sagt von allein nicht, ob das eine Messung
+    # oder ein Tippfehler war.
+    herkunft = f"Übernommen aus {stand['beschriftung']}"
+    if stand.get("stand"):
+        herkunft += f" (Stand {stand['stand']})"
+    eigene = (b.note or "").strip()
+    logger.info(f"auto-confirm: aid={aid} user={user['id']} quelle={a['auto_source']} "
+                f"wert={stand['wert']} cv_alt={a['current_value']}")
+    return await _wert_setzen(db, user["id"], a, float(stand["wert"]), None,
+                              f"{eigene} · {herkunft}" if eigene else herkunft)
+
 
 @app.post("/api/achievements/{aid}/reset")
 @limiter.limit(LIMIT_WRITE_RARE)
@@ -958,7 +1126,7 @@ async def reset_ach(request: Request, aid: int, db=Depends(get_db), user=Depends
         aid)
     logger.info(f"Reset achievement {aid} (user {user['id']}): removed {removed} tx, {removed_sum}€")
     return {"removed_count": removed, "removed_sum": removed_sum,
-            "achievement": ser(await db.fetchrow("SELECT * FROM achievements WHERE id=$1", aid))}
+            "achievement": _ach_out(await db.fetchrow("SELECT * FROM achievements WHERE id=$1", aid))}
 
 @app.delete("/api/achievements/{aid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)

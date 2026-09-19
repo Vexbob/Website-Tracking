@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.9.0', date: '2026-09-19', title: 'Meilensteine holen sich ihren Wert selbst', notes: [
+        'Eine Meilenstein-Kachel kann ihren Stand jetzt aus einem anderen Modul lesen — Gewicht aus Gesundheit, Wertung aus Schach, dazu Trainings, Partien, Ausgaben, Hörzeit und getrackte Tage.',
+        'Eingestellt wird das unter „Bearbeiten“; beim Gewicht ist wählbar, ob der letzte Messwert oder das Mittel über 3 bis 30 Tage zählt.',
+        'Gutgeschrieben wird nie von allein: die Kachel zeigt „Meilenstein erreicht“ mit dem Betrag, und erst der Knopf daneben bucht.',
+        'Eine Schwelle zahlt weiterhin nur einmal — wer wieder zunimmt und dieselbe Marke erneut unterschreitet, bekommt kein zweites Geld.',
+    ]},
     { v: 'v2.8.0', date: '2026-09-19', title: 'Der Export merkt sich, wie du ihn willst', notes: [
         'In den Einstellungen steht jetzt, womit der Export-Dialog aufmacht: die Zusammenfassung je Modul und die Grenze, vor der verdichtet wird.',
         'Neu: „Alles davor monatlich“. Setzt du dort den 01.08.2026, steht alles Ältere monatsweise in der Datei und ab diesem Tag gilt die Stufe des jeweiligen Moduls.',
