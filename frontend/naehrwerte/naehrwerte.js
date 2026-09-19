@@ -1092,9 +1092,12 @@ function zerstoereCharts() {
     });
 }
 
-function kpiKarte(icon, label, wert, sub) {
+/* Ohne Bildzeichen. Auf den Bedienelementen sind die Emoji in v2.5.0
+   verschwunden, weil jedes Geraet ein anderes Bild zeichnet -- auf den
+   Kennzahlen blieben sie stehen und sahen daneben aus wie ein Rest. Die
+   Beschriftung sagt ohnehin, was die Zahl ist. */
+function kpiKarte(label, wert, sub) {
     return `<div class="stat-kpi">
-        <div class="stat-kpi-icon" aria-hidden="true">${icon}</div>
         <div class="stat-kpi-label">${label}</div>
         <div class="stat-kpi-value">${wert}</div>
         <div class="stat-kpi-sub">${sub || ''}</div>
@@ -1114,14 +1117,14 @@ function zeichneVerlauf() {
 
     const z = v.summary;
     const kpi = [
-        kpiKarte('📅', 'Notiert', `${z.days_logged} von ${z.days}`,
+        kpiKarte('Notiert', `${z.days_logged} von ${z.days}`,
                  z.days_logged ? '' : 'noch nichts im Zeitraum'),
-        kpiKarte('🔥', 'Kalorien Ø', z.kcal_avg == null ? '–' : zahlKurz(z.kcal_avg),
+        kpiKarte('Kalorien Ø', z.kcal_avg == null ? '–' : zahlKurz(z.kcal_avg),
                  z.complete_days
                      ? `über ${z.complete_days} ${z.complete_days === 1 ? 'Tag' : 'Tage'} mit vollständigen Angaben`
                      : 'kein Tag, an dem zu allem Nährwerte standen'),
-        kpiKarte('💪', 'Eiweiß Ø', z.protein_avg == null ? '–' : zahlKurz(z.protein_avg) + ' g', ''),
-        kpiKarte('🎯', 'Im Ziel', z.complete_days ? `${z.target_hit_days} von ${z.complete_days}` : '–',
+        kpiKarte('Eiweiß Ø', z.protein_avg == null ? '–' : zahlKurz(z.protein_avg) + ' g', ''),
+        kpiKarte('Im Ziel', z.complete_days ? `${z.target_hit_days} von ${z.complete_days}` : '–',
                  'Tage unter dem Kalorien-Maßstab'),
     ];
     document.getElementById('nwVerlaufKpi').innerHTML = kpi.join('');
@@ -1144,7 +1147,9 @@ function zeichneVerlauf() {
     document.getElementById('nwChart2Karte').hidden = false;
     const texte = achsenTexte(v.days);
     state.charts.eins = tagesChart('nwChart1', 'kcal', figurFarbe(), texte,
-                                   'nwChart1Titel', 'nwChart1Sub', 'nwChart1Note');
+                                   'nwChart1Titel', 'nwChart1Sub', 'nwChart1Note',
+                                   'Tage ohne Eintrag bleiben leer: nichts notiert ist '
+                                   + 'nicht nichts gegessen. Einen Tag antippen öffnet ihn.');
     state.charts.zwei = tagesChart('nwChart2', 'protein_g', cssVar('--chart-1'), texte,
                                    'nwChart2Titel', 'nwChart2Sub', 'nwChart2Note');
 }
@@ -1172,7 +1177,7 @@ const TOOLTIP = (extra) => Object.assign({
 
 /* Ein Balken je Tag gegen die Ziellinie. Ein Tag ohne Eintrag bleibt leer
    statt auf null zu fallen: "nichts notiert" ist nicht "nichts gegessen". */
-function tagesChart(canvasId, makro, farbe, texte, titelEl, subEl, noteEl) {
+function tagesChart(canvasId, makro, farbe, texte, titelEl, subEl, noteEl, notiz) {
     const v = state.verlauf;
     const ziel = (v.targets && v.targets[makro]) || v.reference[makro];
     const eigen = !!(v.targets && v.targets[makro]);
@@ -1181,9 +1186,9 @@ function tagesChart(canvasId, makro, farbe, texte, titelEl, subEl, noteEl) {
     document.getElementById(titelEl).textContent = v.macro_labels[makro] + ' je Tag';
     document.getElementById(subEl).textContent =
         `${eigen ? 'Ziel' : 'Richtwert'} ${zahlKurz(ziel)}${e}`;
-    document.getElementById(noteEl).textContent =
-        'Tage ohne Eintrag bleiben leer: nichts notiert ist nicht nichts gegessen. '
-        + 'Einen Tag antippen öffnet ihn.';
+    // Nur einmal je Seite. Derselbe Satz unter beiden Diagrammen las sich
+    // wie eine Fussnote, die man zweimal gedruckt hat.
+    document.getElementById(noteEl).textContent = notiz || '';
 
     return new Chart(document.getElementById(canvasId), {
         data: {

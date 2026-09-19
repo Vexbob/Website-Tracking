@@ -351,3 +351,11 @@
     .es-stufe { min-height: 32px; padding-inline: 0.7rem; }
     .es-chip { min-height: 44px; }
 }
+
+/* Am Handy steht der Modulname schon in der Leiste ganz oben. Ein zweites
+   Mal als Überschrift darunter kostete rund siebzig Pixel der ersten
+   Ansicht — genau die, in der der Tag anfangen sollte. Am Rechner bleibt er:
+   dort ist die Leiste schmal und der Platz da. */
+@media (max-width: 720px) {
+    .page-head { display: none; }
+}

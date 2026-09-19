@@ -14,7 +14,9 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
-    { v: 'v2.5.0', date: '2026-09-18', title: 'Essen und Nährwerte sehen aus wie eine App', notes: [
+    { v: 'v2.5.1', date: '2026-09-19', title: 'Essen und Nährwerte sehen aus wie eine App', notes: [
+        'Nachgezogen: Der Verlauf war nie angesehen worden — die Vorschau hatte ihn wegen einer falsch gebauten Testantwort gar nicht gezeichnet. Jetzt ohne Emoji auf den Kennzahlen, und der Erklärsatz steht unter einem Diagramm statt wortgleich unter beiden.',
+        'Nachgezogen: Der Schwebeknopf verdeckte am Ende der Liste dauerhaft die letzte Zeile, und der Modulname stand am Handy zweimal untereinander — in der Leiste und als Überschrift. Der Tag fängt jetzt oben an.',
         'Der Tageskopf sagt jetzt zuerst, welcher Tag: „Heute“ groß, darunter „Freitag, 18. September 2026“. Vorher stand beides klein in einer Zeile, und „18.09.2026“ allein sagt nicht, dass es heute ist. Die Pfeile sind runde Flächen, die man trifft.',
         'Der Tag besteht aus vier Mahlzeiten, und jetzt sieht er auch so aus: jede ist ein eigener Block mit Kopfzeile, Teilsumme und Plus statt einer durchlaufenden Liste mit Zwischenüberschriften. Eine leere Mahlzeit steht nicht mehr blass da, sondern lädt ein — die ganze Fläche trägt dich in sie hinein.',
         '„Eintragen“ schwebt am Handy über der Tab-Leiste, wo der Daumen liegt. Bisher war es eine volle Zeile unter dem Datum: sie hat den Tag eine Knopfhöhe nach unten geschoben, und wer unten in der Liste stand, musste erst wieder hochscrollen.',

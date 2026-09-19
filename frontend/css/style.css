@@ -2353,3 +2353,11 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 @media (min-width: 721px) {
     .v-fab { display: none; }
 }
+/* Er schwebt -- also nimmt er niemandem Platz weg, und genau das war der
+   Fehler: die letzte Zeile des Tages lag beim Herunterscrollen dauerhaft
+   unter dem Knopf. Die Seite muss den Platz selbst freihalten. */
+@media (max-width: 720px) {
+    body:has(.v-fab:not([hidden])) {
+        padding-bottom: calc(58px + 4.25rem + env(safe-area-inset-bottom, 0px));
+    }
+}

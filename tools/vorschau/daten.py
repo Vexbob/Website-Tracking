@@ -210,11 +210,31 @@ def _verlauf():
             "carbs_g": {"value": 210 + (i * 7) % 60, "incomplete": False},
             "fat_g": {"value": 70 + (i * 5) % 25, "incomplete": False},
         })
-    return {"days": tage, "macros": list(calc.MAKROS),
-            "macro_labels": dict(calc.MAKRO_LABEL),
-            "targets": {m: None for m in calc.MAKROS},
-            "defaults": {m: float(calc.RICHTWERT[m]) for m in calc.MAKROS},
-            "days_logged": len(tage), "reference_note": calc.RICHTWERT_QUELLE}
+    # Die Form muss der echten Antwort von /api/food/track/history gleichen,
+    # sonst zeigt die Vorschau eine Seite, die es so nicht gibt. Bis v2.5.0
+    # fehlten hier `from`, `to` und `summary` -- die Seite las `v.summary`,
+    # bekam `undefined` und brach ab: der Verlaufs-Reiter stand leer da, und
+    # in seiner Kopfzeile stand "undefined bis undefined". Wer sich darauf
+    # verlaesst, prueft das eine Blatt nie, das er gerade nicht sieht.
+    voll = [t for t in tage if not t["unknown"]]
+    return {
+        "from": tage[0]["day"], "to": tage[-1]["day"],
+        "days": tage,
+        "truncated": False,
+        "targets": {m: None for m in calc.MAKROS},
+        "reference": {m: float(calc.RICHTWERT[m]) for m in calc.MAKROS},
+        "macros": list(calc.MAKROS),
+        "macro_labels": dict(calc.MAKRO_LABEL),
+        "summary": {
+            "days": len(tage),
+            "days_logged": len(tage),
+            "entries": sum(t["entries"] for t in tage),
+            "complete_days": len(voll),
+            "target_hit_days": sum(1 for t in voll if t["kcal"]["value"] <= 2400),
+            "kcal_avg": round(sum(t["kcal"]["value"] for t in voll) / len(voll)),
+            "protein_avg": round(sum(t["protein_g"]["value"] for t in voll) / len(voll)),
+        },
+    }
 
 
 ANTWORTEN = {
