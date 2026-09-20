@@ -343,6 +343,12 @@ async function ladeExportCfg() {
     } catch (e) {
         EXP.groups = [];
     }
+    // Vom Server holen, nicht aus dem Cache: `navReady()` steigt früh aus,
+    // sobald die Leiste steht, und dann ist der localStorage hier noch der
+    // Stand des letzten Besuchs. Die Karte zeigte dann leere Auswahlfelder,
+    // obwohl am Konto etwas gespeichert war — und wer daraufhin speichert,
+    // überschreibt seine eigene Einstellung mit den Standardwerten.
+    try { await VexPrefs.load(); } catch (e) { /* offline: Cache gilt */ }
     const gespeichert = VexPrefs.get(EXPORT_PREF, null) || {};
     EXP.wert = { aggregate: gespeichert.aggregate || {},
                  compact_before: gespeichert.compact_before || null };

@@ -671,6 +671,18 @@ def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
         "YYYY-MM-DDTHH:MM:SSZ (keine Mikrosekunden). ALLE Zahlen nutzen "
         "Punkt-Dezimal, auch Euro-Betraege. Ein leeres Feld heisst 'nicht "
         "bekannt' und nicht 'null'.")
+    # v2.11.0: Diese Zeile steht hier, weil eine Auswertung genau daran
+    # scheitert: derselbe Betrag taucht absichtlich auf mehreren Stufen auf,
+    # und wer die Sektionen addiert, haelt das fuer doppelte Buchungen.
+    lines.append(
+        "# WICHTIG FUER AUSWERTUNGEN: dieselbe Ausgabe steht absichtlich "
+        "auf MEHREREN Stufen in dieser Datei -- als Perioden-Summe, als "
+        "Beleg und als Einzelposten. Das sind keine doppelten Buchungen. "
+        "Fuer eine Gesamtsumme gilt GENAU EINE Sektion: 'Ausgaben - Bons' "
+        "bzw. 'Ausgaben - Bons kompakt' (ein Eintrag je Beleg). Die "
+        "Perioden-Zusammenfassung und die Bon-Positionen sind Sichten auf "
+        "dieselben Belege und duerfen nicht dazugezaehlt werden. Jede "
+        "betroffene Sektion sagt das noch einmal in ihrer eigenen Zeile.")
     if backlog:
         # Ohne diesen Absatz sieht der Rueckblick aus wie schlecht erfasste
         # Bons: hunderte Eintraege ohne eine einzige Position.
@@ -1764,8 +1776,13 @@ async def _expenses_sections(
 
     # Bons (ein Eintrag pro Beleg, Kopfdaten NICHT mehr pro Position wiederholt)
     out.append(
-        "# SEKTION: Ausgaben - Bons (ein Eintrag pro Beleg; Positionen in "
-        "naechster Sektion, verknuepft ueber expense_id)")
+        "# SEKTION: Ausgaben - Bons (ein Eintrag pro Beleg). Die Spalte "
+        "'Gesamt (EUR)' ist der Betrag des ganzen Belegs; seine "
+        "Einzelposten stehen in der naechsten Sektion und summieren sich "
+        "wieder darauf. ACHTUNG BEIM RECHNEN: Bons UND Positionen zu "
+        "addieren zaehlt jeden Euro doppelt -- fuer eine Ausgabensumme "
+        "gilt DIESE Sektion, fuer eine Auswertung nach Artikeln die "
+        "naechste. Verknuepft sind sie ueber expense_id.")
     out.append("expense_id;Datum;Laden;Typ;Gesamt (EUR);Zahlungsart;Notiz;"
                "Herkunft;Empfaenger (Bank);Kategorie (Bank);Unterkategorie (Bank)")
     for r in rows:
@@ -1783,7 +1800,10 @@ async def _expenses_sections(
 
     # Bon-Positionen (expense_id verweist auf die Bon-Sektion oben)
     out.append(
-        "# SEKTION: Ausgaben - Bon-Positionen (expense_id verweist auf vorige Sektion)")
+        "# SEKTION: Ausgaben - Bon-Positionen (die Einzelposten der Bons; "
+        "expense_id verweist auf die vorige Sektion). Ihre Summe je Beleg "
+        "ergibt wieder dessen 'Gesamt (EUR)' -- nicht zu den Bons "
+        "addieren.")
     out.append(
         "expense_id;Position;Menge;Einheit;Einzelpreis (EUR);"
         "Positionspreis (EUR);Original-Preis (EUR);Reduziert;Kategorie")
@@ -1837,10 +1857,13 @@ def _expenses_aggregated_section(rows, aggregate: str) -> list[str]:
 
     out: list[str] = []
     out.append(
-        f"# SEKTION: Ausgaben - {prefix}-Zusammenfassung (aggregiert; die "
-        "einzelnen Bons folgen kompakt in der naechsten Sektion, die "
-        "Einzelpositionen der Bons bleiben in diesem Modus bewusst "
-        "weg, damit lange Zeitraeume kompakt bleiben)")
+        f"# SEKTION: Ausgaben - {prefix}-Zusammenfassung (aggregiert). "
+        "ACHTUNG BEIM RECHNEN: die Summe einer Zeile enthaelt genau die "
+        "Bons, die in 'Ausgaben - Bons kompakt' NOCH EINMAL einzeln "
+        "stehen. Das ist dieselbe Ausgabe auf zwei Stufen, keine zweite "
+        "Ausgabe -- wer beide Sektionen addiert, zaehlt jeden Euro "
+        "doppelt. Die Einzelpositionen der Bons bleiben in diesem Modus "
+        "bewusst weg, damit lange Zeitraeume kompakt bleiben.")
     out.append(
         f"{label};Von;Bis;Anzahl Bons;Summe (EUR);"
         "Durchschnitt Bon (EUR);Verschiedene Laeden;Typen-Aufteilung")
@@ -1895,7 +1918,9 @@ async def _expenses_compact_bons_section(db, user_id: int, rows, aggregate: str)
     out: list[str] = []
     out.append(
         "# SEKTION: Ausgaben - Bons kompakt (ein Eintrag pro Einkauf, ohne "
-        "Einzelpositionen). Kategorien-Spalte: 'Kategorie:Anzahl/Betrag', "
+        "Einzelpositionen). Das sind die Einzelposten der Perioden-Summen "
+        "aus der vorigen Sektion -- dieselben Betraege, nur feiner. NICHT "
+        "zu ihnen addieren. Kategorien-Spalte: 'Kategorie:Anzahl/Betrag', "
         "mehrere Kategorien mit ' | ' getrennt, absteigend nach Betrag.")
     out.append(
         f"{label};Datum;Laden;Typ;Anzahl Positionen;Gesamt (EUR);"

@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.0', date: '2026-09-20', title: 'Der Export nimmt deine Voreinstellung wieder an', notes: [
+        'Die Export-Voreinstellung aus den Einstellungen wurde zwar gespeichert, aber nie gelesen — der Dialog machte immer mit „Einzeln“ auf. Dasselbe traf den Standard-Zeitraum.',
+        'Die drei fertigen Zusammenstellungen sind wieder weg; Zeitraum, Module und Verdichtung stehen wieder direkt im Dialog. Die Wahl zwischen einer Datei und einem ZIP bleibt.',
+        'Der Export sagt jetzt in jeder betroffenen Tabelle, dass derselbe Betrag absichtlich auf mehreren Stufen steht — vorher las sich das wie doppelte Buchungen.',
+    ]},
     { v: 'v2.10.0', date: '2026-09-20', title: 'Der Export fragt zuerst, wofür', notes: [
         'Der Dialog macht mit drei Antworten auf: „Zum Auswerten“, „Alles, ungekürzt“ und „Selbst zusammenstellen“ — die Maske mit Zeitraum, Modulen und Spalten klappt nur noch auf, wenn du sie brauchst.',
         '„Zum Auswerten“ lässt die Rohdaten weg und stellt die Stufe selbst so ein, dass die Datei unter 1 MB bleibt und am Stück hochladbar ist.',

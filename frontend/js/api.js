@@ -333,6 +333,19 @@ const VexPrefs = {
     },
 };
 
+/* Ans Fenster haengen wie jeder andere geteilte Baustein (VexNav, VexModal,
+   VexRing, ...). Ein `const` auf oberster Ebene eines klassischen Skripts
+   wird KEINE Eigenschaft von `window` — wer also defensiv
+   `window.VexPrefs ? ... : Standard` schrieb, bekam immer den Standard.
+
+   Das hat zwei Einstellungen still unwirksam gemacht: die Export-
+   Voreinstellung (der Dialog machte trotz gespeicherter Stufen mit „Einzeln“
+   auf, was aussah, als habe er nichts behalten) und den Standard-Zeitraum in
+   `range-filter.js`. Beide Male war der Wert am Konto gespeichert und wurde
+   nur nie gelesen. `test_navigation.py` prüft jetzt, dass jeder Baustein,
+   auf den irgendwo mit `window.` geprüft wird, auch dort steht. */
+window.VexPrefs = VexPrefs;
+
 /* Jetzt anwenden: der Zwischenspeicher steht, gezeichnet ist noch nichts.
    `_write` ist der eine Ort, durch den jede Änderung geht (laden, setzen,
    zurücksetzen) -- daran hängt das Nachziehen, damit die Einstellungsseite

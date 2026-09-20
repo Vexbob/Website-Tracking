@@ -212,3 +212,45 @@ def test_wer_einen_geteilten_baustein_benutzt_laedt_ihn_auch():
                        bausteine[name]))
 
     assert not fehler, "\n".join(fehler)
+
+
+def test_wer_auf_window_prueft_findet_den_baustein_auch_dort():
+    """``window.VexPrefs ? ... : Standard`` ergab immer den Standard.
+
+    Ein ``const`` auf oberster Ebene eines klassischen Skripts wird KEINE
+    Eigenschaft von ``window``. ``VexPrefs`` war der einzige geteilte
+    Baustein ohne ``window.X = X``, und die beiden Stellen, die defensiv auf
+    sein Vorhandensein prueften, liefen deshalb IMMER in den Ersatzzweig:
+    der Export-Dialog machte trotz gespeicherter Stufen mit "Einzeln" auf,
+    und der Standard-Zeitraum aus den Einstellungen galt nie. Beide Werte
+    waren am Konto gespeichert und wurden nur nie gelesen -- ein Fehler, den
+    man der Oberflaeche nicht ansieht, weil sie nicht kaputt aussieht,
+    sondern nur etwas anderes tut.
+
+    Der Test dreht das um: wer irgendwo ``window.Xyz`` LIEST, muss ein
+    ``window.Xyz =`` irgendwo im Frontend gegenueberstehen haben.
+    """
+    front = WURZEL / "frontend"
+    quellen = {js: js.read_text(encoding="utf-8")
+               for js in sorted(front.rglob("*.js"))}
+    # Ein nachlaufendes ``(?!...)`` reicht hier NICHT: ``\w+`` gibt beim
+    # Zuruecksetzen ein Zeichen her, und aus "VexPrefs =" wird dann der
+    # gefundene Name "VexPref" mit passendem Lookahead. Deshalb wird der
+    # Name ganz gelesen und erst danach geschaut, was dahinter steht.
+    muster = re.compile(r"window\.(Vex\w+|Toast)")
+    zuweisung = re.compile(r"\s*=[^=]")
+
+    gesetzt = set()
+    for text in quellen.values():
+        for treffer in muster.finditer(text):
+            if zuweisung.match(text[treffer.end():]):
+                gesetzt.add(treffer.group(1))
+
+    fehler = []
+    for js, text in quellen.items():
+        gelesen = {t.group(1) for t in muster.finditer(text)
+                   if not zuweisung.match(text[t.end():])}
+        for name in sorted(gelesen - gesetzt):
+            fehler.append("%s prueft auf window.%s, aber nichts setzt es"
+                          % ("/" + js.relative_to(front).as_posix(), name))
+    assert not fehler, "\n".join(fehler)

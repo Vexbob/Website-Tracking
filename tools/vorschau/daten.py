@@ -397,7 +397,12 @@ ANTWORTEN = {
     # Leere Liste heisst ausdruecklich 'alle an' -- ein fehlender
     # Schluessel waere die Werkseinstellung, und die laesst die
     # Naehrwerte ruhen.
-    "/api/ui/prefs": {"prefs": {"ui_module_off": []}},
+    # Mit gespeicherter Export-Voreinstellung: nur so laesst sich im Bild
+    # pruefen, ob der Dialog sie beim Oeffnen wirklich uebernimmt.
+    "/api/ui/prefs": {"prefs": {"ui_module_off": [],
+                               "ui_export": {"aggregate": {"ausgaben": "month",
+                                                           "health": "week"},
+                                             "compact_before": "2026-08-01"}}},
     "/api/ui/nav-tabs": {"tabs": []},
 
     "/api/food/diary/day": TAGEBUCH_TAG,

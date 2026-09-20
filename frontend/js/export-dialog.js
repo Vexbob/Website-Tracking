@@ -45,36 +45,6 @@
         { key: -1,       label: 'Eigene' },
     ];
 
-    /* Wofür man exportiert. Bis v2.9.0 machte der Dialog mit Zeitraum,
-       Höchstgröße, Verdichtungsdatum und 24 Häkchen auf — vier Entscheidungen,
-       bevor man irgendetwas in der Hand hatte, und keine davon beantwortete
-       die eigentliche Frage: was will ich damit. Jetzt steht die Frage vorn,
-       und die Maske ist das, was man aufklappt, wenn keine der Antworten passt.
-
-       Die Zusammenstellung dahinter ist KEINE zweite Liste von Sektionen: was
-       Rohdaten sind, sagt das Register im Backend über `bulk`. Hier steht nur,
-       welche Stellschrauben ein Zweck wie dreht. */
-    const ZWECKE = [
-        {
-            key: 'auswerten',
-            titel: 'Zum Auswerten',
-            zusatz: 'empfohlen',
-            text: 'Alles außer Rohdaten, so fein wie es in eine Datei passt, '
-                + 'die man am Stück hochladen kann.',
-        },
-        {
-            key: 'alles',
-            titel: 'Alles, ungekürzt',
-            text: 'Jede Zeile einzeln, auch Zugfolgen und Upload-Protokolle. '
-                + 'Als Archiv mit einer Datei je Tabelle.',
-        },
-        {
-            key: 'custom',
-            titel: 'Selbst zusammenstellen',
-            text: 'Zeitraum, Module, Spalten und Verdichtung von Hand.',
-        },
-    ];
-
     /* Die eine Datei ist zum Lesen und Auswerten da — mit dem Vorspann davor,
        der sagt, was drin ist. Das Archiv ist für ein Tabellenprogramm: 20
        Tabellen mit verschiedener Spaltenzahl in EINEM Blatt kann keines
@@ -83,13 +53,6 @@
         { key: 'csv', label: 'Eine Datei', hint: 'Alle Tabellen untereinander. Zum Hochladen und Auswerten.' },
         { key: 'zip', label: 'Archiv (ZIP)', hint: 'Eine Datei je Tabelle, dazu eine LIESMICH. Für Excel und Numbers.' },
     ];
-
-    /* Die Zielgröße für „Zum Auswerten“. Eine Datei dieser Größe lässt sich
-       noch am Stück hochladen und lesen; darüber wird aus einer Auswertung
-       ein Ausschnitt, ohne dass man es der Datei ansieht. Der Server sucht
-       dazu die FEINSTE Stufe, die darunter bleibt (/api/export/fit) — gedreht
-       wird dabei nur an der Zeit, nie an den Sektionen. */
-    const AUSWERTEN_BYTES = 1048576;
 
     const iso = (d) => {
         const p = (n) => String(n).padStart(2, '0');
@@ -122,10 +85,6 @@
         const agg = {};
         groups.forEach(g => { agg[g.key] = vorAgg[g.key] || 'none'; });
         return {
-            // Womit der Dialog aufmacht. „Zum Auswerten“ ist die Antwort auf
-            // die Frage, die in fast allen Fällen gemeint ist; die Maske
-            // bleibt für den Rest.
-            zweck: 'auswerten',
             format: 'csv',
             // Vor diesem Tag steht alles monatsweise in der Datei. Leer
             // heisst: keine Grenze.
@@ -191,36 +150,6 @@
         return p;
     }
 
-    /* Die Zusammenstellung hinter einem Zweck. Sie setzt nur, was der Zweck
-       wirklich meint — die Sektionsliste kommt aus dem Register (`bulk`),
-       nicht aus einer Liste hier. */
-    function zweckAnwenden(state, key) {
-        state.zweck = key;
-        if (key === 'custom') return;
-        state.preset = 'all';
-        state.from = '';
-        state.to = '';
-        state.compactBefore = '';
-        state.chosen = {};
-        state.openCols = new Set();
-        if (key === 'auswerten') {
-            state.picked = new Set(state.sections.filter(x => !x.bulk).map(x => x.key));
-            state.groups.forEach(g => { state.agg[g.key] = 'none'; });
-            state.format = 'csv';
-            state.limit = AUSWERTEN_BYTES;
-        } else {
-            state.picked = new Set(state.sections.map(x => x.key));
-            state.groups.forEach(g => { state.agg[g.key] = 'none'; });
-            state.format = 'zip';
-            state.limit = 0;
-        }
-        // Der Knopf in der Maske muss dasselbe sagen wie die Rechnung. Ohne
-        // diese Zeile stand die Höchstgröße auf „Aus“, während die Zeile
-        // darunter „von 1,0 MB“ prüfte — zwei Antworten auf dieselbe Frage.
-        state.limitPick = state.limit;
-        state.fitNote = '';
-    }
-
     /* -------------------------------------------------------------- Aufbau */
     function dialogHtml() {
         return [
@@ -230,23 +159,13 @@
             '    <button class="modal-close" data-act="close" type="button" aria-label="Schließen">✕</button>',
             '  </div>',
             '  <div class="modal-body exp-body">',
-            '    <div class="exp-label">Wofür?</div>',
-            '    <div class="exp-zwecke" id="expZwecke">',
-                 ZWECKE.map(z =>
-                   '<button type="button" class="exp-zweck" id="expZweck_' + z.key + '"' +
-                     ' data-zweck="' + z.key + '">' +
-                     '<span class="exp-zweck-kopf">' + esc(z.titel) +
-                       (z.zusatz ? '<em>' + esc(z.zusatz) + '</em>' : '') + '</span>' +
-                     '<span class="exp-zweck-text">' + esc(z.text) + '</span>' +
-                   '</button>').join(''),
-            '    </div>',
-            '    <div class="exp-label" style="margin-top:1.15rem">Form</div>',
+            '    <div class="exp-label">Form</div>',
             '    <div class="exp-chip-row" id="expFormat">',
                  FORMATE.map(f => '<button type="button" data-format="' + f.key + '">' +
                     esc(f.label) + '</button>').join(''),
             '    </div>',
             '    <p class="exp-hint" id="expFormatNote"></p>',
-            '    <div class="exp-maske" id="expMaske" hidden>',
+            '    <div class="exp-maske">',
             '      <div class="exp-cols">',
             '        <div class="exp-col">',
             '          <div class="exp-label">Zeitraum</div>',
@@ -581,17 +500,6 @@
                 state.preset === 'custom' ? 'flex' : 'none';
         }
 
-        function paintZweck() {
-            overlay.querySelectorAll('#expZwecke .exp-zweck').forEach(b => {
-                const an = b.dataset.zweck === state.zweck;
-                b.classList.toggle('active', an);
-                b.setAttribute('aria-pressed', an ? 'true' : 'false');
-            });
-            // Die Maske ist nicht die Hauptsache, sondern der Ausweg. Sie
-            // steht deshalb erst da, wenn keine der beiden Antworten passt.
-            overlay.querySelector('#expMaske').hidden = state.zweck !== 'custom';
-        }
-
         function paintFormat() {
             overlay.querySelectorAll('#expFormat button').forEach(b => {
                 b.classList.toggle('active', b.dataset.format === state.format);
@@ -599,21 +507,6 @@
             const eintrag = FORMATE.find(f => f.key === state.format);
             overlay.querySelector('#expFormatNote').textContent = eintrag ? eintrag.hint : '';
         }
-
-        overlay.querySelector('#expZwecke').addEventListener('click', (e) => {
-            const b = e.target.closest('[data-zweck]');
-            if (!b || state.fitting) return;
-            zweckAnwenden(state, b.dataset.zweck);
-            paintZweck();
-            paintFormat();
-            paintRange();
-            paintLimit();
-            renderSections(sectionBox, state);
-            // „Zum Auswerten“ heisst: so fein wie es in die Zielgroesse
-            // passt. Das rechnet der Server (er baut dafuer wirklich), die
-            // gefundene Stufe landet sichtbar in den Auswahlfeldern.
-            if (state.limit > 0) fitToLimit(); else refreshPreview();
-        });
 
         overlay.querySelector('#expFormat').addEventListener('click', (e) => {
             const b = e.target.closest('button');
@@ -757,7 +650,6 @@
             await doExport(state);
         };
 
-        paintZweck();
         paintFormat();
         paintRange();
         paintLimit();
@@ -775,7 +667,18 @@
 
         let meta;
         try {
-            meta = await apiCall('/api/export/sections');
+            // Die Voreinstellung KOMMT VOM SERVER, nicht aus dem Cache. Der
+            // localStorage ist nur ein Cache, und `navReady()` steigt früh
+            // aus, sobald die Leiste steht — er kann hier also veraltet oder
+            // leer sein. Dann machte der Dialog mit „Einzeln“ auf, obwohl auf
+            // /einstellungen etwas anderes gespeichert war, und das sah aus,
+            // als hätte er die Einstellung nicht behalten. `load()` ist
+            // idempotent, der Aufruf kostet eine Anfrage.
+            const [sections] = await Promise.all([
+                apiCall('/api/export/sections'),
+                (window.VexPrefs ? VexPrefs.load() : Promise.resolve()).catch(() => {}),
+            ]);
+            meta = sections;
         } catch (e) {
             overlay.querySelector('#expSections').innerHTML =
                 '<div class="empty is-error"><span class="empty-mark">⚠️</span>' +
@@ -784,12 +687,7 @@
             return;
         }
         const state = newState(meta);
-        // Der Standard-Zweck muss auch angewendet werden, nicht nur
-        // dastehen -- sonst zeigt der Dialog „Zum Auswerten“ an und
-        // exportiert die Werkseinstellung.
-        zweckAnwenden(state, state.zweck);
         renderSections(overlay.querySelector('#expSections'), state);
-        const steuer = wire(overlay, state);
-        if (state.limit > 0) steuer.fitToLimit(); else steuer.refreshPreview();
+        wire(overlay, state).refreshPreview();
     };
 })();
