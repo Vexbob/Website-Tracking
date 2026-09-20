@@ -4,7 +4,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .card h3{font-size:1rem;margin-bottom:0.875rem;font-weight:600}
 .form-row{display:grid;grid-template-columns:1fr auto;gap:0.625rem;align-items:end}
 .form-row label{font-size:0.75rem;color:var(--text-2);font-weight:500;margin-bottom:2px}
-.form-row input{margin:0;padding:0.5rem 0.625rem;font-size:0.875rem}
+.form-row input{margin:0;padding:0.5rem 0.625rem}
 .form-row button{margin:0;padding:0.5rem 1rem;font-size:0.875rem;background:var(--grad-accent);color:var(--accent-ink);width:auto;font-weight:600;border-radius:8px;box-shadow:var(--glow-accent)}
 .form-row button:hover{filter:brightness(1.06)}
 @media(max-width:600px){.form-row{grid-template-columns:1fr}}

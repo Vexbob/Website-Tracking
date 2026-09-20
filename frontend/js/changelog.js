@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.3', date: '2026-09-21', title: 'Nichts springt mehr beim Tippen', notes: [
+        'Jedes Feld, in das man tippt, trägt jetzt 17 px — am iPhone zoomt die Seite dabei nicht mehr hinein.',
+        'Knöpfe, Chips und Kästchen sind am Handy 44 px hoch statt 30; das galt bisher nur für zwei Klassen.',
+        'Die Meilenstein-Kachel ist eine Zeile kürzer: „Wert setzen“ liegt hinter den drei Punkten.',
+    ]},
     { v: 'v2.11.2', date: '2026-09-21', title: 'Fehler, die man nicht sah', notes: [
         'Ein gescheiterter Abruf sagt das jetzt — Sparziele, Notizen und Statistik blieben vorher einfach leer.',
         'Tagesziele lassen sich nicht mehr überschreiben, wenn sie gar nicht geladen werden konnten.',

@@ -354,3 +354,56 @@ def test_jeder_inline_handler_hat_seine_funktion():
             fehlend += ["%s -> %s()" % (kurz, n)
                         for n in sorted(namen) if not _ist_definiert(n, code)]
     assert not fehlend, "Handler ohne Funktion: " + ", ".join(fehlend)
+
+
+# ------------------------------------------ Tippfelder tragen 16 px (v2.11.3)
+# iOS Safari zoomt die ganze Seite heran, sobald ein fokussiertes Feld kleiner
+# als 16 px ist -- und zoomt beim Verlassen NICHT zurueck. Das ist die
+# haeufigste Ursache fuer "die Seite springt beim Tippen". Die Regel steht seit
+# v2.4.0 in CLAUDE.md, wurde aber nur in den beiden Ernaehrungs-Modulen
+# durchgesetzt: die globale Grundlage lag bei 0.95rem, und fuenfzehn
+# Modulregeln unterboten sie zusaetzlich. Man sieht es dem CSS nicht an,
+# deshalb steht es hier.
+_REGEL = re.compile(r"([^{}]+)\{([^{}]*)\}")
+# `select` als ELEMENT, nicht als Teil eines Klassennamens (`.v-select--sm`,
+# `.nz-side-sort`). Ohne die Grenze links flaggt der Test halbe Utilities.
+_FELD = re.compile(r"(?<![\w.#-])(input|select|textarea)(?![\w-])")
+_GROESSE = re.compile(r"font-size\s*:\s*([0-9.]+)(rem|px)")
+
+
+def _css_quellen():
+    """Jede CSS-Datei plus jeden <style>-Block einer Seite."""
+    for wurzel, _, dateien in os.walk(FRONTEND):
+        for d in sorted(dateien):
+            pfad = os.path.join(wurzel, d)
+            kurz = os.path.relpath(pfad, FRONTEND)
+            if d.endswith(".css"):
+                yield kurz, open(pfad, encoding="utf-8").read()
+            elif d.endswith(".html"):
+                text = open(pfad, encoding="utf-8").read()
+                for block in re.findall(r"<style[^>]*>(.*?)</style>", text, re.S):
+                    yield kurz, block
+
+
+def test_jedes_tippfeld_traegt_mindestens_16px():
+    zu_klein = []
+    for datei, css in _css_quellen():
+        for selektor, rumpf in _REGEL.findall(css):
+            if not _FELD.search(selektor):
+                continue
+            for wert, einheit in _GROESSE.findall(rumpf):
+                px = float(wert) * 16 if einheit == "rem" else float(wert)
+                if px < 16:
+                    zu_klein.append("%s: %s -> %s%s"
+                                    % (datei, selektor.strip()[:60], wert, einheit))
+    assert not zu_klein, ("Tippfelder unter 16 px (iOS zoomt und zoomt nicht "
+                          "zurueck): " + "; ".join(zu_klein))
+
+
+def test_die_grundlage_kommt_aus_einem_token():
+    """Ein zweiter Zahlenwert waere die naechste Ausnahme."""
+    css = open(os.path.join(FRONTEND, "css", "style.css"), encoding="utf-8").read()
+    assert "--eingabe-schrift:" in css, "Der Token fehlt"
+    stelle = css[css.index(":where(input, select, textarea)"):][:400]
+    assert "var(--eingabe-schrift)" in stelle, (
+        "Die globale Form-Base setzt ihre Schriftgroesse nicht aus dem Token")

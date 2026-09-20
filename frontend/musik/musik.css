@@ -24,7 +24,7 @@
 .m-search input {
     flex: 1; min-width: 0; width: auto; margin: 0;
     padding: 0.4375rem 0;
-    font-size: 0.8125rem; color: var(--text-1);
+    font-size: var(--eingabe-schrift); color: var(--text-1);
     background: transparent; border: none;
 }
 .m-search input:focus { outline: none; box-shadow: none; }

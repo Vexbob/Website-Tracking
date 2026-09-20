@@ -27,7 +27,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 
 .nz-search-wrap{position:relative}
 .nz-search-ico{position:absolute;left:0.7rem;top:50%;transform:translateY(-50%);font-size:0.8125rem;color:var(--text-3);pointer-events:none}
-.nz-search-wrap input[type=search]{width:100%;padding:0.5rem 0.625rem 0.5rem 2rem;font-size:0.875rem;margin:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
+.nz-search-wrap input[type=search]{width:100%;padding:0.5rem 0.625rem 0.5rem 2rem;margin:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
 
 .nz-side-row{display:flex;gap:0.4rem}
 .nz-side-sort{flex:1;padding:0.45rem 0.55rem;font-size:0.8125rem;margin:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line);color:var(--text-1)}

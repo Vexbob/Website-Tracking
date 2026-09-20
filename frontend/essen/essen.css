@@ -20,7 +20,9 @@
        iOS Safari zoomt die ganze Seite heran, sobald ein Feld mit WENIGER
        als 16 px den Fokus bekommt, und zoomt danach nicht zurueck. Eine
        Zahl an EINER Stelle, damit die naechste Ausnahme auffaellt. */
-    --es-eingabe: 1.0625rem;
+    /* Geht im globalen --eingabe-schrift auf (v2.11.3); der Name bleibt
+       als Alias stehen, damit die Regeln darunter unveraendert gelten. */
+    --es-eingabe: var(--eingabe-schrift);
 }
 
 /* ---------- Schnellwahl ----------

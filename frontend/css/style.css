@@ -115,6 +115,15 @@
     /* --- Status: helle Toene fuer Text/Marken, NIE mit weisser Schrift --- */
     --ok: #5eea92;      --ok-soft: rgba(94,234,146,0.16);
     --warn: #ffcb45;    --warn-soft: rgba(255,203,69,0.16);
+    /* v2.11.3: Die Groesse JEDES Feldes, in das man tippt. 1.0625rem = 17 px.
+       iOS Safari zoomt die ganze Seite heran, sobald ein fokussiertes Feld
+       kleiner als 16 px ist, und zoomt beim Verlassen NICHT zurueck -- das
+       ist die haeufigste Ursache fuer "die Seite springt beim Tippen". Die
+       Regel gab es seit v2.4.0, aber nur in den beiden Ernaehrungs-Modulen;
+       die Grundlage hier stand bei 0.95rem = 15,2 px, und jedes Feld ohne
+       eigene Regel erbte sie -- bis hin zum Login-Feld. Wer ein neues Feld
+       baut, nimmt diesen Token, damit die naechste Ausnahme auffaellt. */
+    --eingabe-schrift: 1.0625rem;
     --danger: #ff8a99;  --danger-soft: rgba(255,138,153,0.16);
     --info: #7ab8ff;    --info-soft: rgba(122,184,255,0.16);
 
@@ -471,7 +480,7 @@ h2 { font-size: 1.25rem; font-weight: 600; }
     display: block; width: 100%; margin-bottom: 0.75rem; padding: 0.625rem 0.75rem;
     background: var(--surface); border: 1px solid var(--border-strong);
     border-radius: 8px; color: var(--text);
-    font-size: 0.95rem; font-family: inherit;
+    font-size: var(--eingabe-schrift); font-family: inherit;
     transition: border-color 0.15s, box-shadow 0.15s;
 }
 input:focus, select:focus, textarea:focus {
@@ -585,7 +594,7 @@ input[type="checkbox"] { display: inline; width: auto; }
 }
 .toolbar select {
     width: auto; margin: 0; padding: 0.5rem 0.625rem;
-    font-size: 0.8125rem; border-radius: 10px;
+    border-radius: 10px;
 }
 .toolbar-count { font-size: 0.75rem; color: var(--text-muted); margin: 0 0 0.75rem; }
 
@@ -827,10 +836,34 @@ input[type="checkbox"] { display: inline; width: auto; }
     }
 }
 
-/* Touch-Targets: auf Mobile bekommen Nav-Buttons min. 44px Höhe (Apple HIG). */
-@media (hover: none) and (pointer: coarse) {
+/* Touch-Targets (DESIGN 4): am Handy mindestens 44 px.
+ *
+ * Zwei Bedingungen mit ODER, nicht nur `pointer: coarse`. Die zweite
+ * Bedingung allein trifft im kopflosen Browser der Vorschau NIE zu -- eine
+ * Regel, die man nicht ansehen kann, ist eine Behauptung, und genau deshalb
+ * ist bis v2.11.3 niemandem aufgefallen, dass diese Liste aus zwei Klassen
+ * bestand. Der ganze Rest der Anwendung hatte keine Umschaltung: die
+ * geteilten Icon-Knöpfe blieben 34 px, die Chips 31, der Sortierknopf 34,
+ * die Kästchen im Export-Dialog 30.
+ *
+ * Aufgeführt sind hier nur die GETEILTEN Bausteine. Was ein Modul für sich
+ * erfindet, gehört in seine eigene Datei -- mit derselben Medienabfrage.
+ */
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
     .nav-btn { min-height: 44px; padding: 0.5rem 0.65rem; }
     .tab-btn { min-height: 44px; }
+    /* Der quadratische Icon-Knopf: er trägt oft die einzige Aktion einer
+       Zeile, und 34 px sind mit dem Daumen ein Glücksspiel. */
+    .v-btn--icon { width: 44px; height: 44px; }
+    .v-btn--sm { min-height: 44px; }
+    /* Chips und Filter -- Zeitraum, Statistik, Musik, Nährwerte. */
+    .rf-opt, .stat-chip, .filter-toggle-btn, .fp-btn { min-height: 44px; }
+    .sort-btn { min-height: 44px; }
+    .stat-mini-toggle button { min-height: 44px; }
+    /* Der Export-Dialog: seine Kästchen und die Spaltenwahl. */
+    .exp-check { min-height: 44px; }
+    .exp-colpick-btn { min-height: 44px; }
+    .exp-chip-row button { min-height: 44px; }
 }
 
 
@@ -1009,7 +1042,7 @@ input[type="checkbox"] { display: inline; width: auto; }
     width: 100%; margin: 0.875rem 0 0; padding: 0.625rem 0.75rem;
     background: var(--surface-2); color: var(--text-1);
     border: 1px solid var(--line-strong); border-radius: 10px;
-    font: inherit; font-size: 0.9375rem;
+    font: inherit; font-size: var(--eingabe-schrift);
 }
 .ui-prompt-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 .ui-confirm-actions {
@@ -1201,7 +1234,7 @@ input[type="checkbox"] { display: inline; width: auto; }
     color: var(--accent); padding: 0 0.25rem; }
 #themeSaveRow { display: flex; gap: 0.5rem; margin-top: var(--space-3); }
 #themeSaveRow input { flex: 1; min-width: 0; margin: 0;
-    padding: 0.4375rem 0.625rem; font-size: 0.8125rem;
+    padding: 0.4375rem 0.625rem;
     background: var(--surface-2); color: var(--text-1);
     border: 1px solid var(--line); border-radius: 8px; }
 #themeSaveRow .v-btn { flex: none; }
@@ -1370,7 +1403,7 @@ button.nav-switcher-item:hover { background: var(--surface-2); opacity: 1; }
    Inline-Formatierung. */
 .v-select {
     width: auto; margin: 0; padding: 0.4375rem 0.75rem;
-    font: inherit; font-size: 0.8125rem; font-weight: 600;
+    font: inherit; font-size: var(--eingabe-schrift); font-weight: 600;
     color: var(--text-2); background: var(--surface-2);
     border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
     transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
@@ -1640,7 +1673,7 @@ a.rec-row:hover .rec-go, button.rec-row:hover .rec-go { color: var(--text-2); }
 .fp-row.fp-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0.5rem}
 .fp-row.fp-two>div{display:flex;flex-direction:column;gap:0.25rem;min-width:0}
 .fp-label{font-size:0.6875rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-faint);margin:0}
-.fp-row select,.fp-row input{padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0;width:100%;min-width:0;max-width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px}
+.fp-row select,.fp-row input{padding:0.4375rem 0.625rem;margin:0;width:100%;min-width:0;max-width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px}
 .fp-actions{display:flex;gap:0.5rem;margin-top:0.25rem;padding-top:0.625rem;border-top:1px solid var(--border)}
 .fp-btn{flex:1;padding:0.5rem 0.75rem;font-size:0.8125rem;font-weight:600;border-radius:8px;cursor:pointer;width:auto;margin:0;border:1px solid transparent}
 .fp-btn-ghost{background:var(--surface-2);color:var(--text-muted);border-color:var(--border)}

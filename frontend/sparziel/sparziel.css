@@ -31,7 +31,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .hero-edit.open{display:block}
 .hero-edit-row{display:flex;flex-wrap:wrap;gap:0.625rem;align-items:flex-end}
 .hero-edit label{font-size:0.75rem;color:var(--text-2);display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px}
-.hero-edit input{padding:0.4375rem 0.625rem;font-size:0.875rem;margin:0}
+.hero-edit input{padding:0.4375rem 0.625rem;margin:0}
 .hero-edit .save{padding:0.5rem 1rem;font-size:0.875rem;background:var(--green);color:var(--accent-ink);font-weight:600;width:auto;margin:0}
 .hero-chart-head{margin-top:1.25rem;font-size:0.6875rem;font-weight:700;
     letter-spacing:0.09em;text-transform:uppercase;color:var(--text-4)}
@@ -101,9 +101,15 @@ body{visibility:hidden}body.ready{visibility:visible}
 .ach-quelle-hinweis.warn{color:var(--warn)}
 .ach-bar{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:0.625rem}
 .ach-bar-fill{height:100%;border-radius:3px;transition:width .35s ease}
-/* Zwei Zeilen: [+X …] [⋮] / [Wert] [Setzen] */
+/* Eine Zeile: [+X …] [⋮].
+   Das Feld „Wert“ samt „Setzen“ stand bis v2.11.3 darunter und war damit
+   dauerhaft auf JEDER Kachel zu sehen -- fuer einen Handgriff, den man
+   selten braucht: der haeufige Fall ist +X, und wer eine Messung eintraegt,
+   tut das ein paar Mal im Monat. Jetzt liegt die Zeile hinter den drei
+   Punkten, zusammen mit dem Rest, den man selten anfasst. Die Kachel wird
+   dadurch eine Zeile kuerzer, und die grosse Zahl steht naeher am Balken. */
 .ach-actions{display:grid;grid-template-columns:1fr auto;gap:5px;margin-top:auto;align-items:stretch}
-.ach-actions button,.ach-actions input{padding:0.4375rem 0.5rem;font-size:0.75rem;border-radius:6px;border:none;cursor:pointer;font-weight:600;font-family:inherit;width:auto;margin:0;box-sizing:border-box}
+.ach-actions button{padding:0.4375rem 0.5rem;font-size:0.75rem;border-radius:6px;border:none;cursor:pointer;font-weight:600;font-family:inherit;width:auto;margin:0;box-sizing:border-box}
 /* Zeile 1: [+X …] [⋮] */
 .ach-btn-plus{grid-row:1;grid-column:1;background:var(--grad-accent);color:var(--accent-ink);
     border:1px solid transparent;box-shadow:var(--glow-accent);
@@ -112,25 +118,24 @@ body{visibility:hidden}body.ready{visibility:visible}
 .ach-btn-plus::after{content:'⏱';position:absolute;bottom:2px;right:4px;font-size:0.5rem;opacity:0.6}
 .ach-btn-more{grid-row:1;grid-column:2;background:transparent;color:var(--text-3);padding:0.4375rem 0.5rem;white-space:nowrap}
 .ach-btn-more:hover{color:var(--text-1);background:var(--surface-2)}
-/* Zeile 2: [Wert] [Setzen] */
-.ach-actions .ach-inline-input{
-    grid-row:2;grid-column:1;
-    min-width:0;padding:0.4375rem 0.5rem;font-size:0.8125rem;
+/* Das Wertfeld liegt jetzt in der Klappe (.ach-set-row). */
+.ach-set-row .ach-inline-input{
+    min-width:0;padding:0.4375rem 0.5rem;
     border:1.5px solid var(--green);background:var(--surface-1);
     color:var(--text-1);border-radius:6px;font-family:inherit;
     -moz-appearance:textfield;
     transition:border-color .15s,box-shadow .15s;
     box-shadow:none;
 }
-.ach-actions .ach-inline-input:focus{outline:none;border-color:var(--green-dark);box-shadow:0 0 0 2px rgba(34,197,94,0.25)}
+.ach-set-row .ach-inline-input:focus{outline:none;border-color:var(--green-dark);box-shadow:0 0 0 2px rgba(34,197,94,0.25)}
 .ach-inline-input::-webkit-outer-spin-button,
 .ach-inline-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-.ach-btn-set{grid-row:2;grid-column:2;background:var(--text-1);color:var(--surface-1);padding:0.4375rem 0.625rem;white-space:nowrap}
+.ach-btn-set{background:var(--text-1);color:var(--surface-1);padding:0.4375rem 0.625rem;white-space:nowrap}
 .ach-badge{position:absolute;top:8px;right:8px;background:var(--green);color:var(--accent-ink);font-size:0.625rem;padding:3px 8px;border-radius:10px;font-weight:600;letter-spacing:0.3px}
 .ach-expand{margin-top:0.625rem;padding-top:0.625rem;border-top:1px solid var(--line);display:none}
 .ach-expand.open{display:block}
 .ach-set-row{display:flex;gap:5px;margin-bottom:0.5rem}
-.ach-set-row input{flex:1;padding:0.4375rem 0.5rem;font-size:0.8125rem;margin:0}
+.ach-set-row input{flex:1;padding:0.4375rem 0.5rem;margin:0}
 .ach-set-row button{padding:0.4375rem 0.75rem;font-size:0.75rem;background:var(--text-1);color:var(--surface-1);border:none;border-radius:6px;width:auto;margin:0;white-space:nowrap;font-weight:600}
 .ach-expand-actions{display:flex;gap:5px;flex-wrap:wrap}
 .ach-expand-actions button{padding:0.375rem 0.625rem;font-size:0.6875rem;border:1px solid var(--line);background:var(--surface-2);color:var(--text-2);border-radius:6px;width:auto;margin:0;font-weight:600;cursor:pointer}
@@ -139,7 +144,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .ach-edit-form.open{display:block}
 .ach-edit-form .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
 .ach-edit-form label{font-size:0.6875rem;color:var(--text-2);margin-bottom:2px;font-weight:500}
-.ach-edit-form input,.ach-edit-form select{padding:0.375rem 0.5rem;font-size:0.75rem;margin-bottom:0.375rem}
+.ach-edit-form input,.ach-edit-form select{padding:0.375rem 0.5rem;margin-bottom:0.375rem}
 .ach-edit-form .save-btns{display:flex;gap:5px;margin-top:0.5rem}
 .ach-edit-form .save-btns button{padding:0.4375rem 0.75rem;font-size:0.75rem;font-weight:600;border:none;border-radius:6px;cursor:pointer;width:auto;margin:0}
 .ach-edit-form .save{background:var(--green);color:var(--accent-ink);flex:1}
@@ -191,7 +196,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .pg-expand{margin-top:0.625rem;padding-top:0.625rem;border-top:1px solid var(--line);display:none}
 .pg-expand.open{display:block}
 .pg-expand label{font-size:0.6875rem;color:var(--text-2);font-weight:500;margin-bottom:2px}
-.pg-expand input,.pg-expand select{padding:0.375rem 0.5rem;font-size:0.8125rem;margin-bottom:0.375rem}
+.pg-expand input,.pg-expand select{padding:0.375rem 0.5rem;margin-bottom:0.375rem}
 .pg-expand .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
 .pg-expand-actions{display:flex;gap:5px;margin-top:0.5rem;flex-wrap:wrap}
 .pg-expand-actions button{padding:0.4375rem 0.75rem;font-size:0.75rem;border:none;border-radius:6px;cursor:pointer;font-weight:600;width:auto;margin:0}
@@ -234,7 +239,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .if-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.625rem}
 @media(min-width:640px){.if-grid{grid-template-columns:repeat(3,1fr)}}
 .iform label{font-size:0.75rem;color:var(--text-2);font-weight:500;margin-bottom:3px}
-.iform input,.iform select{padding:0.4375rem 0.625rem;font-size:0.8125rem;margin-bottom:0}
+.iform input,.iform select{padding:0.4375rem 0.625rem;margin-bottom:0}
 .iform .if-btn{padding:0.5rem 1rem;font-size:0.8125rem;background:var(--grad-accent);
     color:var(--accent-ink);font-weight:650;width:auto;margin:0.75rem 0 0;border-radius:9px;
     border:1px solid transparent;box-shadow:var(--glow-accent)}
@@ -256,7 +261,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .log-chips{display:flex;gap:5px;flex-wrap:wrap}
 .log-chip{padding:0.375rem 0.75rem;font-size:0.75rem;border:1px solid var(--line);background:var(--surface-1);border-radius:16px;cursor:pointer;font-weight:600;color:var(--text-2);width:auto;margin:0}
 .log-chip.active{background:var(--text-1);color:var(--surface-1);border-color:var(--text-1)}
-.log-search{flex:1;min-width:150px;padding:0.4375rem 0.625rem;font-size:0.8125rem;margin:0}
+.log-search{flex:1;min-width:150px;padding:0.4375rem 0.625rem;margin:0}
 .log-view-toggle{display:flex;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .log-view-toggle button{padding:0.375rem 0.75rem;font-size:0.75rem;background:var(--surface-1);color:var(--text-2);border:none;font-weight:600;width:auto;margin:0;border-radius:0;cursor:pointer}
 .log-view-toggle button.active{background:var(--text-1);color:var(--surface-1)}
@@ -328,7 +333,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .vex-modal-card h3{margin-bottom:0.5rem;font-size:1.125rem}
 .vex-modal-sub{font-size:0.8125rem;color:var(--text-2);margin-bottom:1rem}
 .vex-modal-card label{font-size:0.75rem;color:var(--text-2);font-weight:500;margin-bottom:3px;display:block}
-.vex-modal-card input,.vex-modal-card select{padding:0.5rem 0.625rem;font-size:0.875rem;margin-bottom:0.75rem}
+.vex-modal-card input,.vex-modal-card select{padding:0.5rem 0.625rem;margin-bottom:0.75rem}
 .vex-modal-actions{display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;margin-top:0.5rem}
 .vex-modal-actions button{width:auto;padding:0.5rem 1rem;font-size:0.875rem;margin:0;border-radius:8px;font-weight:600}
 .vex-modal-actions .cancel{background:var(--surface-2);color:var(--text-1);border:1px solid var(--line)}

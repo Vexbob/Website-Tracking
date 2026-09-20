@@ -13,7 +13,7 @@
 .blog-tag.active{background:var(--accent-strong);color:var(--accent-ink);border-color:transparent}
 
 .blog-search-wrap{display:flex;justify-content:center;margin-bottom:1.5rem}
-.blog-search{width:100%;max-width:400px;padding:0.6rem 1rem;font-size:0.875rem;border:1px solid var(--line);border-radius:10px;background:var(--surface-1);color:var(--text-1);outline:none;transition:border-color .15s}
+.blog-search{width:100%;max-width:400px;padding:0.6rem 1rem;border:1px solid var(--line);border-radius:10px;background:var(--surface-1);color:var(--text-1);outline:none;transition:border-color .15s}
 .blog-search:focus{border-color:var(--accent)}
 .blog-search::placeholder{color:var(--text-3)}
 

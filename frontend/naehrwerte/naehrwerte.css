@@ -25,7 +25,8 @@
        kleine Auswahlfeld aber 13 oder 14 px. Also sprang die Seite -- nicht
        ueberall, sondern genau dort, wo man im Eintragen-Dialog tippt.
        Eine Zahl an EINER Stelle, damit die naechste Ausnahme auffaellt. */
-    --nw-eingabe: 1.0625rem;
+    /* Geht im globalen --eingabe-schrift auf (v2.11.3). */
+    --nw-eingabe: var(--eingabe-schrift);
 }
 
 /* ---------- Ruhezustand ----------

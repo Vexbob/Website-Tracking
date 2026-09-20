@@ -522,12 +522,14 @@ function renderAchievements(){
             <div class="ach-bar"><div class="ach-bar-fill" style="width:${p}%;background:linear-gradient(90deg,${colorHex(c)}dd,${colorHex(c)})"></div></div>
             ${autoBandHTML(a)}
             <div class="ach-actions${live!=null?' nur-mehr':''}">
-                ${live!=null ? '' : `<button class="ach-btn-plus" data-ach-id="${a.id}" onclick="milestonePlus(${a.id})" title="Kurz tippen: +${fmtNum(a.step_amount||a.threshold_increment)} · Lang halten: Datum wählen · Nächster Meilenstein alle ${fmtNum(a.threshold_increment)}">+${fmtNum(a.step_amount||a.threshold_increment)} ${esc(a.unit||'')}</button>
-                <input type="number" step="0.01" class="ach-inline-input" id="achInput_${a.id}" placeholder="Wert" title="Wert setzen">
-                <button class="ach-btn-set" onclick="updateAchievement(${a.id})" title="Wert übernehmen">Setzen</button>`}
-                <button class="ach-btn-more" onclick="toggleAchExpand(${a.id})" title="Mehr">⋮</button>
+                ${live!=null ? '' : `<button class="ach-btn-plus" data-ach-id="${a.id}" onclick="milestonePlus(${a.id})" title="Kurz tippen: +${fmtNum(a.step_amount||a.threshold_increment)} · Lang halten: Datum wählen · Nächster Meilenstein alle ${fmtNum(a.threshold_increment)}">+${fmtNum(a.step_amount||a.threshold_increment)} ${esc(a.unit||'')}</button>`}
+                <button class="ach-btn-more" onclick="toggleAchExpand(${a.id})" aria-label="Mehr zu „${esc(a.title)}“" title="Mehr">⋮</button>
             </div>
             <div class="ach-expand" id="achExpand_${a.id}">
+                ${live!=null ? '' : `<div class="ach-set-row">
+                    <input type="number" step="0.01" class="ach-inline-input" id="achInput_${a.id}" placeholder="Wert" aria-label="Wert setzen">
+                    <button class="ach-btn-set" onclick="updateAchievement(${a.id})">Setzen</button>
+                </div>`}
                 <div class="ach-expand-actions"><button onclick="toggleAchEdit(${a.id})">Bearbeiten</button>${a.auto_source?`<button onclick="pruefeQuelle(${a.id})">Quelle prüfen</button>`:`<button onclick="openMilestoneModal(${a.id})">Backdate…</button>`}<button onclick="resetAchievement(${a.id})">Reset</button><button class="danger" onclick="deleteAchievement(${a.id})">Löschen</button></div>
                 <div class="ach-edit-form" id="achEdit_${a.id}">${editFormHTML(a)}</div>
             </div>
