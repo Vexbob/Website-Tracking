@@ -14,6 +14,10 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.4', date: '2026-09-21', title: 'Sechs Module werden sichtbar', notes: [
+        'Ausgaben, Gesundheit, Musik, Notizen, Blog und Verwaltung lassen sich jetzt in der Vorschau ansehen.',
+        'Ihre Darstellung war bis dahin ungeprüft — geprüft wurde nur, was die anderen fünf Module zeigen.',
+    ]},
     { v: 'v2.11.3', date: '2026-09-21', title: 'Nichts springt mehr beim Tippen', notes: [
         'Jedes Feld, in das man tippt, trägt jetzt 17 px — am iPhone zoomt die Seite dabei nicht mehr hinein.',
         'Knöpfe, Chips und Kästchen sind am Handy 44 px hoch statt 30; das galt bisher nur für zwei Klassen.',

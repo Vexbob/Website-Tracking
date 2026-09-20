@@ -56,6 +56,11 @@ PORT = 8787
 SEITEN = ["/", "/essen/", "/naehrwerte/", "/naehrwerte/#gerichte",
           "/naehrwerte/#vorrat", "/schach/", "/sparziel/", "/einstellungen/",
           "/design.html",
+          # Seit v2.11.4 auch die sechs Module, die bis dahin keine
+          # Vorschau-Daten hatten -- ihre Darstellung war unbelegt, waehrend
+          # die anderen bei jeder Aenderung im Bild geprueft wurden.
+          "/ausgaben/", "/ausgaben/statistik.html", "/ausgaben/kategorien.html",
+          "/health/", "/musik/", "/notizen/", "/blog/", "/admin/",
           # Die beiden Dialoge, in denen die eigentliche Arbeit steckt.
           # Ohne Griff endet die Vorschau davor.
           "/essen/?griff=klick:#esAdd;tippe:#esDlgSuche=Pi",

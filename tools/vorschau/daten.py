@@ -387,6 +387,205 @@ EXPORT_FIT = {
 }
 
 
+# ==========================================================================
+# Die Module, die bis v2.11.4 keine Vorschau hatten
+# --------------------------------------------------------------------------
+# Ausgaben (neun Seiten!), Gesundheit, Musik, Notizen, Blog und Verwaltung
+# liessen sich bis dahin nicht ansehen -- ihre Darstellung war unbelegt,
+# waehrend fuenf andere Module bei jeder Aenderung im Bild geprueft wurden.
+# Die Schluessel sind aus den Render-Funktionen der jeweiligen Seite
+# abgeschrieben; weicht einer ab, bleibt der Block leer, und genau das soll
+# er dann auch.
+# ==========================================================================
+
+def _tag(minus):
+    return (HEUTE - datetime.timedelta(days=minus)).isoformat()
+
+
+# ---------------------------------------------------------------- Ausgaben
+LAEDEN = [
+    {"id": 1, "name": "REWE", "color": "#e11d48", "icon": "R", "receipt_count": 48},
+    {"id": 2, "name": "Aldi Süd", "color": "#0ea5e9", "icon": "A", "receipt_count": 31},
+    {"id": 3, "name": "dm", "color": "#22c55e", "icon": "D", "receipt_count": 12},
+]
+
+KATEGORIEN = [
+    {"id": 1, "name": "Lebensmittel", "icon": "🛒", "color": "#22c55e", "item_count": 412},
+    {"id": 2, "name": "Drogerie", "icon": "🧴", "color": "#0ea5e9", "item_count": 63},
+    {"id": 3, "name": "Haushalt", "icon": "🏠", "color": "#a78bfa", "item_count": 21},
+]
+
+AUSGABEN_TYPEN = [
+    {"key": "receipt", "label": "Kassenbon", "icon": "🧾"},
+    {"key": "online", "label": "Online-Bestellung", "icon": "📦"},
+    {"key": "bill", "label": "Rechnung", "icon": "📄"},
+]
+
+BONS = [
+    {"id": 101, "store_name": "REWE", "store_color": "#e11d48", "store_icon": "R",
+     "expense_type": "receipt", "purchase_date": _tag(0), "item_count": 14,
+     "total_amount": 43.87, "has_image": True, "is_recurring": False},
+    {"id": 102, "store_name": "dm", "store_color": "#22c55e", "store_icon": "D",
+     "expense_type": "receipt", "purchase_date": _tag(0), "item_count": 3,
+     "total_amount": 11.45, "has_image": False, "is_recurring": False},
+    {"id": 103, "store_name": "Aldi Süd", "store_color": "#0ea5e9", "store_icon": "A",
+     "expense_type": "receipt", "purchase_date": _tag(1), "item_count": 9,
+     "total_amount": 27.10, "has_image": True, "is_recurring": False},
+    {"id": 104, "store_name": "Netflix", "store_color": "#a78bfa", "store_icon": "N",
+     "expense_type": "bill", "purchase_date": _tag(3), "item_count": 1,
+     "total_amount": 13.99, "has_image": False, "is_recurring": True},
+    {"id": 105, "store_name": "REWE", "store_color": "#e11d48", "store_icon": "R",
+     "expense_type": "receipt", "purchase_date": _tag(5), "item_count": 21,
+     "total_amount": 61.24, "has_image": True, "is_recurring": False},
+]
+
+AUSGABEN_SUMME = {
+    "today": 55.32, "this_week": 142.41, "this_month": 486.90,
+    "prev_month": 531.08, "this_year": 4820.55, "total": 9614.02, "count": 213,
+}
+
+
+# -------------------------------------------------------------- Gesundheit
+# Die Zusammenfassung ist je Metrik ein Objekt mit ``last`` und ``week_sum``
+# -- abgeschrieben aus ``renderHeartOverview`` und ``loadDashboard``.
+def _metrik(qty, summe=None):
+    eintrag = {"last": {"qty": qty, "date": HEUTE.isoformat()}}
+    if summe is not None:
+        eintrag["week_sum"] = summe
+    return eintrag
+
+
+GESUNDHEIT_SUMME = {
+    "steps": _metrik(8123, 62481),
+    "active_energy": _metrik(512, 3140),
+    "heart_rate": _metrik(74),
+    "resting_hr": _metrik(58),
+    "hrv": _metrik(41),
+    "vo2_max": _metrik(38.4),
+    "weight": _metrik(139.4),
+}
+
+
+# Eine Reihe fuer die Sparklines und die Wochenzahlen: 14 Tage, aelteste
+# zuerst -- genau so liest ``sum7``/``avg7`` sie.
+def _reihe(werte):
+    n = len(werte)
+    return [{"date": (HEUTE - datetime.timedelta(days=n - 1 - i)).isoformat(),
+             "qty": w} for i, w in enumerate(werte)]
+
+
+SCHRITTE_REIHE = _reihe([7420, 9110, 6380, 11240, 8025, 9640, 7180,
+                         8820, 10310, 7540, 9180, 8460, 11020, 8123])
+ENERGIE_REIHE = _reihe([380, 520, 310, 640, 420, 560, 350,
+                        470, 610, 390, 540, 480, 620, 512])
+PULS_REIHE = _reihe([72, 75, 71, 78, 74, 76, 73, 74, 77, 72, 75, 73, 76, 74])
+RUHEPULS_REIHE = _reihe([59, 58, 60, 57, 58, 59, 58, 57, 58, 60, 58, 57, 59, 58])
+
+SCHLAF_NAECHTE = [
+    {"date": (HEUTE - datetime.timedelta(days=i)).isoformat(),
+     "total_minutes": m, "core_minutes": int(m * 0.55),
+     "deep_minutes": int(m * 0.18), "rem_minutes": int(m * 0.22),
+     "awake_minutes": int(m * 0.05),
+     "bed_start": "23:10", "bed_end": "06:48"}
+    for i, m in enumerate([444, 412, 468, 396, 450, 430, 462])
+]
+
+BLUTDRUCK = [
+    {"recorded_at": (HEUTE - datetime.timedelta(days=i)).isoformat() + "T07:30:00",
+     "systolic": s_, "diastolic": d_}
+    for i, (s_, d_) in enumerate([(128, 82), (131, 84), (126, 80), (133, 86)])
+]
+
+BLUTZUCKER = [
+    {"recorded_at": (HEUTE - datetime.timedelta(days=i)).isoformat() + "T08:00:00",
+     "value": v}
+    for i, v in enumerate([92, 88, 97, 90])
+]
+
+WORKOUTS = [
+    {"id": 1, "workout_type": "Schwimmen", "started_at": _tag(1) + "T18:30:00",
+     "duration_min": 45, "active_energy": 420, "distance_km": 1.2, "avg_hr": 131},
+    {"id": 2, "workout_type": "Radfahren", "started_at": _tag(3) + "T09:10:00",
+     "duration_min": 68, "active_energy": 610, "distance_km": 24.6, "avg_hr": 126},
+    {"id": 3, "workout_type": "Krafttraining", "started_at": _tag(4) + "T19:05:00",
+     "duration_min": 52, "active_energy": 330, "distance_km": None, "avg_hr": 112},
+]
+
+
+# ------------------------------------------------------------------- Musik
+MUSIK_FACETTEN = {
+    "kinds": [{"key": "music", "label": "Musik", "count": 18422},
+              {"key": "podcast", "label": "Podcast", "count": 913},
+              {"key": "audiobook", "label": "Hörbuch", "count": 44}],
+    "years": [2024, 2025, 2026],
+}
+
+MUSIK_SUMME = {"plays": 19379, "minutes": 61240, "artists": 1284, "tracks": 7311}
+
+MUSIK_TOP = {
+    "artists": [{"name": "Radiohead", "plays": 812, "minutes": 3140},
+                {"name": "Bonobo", "plays": 604, "minutes": 2480},
+                {"name": "Nils Frahm", "plays": 431, "minutes": 2210},
+                {"name": "Four Tet", "plays": 388, "minutes": 1620},
+                {"name": "Kiasmos", "plays": 301, "minutes": 1410}],
+    "tracks": [{"name": "Weird Fishes", "artist": "Radiohead", "plays": 96},
+               {"name": "Kerala", "artist": "Bonobo", "plays": 71},
+               {"name": "Says", "artist": "Nils Frahm", "plays": 64}],
+}
+
+MUSIK_EINTRAEGE = {
+    "rows": [
+        {"period": "2026-09", "kind": "music", "artist": "Radiohead",
+         "title": "Weird Fishes / Arpeggi", "album": "In Rainbows",
+         "plays": 12, "minutes": 62},
+        {"period": "2026-09", "kind": "music", "artist": "Bonobo",
+         "title": "Kerala", "album": "Migration", "plays": 9, "minutes": 44},
+        {"period": "2026-08", "kind": "podcast", "artist": "Lage der Nation",
+         "title": "LdN 412", "album": "", "plays": 1, "minutes": 118},
+    ],
+    "total": 3, "page": 1, "pages": 1,
+}
+
+
+# ---------------------------------------------------------------- Notizen
+NOTIZEN = [
+    {"id": 1, "title": "Einkaufsliste Samstag", "content":
+     "<ul><li>Haferflocken</li><li>Kaffeebohnen</li><li>Olivenöl</li></ul>",
+     "color": "green", "pinned": True, "archived": False, "format": "html",
+     "created_at": _tag(2) + "T10:12:00", "updated_at": _tag(0) + "T08:40:00"},
+    {"id": 2, "title": "Ideen fürs Rennrad", "content":
+     "<p>Erst Laufräder, dann Sattel. Bremsbeläge halten noch.</p>",
+     "color": "blue", "pinned": False, "archived": False, "format": "html",
+     "created_at": _tag(9) + "T21:02:00", "updated_at": _tag(4) + "T19:15:00"},
+    {"id": 3, "title": "Schach: Eröffnungen üben", "content":
+     "<p>Caro-Kann gegen e4, Slawisch gegen d4.</p>",
+     "color": "default", "pinned": False, "archived": False, "format": "html",
+     "created_at": _tag(20) + "T12:00:00", "updated_at": _tag(11) + "T12:00:00"},
+]
+
+
+# ------------------------------------------------------------- Verwaltung
+KONTEN = [
+    {"id": 1, "username": "etienne", "is_admin": True, "is_active": True,
+     "created_at": _tag(400) + "T12:00:00", "last_login": _tag(0) + "T07:55:00"},
+    {"id": 2, "username": "gast", "is_admin": False, "is_active": True,
+     "created_at": _tag(30) + "T12:00:00", "last_login": _tag(6) + "T18:22:00"},
+]
+
+
+# ------------------------------------------------------------------- Blog
+BLOG_BEITRAEGE = [
+    {"id": 1, "slug": "warum-vexbob", "title": "Warum ich Vexbob gebaut habe",
+     "subtitle": "Ein Tracker, der mir gehört", "tags": ["projekt", "vexbob"],
+     "published_at": _tag(14) + "T18:00:00", "is_published": True,
+     "cover_image_id": None, "excerpt": "Jede App wollte mein Abo. Also habe ich angefangen."},
+    {"id": 2, "slug": "ein-jahr-ausgaben", "title": "Ein Jahr Bons scannen",
+     "subtitle": "Was dabei herauskam", "tags": ["ausgaben"],
+     "published_at": _tag(40) + "T09:30:00", "is_published": True,
+     "cover_image_id": None, "excerpt": "213 Bons, 9.614 Euro, und eine Erkenntnis."},
+]
+
+
 ANTWORTEN = {
     "/api/me": ICH,
     # Die Export-Registry kommt aus dem echten Modul -- eine nachgebaute
@@ -408,6 +607,53 @@ ANTWORTEN = {
                                              # bleiben.
                                              "off": ["notizen"]}}},
     "/api/ui/nav-tabs": {"tabs": []},
+
+    # ---- Ausgaben ----
+    "/api/stores": LAEDEN,
+    "/api/stores/merge-suggestions": [],
+    "/api/expense-categories": KATEGORIEN,
+    "/api/expense-types": AUSGABEN_TYPEN,
+    "/api/category-rules": [],
+    "/api/expenses": BONS,
+    "/api/expenses/stats/summary": AUSGABEN_SUMME,
+    "/api/expenses/recurring/suggestions": [],
+    "/api/expenses/duplicates": [],
+    "/api/expenses/ocr/status": {"available": True, "engine": "tesseract"},
+    "/api/receipts": [],
+
+    # ---- Gesundheit ----
+    "/api/health/summary": GESUNDHEIT_SUMME,
+    "/api/health/metrics/steps": SCHRITTE_REIHE,
+    "/api/health/metrics/active_energy": ENERGIE_REIHE,
+    "/api/health/metrics/heart_rate": PULS_REIHE,
+    "/api/health/metrics/resting_hr": RUHEPULS_REIHE,
+    "/api/health/metrics/*": [],
+    "/api/health/sleep": SCHLAF_NAECHTE,
+    "/api/health/blood-pressure": BLUTDRUCK,
+    "/api/health/blood-glucose": BLUTZUCKER,
+    "/api/health/workouts": WORKOUTS,
+    "/api/health/metric-order": {"order": []},
+    "/api/health/api-keys": [],
+    "/api/health/imports": [],
+
+    # ---- Musik ----
+    "/api/music/facets": MUSIK_FACETTEN,
+    "/api/music/summary": MUSIK_SUMME,
+    "/api/music/series": [],
+    "/api/music/top": MUSIK_TOP,
+    "/api/music/entries": MUSIK_EINTRAEGE,
+    "/api/music/imports": [],
+
+    # ---- Notizen ----
+    "/api/notes": NOTIZEN,
+
+    # ---- Verwaltung ----
+    "/api/admin/users": KONTEN,
+
+    # ---- Blog ----
+    "/api/blog/posts": BLOG_BEITRAEGE,
+    "/api/blog/tags": [{"tag": "projekt", "count": 4}, {"tag": "ausgaben", "count": 2}],
+
 
     "/api/food/diary/day": TAGEBUCH_TAG,
     "/api/food/diary/frequent": TAGEBUCH_HAEUFIG,
