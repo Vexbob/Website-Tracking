@@ -254,3 +254,40 @@ def test_wer_auf_window_prueft_findet_den_baustein_auch_dort():
             fehler.append("%s prueft auf window.%s, aber nichts setzt es"
                           % ("/" + js.relative_to(front).as_posix(), name))
     assert not fehler, "\n".join(fehler)
+
+
+def test_app_version_ist_der_oberste_changelog_eintrag():
+    """``APP_VERSION`` und die oberste Zeile des Zeitstrahls sind dieselbe Zahl.
+
+    Sie stehen in zwei Dateien und laufen deshalb auseinander. Am Tag, an dem
+    dieser Test entstand, war das zweimal passiert: ein Rueckbau bekam eine
+    neue Minor-Nummer (v2.11.0), obwohl die Konvention dafuer die Patch-Zahl
+    des bestehenden Eintrags vorsieht -- gemerkt hat es niemand, weil die
+    Fussleiste einfach die Zahl zeigt, die in version.js steht.
+    """
+    front = WURZEL / "frontend"
+    version = (front / "js" / "version.js").read_text(encoding="utf-8")
+    log = (front / "js" / "changelog.js").read_text(encoding="utf-8")
+
+    gesetzt = re.search(r"APP_VERSION\s*=\s*'([^']+)'", version)
+    assert gesetzt, "version.js setzt kein APP_VERSION"
+
+    eintraege = re.findall(r"\{ v: '([^']+)'", log)
+    assert eintraege, "changelog.js hat keine Eintraege"
+    assert gesetzt.group(1) == eintraege[0], (
+        "APP_VERSION ist %s, oberster Changelog-Eintrag ist %s"
+        % (gesetzt.group(1), eintraege[0]))
+
+    # Und der Zeitstrahl laeuft abwaerts -- eine Version, die zwischen zwei
+    # aelteren steht, findet niemand wieder. Der aelteste Eintrag heisst
+    # "v0.x" und fasst die Vorgeschichte zusammen; er hat absichtlich keine
+    # Nummer und bleibt deshalb aussen vor.
+    zaehlbar = [v for v in eintraege if re.fullmatch(r"v\d+\.\d+\.\d+", v)]
+
+    def teile(v):
+        return tuple(int(x) for x in v[1:].split("."))
+
+    sortiert = sorted(zaehlbar, key=teile, reverse=True)
+    assert zaehlbar == sortiert, (
+        "Der Zeitstrahl ist nicht absteigend: %s"
+        % [v for v, w in zip(zaehlbar, sortiert) if v != w][:4])

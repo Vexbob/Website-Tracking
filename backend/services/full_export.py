@@ -671,7 +671,7 @@ def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
         "YYYY-MM-DDTHH:MM:SSZ (keine Mikrosekunden). ALLE Zahlen nutzen "
         "Punkt-Dezimal, auch Euro-Betraege. Ein leeres Feld heisst 'nicht "
         "bekannt' und nicht 'null'.")
-    # v2.11.0: Diese Zeile steht hier, weil eine Auswertung genau daran
+    # v2.10.1: Diese Zeile steht hier, weil eine Auswertung genau daran
     # scheitert: derselbe Betrag taucht absichtlich auf mehreren Stufen auf,
     # und wer die Sektionen addiert, haelt das fuer doppelte Buchungen.
     lines.append(

@@ -1116,7 +1116,7 @@ input[type="checkbox"] { display: inline; width: auto; }
         padding-left: 0; padding-top: var(--space-4); }
 }
 
-/* v2.11.0 — Form und Maske.
+/* v2.10.1 — Form und Maske.
    v2.10.0 hatte den Einstieg durch drei fertige Zusammenstellungen ersetzt.
    Das war ein Schritt zu weit: wer Zeitraum und Module einstellen will, will
    sie sehen und nicht erst aufklappen. Geblieben ist die Wahl der Form und

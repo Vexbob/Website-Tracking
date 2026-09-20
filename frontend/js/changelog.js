@@ -14,23 +14,18 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
-    { v: 'v2.11.0', date: '2026-09-20', title: 'Der Export nimmt deine Voreinstellung wieder an', notes: [
-        'Die Export-Voreinstellung aus den Einstellungen wurde zwar gespeichert, aber nie gelesen — der Dialog machte immer mit „Einzeln“ auf. Dasselbe traf den Standard-Zeitraum.',
-        'Die drei fertigen Zusammenstellungen sind wieder weg; Zeitraum, Module und Verdichtung stehen wieder direkt im Dialog. Die Wahl zwischen einer Datei und einem ZIP bleibt.',
-        'Der Export sagt jetzt in jeder betroffenen Tabelle, dass derselbe Betrag absichtlich auf mehreren Stufen steht — vorher las sich das wie doppelte Buchungen.',
-    ]},
-    { v: 'v2.10.0', date: '2026-09-20', title: 'Der Export fragt zuerst, wofür', notes: [
-        'Der Dialog macht mit drei Antworten auf: „Zum Auswerten“, „Alles, ungekürzt“ und „Selbst zusammenstellen“ — die Maske mit Zeitraum, Modulen und Spalten klappt nur noch auf, wenn du sie brauchst.',
-        '„Zum Auswerten“ lässt die Rohdaten weg und stellt die Stufe selbst so ein, dass die Datei unter 1 MB bleibt und am Stück hochladbar ist.',
-        'Neu wählbar: eine Datei oder ein Archiv mit einer CSV je Tabelle samt LIESMICH — für Excel und Numbers, die eine Datei mit 20 Tabellen nie öffnen konnten.',
-        'Alle Zahlen nutzen jetzt denselben Dezimalpunkt; vorher schrieben Ausgaben Komma und alles andere Punkt, und die Hälfte der Spalten kam als Text an.',
-        'Leere Tabellen stehen nicht mehr als Überschrift ohne Inhalt in der Datei, sondern namentlich im Kopf.',
+    { v: 'v2.10.1', date: '2026-09-20', title: 'Der Export wird lesbar', notes: [
+        'Neu wählbar: eine Datei mit allen Tabellen oder ein ZIP mit einer CSV je Tabelle.',
+        'Alle Zahlen nutzen denselben Dezimalpunkt; leere Tabellen stehen namentlich im Kopf statt als Überschrift ohne Inhalt.',
+        'Jede Tabelle nennt jetzt ihre Doppelungen — Perioden-Summe, Beleg und Posten sind dasselbe Geld, nicht drei Buchungen.',
+        'Nachgezogen: Export-Voreinstellung und Standard-Zeitraum waren gespeichert, wurden aber nie gelesen.',
+        'Nachgezogen: Der Einstieg über drei fertige Zusammenstellungen ist wieder weg — Zeitraum und Module stehen wieder direkt da.',
     ]},
     { v: 'v2.9.0', date: '2026-09-19', title: 'Meilensteine holen sich ihren Wert selbst', notes: [
-        'Eine Meilenstein-Kachel kann ihren Stand jetzt aus einem anderen Modul lesen — Gewicht aus Gesundheit, Wertung aus Schach, dazu Trainings, Partien, Ausgaben, Hörzeit und getrackte Tage.',
-        'Eingestellt wird das unter „Bearbeiten“; beim Gewicht ist wählbar, ob der letzte Messwert oder das Mittel über 3 bis 30 Tage zählt.',
-        'Gutgeschrieben wird nie von allein: die Kachel zeigt „Meilenstein erreicht“ mit dem Betrag, und erst der Knopf daneben bucht.',
-        'Eine Schwelle zahlt weiterhin nur einmal — wer wieder zunimmt und dieselbe Marke erneut unterschreitet, bekommt kein zweites Geld.',
+        'Eine Meilenstein-Kachel kann ihren Stand aus einem anderen Modul holen: Gewicht, Schach-Wertung, Trainings, Partien, Ausgaben, Hörzeit, getrackte Tage.',
+        'Einstellbar unter „Bearbeiten“; beim Gewicht wahlweise letzter Messwert oder Mittel über 3 bis 30 Tage.',
+        'Gebucht wird nie von allein: die Kachel meldet den Meilenstein, der Knopf daneben schreibt gut.',
+        'Eine Schwelle zahlt weiterhin nur einmal — auch wenn du sie zweimal unterschreitest.',
     ]},
     { v: 'v2.8.0', date: '2026-09-19', title: 'Der Export merkt sich, wie du ihn willst', notes: [
         'In den Einstellungen steht jetzt, womit der Export-Dialog aufmacht: die Zusammenfassung je Modul und die Grenze, vor der verdichtet wird.',
