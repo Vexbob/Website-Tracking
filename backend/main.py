@@ -1696,6 +1696,11 @@ async def del_st(request: Request, tid: int, db=Depends(get_db), user=Depends(ge
 # Export-Helfer leben in ``helpers.py`` (ausgelagert v1.15.1)
 
 
+# v2.11.1: Die Oberflaeche ruft das nicht mehr auf -- der Knopf im
+# Modul ist weg, herausgeholt wird ueber den Gesamt-Export. Der
+# Endpunkt bleibt als direkter Weg bestehen; wer ihn erweitert,
+# sollte vorher fragen, ob die Zeilen nicht in ``full_export`` gehoeren:
+# zwei Wege zu derselben Datei laufen sonst auseinander.
 @app.get("/api/savings-transactions/export")
 async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
     # Bugfix v1.15.0: Der Export enthaelt jetzt vorab einen Metadaten-

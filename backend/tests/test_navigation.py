@@ -34,6 +34,7 @@ from services import backup                        # noqa: E402
 WURZEL = pathlib.Path(__file__).resolve().parents[2]
 NAV_SWITCHER = WURZEL / "frontend" / "js" / "nav-switcher.js"
 MIGRATIONEN = WURZEL / "backend" / "migrations" / "sql"
+FRONTEND = str(WURZEL / "frontend")
 
 
 def _module_pfade() -> set:
@@ -291,3 +292,65 @@ def test_app_version_ist_der_oberste_changelog_eintrag():
     assert zaehlbar == sortiert, (
         "Der Zeitstrahl ist nicht absteigend: %s"
         % [v for v, w in zip(zaehlbar, sortiert) if v != w][:4])
+
+
+# --------------------------------------------- Inline-Handler (v2.11.1)
+_HANDLER = re.compile(
+    r'on(?:click|change|input|submit|keyup|keydown|blur|focus)="\s*'
+    r'([A-Za-z_$][\w$]*)\s*\(')
+_SKRIPT_SRC = re.compile(r'<script[^>]*\ssrc="([^"]+)"')
+# Was der Browser selbst mitbringt und deshalb in keiner Datei stehen muss.
+_EINGEBAUT = {"window", "location", "history", "alert", "confirm", "print"}
+
+
+def _geladener_code(html_pfad: str, text: str) -> str:
+    """Der Quelltext, den GENAU diese Seite laedt: eingebettet plus jede
+    Datei aus ihren ``<script src>``. Gegen den gesamten Bestand zu pruefen
+    waere zu grosszuegig -- eine Funktion, die es auf einer anderen Seite
+    gibt, hilft dieser hier nicht."""
+    stuecke = [text]
+    ordner = os.path.dirname(html_pfad)
+    for src in _SKRIPT_SRC.findall(text):
+        if src.startswith("http"):
+            continue
+        ziel = (os.path.join(FRONTEND, src.lstrip("/")) if src.startswith("/")
+                else os.path.join(ordner, src))
+        ziel = ziel.split("?")[0]
+        if os.path.exists(ziel):
+            stuecke.append(open(ziel, encoding="utf-8").read())
+    return "\n".join(stuecke)
+
+
+def _ist_definiert(name: str, code: str) -> bool:
+    return any(re.search(m, code) for m in (
+        rf"function\s+{re.escape(name)}\s*\(",
+        rf"(?:const|let|var)\s+{re.escape(name)}\s*=",
+        rf"window\.{re.escape(name)}\s*=",
+        rf"{re.escape(name)}\s*=\s*(?:async\s*)?(?:function|\()",
+    ))
+
+
+def test_jeder_inline_handler_hat_seine_funktion():
+    """``onclick="exportCsv()"`` ohne ``exportCsv`` faellt STILL aus.
+
+    Kein roter Rahmen, keine Meldung -- der Knopf tut einfach nichts, und man
+    haelt ihn fuer kaputte Daten statt fuer kaputten Code. Gefunden beim
+    Ausbau der einzelnen Modul-Exporte (v2.11.1): dort verschwanden drei
+    Funktionen, und ob wirklich jeder Aufrufer mitgegangen war, liess sich
+    bis dahin nur durch Hinsehen beantworten.
+    """
+    fehlend = []
+    for wurzel, _, dateien in os.walk(FRONTEND):
+        for d in dateien:
+            if not d.endswith(".html"):
+                continue
+            pfad = os.path.join(wurzel, d)
+            text = open(pfad, encoding="utf-8").read()
+            namen = set(_HANDLER.findall(text)) - _EINGEBAUT
+            if not namen:
+                continue
+            code = _geladener_code(pfad, text)
+            kurz = os.path.relpath(pfad, FRONTEND)
+            fehlend += ["%s -> %s()" % (kurz, n)
+                        for n in sorted(namen) if not _ist_definiert(n, code)]
+    assert not fehlend, "Handler ohne Funktion: " + ", ".join(fehlend)

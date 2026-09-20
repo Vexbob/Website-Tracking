@@ -14,8 +14,9 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
-    { v: 'v2.11.0', date: '2026-09-20', title: 'Der Export lässt Module weg', notes: [
-        'Die Export-Voreinstellung kann Module ganz abschalten — sie fehlen dann im Dialog und in der Datei.',
+    { v: 'v2.11.1', date: '2026-09-20', title: 'Nur noch ein Export', notes: [
+        'Die einzelnen CSV-Knöpfe in Ausgaben, Gesundheit und Sparziel sind weg — es gibt den Gesamt-Export.',
+        'Der kann dafür Module ganz weglassen: abgeschaltet fehlen sie im Dialog und in der Datei.',
         'Gespeichert wird, was aus ist: ein künftiges Modul ist damit von selbst dabei.',
         'Ein Serverfehler meldet sich jetzt als Fehler statt als „Netzwerkfehler“ und nennt seine Kennung.',
     ]},

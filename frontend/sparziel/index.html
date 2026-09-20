@@ -30,10 +30,10 @@
 </nav>
 <main class="wide">
     <div class="tabs">
-        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-        <button class="tab-btn" data-tab="log">Log</button>
-        <button class="tab-btn" data-tab="trophies">Trophäen</button>
-        <button class="tab-btn" data-tab="ideen">Ideen &amp; Ziele</button>
+        <button id="tabDashboard" class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button id="tabLog" class="tab-btn" data-tab="log">Log</button>
+        <button id="tabTrophies" class="tab-btn" data-tab="trophies">Trophäen</button>
+        <button id="tabIdeen" class="tab-btn" data-tab="ideen">Ideen &amp; Ziele</button>
     </div>
 
     <div id="tab-dashboard">
@@ -153,7 +153,6 @@
                 <button data-view="weekly" class="active">Wochenübersicht</button>
                 <button data-view="all">Alle</button>
             </div>
-            <button class="log-btn" onclick="exportCsv()">CSV</button>
             <button class="log-btn" onclick="downloadBackup()">Backup</button>
         </div>
         <div class="log-sum" id="logSum" style="display:none"></div>

@@ -96,7 +96,6 @@ const AUSGABEN_API = {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ expense_ids }),
     }),
-    exportCsv:  () => `${API_BASE}/api/expenses/export`,
 };
 
 
@@ -246,41 +245,6 @@ function todayISO() {
 /* ---------- Bild mit Auth laden -> Blob-URL ---------- */
 async function fetchImageAsBlobUrl(url) { return VexBild.alsBlobUrl(url); }
 
-/* ---------- Datei mit Auth-Header herunterladen (für CSV-Export) ---------- */
-async function downloadFile(url, filename) {
-    try {
-        const token = getToken();
-        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
-        if (!res.ok) {
-            // Fehler-Payload robust in einen String verwandeln (nicht "[object Object]")
-            let msg = 'HTTP ' + res.status;
-            try {
-                const txt = await res.text();
-                if (txt) {
-                    try {
-                        const j = JSON.parse(txt);
-                        if (typeof j === 'string') msg = j;
-                        else if (j && typeof j.detail === 'string') msg = j.detail;
-                        else if (j && Array.isArray(j.detail)) msg = j.detail.map(x => x.msg || JSON.stringify(x)).join('; ');
-                        else msg = JSON.stringify(j);
-                    } catch (_) { msg = txt; }
-                }
-            } catch (_) {}
-            console.error('Export-Fehler:', res.status, msg);
-            throw new Error(msg);
-        }
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    } catch (e) {
-        const msg = (e && typeof e.message === 'string') ? e.message : String(e);
-        showToast('Export fehlgeschlagen: ' + msg, 'error');
-    }
-}
-
 /* ---------- Gemeinsame Subnav für alle Ausgaben-Seiten ---------- */
 // Nutzung: <div id="subnav" data-active="..."></div> ins HTML, wobei active z.B.
 // "dashboard" | "neu" | "statistik" | "produkte" | "laeden" | "kategorien"
@@ -303,15 +267,17 @@ function renderSubnav() {
         { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
         { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },
         { key: 'duplikate',    href: '/ausgaben/duplikate.html',     label: '♻️ Duplikate' },
-        // v1.80.0: Der Nachtrag aus der Banking-App. Steht bewusst neben dem
-        // CSV-Export -- Import und Export sind dieselbe Frage in beide
-        // Richtungen, und wer den einen sucht, denkt auch an den anderen.
+        // v1.80.0: Der Nachtrag aus der Banking-App.
         { key: 'import',       href: '/ausgaben/import.html',        label: '⬆️ Import' },
     ];
+    // v2.11.1: Kein eigener Export mehr in der Leiste. Jedes Modul hatte
+    // seinen -- mit eigenem Dateinamen, eigenem Zeitraum (keinem) und eigener
+    // Spaltenwahl (keiner). Der Gesamt-Export auf /einstellungen/ kann all
+    // das, und wer nur die Ausgaben will, schaltet die anderen Module dort
+    // ab. Zwei Wege zu derselben Datei sind einer zu viel: der zweite wird
+    // nicht gepflegt und liefert irgendwann etwas anderes als der erste.
     el.className = 'subnav';
     el.innerHTML = links.map(l =>
         `<a href="${l.href}"${l.key === active ? ' class="primary"' : ''}>${l.label}</a>`
-    ).join('') + '<a href="#" id="exportCsvLink">⬇ Export</a>';
-    const csv = document.getElementById('exportCsvLink');
-    if (csv) csv.onclick = (e) => { e.preventDefault(); downloadFile(AUSGABEN_API.exportCsv(), 'ausgaben_' + todayISO() + '.csv'); };
+    ).join('');
 }

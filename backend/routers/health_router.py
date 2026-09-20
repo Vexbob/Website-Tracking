@@ -532,6 +532,11 @@ async def clear_import_log(request: Request, db=Depends(get_db),
 
 
 # ---------- CSV-Export (v1.27.0) ----------
+# v2.11.1: Die Oberflaeche ruft das nicht mehr auf -- der Knopf im
+# Modul ist weg, herausgeholt wird ueber den Gesamt-Export. Der
+# Endpunkt bleibt als direkter Weg bestehen; wer ihn erweitert,
+# sollte vorher fragen, ob die Zeilen nicht in ``full_export`` gehoeren:
+# zwei Wege zu derselben Datei laufen sonst auseinander.
 @router.get("/api/health/export")
 async def export_health_csv(db=Depends(get_db), user=Depends(get_current_user)):
     """Dediziertes CSV-Backup aller Gesundheitsdaten des eingeloggten Users

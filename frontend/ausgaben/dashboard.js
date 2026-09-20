@@ -344,7 +344,6 @@ document.querySelectorAll('#datePresets button').forEach(b => {
     b.onclick = () => applyPreset(b.dataset.preset);
 });
 
-// downloadFile + Export-Link kommen aus ausgaben.js (renderSubnav)
 
 loadInit();
 

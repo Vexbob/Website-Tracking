@@ -1930,6 +1930,11 @@ async def product_history(key: str, db=Depends(get_db), user=Depends(get_current
 
 
 # ---------- Export ----------
+# v2.11.1: Die Oberflaeche ruft das nicht mehr auf -- der Knopf im
+# Modul ist weg, herausgeholt wird ueber den Gesamt-Export. Der
+# Endpunkt bleibt als direkter Weg bestehen; wer ihn erweitert,
+# sollte vorher fragen, ob die Zeilen nicht in ``full_export`` gehoeren:
+# zwei Wege zu derselben Datei laufen sonst auseinander.
 @router.get("/api/expenses/export")
 async def export_expenses(db=Depends(get_db), user=Depends(get_current_user)):
     """CSV-Export aller Bons + Einzelpositionen (Semikolon-getrennt, UTF-8 mit BOM).
