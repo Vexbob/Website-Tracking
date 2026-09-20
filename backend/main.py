@@ -198,9 +198,16 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 _cors_env = os.getenv("CORS_ORIGINS", "http://localhost:5500,http://127.0.0.1:5500")
 CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()]
 
+# v2.10.2: ``Content-Disposition`` muss ausdruecklich freigegeben werden.
+# Frontend und Backend liegen auf verschiedenen Domains, und ein Browser
+# reicht aus einer fremden Antwort nur eine Handvoll Kopfzeilen an das
+# Skript weiter -- diese gehoert nicht dazu. Ohne die Freigabe liest der
+# Export-Dialog ``null`` und benennt jede Datei nach seinem Rueckfallnamen;
+# ein Archiv landete so mit der Endung .csv auf der Platte.
 app.add_middleware(CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+    allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
+    expose_headers=["Content-Disposition"])
 
 # v1.21.1: GZip-Kompression fuer alle Responses ab 1 KB. JSON-Listen (z.B.
 # /api/expenses/products, /api/brands) sind hochgradig repetitiv und schrumpfen

@@ -14,12 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
-    { v: 'v2.10.1', date: '2026-09-20', title: 'Der Export wird lesbar', notes: [
+    { v: 'v2.10.2', date: '2026-09-20', title: 'Der Export wird lesbar', notes: [
         'Neu wählbar: eine Datei mit allen Tabellen oder ein ZIP mit einer CSV je Tabelle.',
         'Alle Zahlen nutzen denselben Dezimalpunkt; leere Tabellen stehen namentlich im Kopf statt als Überschrift ohne Inhalt.',
         'Jede Tabelle nennt jetzt ihre Doppelungen — Perioden-Summe, Beleg und Posten sind dasselbe Geld, nicht drei Buchungen.',
-        'Nachgezogen: Export-Voreinstellung und Standard-Zeitraum waren gespeichert, wurden aber nie gelesen.',
-        'Nachgezogen: Der Einstieg über drei fertige Zusammenstellungen ist wieder weg — Zeitraum und Module stehen wieder direkt da.',
+        'Nachgezogen: Das Archiv kam mit der Endung .csv an und ließ sich nicht öffnen.',
+        'Nachgezogen: Zeitraum und Module stehen wieder direkt im Dialog, und die gespeicherte Voreinstellung wird auch gelesen.',
     ]},
     { v: 'v2.9.0', date: '2026-09-19', title: 'Meilensteine holen sich ihren Wert selbst', notes: [
         'Eine Meilenstein-Kachel kann ihren Stand aus einem anderen Modul holen: Gewicht, Schach-Wertung, Trainings, Partien, Ausgaben, Hörzeit, getrackte Tage.',

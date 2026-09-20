@@ -349,10 +349,16 @@
             const res = await apiCall('/api/export/all' + (qs ? '?' + qs : ''), { raw: true });
             if (!res || !res.ok) throw new Error('HTTP ' + (res && res.status));
             const blob = await res.blob();
-            let filename = 'vexbob-gesamt-export.csv';
+            // Der Rueckfallname richtet sich nach der gewaehlten Form. Steht
+            // hier fest .csv, bekommt ein Archiv die falsche Endung und laesst
+            // sich nicht mehr oeffnen -- der Inhalt war nie das Problem.
+            let filename = 'vexbob-gesamt-export' + (state.format === 'zip' ? '.zip' : '.csv');
             const cd = res.headers.get('content-disposition') || '';
             const m = cd.match(/filename="?([^";]+)"?/i);
-            if (m) filename = m[1];
+            // Nur uebernehmen, wenn die Endung zur gewaehlten Form passt: ein
+            // Zwischenspeicher oder ein alter Server darf dem Archiv keinen
+            // .csv-Namen geben.
+            if (m && m[1].toLowerCase().endsWith(filename.slice(-4))) filename = m[1];
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url; a.download = filename;

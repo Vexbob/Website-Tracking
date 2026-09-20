@@ -16,6 +16,7 @@ liefert, reicht fuer die Form. Was IN den Zeilen steht, prueft
 ``test_export_aggregation.py``.
 """
 import asyncio
+import io
 import os
 import sys
 
@@ -155,3 +156,72 @@ def test_rohdaten_sind_als_solche_gekennzeichnet():
     # Jede Sektion muss entscheidbar sein: ein fehlendes Kennzeichen heisst
     # "gehoert in die Auswertung", und das ist die richtige Voreinstellung.
     assert len(fx.AUSWERTBARE_SECTION_KEYS) == len(fx.ALL_SECTION_KEYS) - 3
+
+
+# ------------------------------------------------------- Die Datei als Datei
+# v2.10.2: Der Inhalt des Archivs war nie das Problem -- der NAME war es. Der
+# Browser reicht ``Content-Disposition`` aus einer Antwort von einer fremden
+# Domain nur weiter, wenn der Server sie ausdruecklich freigibt. Ohne die
+# Freigabe griff der Dialog zu seinem Rueckfallnamen, und der hiess fest
+# ".csv" -- ein vollstaendiges Archiv mit einer Endung, die es nicht oeffnet.
+import re
+import zipfile as _zip
+
+from routers import export_router as er                       # noqa: E402
+
+
+class _Anfrage:
+    """Nur das, was ``export_all`` von einem Request liest."""
+
+    def __init__(self, query=None, headers=None):
+        self.query_params = query or {}
+        self.headers = headers or {}
+
+
+def test_zip_antwort_ist_ein_zip_und_heisst_auch_so():
+    antwort = asyncio.run(er.export_all(
+        _Anfrage(), date_from=None, date_to=None,
+        aggregate="none", sections=None, format="zip",
+        db=LeereDB(), user=NUTZER))
+    assert antwort.media_type == "application/zip"
+    # Kein gzip darueber: ein Archiv ist bereits gepackt, und ein zweites
+    # Mal verpackt kaeme es als .zip.gz an.
+    assert "Content-Encoding" not in antwort.headers
+    name = re.search(r'filename="([^"]+)"',
+                     antwort.headers["Content-Disposition"]).group(1)
+    assert name.endswith(".zip"), name
+    # Und der Rumpf ist wirklich eines -- inklusive der LIESMICH.
+    archiv = _zip.ZipFile(io.BytesIO(antwort.body))
+    assert "LIESMICH.txt" in archiv.namelist()
+
+
+def test_csv_antwort_bleibt_eine_csv():
+    antwort = asyncio.run(er.export_all(
+        _Anfrage(), date_from=None, date_to=None,
+        aggregate="none", sections=None, format="csv", db=LeereDB(), user=NUTZER))
+    assert antwort.media_type.startswith("text/csv")
+    assert '.csv"' in antwort.headers["Content-Disposition"]
+
+
+def test_der_browser_darf_den_dateinamen_lesen():
+    """Sonst ist der Name des Servers fuer das Skript unsichtbar.
+
+    Frontend und Backend liegen auf verschiedenen Domains. Ohne
+    ``expose_headers`` liefert ``res.headers.get('content-disposition')``
+    im Browser ``null``, egal was der Server sendet.
+    """
+    quelle = open(os.path.join(os.path.dirname(__file__), "..", "main.py"),
+                  encoding="utf-8").read()
+    kopf = quelle[quelle.index("CORSMiddleware,"):][:400]
+    assert "expose_headers" in kopf
+    assert "Content-Disposition" in kopf
+
+
+def test_rueckfallname_im_dialog_kennt_beide_formen():
+    """Der Dialog darf nicht fest .csv annehmen, wenn ZIP gewaehlt ist."""
+    pfad = os.path.join(os.path.dirname(__file__), "..", "..",
+                        "frontend", "js", "export-dialog.js")
+    js = open(pfad, encoding="utf-8").read()
+    stelle = js[js.index("let filename ="):][:200]
+    assert "state.format === 'zip'" in stelle
+    assert "'.zip'" in stelle
