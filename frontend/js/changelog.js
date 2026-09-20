@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.10.0', date: '2026-09-20', title: 'Der Export fragt zuerst, wofür', notes: [
+        'Der Dialog macht mit drei Antworten auf: „Zum Auswerten“, „Alles, ungekürzt“ und „Selbst zusammenstellen“ — die Maske mit Zeitraum, Modulen und Spalten klappt nur noch auf, wenn du sie brauchst.',
+        '„Zum Auswerten“ lässt die Rohdaten weg und stellt die Stufe selbst so ein, dass die Datei unter 1 MB bleibt und am Stück hochladbar ist.',
+        'Neu wählbar: eine Datei oder ein Archiv mit einer CSV je Tabelle samt LIESMICH — für Excel und Numbers, die eine Datei mit 20 Tabellen nie öffnen konnten.',
+        'Alle Zahlen nutzen jetzt denselben Dezimalpunkt; vorher schrieben Ausgaben Komma und alles andere Punkt, und die Hälfte der Spalten kam als Text an.',
+        'Leere Tabellen stehen nicht mehr als Überschrift ohne Inhalt in der Datei, sondern namentlich im Kopf.',
+    ]},
     { v: 'v2.9.0', date: '2026-09-19', title: 'Meilensteine holen sich ihren Wert selbst', notes: [
         'Eine Meilenstein-Kachel kann ihren Stand jetzt aus einem anderen Modul lesen — Gewicht aus Gesundheit, Wertung aus Schach, dazu Trainings, Partien, Ausgaben, Hörzeit und getrackte Tage.',
         'Eingestellt wird das unter „Bearbeiten“; beim Gewicht ist wählbar, ob der letzte Messwert oder das Mittel über 3 bis 30 Tage zählt.',

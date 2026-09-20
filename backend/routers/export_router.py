@@ -45,7 +45,9 @@ v2.8.0: ``compact_before=YYYY-MM-DD`` verdichtet alles VOR diesem Tag
     schaltet sie fuer diesen einen Aufruf ab.
 """
 import gzip
+import io
 import json
+import zipfile
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -55,6 +57,7 @@ from database import get_db
 from auth import get_current_user
 from services.full_export import (
     AGG_KEYS,
+    build_export_archive,
     EXPORT_AGGREGATES,
     EXPORT_GROUPS,
     EXPORT_SECTIONS,
@@ -245,12 +248,24 @@ async def export_all(
     date_to: str | None = Query(None, alias="to", description="ISO-Datum YYYY-MM-DD"),
     aggregate: str = Query("none"),
     sections: str | None = Query(None, description="Kommaliste von Sektions-Schluesseln"),
+    format: str = Query("csv", description="csv (eine Datei) oder zip (eine Datei je Tabelle)"),
     db=Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Eine CSV mit den gewaehlten Sektionen, inkl. erklaerender
-    Kommentarzeilen vor jeder Sektion. Optional per Zeitraum gefiltert, je
-    Modul zusammengefasst und je Sektion auf bestimmte Spalten beschraenkt."""
+    """Der Gesamtexport in einer von zwei Formen.
+
+    ``format=csv`` ist eine einzige Datei mit allen Tabellen untereinander.
+    Sie ist zum LESEN und AUSWERTEN gedacht -- am Stueck, mit dem Vorspann
+    davor, der sagt, was drin ist und was fehlt.
+
+    ``format=zip`` ist dasselbe als Archiv mit einer Datei je Tabelle, plus
+    LIESMICH.txt. Das ist die Form fuer ein Tabellenprogramm: 20 Tabellen mit
+    verschiedener Spaltenzahl in EINEM Blatt kann keines oeffnen, und genau
+    das war die eine Datei bis v2.9.0 fuer jeden, der sie anklickte.
+
+    Beide kommen aus denselben Zeilen (``_export_teile``) -- die Wahl aendert
+    die Verpackung, nie den Inhalt.
+    """
     d_from, d_to = _validated_range(date_from, date_to)
     picked = _parse_sections(sections)
     agg = _validated_aggregate(aggregate)
@@ -258,12 +273,27 @@ async def export_all(
     col_map = _column_map(request)
     grenze = await _compact_before(request, db, user)
 
-    csv = await build_full_export_csv(
-        db, user, date_from=d_from, date_to=d_to, aggregate=agg,
-        sections=picked, aggregate_map=agg_map, column_map=col_map,
-        compact_before=grenze)
-    # UTF-8 mit BOM, damit Excel Umlaute (ä/ö/ü/ß) korrekt darstellt
-    body = ("﻿" + csv).encode("utf-8")
+    als_zip = (format or "csv").strip().lower() == "zip"
+    if als_zip:
+        dateien = await build_export_archive(
+            db, user, date_from=d_from, date_to=d_to, aggregate=agg,
+            sections=picked, aggregate_map=agg_map, column_map=col_map,
+            compact_before=grenze)
+        puffer = io.BytesIO()
+        with zipfile.ZipFile(puffer, "w", zipfile.ZIP_DEFLATED) as archiv:
+            for name, inhalt in dateien.items():
+                # BOM auch hier: die einzelnen CSV landen in Excel, und ohne
+                # ihn macht es aus jedem Umlaut zwei Zeichen.
+                vorn = "" if name.endswith(".txt") else "﻿"
+                archiv.writestr(name, (vorn + inhalt).encode("utf-8"))
+        body = puffer.getvalue()
+    else:
+        csv = await build_full_export_csv(
+            db, user, date_from=d_from, date_to=d_to, aggregate=agg,
+            sections=picked, aggregate_map=agg_map, column_map=col_map,
+            compact_before=grenze)
+        # UTF-8 mit BOM, damit Excel Umlaute (ä/ö/ü/ß) korrekt darstellt
+        body = ("﻿" + csv).encode("utf-8")
 
     # Dateiname mit Optionen anreichern, damit mehrere Exports im Downloads-
     # Ordner nicht kollidieren.
@@ -284,21 +314,23 @@ async def export_all(
         parts.append("spalten")
     if grenze:
         parts.append("verdichtet-ab-" + grenze.isoformat())
-    filename = "-".join(parts) + ".csv"
+    filename = "-".join(parts) + (".zip" if als_zip else ".csv")
 
     headers = {
         "Content-Disposition": f'attachment; filename="{filename}"',
         "Cache-Control": "no-store",
     }
-    # Optionale gzip-Kompression - massive Ersparnis bei grossen Exports
+    # Optionale gzip-Kompression - massive Ersparnis bei grossen Exports.
+    # Ein ZIP ist bereits komprimiert; es noch einmal durch gzip zu schicken
+    # kostet Rechenzeit und macht die Antwort eher groesser als kleiner.
     accept_enc = request.headers.get("accept-encoding", "").lower()
-    if "gzip" in accept_enc:
+    if not als_zip and "gzip" in accept_enc:
         body = gzip.compress(body, compresslevel=6)
         headers["Content-Encoding"] = "gzip"
         headers["Vary"] = "Accept-Encoding"
 
     return Response(
         content=body,
-        media_type="text/csv; charset=utf-8",
+        media_type="application/zip" if als_zip else "text/csv; charset=utf-8",
         headers=headers,
     )

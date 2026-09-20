@@ -326,6 +326,67 @@ PROGRESS_GOALS = [
 ]
 
 
+# ---------------------------------------------------------------- Export
+# Der Export-Dialog fragt drei Endpunkte. Ohne Antwort darauf steht er mit
+# einer Fehlermeldung da, wo im Betrieb Zahlen stehen -- und ein Bild davon
+# beantwortet nichts. Die Zeilenzahlen sind erfunden, die FORM nicht: sie
+# kommt aus ``build_export_preview`` und ``fit_export_to_size``.
+def _export_vorschau(stufe="none", mit_rohdaten=False):
+    """Eine erfundene Vorschau in der ECHTEN Form.
+
+    ``mit_rohdaten=False`` bildet nach, was der Dialog mit „Zum Auswerten“
+    anfragt: alles ausser den ``bulk``-Sektionen. Ohne diese Nachbildung
+    stuende im Bild eine Zeile „Zugfolgen als PGN: 2.600“ unter einer
+    Einstellung, die sie gerade abwaehlt -- und ein Bild, das etwas anderes
+    zeigt als der Betrieb, ist schlimmer als keines.
+    """
+    teile = []
+    for eintrag in _export.EXPORT_SECTIONS:
+        if eintrag.get("bulk") and not mit_rohdaten:
+            continue
+        # Grob nach Modul gestaffelt, damit die Balken unterschiedlich lang
+        # sind -- ein Diagramm aus lauter gleichen Balken zeigt nichts.
+        roh = {"ausgaben": 4200, "health_vitals": 9800, "chess_games": 2600,
+               "chess_pgn": 2600, "music_register": 5100, "track_log": 1900,
+               "diary_log": 1400, "sparziel_log": 480}.get(eintrag["key"], 60)
+        if stufe == "month" and eintrag.get("aggregatable"):
+            roh = max(12, roh // 30)
+        teile.append({"key": eintrag["key"], "label": eintrag["label"],
+                      "rows": roh, "bytes": roh * 90,
+                      "columns": ["Datum", "Wert", "Einheit"]})
+    zeilen = sum(t["rows"] for t in teile)
+    return {
+        "sections": teile,
+        "total_rows": zeilen,
+        "bytes": zeilen * 90,
+        "lines": zeilen + len(teile) * 2,
+        "aggregate": {g["key"]: stufe for g in _export.EXPORT_GROUPS},
+        "compact_before": None,
+        "sample": \
+            "# Vexbob Gesamt-Export;user=\"etienne\"\n"
+            "# Konventionen: Feldtrenner ist ';'. ALLE Zahlen nutzen Punkt-Dezimal.\n"
+            "\n# SEKTION: Sparziele\n"
+            "id;name;typ;target_amount;saved_amount;is_active\n"
+            "1;Neues Rennrad;ziel;2400.00;1465.50;true",
+        "truncated": True,
+    }
+
+
+EXPORT_PREVIEW = _export_vorschau("none")
+EXPORT_FIT = {
+    "fits": True,
+    "max_bytes": 1048576,
+    "bytes": _export_vorschau("month")["bytes"],
+    "aggregate": {g["key"]: "month" for g in _export.EXPORT_GROUPS},
+    "changed": {g["key"]: "month" for g in _export.EXPORT_GROUPS},
+    "builds": 3,
+    "note": "",
+    "largest_section": {"key": "health_vitals", "label": "Vitalwerte",
+                        "bytes": 29400},
+    "preview": _export_vorschau("month"),
+}
+
+
 ANTWORTEN = {
     "/api/me": ICH,
     # Die Export-Registry kommt aus dem echten Modul -- eine nachgebaute
@@ -364,4 +425,7 @@ ANTWORTEN = {
     "/api/trophies": [],
     "/api/activity-log": {"entries": []},
     "/api/stats/savings-progress": {"points": []},
+
+    "/api/export/preview": EXPORT_PREVIEW,
+    "/api/export/fit": EXPORT_FIT,
 }

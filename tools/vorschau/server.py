@@ -83,6 +83,7 @@ def stub_js() -> str:
        die Arbeit. Ein Griff steht in der Adresse der Seite:
 
            /naehrwerte/?griff=klick:#nwAdd;tippe:#nwDlgSuche=Hafer
+       Dazu ``warte:<ms>`` fuer Dialoge, die ihre Daten erst holen.
 
        Zwei Griffe genuegen fuer alles bisher Gesuchte: ``klick`` auf eine
        Kennung und ``tippe`` in ein Feld.
@@ -96,12 +97,23 @@ def stub_js() -> str:
        dem Klick da. Wer auf etwas wartet, das erst eine Antwort bringt,
        schiesst zweimal: einmal davor, einmal danach. */
 
-    function griffeAbarbeiten(schritte) {
+    async function griffeAbarbeiten(schritte) {
         for (const schritt of schritte) {
             const teil = schritt.split(':');
             const art = teil.shift().trim();
             const rumpf = teil.join(':');
 
+            if (art === 'warte') {
+                // Ein Dialog, der seine Daten erst holt, ist nach dem Klick
+                // noch nicht im DOM -- der naechste Griff ginge ins Leere und
+                // das Bild zeigte die Seite ohne ihn, als waere der Knopf
+                // kaputt. setTimeout geht dabei trotz --virtual-time-budget:
+                // die Uhr wird vorgespult, die Rueckrufe kommen also sehr
+                // wohl, nur nicht nach echten Millisekunden.
+                const ms = parseInt(rumpf, 10) || 400;
+                await new Promise(fertig => setTimeout(fertig, ms));
+                continue;
+            }
             if (art === 'klick') {
                 const el = document.querySelector(rumpf.trim());
                 if (!el) { console.warn('[Vorschau] Griff findet nicht:', rumpf); return; }

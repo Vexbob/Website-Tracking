@@ -84,8 +84,10 @@ Das einzige nach außen sichtbare Modul: `/blog/` ist ohne Anmeldung lesbar, ges
 - **XSS-Schutz** — der gespeicherte HTML-Inhalt läuft vor der Ausgabe durch einen Whitelist-Sanitizer, weil die Seite öffentlich erreichbar ist.
 
 ### ⬇️ Gesamt-Export
-Eine Dashboard-Kachel exportiert alle Module gemeinsam als eine CSV (`GET /api/export/all`), abschnittsweise gegliedert mit erklärenden Kommentarzeilen — gedacht als Archiv und als Futter für externe Auswertungen. Dabei sind: Sparziel, Ausgaben, Gesundheit, Musik, Ernährung (Tagebuch und Nährwerte getrennt), Schach und Notizen. Die Sektionsliste steht in `backend/services/full_export.py` (`EXPORT_SECTIONS`); ein Test hält fest, dass jede Sektion dort auch wirklich gebaut wird.
+Eine Dashboard-Kachel exportiert alle Module gemeinsam (`GET /api/export/all`), abschnittsweise gegliedert mit erklärenden Kommentarzeilen — gedacht als Archiv und als Futter für externe Auswertungen. Dabei sind: Sparziel, Ausgaben, Gesundheit, Musik, Ernährung (Tagebuch und Nährwerte getrennt), Schach und Notizen. Die Sektionsliste steht in `backend/services/full_export.py` (`EXPORT_SECTIONS`); ein Test hält fest, dass jede Sektion dort auch wirklich gebaut wird.
 
+- **Der Dialog fragt zuerst, wofür** — drei Antworten statt einer Maske: „Zum Auswerten“ (ohne Rohdaten, Stufe automatisch so fein, wie es unter 1 MB passt), „Alles, ungekürzt“ (jede Zeile, als Archiv) und „Selbst zusammenstellen“, das die vollständige Maske aufklappt.
+- **Zwei Formen** — eine Datei mit allen Tabellen untereinander (zum Lesen und zur Auswertung) oder ein ZIP mit einer CSV je Tabelle plus LIESMICH (für Excel und Numbers). Beide kommen aus denselben Zeilen.
 - **Zeitraumfilter** — Presets (30 Tage, 3 bzw. 12 Monate, laufendes Jahr) oder freie Von-Bis-Auswahl.
 - **Wochen-/Monats-Aggregation** — fasst Ausgaben und Vitalwerte zu Perioden zusammen. Ausgaben behalten dabei eine Zeile je Einkauf (Datum, Laden, Typ, Anzahl Positionen, Summe, Kategorien-Split); nur die Einzelpositionen entfallen, damit ein Jahresexport lesbar bleibt.
 - **gzip** — die Antwort wird komprimiert, wenn der Browser es anbietet; bei einem Jahresexport spart das rund 85 % Übertragung.

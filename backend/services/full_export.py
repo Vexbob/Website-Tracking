@@ -191,11 +191,23 @@ def _num(v) -> str:
 
 
 def _euro_de(v) -> str:
-    """Deutsches Euro-Format (Komma statt Punkt) fuer die Ausgaben-Sektion."""
+    """Euro-Betraege -- seit v2.10.0 mit PUNKT, wie jede andere Zahl der Datei.
+
+    Der Name bleibt, damit die zehn Aufrufstellen nicht anfassen muss, wer
+    das hier liest; die Bedeutung ist eine andere. Bis v2.9.0 schrieb diese
+    Funktion Komma und ``_num`` Punkt -- in DERSELBEN Datei, getrennt durch
+    Semikolon. Damit war die Haelfte der Zahlen fuer jedes Programm, das die
+    Datei liest, keine Zahl, sondern Text. Der Kopf nannte das eine
+    "Konvention"; es war ein Fehler mit Erklaerung davor.
+
+    Punkt und nicht Komma, weil diese Datei ausgewertet wird und nicht in ein
+    deutsches Tabellenblatt getippt: Punkt ist das, womit jede Auswertung
+    rechnet, und es kann nie mit dem Feldtrenner verwechselt werden.
+    """
     if v is None:
         return ""
     try:
-        return f"{float(v):.2f}".replace(".", ",")
+        return f"{float(v):.2f}"
     except (TypeError, ValueError):
         return ""
 
@@ -210,6 +222,13 @@ def _euro_de(v) -> str:
 # sagt, ob die Sektion ueberhaupt zusammenfassbar ist. Metadaten (Ziele,
 # Achievements, Zusammenfassung) sind es nicht: sie sind Stammdaten, keine
 # Zeitreihe, und werden deshalb auch vom Zeitraum-Filter nicht angefasst.
+#
+# ``bulk`` (v2.10.0) heisst: Rohdaten, die eine Auswertung nicht braucht --
+# Zugfolgen als PGN und die beiden Upload-Protokolle. Sie sind Herkunfts-
+# und Wiederherstellungsmaterial; in einer Datei, die jemand liest, machen
+# sie nur die Zeilen lang. Der Knopf "Zum Auswerten" laesst sie deshalb weg,
+# und weil das Kennzeichen HIER steht, muss die Oberflaeche keine zweite
+# Liste davon fuehren.
 
 EXPORT_SECTIONS: list[dict] = [
     {"key": "sparziel_meta", "group": "sparziel", "aggregatable": False, "dated": False,
@@ -219,6 +238,7 @@ EXPORT_SECTIONS: list[dict] = [
     {"key": "ausgaben", "group": "ausgaben", "aggregatable": True, "dated": True,
      "label": "Bons und ihre Positionen"},
     {"key": "expense_imports", "group": "ausgaben", "aggregatable": False, "dated": False,
+     "bulk": True,
      "label": "Protokoll der Kontoauszug-Uploads"},
     {"key": "health_summary", "group": "health", "aggregatable": False, "dated": False,
      "label": "Zusammenfassung"},
@@ -235,6 +255,7 @@ EXPORT_SECTIONS: list[dict] = [
     {"key": "music_register", "group": "musik", "aggregatable": True, "dated": True,
      "label": "Hörregister (Periode, Interpret, Titel, Wiedergaben)"},
     {"key": "music_imports", "group": "musik", "aggregatable": False, "dated": False,
+     "bulk": True,
      "label": "Protokoll der CSV-Uploads"},
     # Zwei Module, zwei Genauigkeiten -- deshalb zwei Protokolle. Sie in eine
     # Sektion zu werfen hiesse, "Pizza, uebermaessig" und "180 g Brot" in
@@ -254,6 +275,7 @@ EXPORT_SECTIONS: list[dict] = [
     {"key": "chess_games", "group": "schach", "aggregatable": True, "dated": True,
      "label": "Partien (Ergebnis, Gegner, Wertung, Eroeffnung)"},
     {"key": "chess_pgn", "group": "schach", "aggregatable": False, "dated": True,
+     "bulk": True,
      "label": "Zugfolgen als PGN (eine Zeile je Partie)"},
     {"key": "chess_ratings", "group": "schach", "aggregatable": False, "dated": True,
      "label": "Wertungsverlauf (ein Tag je Disziplin)"},
@@ -272,6 +294,11 @@ EXPORT_GROUPS: list[dict] = [
 ]
 
 ALL_SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS]
+
+# Was in eine Datei gehoert, die ausgewertet werden soll: alles ausser den
+# Rohdaten. Steht hier und nicht im Frontend -- sonst waere eine neue
+# Sektion zwei Aenderungen an zwei Orten.
+AUSWERTBARE_SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS if not s.get("bulk")]
 
 # Wie eine Buchung entstanden ist. Steht als Klartext in der Datei -- ein
 # Schluessel wie 'import' waere in fuenf Jahren eine Ratearbeit.
@@ -429,18 +456,130 @@ async def build_full_export_csv(
         weg fallen nur die Einzelpositionen.
       * ``column_map`` (v1.67.0): je Sektion die gewuenschten Spalten.
     """
+    kopf, bloecke = await _export_teile(
+        db, user, date_from, date_to, aggregate, sections, aggregate_map,
+        column_map, compact_before)
+    lines = list(kopf)
+    for _titel, zeilen in bloecke:
+        lines.extend(zeilen)
+    return _compact_timestamps("\n".join(lines) + "\n")
+
+
+async def _export_teile(
+    db,
+    user,
+    date_from: "Optional[date]" = None,
+    date_to: "Optional[date]" = None,
+    aggregate: str = "none",
+    sections: "Optional[list]" = None,
+    aggregate_map: "Optional[dict]" = None,
+    column_map: "Optional[dict]" = None,
+    compact_before: "Optional[date]" = None,
+) -> tuple:
+    """``(Kopfzeilen, [(Titel, Zeilen), ...])`` -- die eine Quelle beider Formate.
+
+    v2.10.0 herausgeloest, weil es seither zwei Ausgabeformen gibt: eine Datei
+    und ein Archiv mit einer Datei je Tabelle. Beide bauen aus DIESEN Teilen.
+    Zwei Bauwege waeren zwei Dateien, die dasselbe behaupten und sich beim
+    naechsten Fix unterscheiden -- und man saehe es keiner von beiden an.
+
+    Leere Bloecke fallen hier heraus und stehen dafuer namentlich im Kopf.
+    Vorher standen in einem frisch benutzten Konto zwei Dutzend Ueberschriften
+    ueber nichts, und wer die Datei ueberflog, suchte zwischen lauter leeren
+    Bloecken nach dem einen, das etwas enthaelt.
+    """
     picked = clean_sections(sections)
     agg_map = clean_aggregate_map(aggregate_map, aggregate, date_from, date_to)
     cols = clean_column_map(column_map)
     built = await _build_sections(db, user, picked, date_from, date_to, agg_map,
                                   compact_before)
 
+    bloecke = []
+    leer = []
+    for key, zeilen in built:
+        gefiltert = _filter_columns(zeilen, cols.get(key))
+        behalten, ohne = _leere_bloecke_aussortieren(gefiltert)
+        leer.extend(ohne)
+        for block in _bloecke(behalten):
+            bloecke.append((_block_titel(block), block))
+
     backlog = await _backlog_facts(db, user["id"]) if "ausgaben" in picked else None
-    lines = _export_header(user, picked, date_from, date_to, agg_map, backlog,
-                           compact_before)
-    for key, section_lines in built:
-        lines.extend(_filter_columns(section_lines, cols.get(key)))
-    return _compact_timestamps("\n".join(lines) + "\n")
+    kopf = _export_header(user, picked, date_from, date_to, agg_map, backlog,
+                          compact_before, leer)
+    return kopf, bloecke
+
+
+def _dateiname(titel: str, nummer: int) -> str:
+    """Aus 'Gesundheit - Blutdruck' wird '06-gesundheit-blutdruck.csv'.
+
+    Die laufende Nummer steht vorn, damit die Dateien im Archiv in derselben
+    Reihenfolge liegen wie die Bloecke in der einen Datei -- alphabetisch
+    sortiert stuende sonst Ausgaben vor Sparziel und Schach zwischen beidem,
+    und der Zusammenhang, den die Reihenfolge traegt, waere weg.
+    """
+    rein = []
+    for zeichen in titel.lower():
+        if zeichen.isalnum():
+            rein.append(zeichen)
+        elif zeichen in " -_/":
+            rein.append("-")
+    name = "".join(rein)
+    for paar in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
+        name = name.replace(*paar)
+    while "--" in name:
+        name = name.replace("--", "-")
+    name = name.strip("-") or "sektion"
+    return f"{nummer:02d}-{name[:60]}.csv"
+
+
+async def build_export_archive(
+    db,
+    user,
+    date_from=None,
+    date_to=None,
+    aggregate: str = "none",
+    sections=None,
+    aggregate_map=None,
+    column_map=None,
+    compact_before=None,
+) -> dict:
+    """Derselbe Export als ``{Dateiname: Inhalt}`` -- eine Datei je Tabelle.
+
+    Die eine grosse CSV ist gut zum Auswerten und schlecht zum Ansehen: 20
+    Tabellen mit verschiedener Spaltenzahl in einem Blatt kann kein
+    Tabellenprogramm oeffnen. Das Archiv loest genau das und sonst nichts --
+    es kommt aus ``_export_teile``, also aus denselben Zeilen.
+
+    ``LIESMICH.txt`` traegt den Vorspann: Zeitraum, Stufen, was bewusst fehlt,
+    was leer war. Ohne ihn waere ein Ordner mit CSV-Dateien eine Sammlung
+    ohne Herkunft, und in einem Jahr weiss niemand mehr, welcher Zeitraum
+    darin steht.
+    """
+    kopf, bloecke = await _export_teile(
+        db, user, date_from, date_to, aggregate, sections, aggregate_map,
+        column_map, compact_before)
+
+    dateien: dict[str, str] = {}
+    verzeichnis = ["Diese Datei gehoert zu einem Vexbob-Gesamtexport.", ""]
+    verzeichnis.extend(z.lstrip("# ") for z in kopf)
+    verzeichnis.append("")
+    verzeichnis.append("Enthaltene Dateien:")
+
+    for nummer, (titel, zeilen) in enumerate(bloecke, start=1):
+        name = _dateiname(titel or f"sektion-{nummer}", nummer)
+        # Die '# SEKTION:'-Ueberschrift steht schon im Dateinamen; in der
+        # Datei selbst waere sie eine Zeile vor dem Spaltenkopf, an der jedes
+        # Tabellenprogramm die Spalten falsch zaehlt.
+        inhalt = [z for z in zeilen if not z.startswith("#")]
+        while inhalt and not inhalt[-1].strip():
+            inhalt.pop()
+        datenzeilen = max(0, len(inhalt) - 1)
+        dateien[name] = _compact_timestamps("\n".join(inhalt) + "\n")
+        verzeichnis.append(f"  {name} - {titel} ({datenzeilen} Zeilen)")
+
+    dateien["LIESMICH.txt"] = _compact_timestamps(
+        "\n".join(verzeichnis) + "\n")
+    return dateien
 
 
 async def _sec_expense_imports(db, user_id: int) -> list[str]:
@@ -489,7 +628,8 @@ async def _backlog_facts(db, user_id: int) -> Optional[dict]:
 
 def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
                    backlog: Optional[dict] = None,
-                   compact_before: Optional[date] = None) -> list[str]:
+                   compact_before: Optional[date] = None,
+                   leer: Optional[list[str]] = None) -> list[str]:
     """Der Vorspann dokumentiert die Zusammenstellung in der Datei selbst --
     ein halber Export ohne diese Zeilen sieht ein Jahr spaeter aus wie
     fehlende Daten."""
@@ -516,15 +656,21 @@ def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
     if len(picked) < len(ALL_SECTION_KEYS):
         fehlt = [labels.get(k, k) for k in ALL_SECTION_KEYS if k not in picked]
         lines.append("# BEWUSST NICHT enthalten: " + "; ".join(fehlt))
+    if leer:
+        # Gewaehlt, aber ohne eine einzige Zeile. Der Unterschied zur Zeile
+        # darueber ist der zwischen "wollte ich nicht" und "gibt es nicht".
+        lines.append("# GEWAEHLT, ABER LEER (keine Daten im Zeitraum): "
+                     + "; ".join(leer))
     lines.append(
         "# Jede Sektion beginnt mit einer Kommentarzeile '# SEKTION: ...' "
         "gefolgt von ihrem eigenen Spalten-Header - die Spaltenanzahl "
         "unterscheidet sich bewusst zwischen den Sektionen. Bons und "
         "Positionen sind ueber expense_id verknuepft.")
     lines.append(
-        "# Konventionen: Zeitstempel sind UTC im Format YYYY-MM-DDTHH:MM:SSZ "
-        "(keine Mikrosekunden). Gesundheitswerte nutzen Punkt-Dezimal, "
-        "Euro-Betraege in der Ausgaben-Sektion nutzen Komma-Dezimal.")
+        "# Konventionen: Feldtrenner ist ';'. Zeitstempel sind UTC im Format "
+        "YYYY-MM-DDTHH:MM:SSZ (keine Mikrosekunden). ALLE Zahlen nutzen "
+        "Punkt-Dezimal, auch Euro-Betraege. Ein leeres Feld heisst 'nicht "
+        "bekannt' und nicht 'null'.")
     if backlog:
         # Ohne diesen Absatz sieht der Rueckblick aus wie schlecht erfasste
         # Bons: hunderte Eintraege ohne eine einzige Position.
@@ -1070,12 +1216,31 @@ def _mindestens_monat(stufe: str) -> str:
     return "year" if stufe == "year" else "month"
 
 
-def _hat_daten(zeilen: list[str]) -> bool:
-    """Steht in diesem Block mehr als der Kopf? Ein leerer alter Teil bekommt
-    sonst eine Ueberschrift ueber nichts, und die Datei behauptet einen
-    Zeitraum, aus dem sie nichts hat."""
-    kopf_gesehen = False
+def _bloecke(zeilen: list[str]) -> list[list[str]]:
+    """Zerlegt die Zeilen einer Sektion an ihren '# SEKTION:'-Ueberschriften.
+
+    Eine Sektion ist nicht immer EIN Block: ``sparziel_meta`` bringt sechs
+    (Ziele, Achievements, Wochenziele, Wuensche, Ideen, Trophaeen),
+    ``ausgaben`` zwei (Bons und Positionen). Wer das uebersieht, haelt die
+    zweite Ueberschrift fuer eine Datenzeile -- genau daran ging die erste
+    Fassung von ``_hat_daten`` vorbei.
+    """
+    raus: list[list[str]] = []
+    aktuell: list[str] = []
     for z in zeilen:
+        if z.startswith("# SEKTION") and aktuell:
+            raus.append(aktuell)
+            aktuell = []
+        aktuell.append(z)
+    if aktuell:
+        raus.append(aktuell)
+    return raus
+
+
+def _block_hat_daten(block: list[str]) -> bool:
+    """Steht in diesem Block mehr als seine Ueberschrift und sein Spaltenkopf?"""
+    kopf_gesehen = False
+    for z in block:
         if not z.strip() or z.startswith("#"):
             continue
         if not kopf_gesehen:
@@ -1083,6 +1248,44 @@ def _hat_daten(zeilen: list[str]) -> bool:
             continue
         return True
     return False
+
+
+def _block_titel(block: list[str]) -> str:
+    """Die Ueberschrift eines Blocks, ohne '# SEKTION: ' und ohne Klammerzusatz.
+
+    Sie benennt genauer als die Registerbeschriftung, was fehlt -- 'Blutzucker'
+    statt 'Gesundheit', und bei ``sparziel_meta`` ueberhaupt erst etwas.
+    """
+    for z in block:
+        if z.startswith("# SEKTION:"):
+            titel = z[len("# SEKTION:"):].strip()
+            return titel.split(" (")[0].split(";")[0].strip()
+    return ""
+
+
+def _leere_bloecke_aussortieren(zeilen: list[str]) -> tuple[list[str], list[str]]:
+    """``(was bleibt, Titel dessen was leer war)``.
+
+    Ein Block ohne eine einzige Datenzeile wird nicht abgedruckt. Er
+    verschwindet aber nicht stillschweigend: sein Titel geht zurueck an den
+    Kopf der Datei. Eine Luecke, die man spaeter nicht von 'nicht exportiert'
+    unterscheiden kann, ist schlimmer als eine Ueberschrift ueber nichts.
+    """
+    behalten: list[str] = []
+    leer: list[str] = []
+    for block in _bloecke(zeilen):
+        if _block_hat_daten(block):
+            behalten.extend(block)
+        else:
+            titel = _block_titel(block)
+            if titel:
+                leer.append(titel)
+    return behalten, leer
+
+
+def _hat_daten(zeilen: list[str]) -> bool:
+    """Steht in irgendeinem Block dieser Sektion mehr als der Kopf?"""
+    return any(_block_hat_daten(b) for b in _bloecke(zeilen))
 
 
 async def _build_sections(db, user, picked: list[str], date_from, date_to,
