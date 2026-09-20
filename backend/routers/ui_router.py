@@ -315,9 +315,15 @@ def _check_export(value: Any) -> dict:
 
     ``aggregate``: Stufe je Modulgruppe. ``compact_before``: ab wann die
     gewaehlte Stufe gilt -- alles davor steht monatsweise in der Datei.
+    ``off``: Module, die im Export gar nicht vorkommen sollen.
     Unbekannte Gruppen und Stufen fliegen still raus; ein falsches Datum
     nicht, denn es waere die eine Angabe, deren Fehlen man am Ergebnis nicht
     sieht.
+
+    v2.11.0: Gespeichert wird, was AUS ist -- nicht, was an ist. Eine Liste
+    der gewaehlten Module waere beim naechsten neuen Modul stillschweigend
+    unvollstaendig, und niemand vermisst im Export etwas, das er nie gesehen
+    hat.
     """
     from services.full_export import AGG_KEYS, EXPORT_GROUPS
 
@@ -337,7 +343,11 @@ def _check_export(value: Any) -> dict:
             grenze = date.fromisoformat(str(grenze)).isoformat()
         except ValueError:
             raise ValueError("'compact_before' muss im Format YYYY-MM-DD sein")
-    return {"aggregate": agg, "compact_before": grenze}
+    roh_aus = value.get("off") or []
+    if not isinstance(roh_aus, list):
+        raise ValueError("'off' ist eine Liste von Modulen")
+    aus = sorted({str(k) for k in roh_aus if str(k) in gruppen})
+    return {"aggregate": agg, "compact_before": grenze, "off": aus}
 
 
 UI_PREFS = {

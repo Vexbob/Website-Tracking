@@ -233,3 +233,54 @@ def test_export_voreinstellung_weist_ein_kaputtes_datum_zurueck():
     with pytest.raises(ValueError):
         _check_export({"compact_before": "August 2026"})
     assert _check_export({"compact_before": ""})["compact_before"] is None
+
+
+# ------------------------------------- Abgeschaltete Module (v2.11.0)
+
+def test_voreinstellung_merkt_sich_was_AUS_ist_nicht_was_an_ist():
+    """Sonst faellt jedes kuenftige Modul stillschweigend aus dem Export.
+
+    Wer heute eine Auswahl speichert, hat das naechste Modul nicht abgewaehlt
+    -- er kannte es nicht. Eine Liste der gewaehlten Module haette es
+    trotzdem weggelassen, und im Export vermisst niemand etwas, das er dort
+    nie gesehen hat.
+    """
+    from routers.ui_router import _check_export
+    wert = _check_export({"off": ["notizen", "gibtsnicht", "musik"]})
+    assert wert["off"] == ["musik", "notizen"]          # sortiert, gefiltert
+    assert _check_export({})["off"] == []
+
+
+def test_abgeschaltete_module_nehmen_ihre_sektionen_mit():
+    aus = fx.sections_ohne_gruppen(["notizen"])
+    notiz_keys = [s["key"] for s in fx.EXPORT_SECTIONS if s["group"] == "notizen"]
+    assert notiz_keys, "Ohne Notizen-Sektion prueft der Test nichts"
+    assert not set(notiz_keys) & set(aus)
+    assert len(aus) == len(fx.ALL_SECTION_KEYS) - len(notiz_keys)
+
+
+def test_alles_abgeschaltet_heisst_wieder_alles():
+    """Eine Voreinstellung darf die Datei kleiner machen, nie leer.
+
+    Eine leere Datei waere die einzige Antwort, an der man nicht sieht, ob
+    nichts da war oder nichts ausgewaehlt.
+    """
+    alle = [g["key"] for g in fx.EXPORT_GROUPS]
+    assert fx.sections_ohne_gruppen(alle) == fx.ALL_SECTION_KEYS
+    assert fx.sections_ohne_gruppen([]) == fx.ALL_SECTION_KEYS
+
+
+def test_die_anfrage_schlaegt_die_voreinstellung():
+    """``sections`` im Aufruf gilt, auch wenn etwas abgeschaltet ist.
+
+    Der Dialog schickt seine Auswahl mit; ein Haken, den man dort gerade
+    gesetzt hat, darf nicht an einer Einstellung von vorgestern scheitern.
+    """
+    from routers.export_router import _sections_mit_vorgabe
+    vorgaben = {"off": ["notizen"]}
+    assert _sections_mit_vorgabe("notes,sparziele", vorgaben) == ["notes", "sparziele"]
+    # Ohne Angabe gilt die Voreinstellung ...
+    ohne = _sections_mit_vorgabe(None, vorgaben)
+    assert ohne is not None and len(ohne) < len(fx.ALL_SECTION_KEYS)
+    # ... und ohne Voreinstellung bleibt der Aufruf, was er immer war: alles.
+    assert _sections_mit_vorgabe(None, {}) is None

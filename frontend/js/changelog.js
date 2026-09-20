@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.0', date: '2026-09-20', title: 'Der Export lässt Module weg', notes: [
+        'Die Export-Voreinstellung kann Module ganz abschalten — sie fehlen dann im Dialog und in der Datei.',
+        'Gespeichert wird, was aus ist: ein künftiges Modul ist damit von selbst dabei.',
+        'Ein Serverfehler meldet sich jetzt als Fehler statt als „Netzwerkfehler“ und nennt seine Kennung.',
+    ]},
     { v: 'v2.10.2', date: '2026-09-20', title: 'Der Export wird lesbar', notes: [
         'Neu wählbar: eine Datei mit allen Tabellen oder ein ZIP mit einer CSV je Tabelle.',
         'Alle Zahlen nutzen denselben Dezimalpunkt; leere Tabellen stehen namentlich im Kopf statt als Überschrift ohne Inhalt.',

@@ -84,6 +84,12 @@
         const vorAgg = vorgabe.aggregate || {};
         const agg = {};
         groups.forEach(g => { agg[g.key] = vorAgg[g.key] || 'none'; });
+        // Abgeschaltete Module (v2.11.0). Gespeichert ist, was AUS ist --
+        // ein neues Modul ist damit von selbst dabei. Abgewählt heißt nicht
+        // versteckt: die Zeile steht weiter in der Liste und lässt sich hier
+        // für diesen einen Export wieder anhaken.
+        const aus = new Set(vorgabe.off || []);
+        const dabei = sections.filter(x => !aus.has(x.group)).map(x => x.key);
         return {
             format: 'csv',
             // Vor diesem Tag steht alles monatsweise in der Datei. Leer
@@ -92,7 +98,7 @@
             preset: 'all',
             from: '',
             to: '',
-            picked: new Set(sections.map(s => s.key)),
+            picked: new Set(dabei.length ? dabei : sections.map(x => x.key)),
             agg: agg,
             sections: sections,
             groups: groups,

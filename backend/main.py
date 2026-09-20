@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, Request, status, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -216,6 +216,39 @@ app.add_middleware(CORSMiddleware,
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
+# v2.11.0: Ein unbehandelter Fehler kam im Browser als "Netzwerkfehler" an.
+#
+# Der Grund ist eine Reihenfolge, die man nicht sieht: Starlettes
+# ``ServerErrorMiddleware`` liegt GANZ aussen, also ausserhalb der
+# CORS-Middleware. Eine 500er-Antwort bekommt deshalb keinen
+# ``Access-Control-Allow-Origin``-Kopf -- und ohne den verwirft der Browser
+# die Antwort, bevor das Skript sie sieht: ``fetch`` wirft, und ``api.js``
+# meldet "Netzwerkfehler". Nicht erreichbar, abgelehnt und abgestuerzt sahen
+# damit identisch aus, und ein Serverfehler war von aussen nicht von einem
+# WLAN-Aussetzer zu unterscheiden.
+#
+# Der Handler setzt die Koepfe selbst und gibt die Request-ID mit. Was
+# schiefging, steht weiterhin nur im Log -- im Browser stuende sonst ein
+# Stacktrace, den niemand lesen soll.
+@app.exception_handler(Exception)
+async def unbehandelter_fehler(request: Request, exc: Exception):
+    rid = getattr(request.state, "request_id", None) or request_id_ctx.get()
+    logger.exception("Unbehandelter Fehler bei %s %s (Request-ID %s)",
+                     request.method, request.url.path, rid)
+    antwort = JSONResponse(
+        status_code=500,
+        content={"detail": f"Serverfehler — der Vorgang wurde nicht gespeichert. "
+                           f"Kennung für das Log: {rid}"},
+        headers={"X-Request-ID": rid},
+    )
+    herkunft = request.headers.get("origin")
+    if herkunft and ("*" in CORS_ORIGINS or herkunft in CORS_ORIGINS):
+        antwort.headers["Access-Control-Allow-Origin"] = herkunft
+        antwort.headers["Access-Control-Allow-Credentials"] = "true"
+        antwort.headers["Vary"] = "Origin"
+    return antwort
+
+
 # v1.34.0: Request-ID-Middleware. Setzt fuer jeden Request eine ContextVar,
 # damit ``logger.info(...)``-Aufrufe automatisch die ID im Log-Format
 # ausgeben. Falls der Client selbst ``X-Request-ID`` mitschickt (nuetzlich
@@ -227,6 +260,10 @@ async def request_id_middleware(request: Request, call_next):
     rid = request.headers.get("x-request-id", "").strip()
     if not rid or len(rid) > 64:
         rid = secrets.token_hex(6)  # 12-Zeichen-Hex, kompakt fuer Logs
+    # Auch am Scope, nicht nur in der ContextVar: die ContextVar wird beim
+    # Verlassen wieder zurueckgesetzt, und der 500er-Handler lauft AUSSERHALB
+    # dieser Middleware -- er saehe dort nur noch den Standardwert.
+    request.state.request_id = rid
     token = request_id_ctx.set(rid)
     try:
         response = await call_next(request)

@@ -86,7 +86,7 @@ Das einzige nach außen sichtbare Modul: `/blog/` ist ohne Anmeldung lesbar, ges
 ### ⬇️ Gesamt-Export
 Eine Dashboard-Kachel exportiert alle Module gemeinsam (`GET /api/export/all`), abschnittsweise gegliedert mit erklärenden Kommentarzeilen — gedacht als Archiv und als Futter für externe Auswertungen. Dabei sind: Sparziel, Ausgaben, Gesundheit, Musik, Ernährung (Tagebuch und Nährwerte getrennt), Schach und Notizen. Die Sektionsliste steht in `backend/services/full_export.py` (`EXPORT_SECTIONS`); ein Test hält fest, dass jede Sektion dort auch wirklich gebaut wird.
 
-- **Voreinstellung je Modul** — die auf `/einstellungen/` hinterlegte Zusammenfassungsstufe und die Verdichtungsgrenze gelten, sobald der Dialog aufmacht; Zeitraum, Module, Spalten und Verdichtung bleiben darin direkt einstellbar.
+- **Voreinstellung je Modul** — die auf `/einstellungen/` hinterlegte Zusammenfassungsstufe und die Verdichtungsgrenze gelten, sobald der Dialog aufmacht; Zeitraum, Module, Spalten und Verdichtung bleiben darin direkt einstellbar. Ein Modul lässt sich dort auch ganz abschalten — gespeichert wird, was **aus** ist, damit ein künftiges Modul von selbst im Export landet.
 - **Zwei Formen** — eine Datei mit allen Tabellen untereinander (zum Lesen und zur Auswertung) oder ein ZIP mit einer CSV je Tabelle plus LIESMICH (für Excel und Numbers). Beide kommen aus denselben Zeilen.
 - **Zeitraumfilter** — Presets (30 Tage, 3 bzw. 12 Monate, laufendes Jahr) oder freie Von-Bis-Auswahl.
 - **Wochen-/Monats-Aggregation** — fasst Ausgaben und Vitalwerte zu Perioden zusammen. Ausgaben behalten dabei eine Zeile je Einkauf (Datum, Laden, Typ, Anzahl Positionen, Summe, Kategorien-Split); nur die Einzelpositionen entfallen, damit ein Jahresexport lesbar bleibt.

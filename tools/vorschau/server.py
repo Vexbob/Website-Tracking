@@ -85,8 +85,11 @@ def stub_js() -> str:
            /naehrwerte/?griff=klick:#nwAdd;tippe:#nwDlgSuche=Hafer
        Dazu ``warte:<ms>`` fuer Dialoge, die ihre Daten erst holen.
 
-       Zwei Griffe genuegen fuer alles bisher Gesuchte: ``klick`` auf eine
-       Kennung und ``tippe`` in ein Feld.
+       Dazu ``zeige:<kennung>`` fuer eine Karte weit unten: sie bleibt,
+       ihre Geschwister werden ausgeblendet.
+
+       Vier Griffe genuegen fuer alles bisher Gesuchte: ``klick`` auf eine
+       Kennung, ``tippe`` in ein Feld, ``warte`` und ``zeige``.
 
        Gearbeitet wird SYNCHRON, ein Schritt nach dem anderen im selben
        Durchlauf. Der erste Anlauf hat die Schritte ueber
@@ -112,6 +115,32 @@ def stub_js() -> str:
                 // wohl, nur nicht nach echten Millisekunden.
                 const ms = parseInt(rumpf, 10) || 400;
                 await new Promise(fertig => setTimeout(fertig, ms));
+                continue;
+            }
+            if (art === 'zeige') {
+                // Eine lange Seite passt in kein Fenster -- Windows deckelt
+                // die Fensterhoehe, und eine dritte Zahl im Aufruf aendert
+                // daran nichts. Rollen hilft ebenfalls nicht: die Karten
+                // laden nacheinander, die Seite waechst also NACH dem Rollen
+                // weiter, und die Scroll-Verankerung des Browsers schiebt das
+                // Ziel wieder aus dem Bild. Zweimal gerollt kam zweimal ein
+                // anderer Ausschnitt heraus -- und ein Bild, das bei jedem
+                // Lauf woanders steht, ist kein Beleg.
+                //
+                // Deshalb wird nicht gerollt, sondern ausgeblendet: die
+                // gesuchte Karte bleibt, ihre Geschwister verschwinden. Das
+                // haengt an keiner Uhr und faellt jedes Mal gleich aus. Was
+                // man dabei aufgibt, ist der Zusammenhang der Seite -- wer
+                // den sehen will, schiesst zusaetzlich ohne Griff.
+                const el = document.querySelector(rumpf.trim());
+                if (!el) { console.warn('[Vorschau] Griff findet nicht:', rumpf); return; }
+                const karte = el.closest('.v-card') || el;
+                if (karte.parentElement) {
+                    for (const g of [...karte.parentElement.children]) {
+                        if (g !== karte) g.style.display = 'none';
+                    }
+                }
+                window.scrollTo(0, 0);
                 continue;
             }
             if (art === 'klick') {
@@ -188,6 +217,16 @@ class Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, *a):
         pass                                   # still bleiben
+
+    def end_headers(self):
+        # Kein Zwischenspeicher, fuer JEDE Antwort -- Seite, Skript und CSS.
+        # Der kopflose Edge laeuft im normalen Profil und haelt fest, was er
+        # einmal geholt hat. Ein frisch gebauter Griff lief danach nie, und
+        # das Bild sah aus, als taete er nichts: die Seite kam samt dem alten
+        # eingespritzten Skript aus dem Speicher. Das kostet einmal eine
+        # Stunde Suche und danach jedes Mal wieder.
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        super().end_headers()
 
     def do_GET(self):
         # Ein Rahmen fester Breite. Edge laesst sich mit --window-size nicht

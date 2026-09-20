@@ -402,7 +402,11 @@ ANTWORTEN = {
     "/api/ui/prefs": {"prefs": {"ui_module_off": [],
                                "ui_export": {"aggregate": {"ausgaben": "month",
                                                            "health": "week"},
-                                             "compact_before": "2026-08-01"}}},
+                                             "compact_before": "2026-08-01",
+                                             # Abgeschaltet (v2.11.0): die Zeile
+                                             # muss zuruecktreten, aber stehen
+                                             # bleiben.
+                                             "off": ["notizen"]}}},
     "/api/ui/nav-tabs": {"tabs": []},
 
     "/api/food/diary/day": TAGEBUCH_TAG,

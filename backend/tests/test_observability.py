@@ -74,3 +74,49 @@ def test_ser_consolidated_iso_and_decimal():
     d2 = ser(row, decimals_as_float=True)
     assert isinstance(d2["amount"], float)
     assert abs(d2["amount"] - 12.34) < 1e-9
+
+
+# ------------------------------------ Serverfehler bleibt lesbar (v2.11.0)
+# Starlettes ServerErrorMiddleware liegt ausserhalb der CORS-Middleware. Eine
+# 500er-Antwort ohne Access-Control-Allow-Origin verwirft der Browser, bevor
+# das Skript sie sieht: ``fetch`` wirft, und api.js meldet "Netzwerkfehler".
+# Server abgestuerzt und Server nicht erreichbar sahen damit gleich aus.
+import main                                                    # noqa: E402
+from fastapi.testclient import TestClient                       # noqa: E402
+
+
+@main.app.get("/api/_testfehler")
+async def _kaputt():
+    raise RuntimeError("absichtlich")
+
+
+def _client():
+    # ``raise_server_exceptions=False``: sonst reicht der Testclient den
+    # Fehler durch, statt die Antwort zu liefern, um die es hier geht.
+    return TestClient(main.app, raise_server_exceptions=False)
+
+
+def test_serverfehler_traegt_die_cors_koepfe():
+    herkunft = main.CORS_ORIGINS[0]
+    res = _client().get("/api/_testfehler", headers={"Origin": herkunft})
+    assert res.status_code == 500
+    assert res.headers.get("access-control-allow-origin") == herkunft
+    # Die Kennung steht in der Antwort UND im Kopf -- sonst muesste man im
+    # Log nach einem Zeitstempel suchen.
+    assert res.headers.get("x-request-id")
+    assert res.headers["x-request-id"] in res.json()["detail"]
+
+
+def test_serverfehler_verraet_nicht_was_kaputt_ist():
+    """Ein Stacktrace im Browser ist fuer niemanden gedacht."""
+    res = _client().get("/api/_testfehler",
+                        headers={"Origin": main.CORS_ORIGINS[0]})
+    assert "absichtlich" not in res.text
+    assert "RuntimeError" not in res.text
+
+
+def test_fremde_herkunft_bekommt_keinen_freibrief():
+    res = _client().get("/api/_testfehler",
+                        headers={"Origin": "https://boese.example"})
+    assert res.status_code == 500
+    assert "access-control-allow-origin" not in res.headers

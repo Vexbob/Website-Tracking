@@ -18,6 +18,21 @@ python tools/vorschau/schuss.py "/essen/?griff=klick:#esAdd" 390 844
 python tools/vorschau/schuss.py "/essen/?griff=klick:#esAdd;tippe:#esDlgSuche=Pi" 390 844
 ```
 
+Dazu kommen ``warte:<ms>`` für Dialoge, die ihre Daten erst holen, und
+``zeige:<kennung>`` für eine Karte weit unten — sie bleibt stehen, ihre
+Geschwister werden ausgeblendet:
+
+```
+python tools/vorschau/schuss.py "/einstellungen/?griff=zeige:%23expCfg" 390
+```
+
+Eine große dritte Zahl hilft dafür **nicht**: Windows deckelt die
+Fensterhöhe, und das Bild sieht danach genauso aus wie davor. Rollen hilft
+ebenfalls nicht — die Karten laden nacheinander, die Seite wächst also nach
+dem Rollen weiter, und die Scroll-Verankerung schiebt das Ziel wieder aus dem
+Bild. Zweimal gerollt kam zweimal ein anderer Ausschnitt heraus, und ein Bild,
+das bei jedem Lauf woanders steht, belegt nichts.
+
 Getippt wird Zeichen für Zeichen mit ``input``-Ereignis: eine Eingabe, die in
 einem Rutsch dasteht, löst die Taktgeber der Seite anders aus als ein Finger,
 und genau deren Zusammenspiel will man sehen. Während ein Griff läuft, sind

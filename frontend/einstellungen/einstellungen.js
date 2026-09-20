@@ -282,7 +282,8 @@ async function saveRange(preset) {
  * (/api/export/sections) und fuehrt sie NICHT als zweite Liste: ein neues
  * Modul steht hier von selbst drin. */
 const EXPORT_PREF = 'ui_export';
-const EXP = { groups: [], aggregates: [], wert: { aggregate: {}, compact_before: null } };
+const EXP = { groups: [], kannAgg: new Set(), aggregates: [],
+              aus: new Set(), wert: { aggregate: {}, compact_before: null, off: [] } };
 
 function renderExportCfg() {
     const box = document.getElementById('expCfg');
@@ -292,12 +293,31 @@ function renderExportCfg() {
     const opt = (gewaehlt) => EXP.aggregates.map(a =>
         '<option value="' + a.key + '"' + (a.key === gewaehlt ? ' selected' : '') +
         '>' + a.label + '</option>').join('');
-    box.innerHTML = EXP.groups.map(g =>
-        '<div class="set-exp-row">' +
-            '<span class="set-exp-name">' + g.label + '</span>' +
-            '<select data-gruppe="' + g.key + '" aria-label="Zusammenfassung für ' +
-                g.label + '">' + opt(agg[g.key] || 'none') + '</select>' +
-        '</div>').join('')
+    box.innerHTML = EXP.groups.map(g => {
+        const aus = EXP.aus.has(g.key);
+        // Das Auswahlfeld steht nur da, wo sich überhaupt etwas zusammenfassen
+        // lässt: Notizen haben kein Datum, ein Feld daneben wäre ein
+        // Bedienelement, das nichts tut. Ist das Modul abgeschaltet, tritt es
+        // zurück statt zu verschwinden — sonst springt die Zeile bei jedem
+        // Schalter.
+        const stufe = EXP.kannAgg.has(g.key)
+            ? '<select data-gruppe="' + g.key + '"' + (aus ? ' disabled' : '') +
+              ' aria-label="Zusammenfassung für ' + g.label + '">' +
+              opt(agg[g.key] || 'none') + '</select>'
+            : '';
+        // Reihenfolge: Name, Stufe, Schalter. Der Schalter steht damit in
+        // JEDER Zeile am selben Rand -- auch dort, wo kein Auswahlfeld
+        // davorsteht, sonst rutschte er in dessen Spalte und die Karte
+        // haette zwei Fluchtlinien.
+        return '<div class="set-exp-row' + (aus ? ' is-schlaeft' : '') + '">' +
+                   '<span class="set-exp-name">' + g.label + '</span>' +
+                   stufe +
+                   '<button type="button" class="v-btn v-btn--sm set-modbtn' +
+                       (aus ? '' : ' is-an') + '" data-aus="' + g.key + '"' +
+                       ' aria-pressed="' + (aus ? 'false' : 'true') + '">' +
+                       (aus ? 'Nicht dabei' : 'Exportieren') + '</button>' +
+               '</div>';
+    }).join('')
         + '<div class="set-exp-row set-exp-grenze">' +
               '<span class="set-exp-name">Alles davor monatlich zusammenfassen' +
                   '<span class="set-modsub">Leer lassen heißt: keine Grenze, ' +
@@ -307,18 +327,47 @@ function renderExportCfg() {
           '</div>';
 }
 
+/* Der Schalter zeichnet nur um, gespeichert wird die Karte mit ihrem Knopf.
+   Bei den ruhenden Modulen greift ein Schalter sofort; hier steht er neben
+   Auswahlfeldern, die auf das Speichern warten, und zwei Verhaltensweisen in
+   einer Karte kann man nicht auseinanderhalten. */
+function toggleExportGruppe(key) {
+    if (EXP.aus.has(key)) EXP.aus.delete(key); else EXP.aus.add(key);
+    // Was in den Feldern steht, überlebt das Neuzeichnen.
+    EXP.wert.aggregate = aktuelleStufen();
+    const grenze = document.getElementById('expGrenze');
+    if (grenze) EXP.wert.compact_before = grenze.value || null;
+    renderExportCfg();
+}
+
+function aktuelleStufen() {
+    const box = document.getElementById('expCfg');
+    const agg = {};
+    if (box) box.querySelectorAll('[data-gruppe]').forEach(s => {
+        if (s.value !== 'none') agg[s.dataset.gruppe] = s.value;
+    });
+    return agg;
+}
+
 async function saveExportCfg(btn) {
     const box = document.getElementById('expCfg');
     if (!box) return;
-    const agg = {};
-    box.querySelectorAll('[data-gruppe]').forEach(s => {
-        if (s.value !== 'none') agg[s.dataset.gruppe] = s.value;
-    });
+    const agg = aktuelleStufen();
     const grenze = (document.getElementById('expGrenze') || {}).value || null;
+    const aus = [...EXP.aus];
+    // Ein Export ohne ein einziges Modul wäre eine leere Datei. Der Server
+    // fängt das ebenfalls ab und nimmt dann wieder alles — hier steht es,
+    // damit die Antwort nicht „gespeichert“ lautet und trotzdem etwas
+    // anderes gilt.
+    if (aus.length && aus.length >= EXP.groups.length) {
+        if (window.Toast) Toast.error('Mindestens ein Modul muss dabei sein.');
+        return;
+    }
     if (btn) btn.classList.add('is-loading');
     try {
-        await VexPrefs.set(EXPORT_PREF, { aggregate: agg, compact_before: grenze });
-        EXP.wert = { aggregate: agg, compact_before: grenze };
+        await VexPrefs.set(EXPORT_PREF,
+            { aggregate: agg, compact_before: grenze, off: aus });
+        EXP.wert = { aggregate: agg, compact_before: grenze, off: aus };
         if (window.Toast) Toast.success('Voreinstellung gespeichert');
     } catch (e) {
         // Der Server hat es nicht -- die Anzeige muss zurueck auf den Stand,
@@ -336,9 +385,13 @@ async function ladeExportCfg() {
         // Nur Module, in denen sich ueberhaupt etwas zusammenfassen laesst.
         // Notizen haben kein Datum -- ein Auswahlfeld daneben waere ein
         // Bedienelement, das nichts tut.
-        const kann = new Set((meta.sections || [])
+        // Alle Module stehen zur Wahl — abschalten muss man auch das
+        // können, was sich nicht zusammenfassen lässt. Nur das
+        // Auswahlfeld daneben hängt daran.
+        EXP.groups = (meta.groups || []).filter(g =>
+            (meta.sections || []).some(s => s.group === g.key));
+        EXP.kannAgg = new Set((meta.sections || [])
             .filter(s => s.aggregatable).map(s => s.group));
-        EXP.groups = (meta.groups || []).filter(g => kann.has(g.key));
         EXP.aggregates = meta.aggregates || [];
     } catch (e) {
         EXP.groups = [];
@@ -351,7 +404,9 @@ async function ladeExportCfg() {
     try { await VexPrefs.load(); } catch (e) { /* offline: Cache gilt */ }
     const gespeichert = VexPrefs.get(EXPORT_PREF, null) || {};
     EXP.wert = { aggregate: gespeichert.aggregate || {},
-                 compact_before: gespeichert.compact_before || null };
+                 compact_before: gespeichert.compact_before || null,
+                 off: gespeichert.off || [] };
+    EXP.aus = new Set(EXP.wert.off);
     renderExportCfg();
 }
 
@@ -415,5 +470,9 @@ async function ladeExportCfg() {
     document.getElementById('tabCfg').onclick = () => VexNav.openTabBarSettings();
     document.getElementById('expBtn').onclick = () => exportAll();
     document.getElementById('expSave').onclick = (e) => saveExportCfg(e.currentTarget);
+    document.getElementById('expCfg').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-aus]');
+        if (b) toggleExportGruppe(b.dataset.aus);
+    });
     ladeExportCfg();
 })();

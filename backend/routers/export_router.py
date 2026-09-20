@@ -65,6 +65,7 @@ from services.full_export import (
     build_full_export_csv,
     clean_aggregate_map,
     fit_export_to_size,
+    sections_ohne_gruppen,
 )
 
 router = APIRouter(tags=["export"])
@@ -150,25 +151,46 @@ async def _export_prefs(db, user) -> dict:
         return {}
 
 
-async def _compact_before(request: Request, db, user) -> date | None:
+# Die drei Helfer bekommen die Voreinstellung uebergeben, statt sie sich zu
+# holen: sonst liest ein einziger Export sie dreimal aus der Datenbank, und
+# beim vierten Nutzer der Vorgabe waere es die vierte Abfrage.
+def _compact_before(request: Request, vorgaben: dict) -> date | None:
     """Ab wann die gewaehlte Stufe gilt. Die Anfrage schlaegt die
     Voreinstellung -- auch mit einem leeren Wert, der sie ausdruecklich
     abschaltet."""
     if "compact_before" in request.query_params:
         return _parse_date(request.query_params["compact_before"], "compact_before")
-    gespeichert = (await _export_prefs(db, user)).get("compact_before")
+    gespeichert = vorgaben.get("compact_before")
     return _parse_date(gespeichert, "compact_before") if gespeichert else None
 
 
-async def _agg_map_mit_vorgabe(request: Request, db, user) -> dict:
+def _agg_map_mit_vorgabe(request: Request, vorgaben: dict) -> dict:
     """``agg_<gruppe>`` aus der Anfrage, sonst die Voreinstellung. Eine
     Gruppe, die in der Anfrage steht, bleibt wie sie dort steht."""
     aus_anfrage = _agg_map(request)
-    vorgabe = (await _export_prefs(db, user)).get("aggregate") or {}
+    vorgabe = vorgaben.get("aggregate") or {}
     out = {g: s for g, s in vorgabe.items()
            if g in GROUP_KEYS and s in AGG_KEYS}
     out.update(aus_anfrage)
     return out
+
+
+def _sections_mit_vorgabe(raw: str | None, vorgaben: dict) -> list[str] | None:
+    """Die Sektionsauswahl. ``sections`` in der Anfrage schlaegt alles.
+
+    v2.11.0: Ohne ``sections`` gelten die Module, die in der Voreinstellung
+    NICHT abgeschaltet sind. ``None`` heisst weiterhin "alles" und bleibt der
+    Rueckfall, wenn nichts abgeschaltet ist -- so bleibt der Aufruf ohne
+    Parameter genau das, was er immer war.
+    """
+    picked = _parse_sections(raw)
+    if picked is not None:
+        return picked
+    aus = vorgaben.get("off") or []
+    if not aus:
+        return None
+    gewaehlt = sections_ohne_gruppen(aus)
+    return None if len(gewaehlt) == len(SECTION_KEYS) else gewaehlt
 
 
 def _validated_aggregate(value: str) -> str:
@@ -199,13 +221,14 @@ async def export_preview(
     """Zeilen, Groesse und verfuegbare Spalten je Sektion plus die ersten
     Zeilen der Datei."""
     d_from, d_to = _validated_range(date_from, date_to)
+    vorgaben = await _export_prefs(db, user)
     return await build_export_preview(
         db, user, date_from=d_from, date_to=d_to,
         aggregate=_validated_aggregate(aggregate),
-        sections=_parse_sections(sections),
-        aggregate_map=await _agg_map_mit_vorgabe(request, db, user),
+        sections=_sections_mit_vorgabe(sections, vorgaben),
+        aggregate_map=_agg_map_mit_vorgabe(request, vorgaben),
         column_map=_column_map(request),
-        compact_before=await _compact_before(request, db, user))
+        compact_before=_compact_before(request, vorgaben))
 
 
 @router.get("/api/export/fit")
@@ -233,12 +256,13 @@ async def export_fit(
     if max_bytes > MAX_FIT_BYTES:
         raise HTTPException(400, "Die Hoechstgroesse ist unrealistisch gross")
     d_from, d_to = _validated_range(date_from, date_to)
+    vorgaben = await _export_prefs(db, user)
     return await fit_export_to_size(
         db, user, max_bytes, date_from=d_from, date_to=d_to,
-        sections=_parse_sections(sections),
-        aggregate_map=await _agg_map_mit_vorgabe(request, db, user),
+        sections=_sections_mit_vorgabe(sections, vorgaben),
+        aggregate_map=_agg_map_mit_vorgabe(request, vorgaben),
         column_map=_column_map(request),
-        compact_before=await _compact_before(request, db, user))
+        compact_before=_compact_before(request, vorgaben))
 
 
 @router.get("/api/export/all")
@@ -267,11 +291,12 @@ async def export_all(
     die Verpackung, nie den Inhalt.
     """
     d_from, d_to = _validated_range(date_from, date_to)
-    picked = _parse_sections(sections)
+    vorgaben = await _export_prefs(db, user)
+    picked = _sections_mit_vorgabe(sections, vorgaben)
     agg = _validated_aggregate(aggregate)
-    agg_map = await _agg_map_mit_vorgabe(request, db, user)
+    agg_map = _agg_map_mit_vorgabe(request, vorgaben)
     col_map = _column_map(request)
-    grenze = await _compact_before(request, db, user)
+    grenze = _compact_before(request, vorgaben)
 
     als_zip = (format or "csv").strip().lower() == "zip"
     if als_zip:

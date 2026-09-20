@@ -300,6 +300,24 @@ ALL_SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS]
 # Sektion zwei Aenderungen an zwei Orten.
 AUSWERTBARE_SECTION_KEYS = [s["key"] for s in EXPORT_SECTIONS if not s.get("bulk")]
 
+def sections_ohne_gruppen(aus: list) -> list[str]:
+    """Alle Sektions-Schluessel ausser denen der genannten Modulgruppen.
+
+    v2.11.0: Die Export-Voreinstellung kann Module abschalten. Gespeichert
+    wird, was AUS ist, nicht was an ist -- sonst faellt jede kuenftig
+    hinzukommende Sektion stillschweigend aus dem Export eines Kontos, das
+    seine Auswahl einmal gespeichert hat.
+
+    Bleibt nichts uebrig, gilt wieder alles: eine Voreinstellung darf zu
+    einer kleineren Datei fuehren, nie zu gar keiner.
+    """
+    raus = set(aus or [])
+    if not raus:
+        return list(ALL_SECTION_KEYS)
+    rest = [s["key"] for s in EXPORT_SECTIONS if s.get("group") not in raus]
+    return rest or list(ALL_SECTION_KEYS)
+
+
 # Wie eine Buchung entstanden ist. Steht als Klartext in der Datei -- ein
 # Schluessel wie 'import' waere in fuenf Jahren eine Ratearbeit.
 HERKUNFT = {
