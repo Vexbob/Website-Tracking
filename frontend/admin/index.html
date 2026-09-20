@@ -230,7 +230,16 @@ async function savePwReset() {
 }
 
 async function deleteUser(id, name) {
-    if (!confirm(`Account "${name}" wirklich löschen?\n\nALLE Daten dieses Users werden unwiderruflich entfernt.`)) return;
+    // Der gestaltete Dialog, nicht der native: das hier ist die
+    // zerstoerendste Aktion der ganzen Anwendung, und ausgerechnet sie
+    // stellte die Frage in einem Kasten, der aus der Seite ausbricht und
+    // dessen Knopf „OK“ heisst.
+    const ok = await askConfirm({
+        title: `Account „${name}“ löschen?`,
+        text: 'Alle Daten dieses Kontos werden unwiderruflich entfernt — '
+            + 'Bons, Notizen, Sparziele, Gesundheitsdaten. Das lässt sich nicht rückgängig machen.',
+        ok: 'Endgültig löschen', danger: true });
+    if (!ok) return;
     try {
         await apiCall('/api/admin/users/' + id, { method: 'DELETE' });
         haptic('success');
@@ -248,16 +257,25 @@ document.getElementById('inviteModal').addEventListener('click', e => { if (e.ta
 
 (async function boot() {
     if (!isLoggedIn()) { location.href = '/private/login.html'; return; }
+    // Aufdecken direkt hinter dem synchronen Login-Check. Vorher hing die
+    // Freigabe hinter `await fetchMe()`, und der `catch`-Zweig kehrte ohne
+    // sie zurueck: bei einem Serverfehler blieb eine leere Seite ohne
+    // Meldung stehen.
+    document.body.classList.add('ready');
     try {
         const me = await fetchMe(true);
         if (!me.is_admin) {
-            alert('Zugriff verweigert — nur Admin');
+            await askAlert({ title: 'Kein Zugriff',
+                             text: 'Diese Seite ist Administratoren vorbehalten.' });
             location.href = '/';
             return;
         }
         document.getElementById('userLabel').textContent = '👤 ' + me.username;
-    } catch(e) { return; }
-    document.body.classList.add('ready');
+    } catch(e) {
+        await askAlert({ title: 'Laden fehlgeschlagen',
+                         text: (e && e.message) ? e.message : 'Der Server antwortet nicht.' });
+        return;
+    }
     await loadUsers();
 })();
 </script>

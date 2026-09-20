@@ -122,8 +122,14 @@ function bindUI() {
 async function loadNotes() {
     try {
         state.notes = await NOTES_API.list(state.showArchived);
+        state.ladeFehler = null;
     } catch (e) {
-        showToast('Laden fehlgeschlagen: ' + e.message, true);
+        // Der Toast ist nach Sekunden weg, und danach stand in der Liste
+        // „Noch keine Notizen. Leg oben eine an.“ -- eine Stoerung sah aus
+        // wie ein leeres Konto, und wer daraufhin schrieb, fing in einem
+        // falschen Weltbild an. Der Fehler bleibt jetzt in der Liste stehen.
+        state.ladeFehler = e && e.message ? e.message : 'Der Server antwortet nicht.';
+        showToast('Laden fehlgeschlagen: ' + state.ladeFehler, true);
         state.notes = [];
     }
     state.notes.forEach(n => {
@@ -154,6 +160,16 @@ function renderSidebar() {
     notes.sort(sortFn);
 
     if (!notes.length) {
+        // Ein Ladefehler ist kein leeres Konto: er bleibt hier stehen, mit
+        // dem Weg zurueck daneben.
+        if (state.ladeFehler) {
+            list.innerHTML = '<div class="nz-list-empty">Die Notizen konnten nicht '
+                + 'geladen werden.<br><small>' + escapeHtml(state.ladeFehler) + '</small>'
+                + '<br><button type="button" class="nz-de-cta" id="nzNochmal">Nochmal versuchen</button></div>';
+            const nochmal = document.getElementById('nzNochmal');
+            if (nochmal) nochmal.addEventListener('click', () => loadNotes());
+            return;
+        }
         const msg = state.query
             ? 'Keine Treffer für <strong>' + escapeHtml(state.query) + '</strong>.'
             : state.showArchived ? 'Kein archiviertes Element.' : 'Noch keine Notizen. Leg oben eine an.';
@@ -322,7 +338,8 @@ async function deleteNote(id) {
     if (!n) return;
     const snapshot = { ...n };
     if (!await askConfirm({ title: `Notiz „${n.title || '(ohne Titel)'}“ löschen?`,
-        text: 'Sie landet im Papierkorb der Liste und lässt sich von dort noch zurückholen.',
+        text: 'Gleich danach steht „Rückgängig“ ein paar Sekunden lang unten — '
+            + 'danach ist sie weg. Einen Papierkorb gibt es nicht.',
         ok: 'Löschen', danger: true })) return;
     try {
         await NOTES_API.remove(id);

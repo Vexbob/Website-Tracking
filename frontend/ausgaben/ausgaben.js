@@ -162,16 +162,38 @@ function expenseTypeOptions(selected) {
     ).join('');
 }
 
-/* ---------- Auth Bootstrap ---------- */
+/* ---------- Auth Bootstrap ----------
+ *
+ * Die Freigabe des Body steht hier und NICHT bei den Aufrufern. Alle acht
+ * Ausgaben-Seiten schrieben `const me = await ensureLoggedIn(); if (!me)
+ * return;` und deckten sich erst DANACH auf. Antwortete `/api/me` mit einem
+ * Fehler (nicht 401 -- den faengt api.js ab), kehrte jede dieser Seiten
+ * vorher zurueck und liess `body{visibility:hidden}` stehen: eine
+ * vollstaendig unsichtbare Seite, DOM komplett, Konsole sauber. Selbst der
+ * Fehler-Toast haing am selben verborgenen Body und war damit ebenfalls weg.
+ *
+ * Aufgedeckt wird deshalb direkt hinter dem SYNCHRONEN Login-Check -- der
+ * ist der eigentliche Schutz, und er haengt an keiner Antwort. Was danach
+ * schiefgeht, sieht man dann wenigstens.
+ */
 async function ensureLoggedIn() {
     if (!isLoggedIn()) { window.location.href = '/private/login.html'; return null; }
+    document.body.classList.add('ready');
+    document.body.style.visibility = 'visible';
     try {
         const me = await fetchMe(true);
         const label = document.getElementById('userLabel');
         if (label) label.textContent = '👤 ' + me.username;
         const logout = document.getElementById('logoutBtn'); if (logout) logout.onclick = () => { clearToken(); location.reload(); };
         return me;
-    } catch (e) { return null; }
+    } catch (e) {
+        // Nicht still zurueckgeben: der Aufrufer bricht ab, und ohne Meldung
+        // steht man vor einer leeren Seite und haelt die Anwendung fuer
+        // kaputt statt den Server fuer langsam.
+        showToast('Das Konto konnte nicht geladen werden: '
+            + (e && e.message ? e.message : 'unbekannter Fehler'), 'error', 8000);
+        return null;
+    }
 }
 
 /* ---------- Toast ---------- */

@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.2', date: '2026-09-21', title: 'Fehler, die man nicht sah', notes: [
+        'Ein gescheiterter Abruf sagt das jetzt — Sparziele, Notizen und Statistik blieben vorher einfach leer.',
+        'Tagesziele lassen sich nicht mehr überschreiben, wenn sie gar nicht geladen werden konnten.',
+        'Rückfragen tragen wieder ihr Verb statt „Bestätigen“, und Enter drückt nicht mehr blind den roten Knopf.',
+        'Die Ausgaben-Seiten bleiben bei einem Serverfehler nicht mehr vollständig unsichtbar.',
+        'Account löschen und die Blog-Verwaltung fragen im gestalteten Fenster statt im Browserkasten.',
+    ]},
     { v: 'v2.11.1', date: '2026-09-20', title: 'Nur noch ein Export', notes: [
         'Die einzelnen CSV-Knöpfe in Ausgaben, Gesundheit und Sparziel sind weg — es gibt den Gesamt-Export.',
         'Der kann dafür Module ganz weglassen: abgeschaltet fehlen sie im Dialog und in der Datei.',

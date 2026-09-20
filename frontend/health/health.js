@@ -755,7 +755,14 @@ async function loadBpGlucoseCharts() {
         state.chartBp.data.datasets[0].data = bp.map(r => r.systolic);
         state.chartBp.data.datasets[1].data = bp.map(r => r.diastolic);
         state.chartBp.update();
-    } catch (e) {}
+        kurveOk('hChartBp');
+    } catch (e) {
+        // Bei Messwerten ist ein stiller Fehler der schlimmste: die alte
+        // Kurve bleibt stehen, man liest sie als aktuell und trifft eine
+        // Entscheidung ueber die eigene Gesundheit auf einem Stand von
+        // gestern. Also sagen, dass sie nicht frisch ist.
+        kurveFehler('hChartBp');
+    }
     try {
         const range = state.vitalRange || VexRange.resolve('30');
         const gl = VexRange.clip(await HEALTH_API.bloodGlucose(range.fetchDays),
@@ -764,7 +771,32 @@ async function loadBpGlucoseCharts() {
         setChartDates(state.chartGlucose, gl.map(r => r.recorded_at));
         state.chartGlucose.data.datasets[0].data = gl.map(r => r.value);
         state.chartGlucose.update();
-    } catch (e) {}
+        kurveOk('hChartGlucose');
+    } catch (e) {
+        kurveFehler('hChartGlucose');
+    }
+}
+
+/* Ein Streifen ueber der Kurve statt einer leeren Flaeche: die Kurve selbst
+   bleibt sichtbar (sie war ja richtig), traegt aber sichtbar den Vermerk,
+   dass der letzte Abruf nicht durchkam. */
+function kurveFehler(canvasId) {
+    const c = document.getElementById(canvasId);
+    if (!c || !c.parentElement) return;
+    let hinweis = c.parentElement.querySelector('.h-kurve-alt');
+    if (!hinweis) {
+        hinweis = document.createElement('p');
+        hinweis.className = 'h-kurve-alt';
+        c.parentElement.appendChild(hinweis);
+    }
+    hinweis.textContent = 'Nicht aktualisiert — der Abruf ist fehlgeschlagen. '
+        + 'Was du siehst, ist der Stand von vorhin.';
+}
+
+function kurveOk(canvasId) {
+    const c = document.getElementById(canvasId);
+    const hinweis = c && c.parentElement && c.parentElement.querySelector('.h-kurve-alt');
+    if (hinweis) hinweis.remove();
 }
 
 // ---------- Schlaf ----------

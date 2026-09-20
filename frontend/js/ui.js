@@ -79,7 +79,12 @@
         opts = opts || {};
         const title = opts.title || 'Bist du sicher?';
         const text = opts.text || '';
-        const okLabel = opts.ok || 'Bestätigen';
+        // `ok` und `confirmText` meinen dasselbe. Sechs Aufrufe (Schach,
+        // Nährwerte) schrieben `confirmText`, wurden hier nie gelesen und
+        // zeigten deshalb „Bestätigen“ — ausgerechnet an „Katalog ersetzen?“
+        // und „Lebensmittel entfernen?“. Ein Knopf, der nicht sagt, was er
+        // tut, ist genau die Reibung, gegen die die Rückfrage da ist.
+        const okLabel = opts.ok || opts.confirmText || 'Bestätigen';
         const cancelLabel = opts.cancel === null ? null : (opts.cancel || 'Abbrechen');
         const danger = !!opts.danger;
 
@@ -112,18 +117,42 @@
 
             const close = (result) => {
                 overlay.classList.remove('show');
-                document.removeEventListener('keydown', onKey);
+                document.removeEventListener('keydown', onKey, true);
                 setTimeout(() => {
                     overlay.remove();
                     document.body.style.overflow = prevOverflow;
                     resolve(result);
                 }, 180);
             };
+            const ziele = () => Array.prototype.filter.call(
+                box.querySelectorAll('button:not([disabled])'),
+                el => el.offsetParent !== null);
             const onKey = (e) => {
-                if (e.key === 'Escape' && cancelLabel !== null) close(false);
-                else if (e.key === 'Enter') close(true);
+                if (e.key === 'Escape' && cancelLabel !== null) { close(false); return; }
+                // Enter bestätigt NUR, wenn der Bestätigen-Knopf selbst den
+                // Fokus hat. Vorher löste jedes Enter aus, egal worauf man
+                // stand — zusammen mit dem Fokus auf dem gefährlichen Knopf
+                // war das ein Löschvorgang pro unbedachtem Tastendruck.
+                if (e.key === 'Enter') {
+                    if (document.activeElement === box.querySelector('.ui-confirm-ok')) {
+                        e.preventDefault();
+                        close(true);
+                    }
+                    return;
+                }
+                if (e.key !== 'Tab') return;
+                // Der Fokus bleibt im Dialog -- sonst wandert Tab durch die
+                // Seite dahinter, die man gerade nicht bedienen kann.
+                const liste = ziele();
+                if (!liste.length) return;
+                const erstes = liste[0], letztes = liste[liste.length - 1];
+                if (!e.shiftKey && document.activeElement === letztes) {
+                    e.preventDefault(); erstes.focus();
+                } else if (e.shiftKey && document.activeElement === erstes) {
+                    e.preventDefault(); letztes.focus();
+                }
             };
-            document.addEventListener('keydown', onKey);
+            document.addEventListener('keydown', onKey, true);
 
             box.querySelector('.ui-confirm-ok').addEventListener('click', () => close(true));
             const cancelBtn = box.querySelector('.ui-confirm-cancel');
@@ -133,7 +162,12 @@
             });
             requestAnimationFrame(() => {
                 overlay.classList.add('show');
-                box.querySelector('.ui-confirm-ok').focus();
+                // Bei einer gefährlichen Rückfrage bekommt ABBRECHEN den
+                // Fokus. Der Fokus ist eine Empfehlung, und die darf nicht
+                // auf dem unwiderruflichen Knopf liegen.
+                const zuerst = (danger && cancelBtn) ? cancelBtn
+                                                     : box.querySelector('.ui-confirm-ok');
+                zuerst.focus();
             });
         });
     }
@@ -209,8 +243,13 @@
             overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
             requestAnimationFrame(() => {
                 overlay.classList.add('show');
-                input.focus();
-                input.select();
+                // Nur am Rechner ins Feld springen. Am Handy risse das sofort
+                // die Tastatur hoch und verdeckte die Frage darüber -- dieselbe
+                // Begründung wie in modal.js.
+                if (window.matchMedia('(min-width: 721px)').matches) {
+                    input.focus();
+                    input.select();
+                }
             });
         });
     }

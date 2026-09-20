@@ -238,3 +238,10 @@ button.danger-outline:hover{background:var(--red-bg)}
     margin-top:2px;line-height:1.2}
 .h-rhythm-val small{font-size:0.75rem;font-weight:600;color:var(--text-2);margin-left:4px}
 .h-rhythm-sub{font-size:0.6875rem;color:var(--text-2);margin-top:2px}
+
+/* v2.11.2: Ein Vermerk unter einer Kurve, deren letzter Abruf nicht durchkam.
+   Die Kurve bleibt stehen -- sie war richtig -- traegt aber sichtbar, dass
+   sie nicht frisch ist. Bei Messwerten ist eine stille alte Kurve die
+   schlimmste Sorte Fehler. */
+.h-kurve-alt { margin: 0.5rem 0 0; font-size: 0.8125rem; color: var(--warn);
+    line-height: 1.4; }

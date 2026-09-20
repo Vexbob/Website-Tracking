@@ -1045,6 +1045,19 @@ function deleteProgress(id){
 // Cache aller Sparziele des Users (fuer Reward-Goal-Dropdowns), v1.18.2
 let savingsGoalsCache = [];
 
+/* Ein Ladefehler bleibt sichtbar, statt eine leere Liste zu hinterlassen.
+   Vorher standen hier drei stille `catch`-Bloecke: Sparziele, Wunschliste und
+   Ideen blieben bei einem Serverfehler einfach leer -- nicht einmal der
+   Leerzustand wurde gezeichnet, es stand buchstaeblich nichts da. „Noch kein
+   Wunsch notiert“ und „der Server antwortet nicht“ sahen gleich aus. */
+function ladeFehler(box, was, nochmal){
+    if(!box) return;
+    box.innerHTML = `<div class="empty-line">${esc(was)} konnte nicht geladen werden.
+        <button type="button" class="he-btn" style="margin-left:0.5rem" data-nochmal>Nochmal</button></div>`;
+    const k = box.querySelector('[data-nochmal]');
+    if(k && typeof nochmal === 'function') k.addEventListener('click', nochmal);
+}
+
 async function loadSavingsGoals(){
     try{
         const list=await apiCall('/api/savings-goals')||[];
@@ -1067,7 +1080,10 @@ async function loadSavingsGoals(){
             return;
         }
         box.innerHTML = goals.map(renderSavingsGoalCard).join('');
-    }catch(e){console.error(e);}
+    }catch(e){
+        console.error(e);
+        ladeFehler(document.getElementById('sgList'), 'Deine Sparziele', loadSavingsGoals);
+    }
 }
 
 // Kopfzeile des Tabs: aktives Ziel, Summe auf Zielen, Puffer, offener Rest
@@ -1298,7 +1314,10 @@ async function loadPotentialGoals(){
                 </div>
             </div>`;
         }).join('') : '<div class="empty-line">Noch kein Wunsch notiert.</div>';
-    }catch(e){}
+    }catch(e){
+        console.error(e);
+        ladeFehler(document.getElementById('potList'), 'Die Wunschliste', loadPotentialGoals);
+    }
 }
 
 // Wunsch als Sparziel uebernehmen: fuellt nur das Formular vor, angelegt
@@ -1354,7 +1373,10 @@ async function loadFutureIdeas(){
                 </div>
             </div>`;
         }).join('') : '<div class="empty-line">Noch keine Idee gesammelt.</div>';
-    }catch(e){}
+    }catch(e){
+        console.error(e);
+        ladeFehler(document.getElementById('ideaList'), 'Die Ideen', loadFutureIdeas);
+    }
 }
 async function createIdea(){
     const t=document.getElementById('ideaTitle').value.trim(),c=document.getElementById('ideaKind').value;

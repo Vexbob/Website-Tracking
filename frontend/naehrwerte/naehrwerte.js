@@ -1253,6 +1253,17 @@ function tagesChart(canvasId, makro, farbe, texte, titelEl, subEl, noteEl, notiz
 
 function zieleFelder() {
     const e = state.ziele;
+    // Ein gescheiterter Abruf darf NICHT wie „noch keine Ziele gesetzt“
+    // aussehen. Vorher blieb hier das Skelett stehen, und wer trotzdem
+    // speicherte, schickte eine leere Zielliste an den Server -- die
+    // gespeicherten Tagesziele waren damit weg, ohne dass irgendwo stand,
+    // dass sie nie geladen wurden.
+    if (state.zieleFehler) {
+        return '<div class="empty is-error"><span class="empty-mark">⚠️</span>'
+            + '<p class="empty-text">Deine Tagesziele konnten nicht geladen werden. '
+            + 'Sie sind noch da — gespeichert wird erst wieder, wenn sie hier stehen.</p>'
+            + '<button type="button" class="v-btn v-btn--sm" id="nwZieleNochmal">Nochmal versuchen</button></div>';
+    }
     if (!e) return '<span class="skel skel-block"></span>';
     return e.macros.map(m => `
         <label class="ern-feld">
@@ -1288,16 +1299,27 @@ function zieleDialog() {
 async function ladeZiele() {
     try {
         state.ziele = await API.ziele();
+        state.zieleFehler = false;
     } catch (e) {
         state.ziele = null;
+        state.zieleFehler = true;
     }
     // Steht der Dialog gerade offen, bekommt er die frischen Werte; sonst
     // gibt es nichts zu zeichnen -- die Felder entstehen erst mit ihm.
     const ziel = document.getElementById('nwZiele');
-    if (ziel) ziel.innerHTML = zieleFelder();
+    if (!ziel) return;
+    ziel.innerHTML = zieleFelder();
+    const nochmal = document.getElementById('nwZieleNochmal');
+    if (nochmal) nochmal.addEventListener('click', ladeZiele);
 }
 
 async function zieleSpeichern() {
+    // Ohne geladene Ziele gibt es nichts zu speichern -- was hier stünde,
+    // wäre nicht die Eingabe des Nutzers, sondern eine leere Maske.
+    if (state.zieleFehler || !state.ziele) {
+        melde('Die Ziele stehen noch nicht — erst laden, dann speichern.', 'error');
+        return;
+    }
     const knopf = document.getElementById('nwZieleSpeichern');
     const ziele = {};
     document.querySelectorAll('[data-ziel]').forEach(f => {

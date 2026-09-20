@@ -170,7 +170,29 @@ async function loadInsights(){
         renderInsights(data);
         renderWeekday(data);
         renderRanks(data);
-    } catch(e) { console.error('insights failed:', e); }
+    } catch(e) {
+        // Ohne diesen Zweig blieb das Skelett aus statistik.html FÜR IMMER
+        // stehen: ein Ladezustand, der nie endet, sieht aus wie ein
+        // haengender Browser -- man wartet, statt neu zu laden.
+        console.error('insights failed:', e);
+        fehlerKarte('statKpiGrid', 'Die Kennzahlen konnten nicht geladen werden.', loadInsights);
+        ['statInsights', 'rankCategory', 'rankStore'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '';
+        });
+    }
+}
+
+/* Ein Fehler gehoert DORTHIN, wo die Zahlen stehen sollten, mit dem Weg
+   zurueck daneben. Ein `console.error` sieht der Benutzer nie. */
+function fehlerKarte(id, satz, nochmal){
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '<div class="empty is-error"><span class="empty-mark">⚠️</span>'
+        + '<p class="empty-text">' + satz + '</p>'
+        + '<button type="button" class="v-btn v-btn--sm" data-nochmal="1">Nochmal versuchen</button></div>';
+    const knopf = el.querySelector('[data-nochmal]');
+    if (knopf && typeof nochmal === 'function') knopf.addEventListener('click', nochmal);
 }
 
 /* Die Hauptzahl bekommt die Veraenderung als Pille daneben; sie ist die
@@ -458,7 +480,10 @@ async function loadSeries(){
             densify(rows, gran, STAT.from, STAT.to),
             pr ? densify(prevRows, gran, pr.from, pr.to) : null,
             gran);
-    } catch(e) { console.error('series failed:', e); }
+    } catch(e) {
+        console.error('series failed:', e);
+        fehlerKarte('chartSeriesWrap', 'Der Zeitverlauf konnte nicht geladen werden.', loadSeries);
+    }
 }
 
 function renderSeriesChart(points, prevPoints, gran){

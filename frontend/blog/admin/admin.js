@@ -18,6 +18,13 @@ function fmtDate(iso){if(!iso)return'';return new Date(iso).toLocaleDateString('
 
 async function boot() {
     if (!isLoggedIn()) { window.location.href = '/private/login.html'; return; }
+    // Direkt hinter dem synchronen Login-Check aufdecken, nicht am Ende.
+    // Vorher lief ein Nicht-Admin in `askAlert` hinein, waehrend der Body
+    // noch `visibility:hidden` trug: der Dialog haengt an genau diesem Body,
+    // war damit unsichtbar, das `await` loeste nie auf, die Weiterleitung
+    // passierte nie. Ergebnis war eine dauerhaft leere Seite -- kein Fehler,
+    // keine Konsolenausgabe, nichts zum Anfassen.
+    document.body.style.visibility = 'visible';
     try {
         const me = await fetchMe(true);
         if (!me.is_admin) {
@@ -25,11 +32,18 @@ async function boot() {
             window.location.href = '/'; return;
         }
         document.getElementById('userLabel').textContent = '👤 ' + me.username;
-    } catch (e) { window.location.href = '/private/login.html'; return; }
+    } catch (e) {
+        // Ein Serverfehler ist keine Abmeldung. Wer hier auf den Login
+        // geschickt wird, haelt sich fuer ausgeloggt und meldet sich neu an,
+        // waehrend in Wahrheit der Server nicht antwortet. (401 faengt
+        // api.js selbst ab und leitet dort um.)
+        await askAlert({ title: 'Laden fehlgeschlagen',
+                         text: (e && e.message ? e.message : 'Der Server antwortet nicht.') });
+        return;
+    }
     document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
     bindUI();
     await loadPosts();
-    document.body.style.visibility = 'visible';
     // Von "+ Neuer Beitrag" auf der Blog-Seite kommt man mit #neu hierher und
     // steht dann gleich in einem frischen Entwurf. Der Anker wird entfernt,
     // damit ein Neuladen nicht einen zweiten anlegt.
@@ -77,23 +91,38 @@ function bindUI() {
         const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
         files.forEach(f => uploadAndInsertImage(f));
     });
-    document.getElementById('baPublish').onclick = async () => {
-        await flushSave();
-        const p = await BLOG_ADMIN_API.publish(S.selectedId);
-        Object.assign(S.posts.find(x=>x.id===S.selectedId) || {}, p);
-        renderList(); renderState();
+    /* Veroeffentlichen, Zuruecknehmen und Loeschen liefen ohne `try`:
+       scheiterte der Endpunkt, passierte sichtbar GAR NICHTS -- die Liste
+       blieb stehen, die Zustandszeile blieb stehen, es kam keine Meldung,
+       und der Beitrag sah weiter aus wie ein Entwurf, obwohl man den Knopf
+       gedrueckt hatte. */
+    const zustandSetzen = async (fn, was) => {
+        try {
+            await flushSave();
+            const p = await fn(S.selectedId);
+            Object.assign(S.posts.find(x => x.id === S.selectedId) || {}, p);
+            renderList(); renderState();
+        } catch (e) {
+            const msg = (e && e.message) ? e.message : 'Der Server antwortet nicht.';
+            if (window.Toast) Toast.error(was + ' fehlgeschlagen: ' + msg);
+            else await askAlert({ title: was + ' fehlgeschlagen', text: msg });
+        }
     };
-    document.getElementById('baUnpub').onclick = async () => {
-        await flushSave();
-        const p = await BLOG_ADMIN_API.unpublish(S.selectedId);
-        Object.assign(S.posts.find(x=>x.id===S.selectedId) || {}, p);
-        renderList(); renderState();
-    };
+    document.getElementById('baPublish').onclick = () =>
+        zustandSetzen(BLOG_ADMIN_API.publish, 'Veröffentlichen');
+    document.getElementById('baUnpub').onclick = () =>
+        zustandSetzen(BLOG_ADMIN_API.unpublish, 'Zurückziehen');
     document.getElementById('baDelete').onclick = async () => {
         if (!await askConfirm({ title: 'Beitrag löschen?',
             text: 'Der Beitrag verschwindet samt Bildern aus dem Blog.',
             ok: 'Löschen', danger: true })) return;
-        await BLOG_ADMIN_API.remove(S.selectedId);
+        try {
+            await BLOG_ADMIN_API.remove(S.selectedId);
+        } catch (e) {
+            const msg = (e && e.message) ? e.message : 'Der Server antwortet nicht.';
+            if (window.Toast) Toast.error('Löschen fehlgeschlagen: ' + msg);
+            return;                       // Liste NICHT anfassen -- er ist noch da.
+        }
         S.posts = S.posts.filter(x => x.id !== S.selectedId);
         S.selectedId = null;
         renderList(); renderDetail();
@@ -306,7 +335,12 @@ function onEditorClick(e) {
     const img = e.target.closest('img');
     if (img) {
         // Nativ, weil danach im contenteditable weitergearbeitet wird.
-        const newAlt = prompt('Beschreibung/Alt-Text für das Bild:', img.alt || '');
+        // Die dokumentierte Ausnahme fuer native Dialoge gilt dem LINK-Dialog:
+        // dort nimmt ein Modal dem contenteditable den Fokus und damit die
+        // Auswahl. Hier ist nichts ausgewaehlt -- das Bild steht schon.
+        const newAlt = await askPrompt({ title: 'Bildbeschreibung',
+            text: 'Was ist auf dem Bild zu sehen? Der Text steht als Alt-Text darin.',
+            value: img.alt || '', ok: 'Übernehmen' });
         if (newAlt != null) {
             img.alt = newAlt;
             img.title = newAlt || 'Bild';
