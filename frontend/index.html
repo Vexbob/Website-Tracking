@@ -29,11 +29,14 @@
     /* Die Nebenmodule (Blog, Export, Verwaltung) standen in drei eigenen
        Abschnitten mit je genau einer Kachel -- viel Vertikale fuer wenig. */
     .home-more{display:flex;flex-wrap:wrap;gap:var(--space-2)}
-    .home-more a{display:inline-flex;align-items:center;gap:0.5rem;
+    .home-more a,.home-more button{display:inline-flex;align-items:center;gap:0.5rem;
         padding:0.5rem 0.875rem;background:var(--surface-1);border:1px solid var(--line);
         border-radius:999px;color:var(--text-2);font-size:0.875rem;font-weight:600;
         text-decoration:none;transition:border-color var(--dur-1) var(--ease),color var(--dur-1) var(--ease)}
-    .home-more a:hover{border-color:var(--line-strong);color:var(--text-1);text-decoration:none}
+    .home-more a:hover,.home-more button:hover{border-color:var(--line-strong);color:var(--text-1);text-decoration:none}
+/* Der Export ist eine Aktion, kein Ziel -- deshalb ein Knopf. Als <a href="#">
+   sprang die Seite bei einem Fehler nur an den Anfang. */
+.home-more button{cursor:pointer;font-family:inherit;width:auto;margin:0}
     </style>
     <meta name="description" content="Vexbob — persönliches Dashboard für Sparziele, Ausgaben, Notizen und Gesundheit.">
     <script src="/js/config.js"></script>
@@ -72,40 +75,10 @@
                 <span class="eyebrow">Meine Tools</span>
                 <h2>Tracking &amp; Analyse</h2>
             </div>
-            <div class="tile-grid" id="tileGrid">
-                <a href="/sparziel/" class="tile">
-                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-sparziel)">💰</div>
-                    <div class="tile-text"><div class="tile-title">Sparziel-Tracker</div><div class="tile-sub">Achievements & Wochenziele</div></div>
-                </a>
-                <a href="/ausgaben/" class="tile">
-                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-ausgaben)">💶</div>
-                    <div class="tile-text"><div class="tile-title">Ausgaben</div><div class="tile-sub">Kassenbons scannen &amp; analysieren</div></div>
-                </a>
-                <a href="/notizen/" class="tile">
-                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-notizen)">📝</div>
-                    <div class="tile-text"><div class="tile-title">Notizen</div><div class="tile-sub">Schnelle Notizen, einzeln aufrufbar</div></div>
-                </a>
-                <a href="/musik/" class="tile">
-                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-musik)">🎧</div>
-                    <div class="tile-text"><div class="tile-title">Musik</div><div class="tile-sub">Hörregister aus dem Spotify-Export</div></div>
-                </a>
-                <a href="/health/" class="tile">
-                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-health)">🏋️</div>
-                    <div class="tile-text"><div class="tile-title">Gesundheit</div><div class="tile-sub">Vitalwerte, Schlaf &amp; Workouts</div></div>
-                </a>
-                <a href="/schach/" class="tile" data-modul="/schach/">
-                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-schach)">♟️</div>
-                    <div class="tile-text"><div class="tile-title">Schach</div><div class="tile-sub">Rating und Partien von Lichess &amp; Chess.com</div></div>
-                </a>
-                <a href="/essen/" class="tile" data-modul="/essen/">
-                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-essen)">🍽️</div>
-                    <div class="tile-text"><div class="tile-title">Essenstagebuch</div><div class="tile-sub">Hinschreiben, was es gab — mehr nicht</div></div>
-                </a>
-                <a href="/naehrwerte/" class="tile" data-modul="/naehrwerte/">
-                    <div class="tile-icon v-icon-tile" style="--tone:var(--m-naehrwerte)">📊</div>
-                    <div class="tile-text"><div class="tile-title">Nährwerte</div><div class="tile-sub">Mengen, Nährwerte &amp; eigene Tagesziele</div></div>
-                </a>
-            </div>
+            <!-- Die Kacheln kommen aus derselben Registry wie die Navigation
+                 (MODULES in nav-switcher.js). Ein neues Modul steht damit von
+                 selbst hier; vorher war es eine dritte Eintragung. -->
+            <div class="tile-grid" id="tileGrid"></div>
         </section>
         <!-- v1.82.0: Module im Bau stehen getrennt von dem, was laeuft.
              Die Kacheln baut das Skript unten aus VexNav -- eine zweite
@@ -122,10 +95,10 @@
                 <h2>Mehr</h2>
             </div>
             <div class="home-more">
-                <a href="/blog/">📰 Blog</a>
-                <a href="/einstellungen/">⚙️ Einstellungen</a>
-                <a href="#" id="exportAllTile" onclick="exportAll();return false;">⬇ Alles exportieren</a>
-                <a href="/admin/" id="adminLink" hidden>👥 User-Verwaltung</a>
+                <a href="/blog/">Blog</a>
+                <a href="/einstellungen/">Einstellungen</a>
+                <button type="button" id="exportAllTile" onclick="exportAll()">Alles exportieren</button>
+                <a href="/admin/" id="adminLink" hidden>User-Verwaltung</a>
             </div>
         </section>
     </main>
@@ -140,12 +113,26 @@
         // dann darf es hier auch keine Kachel haben. Die fertigen Kacheln
         // stehen von Hand im HTML (sie tragen mehr Text als die Registry
         // hergibt); ``data-modul`` ist der Faden dorthin.
+        /* Eine Kachel bekommt jedes Modul, das kein Nebenschauplatz ist:
+           nicht das Dashboard selbst, nicht der Blog und nicht die
+           Verwaltung -- die drei stehen unten in „Mehr“. Ruhende Module
+           haben hier ebenso wenig verloren wie in der Leiste. */
         document.addEventListener('vexnav:ready', () => {
-            const ruht = new Set((window.VexNav && VexNav.readOff)
-                ? VexNav.readOff() : []);
-            document.querySelectorAll('#tileGrid [data-modul]').forEach(k => {
-                k.hidden = ruht.has(k.dataset.modul);
-            });
+            const grid = document.getElementById('tileGrid');
+            if (!grid || !window.VexNav) return;
+            const kacheln = VexNav.modules().filter(m =>
+                m.href !== '/' && !m.admin && !m.public && m.status !== 'neu');
+            grid.innerHTML = kacheln.map(m => {
+                const teile = m.label.split(' ');
+                teile.shift();                       // das Emoji der Registry
+                const name = teile.join(' ');
+                const ton = m.tone ? ('--tone:var(' + m.tone + ')') : '';
+                return '<a href="' + m.href + '" class="tile">'
+                    + '<div class="tile-icon v-icon-tile" style="' + ton + '">'
+                    + VexNav.iconSvg(m) + '</div>'
+                    + '<div class="tile-text"><div class="tile-title">' + name + '</div>'
+                    + '<div class="tile-sub">' + (m.sub || '') + '</div></div></a>';
+            }).join('');
         });
 
         document.addEventListener('vexnav:ready', () => {

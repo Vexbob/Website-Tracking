@@ -25,11 +25,20 @@
     // an genau einer Stelle eingetragen werden muss.
     const MODULES = [
         { href: '/',            label: '🏠 Dashboard',      public: false, icon: 'home',   short: 'Home' },
-        { href: '/sparziel/',   label: '💰 Sparziel',       public: false, icon: 'coin',   short: 'Sparen' },
-        { href: '/ausgaben/',   label: '💶 Ausgaben',       public: false, icon: 'wallet', short: 'Ausgaben' },
-        { href: '/notizen/',    label: '📝 Notizen',        public: false, icon: 'note',   short: 'Notizen' },
-        { href: '/health/',     label: '🏋️ Gesundheit',     public: false, icon: 'pulse',  short: 'Gesundheit' },
-        { href: '/musik/',      label: '🎧 Musik',          public: false, icon: 'music',  short: 'Musik' },
+        // ``tone`` und ``sub`` gehoeren zum Modul, nicht zur Startseite:
+        // bis v2.11.6 standen die acht fertigen Kacheln von Hand in
+        // index.html -- eine DRITTE Liste neben MODULES und ALLOWED_NAV_TABS,
+        // die beim naechsten neuen Modul als erste veraltet waere.
+        { href: '/sparziel/',   label: '💰 Sparziel',       public: false, icon: 'coin',   short: 'Sparen',
+          tone: '--m-sparziel', sub: 'Achievements und Wochenziele' },
+        { href: '/ausgaben/',   label: '💶 Ausgaben',       public: false, icon: 'wallet', short: 'Ausgaben',
+          tone: '--m-ausgaben', sub: 'Kassenbons scannen und auswerten' },
+        { href: '/notizen/',    label: '📝 Notizen',        public: false, icon: 'note',   short: 'Notizen',
+          tone: '--m-notizen',  sub: 'Schnelle Notizen, einzeln aufrufbar' },
+        { href: '/health/',     label: '🏋️ Gesundheit',     public: false, icon: 'pulse',  short: 'Gesundheit',
+          tone: '--m-health',   sub: 'Vitalwerte, Schlaf und Workouts' },
+        { href: '/musik/',      label: '🎧 Musik',          public: false, icon: 'music',  short: 'Musik',
+          tone: '--m-musik',    sub: 'Hörregister aus dem Spotify-Export' },
         { href: '/blog/',       label: '📰 Blog',           public: true, hideForAdmin: true, icon: 'news', short: 'Blog' },
         { href: '/blog/admin/', label: '📰 Blog',           public: false, admin: true, icon: 'news', short: 'Blog' },
         { href: '/admin/',      label: '👥 User-Verwaltung', public: false, admin: true, icon: 'users', short: 'User' },

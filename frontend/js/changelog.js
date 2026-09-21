@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.6', date: '2026-09-21', title: 'Startseite und Notizen ziehen nach', notes: [
+        'Die Kacheln der Startseite kommen aus der Modulliste — ein neues Modul steht dort jetzt von selbst.',
+        'Sie tragen dieselben Zeichen wie die Navigationsleiste statt Emoji; „Mehr“ ebenso.',
+        'Notizen: die Vorschauzeile trennt wieder zwischen Listenpunkten, statt sie aneinanderzuhängen.',
+    ]},
     { v: 'v2.11.5', date: '2026-09-21', title: 'Zwei Module räumen auf', notes: [
         'Ausgaben hatte zwei Zeitfilter übereinander — jetzt einer, derselbe Knopf wie in jedem anderen Modul.',
         'Gesundheit: alle fünf Reiter sind am Handy sichtbar; „Einstellungen“ lag vorher hinter dem Bildrand.',
