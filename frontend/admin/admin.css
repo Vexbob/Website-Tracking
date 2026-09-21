@@ -1,7 +1,13 @@
 /* Admin — User-Verwaltung (v1.31.0, ausgelagert aus admin/index.html) */
 body{visibility:hidden}body.ready{visibility:visible}
-.card{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;}
-.card h3{font-size:1rem;margin-bottom:0.875rem;font-weight:600}
+/* Keine eigene Karte mehr: Werte und Form kommen aus .v-card in style.css.
+   Hier steht nur, was diese Seite zusaetzlich braucht. */
+.card{background:var(--surface-1);border:1px solid var(--line);
+    border-radius:var(--radius-lg);padding:var(--space-5);margin-bottom:var(--space-5)}
+.card h3{font-size:1rem;margin:0;font-weight:700}
+.card-head-row{display:flex;align-items:center;justify-content:space-between;
+    gap:var(--space-3);margin-bottom:0.875rem;flex-wrap:wrap}
+.ad-dlg-note{font-size:0.8125rem;color:var(--text-2);line-height:1.5;margin:0 0 0.875rem}
 .form-row{display:grid;grid-template-columns:1fr auto;gap:0.625rem;align-items:end}
 .form-row label{font-size:0.75rem;color:var(--text-2);font-weight:500;margin-bottom:2px}
 .form-row input{margin:0;padding:0.5rem 0.625rem}

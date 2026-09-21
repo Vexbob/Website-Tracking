@@ -12,7 +12,8 @@
     <script src="/js/config.js"></script>
     <script src="/js/version.js"></script>
     <script src="/js/api.js"></script>
-    <script src="/js/nav-switcher.js"></script>
+    <script src="/js/modal.js"></script>
+<script src="/js/nav-switcher.js"></script>
     <script src="/js/sw-update.js"></script>
     <link rel="stylesheet" href="/admin/admin.css">
 </head>
@@ -31,20 +32,16 @@
         einmaligen Einladungs-Link und legt sein Passwort selbst fest — du siehst es nie.</p>
     </header>
 
+    <!-- v2.11.7: Das Einladen lag als dauerhaft offene Maske ueber der Liste,
+         um die es geht -- fuer einen Vorgang, den man ein paar Mal im Jahr
+         hat. Was man selten tut, steht nicht dauerhaft auf der Seite
+         (DESIGN 6d). Dazu stand der erklaerende Satz zweimal: einmal im
+         Seitenkopf, vier Zeilen tiefer noch einmal in der Karte. -->
     <div class="card">
-        <h3>Neuen Account einladen</h3>
-        <p style="font-size:0.8125rem;color:var(--text-2);margin-bottom:0.75rem">Du erstellst den Account, der User bekommt einen Einladungs-Link und legt sein Passwort selbst fest.</p>
-        <div class="form-row">
-            <div>
-                <label>Benutzername</label>
-                <input id="newUsername" placeholder="z.B. Anna" autocomplete="off">
-            </div>
-            <button onclick="createUser()">Einladung erstellen</button>
+        <div class="card-head-row">
+            <h3>Bestehende Accounts</h3>
+            <button type="button" class="v-btn v-btn--sm v-btn--primary" id="inviteBtn">+ Einladen</button>
         </div>
-    </div>
-
-    <div class="card">
-        <h3>Bestehende Accounts</h3>
         <div id="userList">
             <span class="skel skel-line long"></span>
             <span class="skel skel-line"></span>
@@ -55,12 +52,12 @@
 
 <div class="modal" id="inviteModal">
     <div class="modal-card">
-        <h3>🎉 Einladungs-Link</h3>
+        <h3>Einladungs-Link</h3>
         <p style="margin-bottom:0.75rem;font-size:0.875rem;color:var(--text-2)">Schicke diesen Link an <strong id="inviteUser">–</strong>. Der Link ist einmalig und gilt <strong id="inviteExp">–</strong>.</p>
         <div class="invite-box" id="inviteLink">–</div>
         <div class="modal-actions">
             <button class="cancel" onclick="closeInviteModal()">Schließen</button>
-            <button class="primary" onclick="copyInvite()">📋 Kopieren</button>
+            <button class="primary" onclick="copyInvite()">Kopieren</button>
         </div>
     </div>
 </div>
@@ -149,22 +146,46 @@ function renderUsers() {
     }).join('');
 }
 
+function openInviteDialog() {
+    const dlg = VexModal.open('Neuen Account einladen',
+        '<p class="ad-dlg-note">Du erstellst den Account, der Benutzer bekommt einen '
+        + 'einmaligen Einladungs-Link und legt sein Passwort selbst fest.</p>'
+        + '<label for="newUsername">Benutzername</label>'
+        + '<input id="newUsername" placeholder="z.B. Anna" autocomplete="off">'
+        + '<div class="modal-actions"><button type="button" class="v-btn" data-zu>Abbrechen</button>'
+        + '<button type="button" class="v-btn v-btn--primary" id="inviteGo">Einladung erstellen</button></div>',
+        { voll: true });
+    dlg.root.querySelector('[data-zu]').onclick = () => dlg.close();
+    dlg.root.querySelector('#inviteGo').onclick = async () => {
+        if (await createUser()) dlg.close();
+    };
+    // Nur am Rechner ins Feld springen -- am Handy risse das die Tastatur
+    // ueber den Dialog, den man gerade liest.
+    if (window.matchMedia('(min-width: 721px)').matches) {
+        dlg.root.querySelector('#newUsername').focus();
+    }
+}
+
+/* Gibt zurueck, ob es geklappt hat -- der Dialog schliesst nur dann. Bleibt
+   er bei einem Fehler offen, steht der getippte Name noch da. */
 async function createUser() {
-    const uname = document.getElementById('newUsername').value.trim();
-    if (!uname || uname.length < 2) { showToast('Username zu kurz', true); return; }
+    const feld = document.getElementById('newUsername');
+    const uname = feld ? feld.value.trim() : '';
+    if (!uname || uname.length < 2) { showToast('Username zu kurz', true); return false; }
     try {
         const res = await apiCall('/api/admin/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: uname })
         });
-        document.getElementById('newUsername').value = '';
         haptic('success');
-        showInvite(res.invite_token, res.username, res.invite_expires_at);
         await loadUsers();
+        showInvite(res.invite_token, res.username, res.invite_expires_at);
+        return true;
     } catch(e) {
         haptic('error');
         showToast(e.message || 'Fehler', true);
+        return false;
     }
 }
 
@@ -252,6 +273,7 @@ async function deleteUser(id, name) {
 }
 
 document.getElementById('logoutBtn').onclick = () => { clearToken(); location.href = '/private/login.html'; };
+document.getElementById('inviteBtn').onclick = openInviteDialog;
 document.getElementById('pwModal').addEventListener('click', e => { if (e.target.id === 'pwModal') closePwModal(); });
 document.getElementById('inviteModal').addEventListener('click', e => { if (e.target.id === 'inviteModal') closeInviteModal(); });
 

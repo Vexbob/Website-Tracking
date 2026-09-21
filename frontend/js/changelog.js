@@ -14,6 +14,10 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.7', date: '2026-09-21', title: 'Einladen liegt im Dialog', notes: [
+        'Die Verwaltung zeigt die Konten, statt eine Einladungsmaske darüber offen zu halten.',
+        'Der erklärende Satz stand zweimal auf derselben Seite — jetzt einmal, im Kopf.',
+    ]},
     { v: 'v2.11.6', date: '2026-09-21', title: 'Startseite und Notizen ziehen nach', notes: [
         'Die Kacheln der Startseite kommen aus der Modulliste — ein neues Modul steht dort jetzt von selbst.',
         'Sie tragen dieselben Zeichen wie die Navigationsleiste statt Emoji; „Mehr“ ebenso.',
