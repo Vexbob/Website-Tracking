@@ -213,6 +213,12 @@ function textFromHtml(html) {
     if (!html) return '';
     const d = document.createElement('div');
     d.innerHTML = html;
+    // Blockenden trennen, bevor `textContent` alles aneinanderhaengt: aus
+    // einer Liste mit drei Punkten wurde sonst in der Vorschauzeile
+    // "HaferflockenKaffeebohnenOlivenoel" -- ein Wort, das es nicht gibt.
+    d.querySelectorAll('li, p, div, br, h1, h2, h3, tr').forEach(el => {
+        el.insertAdjacentText('beforebegin', ' ');
+    });
     return (d.textContent || '').replace(/\s+/g, ' ').trim();
 }
 function previewText(html) { return textFromHtml(html).slice(0, 120); }

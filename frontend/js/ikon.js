@@ -49,5 +49,22 @@
             + pfad + '</svg>';
     }
 
-    window.VexIkon = { svg: svg, namen: Object.keys(PFADE) };
+    /* Aus reinem HTML benutzbar: `<span data-ikon="muell"></span>` fuellt
+       sich selbst. Ohne das musste jede Seite fuer jedes Zeichen eine Zeile
+       JavaScript schreiben -- und genau deshalb standen in den aelteren
+       Modulen weiter Emoji. Die Groesse kommt aus `data-ikon-gross`. */
+    function einsetzen(wurzel) {
+        (wurzel || document).querySelectorAll('[data-ikon]').forEach(el => {
+            if (el.firstElementChild) return;          // schon gefuellt
+            const g = parseInt(el.dataset.ikonGross, 10) || 18;
+            el.innerHTML = svg(el.dataset.ikon, g);
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => einsetzen());
+    } else {
+        einsetzen();
+    }
+
+    window.VexIkon = { svg: svg, einsetzen: einsetzen, namen: Object.keys(PFADE) };
 })();
