@@ -1,4 +1,10 @@
 let stores=[], categories=[];
+/* v2.11.5: Der Zeitraum kommt aus VexRange -- wie auf jeder anderen
+   Modulseite. Vorher standen hier ZWEI Antworten auf dieselbe Frage
+   uebereinander: eine eigene Chipreihe (Woche/Monat/Quartal/Jahr) und
+   zusaetzlich Von/Bis im Filter-Popover. Welche gerade galt, sah man keiner
+   von beiden an, und markiert war ohnehin nie eine. */
+let zeitraum = null;
 
 async function loadInit() {
     const me = await ensureLoggedIn(); if (!me) return;
@@ -8,6 +14,7 @@ async function loadInit() {
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
     await loadExpenseTypes();
     populateFilters();
+    zeitraumAufbauen();
     setupFilterPopover();
     setupQuickNew();
     await Promise.all([loadKpis(), loadExpenses(), loadRecurring()]);
@@ -79,8 +86,8 @@ async function loadExpenses() {
         expense_type: document.getElementById('filterType').value || undefined,
         store_id:    document.getElementById('filterStore').value || undefined,
         category_id: document.getElementById('filterCategory').value || undefined,
-        from:        document.getElementById('filterFrom').value || undefined,
-        to:          document.getElementById('filterTo').value || undefined,
+        from:        (zeitraum && zeitraum.from) || undefined,
+        to:          (zeitraum && zeitraum.to) || undefined,
         q:           (document.getElementById('filterQ')?.value || '').trim() || undefined,
         limit: 200,
     };
@@ -285,10 +292,9 @@ function escapeHtml(s) {
 }
 
 // Live-Reload bei Filter-Änderung
-['filterType','filterStore','filterCategory','filterFrom','filterTo'].forEach(id => {
+['filterType','filterStore','filterCategory'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.onchange = () => {
-        clearPresetActive();
         if (typeof updateFilterBadge === 'function') updateFilterBadge();
         if (typeof renderActiveFilterChips === 'function') renderActiveFilterChips();
         loadExpenses();
@@ -301,48 +307,38 @@ if (searchEl) searchEl.oninput = () => {
     searchDebounceTimer = setTimeout(loadExpenses, 500);
 };
 document.getElementById('filterReset').onclick = () => {
-    ['filterType','filterStore','filterCategory','filterFrom','filterTo','filterQ'].forEach(id => {
+    ['filterType','filterStore','filterCategory','filterQ'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
     });
-    clearPresetActive();
+    // Der Zeitraum gehoert dazu: "Zuruecksetzen" heisst alles, nicht alles
+    // ausser dem einen Filter, der oben steht.
+    if (zeitraumFilter) zeitraumFilter.set('all'); else loadExpenses();
     if (typeof updateFilterBadge === 'function') updateFilterBadge();
     if (typeof renderActiveFilterChips === 'function') renderActiveFilterChips();
-    loadExpenses();
 };
 
-// Datums-Presets
-function clearPresetActive() {
-    document.querySelectorAll('#datePresets button').forEach(b => b.classList.remove('active'));
-}
 function pad(n) { return String(n).padStart(2, '0'); }
 function isoDate(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-function applyPreset(name) {
-    const today = new Date(); today.setHours(0,0,0,0);
-    let from = null, to = today;
-    if (name === 'week') {
-        // Montag dieser Woche (ISO)
-        const d = new Date(today);
-        const dow = (d.getDay() + 6) % 7; // 0=Mo
-        d.setDate(d.getDate() - dow);
-        from = d;
-    } else if (name === 'month') {
-        from = new Date(today.getFullYear(), today.getMonth(), 1);
-    } else if (name === 'quarter') {
-        from = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-    } else if (name === 'year') {
-        from = new Date(today.getFullYear(), 0, 1);
-    }
-    document.getElementById('filterFrom').value = from ? isoDate(from) : '';
-    document.getElementById('filterTo').value = isoDate(to);
-    clearPresetActive();
-    document.querySelector(`#datePresets button[data-preset="${name}"]`)?.classList.add('active');
-    if (typeof updateFilterBadge === 'function') updateFilterBadge();
-    if (typeof renderActiveFilterChips === 'function') renderActiveFilterChips();
-    loadExpenses();
+
+/* Der Zeitraum: ein Knopf, der benennt, was gerade gilt. Er wird erst nach
+   dem Laden gesetzt -- `mount` loest `onChange` sofort aus, und die erste
+   Liste soll nicht zweimal geholt werden. */
+let zeitraumFilter = null;
+function zeitraumAufbauen() {
+    const host = document.getElementById('expRange');
+    if (!host || !window.VexRange) return;
+    let erster = true;
+    zeitraumFilter = VexRange.mount(host, {
+        preset: 'all',
+        onChange: (r) => {
+            zeitraum = r;
+            if (typeof updateFilterBadge === 'function') updateFilterBadge();
+            if (typeof renderActiveFilterChips === 'function') renderActiveFilterChips();
+            if (erster) { erster = false; return; }
+            loadExpenses();
+        },
+    });
 }
-document.querySelectorAll('#datePresets button').forEach(b => {
-    b.onclick = () => applyPreset(b.dataset.preset);
-});
 
 
 loadInit();
@@ -374,7 +370,10 @@ function setupFilterPopover() {
 }
 
 function activeFilterCount() {
-    const ids = ['filterType','filterStore','filterCategory','filterFrom','filterTo'];
+    // Der Zeitraum zaehlt hier NICHT mit: er steht als eigener Knopf daneben
+    // und benennt sich selbst. Ihn zusaetzlich als Zahl am Filter zu fuehren
+    // waere die zweite Auskunft ueber dieselbe Einstellung.
+    const ids = ['filterType','filterStore','filterCategory'];
     return ids.reduce((n, id) => n + ((document.getElementById(id)?.value || '') ? 1 : 0), 0);
 }
 
@@ -401,22 +400,11 @@ function renderActiveFilterChips() {
     if (storeEl && storeEl.value) push('filterStore', 'Laden', storeEl.options[storeEl.selectedIndex].text);
     const catEl = document.getElementById('filterCategory');
     if (catEl && catEl.value) push('filterCategory', 'Kategorie', catEl.options[catEl.selectedIndex].text);
-    const from = document.getElementById('filterFrom')?.value;
-    const to = document.getElementById('filterTo')?.value;
-    if (from && to) push('filterFromTo', 'Zeitraum', fmtDate(from) + ' – ' + fmtDate(to));
-    else if (from) push('filterFrom', 'Ab', fmtDate(from));
-    else if (to) push('filterTo', 'Bis', fmtDate(to));
     box.innerHTML = chips.join('');
     box.querySelectorAll('button[data-clear]').forEach(b => {
         b.onclick = () => {
-            const id = b.dataset.clear;
-            if (id === 'filterFromTo') {
-                document.getElementById('filterFrom').value = '';
-                document.getElementById('filterTo').value = '';
-            } else {
-                const el = document.getElementById(id); if (el) el.value = '';
-            }
-            clearPresetActive();
+            const el = document.getElementById(b.dataset.clear);
+            if (el) el.value = '';
             updateFilterBadge();
             renderActiveFilterChips();
             loadExpenses();

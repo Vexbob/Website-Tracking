@@ -31,42 +31,53 @@
 </nav>
 <main class="wide">
     <div class="tabs">
-        <button class="tab-btn active" data-tab="dashboard">🏠 Dashboard</button>
-        <button class="tab-btn" data-tab="vitalwerte">❤️ Vitalwerte</button>
-        <button class="tab-btn" data-tab="schlaf">😴 Schlaf</button>
-        <button class="tab-btn" data-tab="workouts">🏋️ Workouts</button>
-        <button class="tab-btn" data-tab="einstellungen">⚙️ Einstellungen</button>
+        <!-- Ohne Emoji: sie sind hier Zeichen an einem Bedienelement, nicht
+             Schmuck, und sie kosteten am Handy die Breite, an der der fuenfte
+             Reiter aus dem Bild fiel. -->
+        <button id="hTabDashboard" class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button id="hTabVital" class="tab-btn" data-tab="vitalwerte">Vitalwerte</button>
+        <button id="hTabSchlaf" class="tab-btn" data-tab="schlaf">Schlaf</button>
+        <button id="hTabWorkouts" class="tab-btn" data-tab="workouts">Workouts</button>
+        <button id="hTabEinst" class="tab-btn" data-tab="einstellungen">Einstellungen</button>
     </div>
 
     <!-- ---------- Dashboard ---------- -->
     <div id="tab-dashboard">
+        <!-- Laden heisst Skeleton, nicht „Lade …“ als Fliesstext. -->
         <div class="stat-kpi-grid" id="hDashKpis">
-            <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
-            <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
-            <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
-            <div class="stat-kpi"><div class="stat-loading">Lade …</div></div>
+            <div class="stat-kpi"><span class="skel skel-block"></span></div>
+            <div class="stat-kpi"><span class="skel skel-block"></span></div>
+            <div class="stat-kpi"><span class="skel skel-block"></span></div>
+            <div class="stat-kpi"><span class="skel skel-block"></span></div>
+        </div>
+
+        <!-- Zeigen statt umschalten (v1.93.0): Schritte und Kalorien standen
+             hinter einem Umschalter, obwohl sie dieselben vierzehn Tage
+             beschreiben und man sie vergleichen will. Jetzt zwei Kurven
+             nebeneinander, jede in ihrer Farbe. Das Etikett „· 14 Tage“ stand
+             fest im HTML und behauptete den Zeitraum, statt ihn zu nennen --
+             es kommt jetzt aus derselben Zahl, aus der die Kurven kommen. -->
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>Aktivität <span class="stat-range-lbl" id="hDashActivityLbl"></span></h3>
+            </div>
+            <div class="h-dash-charts">
+                <div><div class="h-chart-title" id="hDashStepsTitle"></div>
+                    <div class="chart-wrap"><canvas id="hDashActivity"></canvas></div></div>
+                <div><div class="h-chart-title" id="hDashEnergyTitle"></div>
+                    <div class="chart-wrap"><canvas id="hDashEnergy"></canvas></div></div>
+            </div>
         </div>
 
         <div class="split-3-2">
             <div class="stat-card">
-                <div class="stat-card-head">
-                    <h3>👟 Aktivität <span class="stat-range-lbl">· 14 Tage</span></h3>
-                    <div class="stat-mini-toggle" id="hActivityToggle">
-                        <button class="active" data-mode="steps">Schritte</button>
-                        <button data-mode="active_energy">Kalorien</button>
-                    </div>
-                </div>
-                <div class="chart-wrap"><canvas id="hDashActivity"></canvas></div>
+                <h3>Letzte Nacht</h3>
+                <div id="hDashSleep"><span class="skel skel-block"></span></div>
             </div>
             <div class="stat-card">
-                <h3>😴 Letzte Nacht</h3>
-                <div id="hDashSleep" class="h-empty">Noch keine Daten synchronisiert.</div>
+                <h3>Herz-Übersicht <span class="stat-range-lbl" id="hDashHeartLbl"></span></h3>
+                <div id="hDashHeart"><span class="skel skel-block"></span></div>
             </div>
-        </div>
-
-        <div class="stat-card">
-            <h3>❤️ Herz-Übersicht <span class="stat-range-lbl">· 7 Tage</span></h3>
-            <div id="hDashHeart"><span class="skel skel-block"></span></div>
         </div>
 
         <div class="stat-insights" id="hDashInsights"></div>

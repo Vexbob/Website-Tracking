@@ -16,6 +16,7 @@
 <script src="/js/modal.js"></script>
 <script src="/js/sw-update.js"></script>
     <script src="/js/bild.js"></script>
+<script src="/js/range-filter.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 <script src="/js/charts.js"></script>
@@ -72,7 +73,8 @@
         <div class="filter-bar-v2">
             <h3 class="filter-title">Letzte Ausgaben</h3>
             <div class="filter-tools">
-                <input type="search" id="filterQ" placeholder="🔍 Suchen (Laden, Artikel, Notiz)">
+                <input type="search" id="filterQ" placeholder="Suchen (Laden, Artikel, Notiz)">
+                <div class="stat-filter-slot" id="expRange"></div>
                 <div class="filter-popover-wrap">
                     <button type="button" id="filterToggle" class="filter-toggle-btn" aria-expanded="false" aria-haspopup="dialog" aria-controls="filterPopover">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16M7 12h10M10 19h4"/></svg>
@@ -95,16 +97,6 @@
                             <label class="fp-label">Kategorie</label>
                             <select id="filterCategory"><option value="">Alle Kategorien</option></select>
                         </div>
-                        <div class="fp-row fp-two">
-                            <div>
-                                <label class="fp-label">Von</label>
-                                <input type="date" id="filterFrom">
-                            </div>
-                            <div>
-                                <label class="fp-label">Bis</label>
-                                <input type="date" id="filterTo">
-                            </div>
-                        </div>
                         <div class="fp-actions">
                             <button type="button" id="filterReset" class="fp-btn fp-btn-ghost">Zurücksetzen</button>
                             <button type="button" id="filterApply" class="fp-btn fp-btn-primary">Fertig</button>
@@ -112,12 +104,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="presets" id="datePresets">
-            <button data-preset="week">Diese Woche</button>
-            <button data-preset="month">Dieser Monat</button>
-            <button data-preset="quarter">Letzte 3 Monate</button>
-            <button data-preset="year">Dieses Jahr</button>
         </div>
         <div id="activeFilterChips" class="active-filter-chips"></div>
         <div id="filterTotal"></div>

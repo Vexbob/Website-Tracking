@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.5', date: '2026-09-21', title: 'Zwei Module räumen auf', notes: [
+        'Ausgaben hatte zwei Zeitfilter übereinander — jetzt einer, derselbe Knopf wie in jedem anderen Modul.',
+        'Gesundheit: alle fünf Reiter sind am Handy sichtbar; „Einstellungen“ lag vorher hinter dem Bildrand.',
+        'Schritte und Kalorien stehen nebeneinander statt hinter einem Umschalter, jede Zahl in ihrer Farbe.',
+    ]},
     { v: 'v2.11.4', date: '2026-09-21', title: 'Sechs Module werden sichtbar', notes: [
         'Ausgaben, Gesundheit, Musik, Notizen, Blog und Verwaltung lassen sich jetzt in der Vorschau ansehen.',
         'Ihre Darstellung war bis dahin ungeprüft — geprüft wurde nur, was die anderen fünf Module zeigen.',

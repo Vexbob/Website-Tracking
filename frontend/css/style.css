@@ -772,9 +772,16 @@ input[type="checkbox"] { display: inline; width: auto; }
 /* Falls .tabs als volle Zeile gewünscht: .tabs.full { display: flex; } */
 .tabs.full { display: flex; width: 100%; }
 .tabs.full .tab-btn { flex: 1; justify-content: center; }
+/* Am Handy UMBRECHEN statt scrollen. Vorher stand hier `display:flex` mit
+   `flex:1` je Reiter -- zusammen mit `white-space:nowrap` schrumpft dabei
+   nichts, die Leiste laeuft ueber, und der letzte Reiter liegt hinter dem
+   rechten Rand. Im Gesundheitsmodul war das "Einstellungen": fuenf Reiter,
+   der fuenfte unsichtbar, und nichts deutete an, dass man wischen kann.
+   Zwei Zeilen kosten 40 Pixel und zeigen alles. */
 @media (max-width: 500px) {
-    .tabs { display: flex; width: 100%; }
-    .tab-btn { flex: 1; justify-content: center; padding: 0.6rem 0.75rem; font-size: 0.8125rem; }
+    .tabs { display: flex; width: 100%; flex-wrap: wrap; overflow-x: visible; }
+    .tab-btn { flex: 1 1 30%; min-width: 0; justify-content: center;
+        padding: 0.6rem 0.5rem; font-size: 0.8125rem; }
 }
 
 /* ==========================================================================
@@ -1463,6 +1470,13 @@ button.nav-switcher-item:hover { background: var(--surface-2); opacity: 1; }
     border:1px solid var(--line);border-top:none;
     border-radius:0 0 var(--radius-lg) var(--radius-lg);overflow:hidden}
 .kpi-mini{background:var(--surface-1);padding:0.75rem var(--space-4)}
+/* Fuenf Kacheln in zwei Spalten lassen unten rechts ein Loch -- eine leere
+   Flaeche in Kartenfarbe, die aussieht, als fehle etwas. Am Handy nimmt die
+   letzte deshalb die ganze Zeile. Nur dort: am Rechner stehen alle fuenf
+   nebeneinander, und die Regel wuerde die letzte falsch dehnen. */
+@media (max-width: 560px){
+    .kpi-mini:last-child:nth-child(odd){grid-column:1/-1}
+}
 .kpi-mini .lbl{font-size:0.6875rem;color:var(--text-4);letter-spacing:0.06em;text-transform:uppercase}
 .kpi-mini .val{font-size:1.0625rem;font-weight:650;color:var(--text-2);
     font-variant-numeric:tabular-nums;margin-top:2px}

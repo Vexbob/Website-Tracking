@@ -245,3 +245,13 @@ button.danger-outline:hover{background:var(--red-bg)}
    schlimmste Sorte Fehler. */
 .h-kurve-alt { margin: 0.5rem 0 0; font-size: 0.8125rem; color: var(--warn);
     line-height: 1.4; }
+
+/* v2.11.5: Zwei Aktivitaetskurven nebeneinander statt einer hinter einem
+   Umschalter. Am Handy stapeln sie -- zwei 160-px-Diagramme untereinander
+   sind lesbar, zwei halbe nebeneinander nicht. */
+.h-dash-charts { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
+@media (min-width: 760px) { .h-dash-charts { grid-template-columns: 1fr 1fr; } }
+.h-chart-title { font-size: 1.125rem; font-weight: 700; letter-spacing: -0.02em;
+    margin-bottom: 0.375rem; font-variant-numeric: tabular-nums; }
+.h-chart-title small { font-size: 0.75rem; font-weight: 500; color: var(--text-3);
+    letter-spacing: 0; }

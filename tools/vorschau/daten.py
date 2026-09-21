@@ -463,6 +463,13 @@ GESUNDHEIT_SUMME = {
     "hrv": _metrik(41),
     "vo2_max": _metrik(38.4),
     "weight": _metrik(139.4),
+    # ``renderSleepBlock`` liest die letzte Nacht aus der Zusammenfassung,
+    # nicht aus /sleep -- ohne diesen Schluessel behauptet die Karte "Noch
+    # keine Daten synchronisiert", obwohl daneben Naechte stehen.
+    "sleep_last": {"date": HEUTE.isoformat(), "asleep_minutes": 444,
+                   "core_minutes": 244, "deep_minutes": 80, "rem_minutes": 98,
+                   "awake_minutes": 22, "bed_start": "23:10", "bed_end": "06:48"},
+    "workouts_this_week": 3,
 }
 
 

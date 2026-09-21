@@ -317,12 +317,15 @@ async function loadDashboard() {
         const restAvg = avg7(restRows), restPrev = avgPrev7(restRows);
 
         const tiles = [
+            // Ohne Sparkline: direkt darunter steht dieselbe Reihe als
+            // grosses Diagramm. Die Kachel traegt die Zahl und den Vergleich
+            // zur Vorwoche -- das ist, was die Kurve NICHT sagt.
             { icon: '👟', label: 'Schritte (7 Tage)', value: fmt0(stepsSum),
               delta: pctDelta(stepsSum, stepsPrev), higherIsBetter: true,
-              spark: stepsRows.slice(-14).map(r => Number(r.qty) || 0), color: cssVar('--h-steps') },
+              spark: null, color: cssVar('--h-steps') },
             { icon: '🔥', label: 'Aktive Energie (7 Tage)', value: fmt0(enSum) + ' kcal',
               delta: pctDelta(enSum, enPrev), higherIsBetter: true,
-              spark: energyRows.slice(-14).map(r => Number(r.qty) || 0), color: cssVar('--h-energy') },
+              spark: null, color: cssVar('--h-energy') },
             { icon: '🛋️', label: 'Ø Ruhepuls (7 Tage)',
               value: restAvg != null ? fmt0(restAvg) + ' bpm' : '–',
               delta: pctDelta(restAvg, restPrev), higherIsBetter: false,
@@ -471,13 +474,33 @@ function renderHeartOverview(s, hrRows, restRows) {
         </div>`).join('')}</div>`;
 }
 
+/* Beide Kurven, nebeneinander. `renderActivityChart` hiess frueher so, weil
+   es nur eine gab -- der Name bleibt als Einstieg, gebaut werden zwei. */
 function renderActivityChart() {
-    const canvas = document.getElementById('hDashActivity');
-    const rows = (state.dashSeries && state.dashSeries[state.activityMode]) || [];
+    const tage = (state.dashSeries && state.dashSeries.steps) || [];
+    const lbl = document.getElementById('hDashActivityLbl');
+    if (lbl) lbl.textContent = tage.length ? '· ' + Math.min(14, tage.length) + ' Tage' : '';
+    _aktivitaetKurve('hDashActivity', 'steps', 'hDashStepsTitle', 'activityChart');
+    _aktivitaetKurve('hDashEnergy', 'active_energy', 'hDashEnergyTitle', 'energyChart');
+}
+
+function _aktivitaetKurve(canvasId, metrik, titelId, merker) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const rows = (state.dashSeries && state.dashSeries[metrik]) || [];
     const data = rows.slice(-14);
-    const meta = METRIC_LABELS[state.activityMode];
-    if (state.activityChart) state.activityChart.destroy();
-    state.activityChart = new Chart(canvas.getContext('2d'), {
+    const meta = METRIC_LABELS[metrik];
+    // Die Zahl steht ueber ihrer eigenen Kurve, in deren Farbe -- so muss
+    // man die Legende nicht lesen, um zu wissen, welche welche ist.
+    const titel = document.getElementById(titelId);
+    if (titel) {
+        const summe = data.slice(-7).reduce((s, r) => s + (Number(r.qty) || 0), 0);
+        titel.innerHTML = '<span style="color:' + meta.color + '">'
+            + fmt0(summe) + ' ' + (meta.unit || '') + '</span> <small>'
+            + meta.label + ' · 7 Tage</small>';
+    }
+    if (state[merker]) state[merker].destroy();
+    state[merker] = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
             labels: data.map(r => fmtDate(r.sample_date || r.recorded_at)),
@@ -505,7 +528,7 @@ function renderActivityChart() {
             },
         }),
     });
-    setChartDates(state.activityChart, data.map(r => r.sample_date || r.recorded_at));
+    setChartDates(state[merker], data.map(r => r.sample_date || r.recorded_at));
 }
 
 // ---------- Vitalwerte ----------
@@ -1824,14 +1847,6 @@ async function uploadHealthFile() {
     activateTab((location.hash || '').replace('#', '') || H_TABS[0]);
 
     // Activity-Chart Toggle
-    document.querySelectorAll('#hActivityToggle button').forEach(b => {
-        b.addEventListener('click', () => {
-            document.querySelectorAll('#hActivityToggle button').forEach(x => x.classList.remove('active'));
-            b.classList.add('active');
-            state.activityMode = b.dataset.mode;
-            renderActivityChart();
-        });
-    });
 
     // Modal-Overlay-Click schließt
     document.getElementById('hKeyModal').addEventListener('click',
