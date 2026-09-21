@@ -267,6 +267,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .log-view-toggle button.active{background:var(--text-1);color:var(--surface-1)}
 .log-btn{padding:0.4375rem 0.75rem;font-size:0.75rem;background:var(--surface-2);color:var(--text-1);border:1px solid var(--line);border-radius:6px;font-weight:600;width:auto;margin:0;cursor:pointer}
 .log-sum{background:var(--surface-1);border:1px solid var(--line);border-radius:10px;padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.875rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap}
+.log-sum-hint{display:block;font-weight:400;opacity:0.75;font-size:0.75rem;margin-top:0.125rem}
 .log-sum strong{font-size:1rem;color:var(--green-dark)}
 .log-week{background:var(--surface-1);border:1px solid var(--line);border-radius:10px;padding:0.75rem;margin-bottom:0.625rem}
 .log-week-hdr{display:flex;justify-content:space-between;align-items:baseline;font-size:0.8125rem;font-weight:700;color:var(--text-1);margin-bottom:0.5rem;cursor:pointer;gap:0.5rem;flex-wrap:wrap}

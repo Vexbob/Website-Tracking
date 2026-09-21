@@ -593,6 +593,51 @@ BLOG_BEITRAEGE = [
 ]
 
 
+# ---- Aktivitaets-Log (v2.11.8) ----
+# Die Liste ist der Ausschnitt, LOG_SUMMEN die Auskunft ueber das Ganze. Hier
+# decken sich beide -- das ist der normale Fall, und das Bild soll ihn zeigen.
+# Dass die Zahl groesser sein kann als die Liste, faengt der Hinweis in
+# renderLog ab; geprueft wird das in backend/tests/test_activity_log.py.
+LOG_EREIGNISSE = [
+    {"type": "checkin", "date": "2026-09-19T18:20:00", "log_date": "2026-09-19",
+     "title": "Laufen", "description": "3/3 · 2026-W38", "amount": 15.0,
+     "log_id": 901, "source_id": 11, "fulfilled": True, "note": "", "deletable": True},
+    {"type": "milestone", "date": "2026-09-18", "title": "100 km gelaufen",
+     "description": "Erreicht bei 100 km", "achieved_value": 100.0, "unit": "km",
+     "amount": 50.0, "log_id": 902, "source_id": 4, "note": "", "deletable": True},
+    {"type": "progress", "date": "2026-09-17T07:05:00", "title": "100 km gelaufen",
+     "description": "92,5 → 97,5 km", "amount": 0.0, "delta": 5.0, "unit": "km",
+     "hit_milestone": False, "log_id": 903, "source_id": 4, "note": "",
+     "deletable": True},
+    {"type": "streak_bonus", "date": "2026-09-15T21:00:00", "title": "Laufen",
+     "description": "3 Wochen in Folge", "amount": 20.0, "log_id": 904,
+     "source_id": 11, "note": "", "deletable": True},
+    {"type": "transfer", "date": "2026-09-12T12:00:00", "title": "Übertrag",
+     "description": "Auf „Neues Fahrrad“", "amount": 120.0, "log_id": 905,
+     "source_id": 2, "note": "", "deletable": True},
+    {"type": "initial", "date": "2026-01-02T09:00:00", "title": "Anfangsbestand",
+     "description": "Start ins Jahr", "amount": 250.0, "log_id": 906,
+     "note": "", "deletable": True},
+]
+
+LOG_SUMMEN = {
+    "all": {"count": 6, "amount": 455.00},
+    "by_type": {
+        "checkin":      {"count": 1, "amount": 15.00},
+        "milestone":    {"count": 1, "amount": 50.00},
+        "progress":     {"count": 1, "amount": 0.0},
+        "streak_bonus": {"count": 1, "amount": 20.00},
+        "transfer":     {"count": 1, "amount": 120.00},
+        "initial":      {"count": 1, "amount": 250.00},
+    },
+}
+
+# Anzahl und Summe ueber ALLE Bons des Filters -- bewusst groesser als die
+# sechs Zeilen in BONS, damit der Hinweis „Liste zeigt die neuesten …“ im
+# Bild auftaucht.
+AUSGABEN_GEFILTERT = {"count": 247, "total": 3184.92}
+
+
 ANTWORTEN = {
     "/api/me": ICH,
     # Die Export-Registry kommt aus dem echten Modul -- eine nachgebaute
@@ -623,6 +668,7 @@ ANTWORTEN = {
     "/api/category-rules": [],
     "/api/expenses": BONS,
     "/api/expenses/stats/summary": AUSGABEN_SUMME,
+    "/api/expenses/stats/filtered": AUSGABEN_GEFILTERT,
     "/api/expenses/recurring/suggestions": [],
     "/api/expenses/duplicates": [],
     "/api/expenses/ocr/status": {"available": True, "engine": "tesseract"},
@@ -685,7 +731,8 @@ ANTWORTEN = {
     "/api/potential-goals": [],
     "/api/future-ideas": [],
     "/api/trophies": [],
-    "/api/activity-log": {"entries": []},
+    "/api/activity-log": LOG_EREIGNISSE,
+    "/api/activity-log/summary": LOG_SUMMEN,
     "/api/stats/savings-progress": {"points": []},
 
     "/api/export/preview": EXPORT_PREVIEW,

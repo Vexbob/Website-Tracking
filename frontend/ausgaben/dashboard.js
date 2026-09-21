@@ -136,15 +136,36 @@ async function loadExpenses() {
     } catch(e) { list.innerHTML = '<div class="empty muted">Fehler: '+e.message+'</div>'; }
 }
 
-function renderFilterTotal(rows, params) {
+/* v2.11.8: Die Zeile rechnete ueber `rows` -- und `rows` endet bei 200.
+   Wer nach „Rewe, dieses Jahr“ filtert und mehr als 200 Bons hat, bekam eine
+   zu kleine Summe und eine zu kleine Anzahl praesentiert, ohne Hinweis. Die
+   Zahl kommt jetzt aus derselben Filterfunktion wie die Liste, nur ohne
+   Obergrenze. Bleibt sie aus, steht dort lieber nichts als etwas Falsches. */
+let summenLauf = 0;
+async function renderFilterTotal(rows, params) {
     const el = document.getElementById('filterTotal');
     if (!el) return;
     const hasFilter = params.q || params.expense_type || params.store_id || params.category_id || params.from || params.to;
     if (!hasFilter || !rows.length) { el.innerHTML = ''; return; }
-    const total = rows.reduce((s, r) => s + (Number(r.total_amount) || 0), 0);
+    const lauf = ++summenLauf;
+    let zahl;
+    try {
+        zahl = await AUSGABEN_API.expensesGefiltert(params);
+    } catch (e) {
+        if (lauf === summenLauf) el.innerHTML = '';
+        return;
+    }
+    // Waehrend wir gefragt haben, hat der Nutzer weitergefiltert.
+    if (lauf !== summenLauf) return;
+    const n = Number(zahl && zahl.count) || 0;
+    if (!n) { el.innerHTML = ''; return; }
+    // Die Liste zeigt hoechstens 200 Zeilen. Wenn der Filter mehr trifft,
+    // gehoert das dazugesagt -- sonst widersprechen sich Zahl und Liste.
+    const hinweis = n > rows.length
+        ? `<small class="filter-total-hint">Liste zeigt die neuesten ${rows.length}</small>` : '';
     el.innerHTML = `<div class="filter-total">
-        <span>${rows.length} Bon${rows.length === 1 ? '' : 's'} gefiltert</span>
-        <strong>${fmtEur(total)}</strong>
+        <span>${n} Bon${n === 1 ? '' : 's'} gefiltert${hinweis}</span>
+        <strong>${fmtEur(Number(zahl.total) || 0)}</strong>
     </div>`;
 }
 

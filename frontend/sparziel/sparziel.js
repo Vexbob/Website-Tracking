@@ -1396,9 +1396,27 @@ function deleteIdea(id){
     );
 }
 
+/* v2.11.8: Die Zeile ueber dem Log nannte „N Eintraege, +X EUR“ und meinte
+   damit die geladenen -- und geladen wurden 500. Wer laenger spart, bekam eine
+   zu kleine Zahl gezeigt, ohne Hinweis. Die Auskunft ueber das Ganze kommt
+   jetzt vom Server (`/api/activity-log/summary`, dieselben Ereignisse ohne
+   Ausschnitt). Die Liste darunter bleibt gekuerzt -- das ist in Ordnung,
+   solange die Zeile nicht behauptet, sie sei alles. */
+const LOG_GRENZE = 500;
+let logSummen = null;          // {all:{count,amount}, by_type:{…}} oder null
+let logGekappt = false;
+
 async function loadLog(){
-    try{logRaw=await apiCall('/api/activity-log?limit=500')||[];loadErrors.log=false;renderLog();}
-    catch(e){loadErrors.log=true;document.getElementById('logBody').innerHTML='<div class="retry-empty">Laden fehlgeschlagen.<br><button onclick="loadLog()">Nochmal versuchen</button></div>';showToast('Log laden fehlgeschlagen',true);}
+    try{
+        logRaw=await apiCall('/api/activity-log?limit='+LOG_GRENZE)||[];
+        logGekappt = logRaw.length >= LOG_GRENZE;
+        loadErrors.log=false;
+        renderLog();
+    }
+    catch(e){loadErrors.log=true;document.getElementById('logBody').innerHTML='<div class="retry-empty">Laden fehlgeschlagen.<br><button onclick="loadLog()">Nochmal versuchen</button></div>';showToast('Log laden fehlgeschlagen',true);return;}
+    // Getrennt geholt: bleibt die Auskunft aus, steht die Liste trotzdem da.
+    try{ logSummen = await apiCall('/api/activity-log/summary'); renderLog(); }
+    catch(e){ logSummen = null; renderLog(); }
 }
 function filterLogRows(){
     const q=document.getElementById('logSearch').value.trim().toLowerCase();
@@ -1407,12 +1425,39 @@ function filterLogRows(){
     if(q)rows=rows.filter(r=>(r.title||'').toLowerCase().includes(q)||(r.description||'').toLowerCase().includes(q));
     return rows;
 }
+/* Welche Zahl in der Kopfzeile steht, haengt davon ab, ob wir sie wissen
+   koennen. Ohne Textsuche deckt sich die Auswahl mit einer Art, die der Server
+   ganz gezaehlt hat -- dann seine Zahl. Mit Textsuche wird im Browser gefiltert;
+   das ist genau, solange nichts abgeschnitten wurde, und wird sonst benannt. */
+function logKopfzahlen(rows){
+    const suche=document.getElementById('logSearch').value.trim();
+    if(!suche && logSummen){
+        const q = logFilter==='all' ? logSummen.all
+                                    : (logSummen.by_type||{})[logFilter];
+        if(q) return {count:Number(q.count)||0, amount:Number(q.amount)||0, genau:true};
+    }
+    return {count:rows.length,
+            amount:rows.reduce((a,r)=>a+Number(r.amount||0),0),
+            genau:!logGekappt};
+}
 function renderLog(){
     const rows=filterLogRows();
-    const sum=rows.reduce((a,r)=>a+Number(r.amount||0),0);
     const sumBox=document.getElementById('logSum');
     const filtered=document.getElementById('logSearch').value.trim()||logFilter!=='all';
-    if(rows.length){sumBox.style.display='flex';sumBox.innerHTML=`<span>${rows.length} Einträge${filtered?' (gefiltert)':''}</span><strong>+${fmtEur(sum)}</strong>`;}
+    if(rows.length){
+        const z=logKopfzahlen(rows);
+        // Zwei verschiedene Einschraenkungen, und beide muessen dastehen:
+        // die Zahl kann ueber weniger gerechnet sein als es gibt, und die
+        // Liste darunter kann kuerzer sein als die Zahl. Sonst steht eine
+        // grosse Zahl ueber wenigen Zeilen und niemand weiss, warum.
+        const hinweis = !z.genau
+            ? `<small class="log-sum-hint">gezählt in den neuesten ${logRaw.length}</small>`
+            : (logGekappt
+                ? `<small class="log-sum-hint">Liste zeigt die neuesten ${rows.length}</small>`
+                : '');
+        sumBox.style.display='flex';
+        sumBox.innerHTML=`<span>${z.count} Einträge${filtered?' (gefiltert)':''}${hinweis}</span><strong>+${fmtEur(z.amount)}</strong>`;
+    }
     else{sumBox.style.display='none';}
     const body=document.getElementById('logBody');
     if(!rows.length){body.innerHTML='<div class="log-empty">Keine Einträge.</div>';return;}

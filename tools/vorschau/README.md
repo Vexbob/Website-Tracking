@@ -79,7 +79,7 @@ einem frischen Gerät als ruhend.
   welche — das ist ein Befund, kein Fehler der Vorschau.
 * **`schuss.py`** startet den Server, wenn er nicht läuft, und schießt.
 
-## Zwei Fallstricke, beide haben einmal in die Irre geführt
+## Drei Fallstricke, jeder hat einmal in die Irre geführt
 
 1. **`--window-size` trägt schmale Breiten nicht.** Windows erzwingt eine
    Mindest-Fensterbreite; darunter wird das **Bild** beschnitten, während die
@@ -98,6 +98,13 @@ einem frischen Gerät als ruhend.
    also sehr wohl, nur nicht nach echten Sekunden. Ein Messfühler, der nach
    zwei Sekunden etwas in die Seite schreibt, läuft trotzdem ins Leere, wenn
    das Budget vorher abgelaufen ist — wer messen will, misst am Bild.
+
+3. **Griffe gehen in Git Bash nicht durch.** Jeder Aufruf mit `?griff=…`
+   scheitert dort reproduzierbar — auch die Beispiele oben —, weil MSYS das
+   Argument umschreibt, bevor Python es sieht. Ohne Griff läuft derselbe
+   Aufruf in beiden Shells, was die Ursache gut versteckt: es sieht aus, als
+   sei der Griff kaputt, nicht die Shell. **Griffe immer aus PowerShell
+   aufrufen.**
 
 Dazu eine Kleinigkeit: ein `#` im Seitenpfad muss als `%23` in die
 Rahmen-Adresse, sonst behält der **Browser** alles dahinter als eigenen Anker

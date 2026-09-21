@@ -1723,23 +1723,39 @@ async def export_st(db=Depends(get_db), user=Depends(get_current_user)):
                              "Cache-Control": "no-store"})
 
 # ---------- Activity Log ----------
-@app.get("/api/activity-log")
-async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_current_user)):
+async def _aktivitaets_ereignisse(db, user_id: int) -> list:
+    """Alle Ereignisse des Logs -- ohne Obergrenze, fertig sortiert.
+
+    v2.11.8: Bis hierher war das der Endpunkt selbst, und jede der sechs
+    Quellen holte hoechstens `limit` Zeilen. Die Zeile ueber dem Log
+    ("312 Eintraege, +840 EUR") rechnete im Browser darueber und war damit ab
+    der Grenze zu klein, ohne es zu sagen. Jetzt gibt es eine Funktion, die
+    das Ganze kennt: der Endpunkt schneidet fuer die Anzeige ab, die
+    Summenauskunft nicht. Die Regel, wann ein Check-in Geld ausloest, steht
+    weiterhin nur an EINER Stelle -- deshalb rechnet die Summe nicht selbst
+    nach, sondern zaehlt dieselben Ereignisse.
+    """
     events = []
+    # Der Stand innerhalb der Periode kam frueher aus einer eigenen Abfrage
+    # JE ZEILE -- bei 500 Check-ins also 500 Abfragen. Als Fensterfunktion ist
+    # es eine. Ohne diesen Schritt waere das Log ohne Obergrenze unbezahlbar.
     ci_rows = await db.fetch(
         """SELECT pl.id, pl.progress_goal_id, pl.log_date, pl.week_key, pl.month_key, pl.created_at, pl.note,
-                  pg.title, pg.reward_amount, pg.rhythm_type, pg.target_count
+                  pg.title, pg.reward_amount, pg.rhythm_type, pg.target_count,
+                  COUNT(*) OVER (
+                      PARTITION BY pl.progress_goal_id,
+                                   CASE WHEN COALESCE(pg.rhythm_type, 'weekly') = 'monthly'
+                                        THEN pl.month_key ELSE pl.week_key END
+                      ORDER BY pl.id
+                      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS stand
            FROM progress_logs pl JOIN progress_goals pg ON pg.id = pl.progress_goal_id
            WHERE pl.user_id=$1
-           ORDER BY pl.created_at DESC LIMIT $2""",
-        user["id"], limit)
+           ORDER BY pl.created_at DESC""",
+        user_id)
     for r in ci_rows:
         rhythm = r["rhythm_type"] or "weekly"
         pk = r["month_key"] if rhythm == "monthly" else r["week_key"]
-        col = "month_key" if rhythm == "monthly" else "week_key"
-        count_at_or_before = int(await db.fetchval(
-            f"SELECT COUNT(*) FROM progress_logs WHERE progress_goal_id=$1 AND user_id=$2 AND {col}=$3 AND id <= $4",
-            r["progress_goal_id"], user["id"], pk, r["id"]))
+        count_at_or_before = int(r["stand"])
         target = int(r["target_count"])
         just_fulfilled = count_at_or_before == target
         amt = float(r["reward_amount"]) if just_fulfilled else 0.0
@@ -1754,8 +1770,8 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
                   a.title, a.unit
            FROM achievement_logs al JOIN achievements a ON a.id = al.achievement_id
            WHERE al.user_id=$1
-           ORDER BY al.date_achieved DESC LIMIT $2""",
-        user["id"], limit)
+           ORDER BY al.date_achieved DESC""",
+        user_id)
     for r in ml_rows:
         unit = r["unit"] or ""
         val = float(r["achieved_value"])
@@ -1783,8 +1799,8 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
              FROM achievement_progress_logs pr
              JOIN achievements a ON a.id = pr.achievement_id
             WHERE pr.user_id=$1
-            ORDER BY pr.created_at DESC LIMIT $2""",
-        user["id"], limit)
+            ORDER BY pr.created_at DESC""",
+        user_id)
     for r in pr_rows:
         unit = r["unit"] or ""
         delta = float(r["delta"])
@@ -1803,8 +1819,8 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
         })
 
     for r in await db.fetch(
-        "SELECT * FROM savings_transactions WHERE user_id=$1 AND source_type='initial' ORDER BY created_at DESC LIMIT $2",
-        user["id"], limit):
+        "SELECT * FROM savings_transactions WHERE user_id=$1 AND source_type='initial' ORDER BY created_at DESC",
+        user_id):
         events.append({"type": "initial", "date": r["created_at"].isoformat(), "title": "Anfangsbestand",
             "description": r["description"] or "", "amount": float(r["amount"]),
             "log_id": r["id"], "note": r["note"] or "", "deletable": True})
@@ -1819,8 +1835,8 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
              FROM savings_transactions st
              JOIN savings_goals sg ON sg.id = st.savings_goal_id
             WHERE st.user_id=$1 AND st.source_type='transfer' AND st.amount > 0
-            ORDER BY st.created_at DESC LIMIT $2""",
-        user["id"], limit)
+            ORDER BY st.created_at DESC""",
+        user_id)
     for r in tr_rows:
         events.append({
             "type": "transfer",
@@ -1836,8 +1852,8 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
         """SELECT st.id, st.amount, st.description, st.created_at, st.source_id, st.period_key, st.note, pg.title
            FROM savings_transactions st LEFT JOIN progress_goals pg ON pg.id = st.source_id
            WHERE st.user_id=$1 AND st.source_type='progress' AND st.period_key LIKE '%%-streak-%%'
-           ORDER BY st.created_at DESC LIMIT $2""",
-        user["id"], limit)
+           ORDER BY st.created_at DESC""",
+        user_id)
     for r in sb_rows:
         events.append({"type": "streak_bonus", "date": r["created_at"].isoformat(),
             "title": r["title"] or "?", "description": r["description"] or "",
@@ -1845,7 +1861,37 @@ async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_cu
             "note": r["note"] or "", "deletable": True})
 
     events.sort(key=lambda x: x["date"], reverse=True)
-    return events[:limit]
+    return events
+
+
+@app.get("/api/activity-log")
+async def activity_log(limit: int = 500, db=Depends(get_db), user=Depends(get_current_user)):
+    """Die neuesten Ereignisse fuer die Anzeige."""
+    alle = await _aktivitaets_ereignisse(db, user["id"])
+    return alle[:max(1, min(limit, 5000))]
+
+
+@app.get("/api/activity-log/summary")
+async def activity_log_summary(db=Depends(get_db), user=Depends(get_current_user)):
+    """Anzahl und Summe ueber ALLE Ereignisse, je Art und insgesamt.
+
+    Dieselbe Quelle wie die Liste, nur ohne Ausschnitt: die Zeile ueber dem
+    Log nennt damit das Ganze, auch wenn darunter nur die neuesten stehen.
+    """
+    alle = await _aktivitaets_ereignisse(db, user["id"])
+    je_art: dict = {}
+    for e in alle:
+        art = e.get("type") or "initial"
+        eintrag = je_art.setdefault(art, {"count": 0, "amount": 0.0})
+        eintrag["count"] += 1
+        eintrag["amount"] += float(e.get("amount") or 0)
+    for eintrag in je_art.values():
+        eintrag["amount"] = round(eintrag["amount"], 2)
+    return {
+        "all": {"count": len(alle),
+                "amount": round(sum(float(e.get("amount") or 0) for e in alle), 2)},
+        "by_type": je_art,
+    }
 
 # ---------- Stats ----------
 @app.get("/api/stats/savings-progress")

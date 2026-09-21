@@ -32,6 +32,17 @@ const AUSGABEN_API = {
         const q = qs.toString();
         return apiCall('/api/expenses' + (q ? '?' + q : ''));
     },
+    // Anzahl und Summe ueber ALLE Bons des Filters -- ohne die Obergrenze,
+    // mit der `expenses` die Liste kurz haelt.
+    expensesGefiltert: (params={}) => {
+        const qs = new URLSearchParams();
+        Object.entries(params).forEach(([k,v]) => {
+            if (k === 'limit') return;
+            if (v !== null && v !== undefined && v !== '') qs.append(k, v);
+        });
+        const q = qs.toString();
+        return apiCall('/api/expenses/stats/filtered' + (q ? '?' + q : ''));
+    },
     getExpense:    (id) => apiCall(`/api/expenses/${id}`),
     createExpense: (b) => apiCall('/api/expenses', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
     updateExpense: (id, b) => apiCall(`/api/expenses/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),

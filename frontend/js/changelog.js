@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.8', date: '2026-09-21', title: 'Summen meinen wieder das Ganze', notes: [
+        'Die Summenzeile bei den Ausgaben rechnete über die geladenen 200 Bons — ab dem 201. stand dort eine zu kleine Zahl.',
+        'Dasselbe im Aktivitäts-Log ab dem 501. Eintrag. Beide Zahlen kommen jetzt vom Server und meinen alles, was der Filter trifft.',
+        'Zeigt die Liste darunter nur einen Ausschnitt, steht das jetzt dabei.',
+        'Das Log lädt nebenbei deutlich schneller: der Stand je Check-in kam aus einer eigenen Abfrage pro Zeile.',
+    ]},
     { v: 'v2.11.7', date: '2026-09-21', title: 'Einladen liegt im Dialog', notes: [
         'Die Verwaltung zeigt die Konten, statt eine Einladungsmaske darüber offen zu halten.',
         'Der erklärende Satz stand zweimal auf derselben Seite — jetzt einmal, im Kopf.',

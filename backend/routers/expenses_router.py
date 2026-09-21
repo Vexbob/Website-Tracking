@@ -410,19 +410,19 @@ async def suggest_rule(body: dict, db=Depends(get_db), user=Depends(get_current_
 
 # ---------- Expenses ----------
 
-@router.get("/api/expenses")
-async def list_expenses(
-    db=Depends(get_db), user=Depends(get_current_user),
-    date_from: Optional[str] = Query(None, alias="from"),
-    date_to: Optional[str] = Query(None, alias="to"),
-    store_id: Optional[int] = None,
-    category_id: Optional[int] = None,
-    expense_type: Optional[str] = None,
-    q: Optional[str] = None,          # Volltextsuche (Notiz, Laden, Item-Beschreibungen)
-    limit: int = 200,
-):
+def _bon_filter(user_id: int, date_from, date_to, store_id, category_id,
+                expense_type, q):
+    """Die WHERE-Bedingungen der Bonliste -- an EINER Stelle.
+
+    v2.11.8: Die Liste baute ihren Filter hier, die Summenzeile darueber
+    rechnete danach im Browser ueber die geladenen Zeilen. Bis 200 Bons war
+    das dasselbe Ergebnis, ab dem 201. nicht mehr -- und anzusehen war der
+    Zeile das nicht. Wer die Menge nennt, muss sie auch abgrenzen duerfen:
+    deshalb liefert diese Funktion beides, und `/api/expenses/stats/filtered`
+    zaehlt ueber genau dieselbe Menge wie die Liste darunter.
+    """
     conds = ["e.user_id=$1"]
-    params = [user["id"]]
+    params = [user_id]
     if date_from:
         params.append(_parse_iso_date(date_from))
         conds.append(f"e.purchase_date >= ${len(params)}")
@@ -447,6 +447,22 @@ async def list_expenses(
             f"OR LOWER(COALESCE(e.note,'')) LIKE ${idx} "
             f"OR EXISTS (SELECT 1 FROM expense_items ei WHERE ei.expense_id=e.id AND LOWER(ei.description) LIKE ${idx}))"
         )
+    return conds, params
+
+
+@router.get("/api/expenses")
+async def list_expenses(
+    db=Depends(get_db), user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    store_id: Optional[int] = None,
+    category_id: Optional[int] = None,
+    expense_type: Optional[str] = None,
+    q: Optional[str] = None,          # Volltextsuche (Notiz, Laden, Item-Beschreibungen)
+    limit: int = 200,
+):
+    conds, params = _bon_filter(user["id"], date_from, date_to, store_id,
+                                category_id, expense_type, q)
     params.append(max(1, min(limit, 500)))
     rows = await db.fetch(
         f"""SELECT e.*, s.name AS store_name, s.color AS store_color, s.icon AS store_icon,
@@ -996,6 +1012,31 @@ async def stats_summary(db=Depends(get_db), user=Depends(get_current_user)):
         "total":       float(total_all or 0),
         "count":       int(count_all or 0),
     }
+
+@router.get("/api/expenses/stats/filtered")
+async def stats_filtered(
+    db=Depends(get_db), user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    store_id: Optional[int] = None,
+    category_id: Optional[int] = None,
+    expense_type: Optional[str] = None,
+    q: Optional[str] = None,
+):
+    """Anzahl und Summe ALLER Bons, auf die der Filter passt.
+
+    Dieselben Parameter wie `/api/expenses`, nur ohne `limit`: die Liste zeigt
+    einen Ausschnitt, diese Zahl meint das Ganze.
+    """
+    conds, params = _bon_filter(user["id"], date_from, date_to, store_id,
+                                category_id, expense_type, q)
+    row = await db.fetchrow(
+        f"""SELECT COUNT(*) AS anzahl, COALESCE(SUM(e.total_amount), 0) AS summe
+              FROM expenses e
+              LEFT JOIN stores s ON s.id = e.store_id
+             WHERE {' AND '.join(conds)}""",
+        *params)
+    return {"count": int(row["anzahl"] or 0), "total": float(row["summe"] or 0)}
 
 @router.get("/api/expenses/stats/by-category")
 async def stats_by_category(db=Depends(get_db), user=Depends(get_current_user),
