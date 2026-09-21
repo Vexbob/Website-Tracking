@@ -407,3 +407,46 @@ def test_die_grundlage_kommt_aus_einem_token():
     stelle = css[css.index(":where(input, select, textarea)"):][:400]
     assert "var(--eingabe-schrift)" in stelle, (
         "Die globale Form-Base setzt ihre Schriftgroesse nicht aus dem Token")
+
+
+# ====================================================== Lesbares JavaScript
+# Der teuerste Fehler dieser Sitzung war einer, den kein einziger der damals
+# 304 Tests sehen konnte: ein `await` in einer Funktion ohne `async`. Das ist
+# ein SYNTAXfehler, und ein solcher trifft nicht die eine Zeile, sondern die
+# ganze Datei -- der Browser fuehrt sie gar nicht erst aus. Im Blog-Editor
+# stand `boot()` am Ende, also lief es nie; der Body blieb auf
+# `visibility:hidden`, und uebrig war eine leere Seite ohne Fehlermeldung,
+# ueber acht Versionen hinweg. Ein Parser haette es in einer Sekunde gefunden.
+
+def _js_quellen():
+    for js in sorted(pathlib.Path(FRONTEND).rglob("*.js")):
+        yield js, js.read_text(encoding="utf-8")
+
+
+def _ohne_neuere_operatoren(quelle: str) -> str:
+    """`?.` und `??` wegnehmen, sonst nichts.
+
+    Der Parser kann ES2017; die beiden Operatoren kamen spaeter und sind das
+    Einzige aus neueren Jahrgaengen, das im Projekt vorkommt. Sie zu
+    neutralisieren aendert nichts an der Frage, um die es hier geht -- ob die
+    Datei ueberhaupt eine gueltige Struktur hat.
+    """
+    for alt, neu in (("?.(", "("), ("?.[", "["), ("?.", "."),
+                     ("??=", "="), ("??", "||")):
+        quelle = quelle.replace(alt, neu)
+    return quelle
+
+
+def test_jede_javascript_datei_laesst_sich_lesen():
+    """Hart, nicht uebersprungen: ein Waechter, der bei fehlendem Paket
+    stillschweigend verschwindet, haette denselben Fehler durchgelassen.
+    `esprima` steht in backend/requirements.txt."""
+    import esprima
+    kaputt = []
+    for js, quelle in _js_quellen():
+        try:
+            esprima.parseScript(_ohne_neuere_operatoren(quelle))
+        except Exception as e:                       # noqa: BLE001
+            kaputt.append("%s: %s" % (js.name, str(e)[:120]))
+    assert not kaputt, (
+        "Diese Dateien fuehrt der Browser gar nicht aus:\n" + "\n".join(kaputt))

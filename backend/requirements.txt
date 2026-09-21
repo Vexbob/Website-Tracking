@@ -9,6 +9,11 @@ pydantic==2.5.3
 slowapi==0.1.9
 pytest==8.0.0
 pytest-asyncio==0.23.5
+# JavaScript-Parser fuer test_navigation.py. Ohne ihn faellt ein Syntaxfehler
+# im Frontend erst im Browser auf -- und dort still: eine Datei, die nicht
+# geparst werden kann, wird gar nicht ausgefuehrt. Genau so lag der
+# Blog-Editor acht Versionen lang leer da.
+esprima==4.0.1
 Pillow==10.2.0
 # HEIC/HEIF (iPhone-Fotos). Ohne dieses Paket kann Pillow HEIC nicht
 # oeffnen; services/expenses.py faengt das Fehlen ab, dann sind HEIC-

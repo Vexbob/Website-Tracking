@@ -61,6 +61,11 @@ SEITEN = ["/", "/essen/", "/naehrwerte/", "/naehrwerte/#gerichte",
           # die anderen bei jeder Aenderung im Bild geprueft wurden.
           "/ausgaben/", "/ausgaben/statistik.html", "/ausgaben/kategorien.html",
           "/health/", "/musik/", "/notizen/", "/blog/", "/admin/",
+          # Seit v2.11.9: der Blog-Editor (er stand acht Versionen lang leer
+          # da, ohne dass es jemandem auffiel) und das Hoerregister, das nur
+          # hinter einem Reiter zu sehen ist.
+          "/blog/admin/",
+          "/musik/?griff=warte:900;klick:#mTabRegister;warte:700",
           # Die beiden Dialoge, in denen die eigentliche Arbeit steckt.
           # Ohne Griff endet die Vorschau davor.
           "/essen/?griff=klick:#esAdd;tippe:#esDlgSuche=Pi",

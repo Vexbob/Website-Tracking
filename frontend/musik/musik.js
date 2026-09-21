@@ -487,44 +487,61 @@ function columns() {
     return cols;
 }
 
+/* Die Sortierung stand frueher in den Spaltenkoepfen. Ohne Tabelle braucht
+   sie ein eigenes Bedienelement -- und zwar eins, das benennt, was gerade
+   gilt, statt es nur als Pfeil anzudeuten. Die Auswahl kommt aus denselben
+   `columns()` wie vorher die Koepfe, damit „Interpret“ und „Show“ weiter
+   mit der gewaehlten Art mitwandern. */
 function renderHead() {
-    document.getElementById('mRegHead').innerHTML = '<tr>' + columns().map(c => {
-        if (!c.sort) return '<th' + (c.num ? ' class="num"' : '') + '>' + esc(c.label) + '</th>';
-        const active = state.sort === c.sort;
-        return '<th class="sort' + (c.num ? ' num' : '') + (active ? ' is-sorted' : '') + '">' +
-            '<button type="button" class="sort-btn" data-sort="' + c.sort + '">' +
-                esc(c.label) +
-                '<span class="sort-arrow" aria-hidden="true">' +
-                    (active && state.direction === 'asc' ? '▲' : '▼') + '</span>' +
-            '</button></th>';
-    }).join('') + '</tr>';
+    const wahl = document.getElementById('mRegSort');
+    const sortierbar = columns().filter(c => c.sort);
+    if (!sortierbar.some(c => c.sort === state.sort)) state.sort = sortierbar[0].sort;
+    wahl.innerHTML = sortierbar.map(c =>
+        '<option value="' + c.sort + '"' +
+        (state.sort === c.sort ? ' selected' : '') + '>' + esc(c.label) + '</option>'
+    ).join('');
+    const ab = state.direction !== 'asc';
+    const knopf = document.getElementById('mRegDir');
+    // Der Knopf sagt, was gilt -- nicht, was passiert, wenn man ihn drueckt.
+    // Was passiert, sagt der Titel.
+    knopf.innerHTML = (ab ? '▼' : '▲') + ' ' + (ab ? 'Absteigend' : 'Aufsteigend');
+    knopf.title = ab ? 'Aufsteigend sortieren' : 'Absteigend sortieren';
+    knopf.setAttribute('aria-label', knopf.title);
 }
 
+/* Eine Zeile je Eintrag. Oben steht, was die Zeile IST -- wer und was --,
+   darunter die Nebenangaben, rechts die Zahl, um die es geht. Das Album
+   stand vorher in einer eigenen Spalte, die in der Haelfte der Zeilen leer
+   war; als Nebenangabe faellt es einfach weg, wenn es fehlt. */
 function renderRows(data) {
-    const body = document.getElementById('mRegBody');
-    const cols = columns();
+    const liste = document.getElementById('mRegList');
     if (!data.items.length) {
-        body.innerHTML = '<tr><td colspan="' + cols.length + '">' +
-            '<div class="stat-empty">Für diesen Filter steht nichts im Register. ' +
-            'Entweder war in dem Zeitraum nichts zu hören, oder er wurde noch nicht ' +
-            'importiert.</div></td></tr>';
+        liste.innerHTML = '<div class="stat-empty">Für diesen Filter steht nichts ' +
+            'im Register. Entweder war in dem Zeitraum nichts zu hören, oder er ' +
+            'wurde noch nicht importiert.</div>';
         return;
     }
-    const kindCell = (kind) => kind
-        ? '<span class="m-kind" style="--tone:var(' + vocab(kind).tone + ')">' +
-          vocab(kind).mark + ' ' + esc(kind) + '</span>'
-        : '<span class="m-grain-tag">ohne Angabe</span>';
-    body.innerHTML = data.items.map(r =>
-        '<tr>' +
-            '<td>' + esc(r.period_key) +
-                ' <span class="m-grain-tag">' + esc(STEP_LABEL[r.grain] || r.grain) + '</span></td>' +
-            (state.kind ? '' : '<td>' + kindCell(r.kind) + '</td>') +
-            '<td>' + esc(r.artist || '—') + '</td>' +
-            '<td>' + esc(r.title || '—') + '</td>' +
-            '<td>' + esc(r.album || '—') + '</td>' +
-            '<td class="num">' + fmtInt(r.plays) + '</td>' +
-            '<td class="num">' + esc(fmtDuration(r.ms_played) || '—') + '</td>' +
-        '</tr>').join('');
+    liste.innerHTML = data.items.map(r => {
+        const v = vocab(r.kind);
+        const wer = esc(r.artist || '—');
+        const was = r.title ? esc(r.title) : '';
+        const meta = [esc(r.period_key),
+                      '<span class="m-grain-tag">' + esc(STEP_LABEL[r.grain] || r.grain) + '</span>'];
+        if (r.album) meta.push(esc(r.album));
+        const zeit = fmtDuration(r.ms_played);
+        return '<div class="rec-row">' +
+            '<span class="rec-mark" style="--tone:var(' + v.tone + ')" ' +
+                'title="' + esc(r.kind || 'ohne Angabe') + '">' + v.mark + '</span>' +
+            '<span class="rec-main">' +
+                '<span class="rec-title">' + wer + (was ? ' <span class="sep">·</span> ' + was : '') + '</span>' +
+                '<span class="rec-meta">' + meta.join(' <span class="sep">·</span> ') + '</span>' +
+            '</span>' +
+            '<span class="rec-side">' +
+                '<span class="rec-val">' + fmtInt(r.plays) + '</span>' +
+                (zeit ? '<span class="rec-sub">' + esc(zeit) + '</span>' : '') +
+            '</span>' +
+        '</div>';
+    }).join('');
 }
 
 function renderPager(data) {
@@ -543,9 +560,8 @@ function renderPager(data) {
 
 async function loadRegister() {
     renderHead();
-    const body = document.getElementById('mRegBody');
-    body.innerHTML = '<tr><td colspan="' + columns().length + '">' +
-        '<span class="skel skel-block"></span></td></tr>';
+    const liste = document.getElementById('mRegList');
+    liste.innerHTML = '<div class="rec-row"><span class="skel skel-block"></span></div>'.repeat(4);
     try {
         const data = await API.entries(qs({
             sort: state.sort, direction: state.direction,
@@ -556,8 +572,7 @@ async function loadRegister() {
         renderRows(data);
         renderPager(data);
     } catch (e) {
-        body.innerHTML = '<tr><td colspan="' + columns().length + '">' +
-            '<div class="stat-empty">' + esc(e.message || e) + '</div></td></tr>';
+        liste.innerHTML = '<div class="stat-empty">' + esc(e.message || e) + '</div>';
     }
 }
 
@@ -930,15 +945,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         reload();
     });
 
-    document.getElementById('mRegHead').addEventListener('click', (e) => {
-        const b = e.target.closest('[data-sort]');
-        if (!b) return;
-        if (state.sort === b.dataset.sort) {
-            state.direction = state.direction === 'asc' ? 'desc' : 'asc';
-        } else {
-            state.sort = b.dataset.sort;
-            state.direction = 'desc';
-        }
+    document.getElementById('mRegSort').addEventListener('change', (e) => {
+        state.sort = e.target.value;
+        // Ein neues Feld faengt gross an: die haeufigste Frage ist „was am
+        // meisten“, nicht „was am wenigsten“.
+        state.direction = 'desc';
+        state.offset = 0;
+        loadRegister();
+    });
+    document.getElementById('mRegDir').addEventListener('click', () => {
+        state.direction = state.direction === 'asc' ? 'desc' : 'asc';
         state.offset = 0;
         loadRegister();
     });
@@ -949,7 +965,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.offset = Math.max(0, state.offset +
             (b.dataset.page === 'next' ? state.limit : -state.limit));
         loadRegister();
-        document.getElementById('mRegTable').scrollIntoView({ block: 'nearest' });
+        document.getElementById('mRegList').scrollIntoView({ block: 'nearest' });
     });
 
     // ---- Import

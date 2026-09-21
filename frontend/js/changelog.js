@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.11.9', date: '2026-09-21', title: 'Hörregister lesbar, Blog-Editor wieder da', notes: [
+        'Nachgezogen aus v2.11.2: der Blog-Editor öffnete seit dieser Version eine leere Seite — ein Tippfehler machte die ganze Datei unlesbar, und der Browser führte sie stumm nicht aus.',
+        'Am Handy lässt sich dort jetzt auch speichern: die Seite scrollt, vorher lagen „Veröffentlichen“ und „Löschen“ außerhalb des Bildes.',
+        'Das Hörregister der Musik ist eine Liste statt einer Tabelle, die man seitwärts schieben musste; sortiert wird über ein eigenes Feld.',
+        'Neuer Prüfschritt: jede JavaScript-Datei wird gelesen, bevor sie ausgeliefert wird.',
+    ]},
     { v: 'v2.11.8', date: '2026-09-21', title: 'Summen meinen wieder das Ganze', notes: [
         'Die Summenzeile bei den Ausgaben rechnete über die geladenen 200 Bons — ab dem 201. stand dort eine zu kleine Zahl.',
         'Dasselbe im Aktivitäts-Log ab dem 501. Eintrag. Beide Zahlen kommen jetzt vom Server und meinen alles, was der Filter trifft.',

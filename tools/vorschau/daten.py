@@ -520,37 +520,90 @@ WORKOUTS = [
 
 
 # ------------------------------------------------------------------- Musik
+# v2.11.9: Alle vier Musik-Antworten standen hier in einer Form, die es nie
+# gegeben hat -- `count` statt `rows`, `minutes` statt `ms_played`, englische
+# Artnamen ("music") statt der deutschen, die die Datenbank fuehrt
+# ("Musik | Podcast | Hörbuch"), und Rasterschluessel "week"/"month" statt
+# "woche"/"monat". Die Oberflaeche uebersetzt ueber genau diese Schluessel
+# (VOCAB, STEP_LABEL in musik.js); mit den falschen zeigte die Vorschau fuer
+# jede Zeile das Musik-Zeichen und schrieb das Raster roh hin. Massgeblich ist
+# `backend/routers/music_router.py`.
+def _ms(minuten):
+    return minuten * 60 * 1000
+
+
 MUSIK_FACETTEN = {
-    "kinds": [{"key": "music", "label": "Musik", "count": 18422},
-              {"key": "podcast", "label": "Podcast", "count": 913},
-              {"key": "audiobook", "label": "Hörbuch", "count": 44}],
-    "years": [2024, 2025, 2026],
+    "kinds": [{"key": "Musik", "rows": 18422, "plays": 18422},
+              {"key": "Podcast", "rows": 913, "plays": 913},
+              {"key": "Hörbuch", "rows": 44, "plays": 44}],
+    "grains": [{"key": "tag", "label": "täglich", "rows": 2140},
+               {"key": "woche", "label": "wöchentlich", "rows": 15200},
+               {"key": "monat", "label": "monatlich", "rows": 2039}],
+    "groups": [{"key": "titel", "rows": 19379}],
+    "rows": 19379, "from": "2024-01-01", "to": _tag(0),
 }
 
-MUSIK_SUMME = {"plays": 19379, "minutes": 61240, "artists": 1284, "tracks": 7311}
+MUSIK_SUMME = {
+    "by_kind": [
+        {"kind": "Musik", "plays": 18422, "ms_played": _ms(58900),
+         "titles": 7311, "artists": 1284, "rows": 18422},
+        {"kind": "Podcast", "plays": 913, "ms_played": _ms(2180),
+         "titles": 604, "artists": 38, "rows": 913},
+        {"kind": "Hörbuch", "plays": 44, "ms_played": _ms(160),
+         "titles": 44, "artists": 6, "rows": 44},
+    ],
+    "plays": 19379, "rows": 19379, "ms_played": _ms(61240),
+    "titles": 7311, "artists": 1284,
+    "from": "2024-01-01", "to": _tag(0),
+    "grains": [{"grain": "tag", "rows": 2140, "from": "2026-06-01", "to": _tag(0)},
+               {"grain": "woche", "rows": 15200, "from": "2024-01-01", "to": _tag(0)},
+               {"grain": "monat", "rows": 2039, "from": "2024-01-01", "to": "2025-12-31"}],
+}
 
 MUSIK_TOP = {
-    "artists": [{"name": "Radiohead", "plays": 812, "minutes": 3140},
-                {"name": "Bonobo", "plays": 604, "minutes": 2480},
-                {"name": "Nils Frahm", "plays": 431, "minutes": 2210},
-                {"name": "Four Tet", "plays": 388, "minutes": 1620},
-                {"name": "Kiasmos", "plays": 301, "minutes": 1410}],
-    "tracks": [{"name": "Weird Fishes", "artist": "Radiohead", "plays": 96},
-               {"name": "Kerala", "artist": "Bonobo", "plays": 71},
-               {"name": "Says", "artist": "Nils Frahm", "plays": 64}],
+    "by": "interpret", "metric": "plays",
+    "items": [
+        {"label": "Radiohead", "sub": None, "plays": 812, "titles": 94,
+         "ms_played": _ms(3140), "from": "2024-01-01", "to": _tag(0)},
+        {"label": "Bonobo", "sub": None, "plays": 604, "titles": 61,
+         "ms_played": _ms(2480), "from": "2024-02-05", "to": _tag(3)},
+        {"label": "Nils Frahm", "sub": None, "plays": 431, "titles": 48,
+         "ms_played": _ms(2210), "from": "2024-01-14", "to": _tag(9)},
+        {"label": "Four Tet", "sub": None, "plays": 388, "titles": 52,
+         "ms_played": _ms(1620), "from": "2024-03-02", "to": _tag(21)},
+        {"label": "Kiasmos", "sub": None, "plays": 301, "titles": 27,
+         "ms_played": _ms(1410), "from": "2024-05-11", "to": _tag(30)},
+    ],
 }
 
+# v2.11.9: Die Form stammt jetzt aus dem echten Endpunkt
+# (`routers/music_router.py`, /api/music/entries): `items`, `total`, `plays`,
+# `limit`, `offset` -- und je Zeile `period_key`, `grain`, `ms_played`. Vorher
+# stand hier `rows`/`period`/`minutes`/`page`, eine Form, die es nie gab; das
+# Register war in der Vorschau deshalb immer leer, und genau deshalb ist neun
+# Versionen lang niemandem aufgefallen, wie es aussieht.
 MUSIK_EINTRAEGE = {
-    "rows": [
-        {"period": "2026-09", "kind": "music", "artist": "Radiohead",
-         "title": "Weird Fishes / Arpeggi", "album": "In Rainbows",
-         "plays": 12, "minutes": 62},
-        {"period": "2026-09", "kind": "music", "artist": "Bonobo",
-         "title": "Kerala", "album": "Migration", "plays": 9, "minutes": 44},
-        {"period": "2026-08", "kind": "podcast", "artist": "Lage der Nation",
-         "title": "LdN 412", "album": "", "plays": 1, "minutes": 118},
+    "total": 128, "plays": 1462, "limit": 100, "offset": 0,
+    "items": [
+        {"id": 1, "period_key": "2026-KW38", "grain": "woche", "kind": "Musik",
+         "artist": "Radiohead", "title": "Weird Fishes / Arpeggi",
+         "album": "In Rainbows", "plays": 12, "ms_played": _ms(62)},
+        {"id": 2, "period_key": "2026-KW38", "grain": "woche", "kind": "Musik",
+         "artist": "Bonobo", "title": "Kerala", "album": "Migration",
+         "plays": 9, "ms_played": _ms(44)},
+        {"id": 3, "period_key": "2026-KW38", "grain": "woche", "kind": "Musik",
+         "artist": "Fontaines D.C.", "title": "Starburster", "album": "Romance",
+         "plays": 8, "ms_played": _ms(29)},
+        {"id": 4, "period_key": "2026-KW37", "grain": "woche", "kind": "Podcast",
+         "artist": "Lage der Nation", "title": "LdN 412 — Haushalt, Netzausbau",
+         "album": "", "plays": 1, "ms_played": _ms(118)},
+        {"id": 5, "period_key": "2026-KW37", "grain": "woche", "kind": "Musik",
+         "artist": "Khruangbin", "title": "May Ninth", "album": "Mordechai",
+         "plays": 7, "ms_played": _ms(26)},
+        {"id": 6, "period_key": "2026-08", "grain": "monat", "kind": "Musik",
+         "artist": "Nils Frahm", "title": "Says", "album": "Spaces",
+         "plays": 6, "ms_played": _ms(52)},
     ],
-    "total": 3, "page": 1, "pages": 1,
 }
 
 

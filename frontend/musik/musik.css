@@ -67,10 +67,23 @@
 .m-block-head .m-kind { font-size: 0.8125rem; padding: 0.2rem 0.625rem; }
 
 /* ---------- Register ---------- */
-/* Die Tabelle hat acht Spalten und muss auf dem Handy waagerecht scrollen
-   dürfen — die Seite selbst darf das nie. */
-.m-table-scroll { overflow-x: auto; }
-.m-table-scroll .stat-table { min-width: 44rem; }
+/* Die Sortierung steht über der Liste, seit die Spaltenköpfe weg sind.
+   Auf dem Telefon bricht sie um; das Feld bekommt den Platz, der übrig ist. */
+.m-reg-sort {
+    display: flex; align-items: center; gap: var(--space-2);
+    flex-wrap: wrap; margin-bottom: var(--space-3);
+}
+.m-reg-sort label { font-size: 0.8125rem; color: var(--text-3); }
+.m-reg-sort select { flex: 1 1 10rem; min-width: 0; max-width: 16rem; }
+.m-reg-sort #mRegDir { white-space: nowrap; flex: none; }
+/* Schmal reicht die Breite nicht fuer Beschriftung, Feld und Knopf in einer
+   Zeile. Dann nimmt die Beschriftung ihre eigene, und die beiden
+   Bedienelemente teilen sich die naechste -- statt dass der Knopf allein
+   unter einem halbleeren Feld haengt. */
+@media (max-width: 560px) {
+    .m-reg-sort label { flex: 1 0 100%; }
+    .m-reg-sort select { max-width: none; }
+}
 .m-grain-tag {
     display: inline-block; padding: 0.05rem 0.375rem;
     font-size: 0.6875rem; font-weight: 600;
@@ -149,5 +162,4 @@
 
 @media (max-width: 700px) {
     .m-search { flex-basis: 100%; order: -1; }
-    .m-table-scroll .stat-table { min-width: 38rem; }
 }

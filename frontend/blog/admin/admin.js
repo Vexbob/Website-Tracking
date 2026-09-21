@@ -321,7 +321,12 @@ function closestBlock(node, boundary) {
     return null;
 }
 
-function onEditorClick(e) {
+// `async`, seit der Alt-Text-Dialog in v2.11.2 von `prompt()` auf
+// `askPrompt()` umgestellt wurde: `await` in einer Funktion ohne `async` ist
+// ein SYNTAXfehler, und der trifft die ganze Datei -- `boot()` am Ende lief
+// nie, der Body blieb auf `visibility:hidden`, der Editor war leer. Seit
+// v2.11.10 liest `test_jede_javascript_datei_laesst_sich_lesen` jede Datei.
+async function onEditorClick(e) {
     const box = e.target.closest('.nz-task-box');
     if (box) {
         e.preventDefault();
@@ -334,10 +339,10 @@ function onEditorClick(e) {
     // Bild angeklickt → Alt-Text bearbeiten (v1.18.1)
     const img = e.target.closest('img');
     if (img) {
-        // Nativ, weil danach im contenteditable weitergearbeitet wird.
-        // Die dokumentierte Ausnahme fuer native Dialoge gilt dem LINK-Dialog:
-        // dort nimmt ein Modal dem contenteditable den Fokus und damit die
-        // Auswahl. Hier ist nichts ausgewaehlt -- das Bild steht schon.
+        // Hier geht der eigene Dialog: die dokumentierte Ausnahme fuer
+        // native Dialoge gilt dem LINK-Dialog, wo ein Modal dem
+        // contenteditable den Fokus und damit die Auswahl nimmt. Hier ist
+        // nichts ausgewaehlt -- das Bild steht schon.
         const newAlt = await askPrompt({ title: 'Bildbeschreibung',
             text: 'Was ist auf dem Bild zu sehen? Der Text steht als Alt-Text darin.',
             value: img.alt || '', ok: 'Übernehmen' });

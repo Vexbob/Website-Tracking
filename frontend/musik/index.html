@@ -30,9 +30,13 @@
 </nav>
 <main class="wide">
     <div class="tabs">
-        <button class="tab-btn active" data-tab="ueberblick">🎧 Überblick</button>
-        <button class="tab-btn" data-tab="register">🗂️ Register</button>
-        <button class="tab-btn" data-tab="import">⬆️ Import</button>
+        <!-- Kennungen, damit die Vorschau die Reiter greifen kann: ein
+             Attribut-Selektor ueberlebt den Weg durch die Adresse nicht
+             (tools/vorschau/README.md). Emoji raus wie bei der Gesundheit
+             in v2.11.5 -- an einem Bedienelement ist das kein Schmuck. -->
+        <button class="tab-btn active" id="mTabUeberblick" data-tab="ueberblick">Überblick</button>
+        <button class="tab-btn" id="mTabRegister" data-tab="register">Register</button>
+        <button class="tab-btn" id="mTabImport" data-tab="import">Import</button>
     </div>
 
     <!-- Eine Filterleiste für Überblick UND Register. Zwei getrennte wären
@@ -88,12 +92,20 @@
                 <h3>🗂️ Hörregister</h3>
                 <span class="stat-range-lbl" id="mRegSummary"></span>
             </div>
-            <div class="m-table-scroll">
-                <table class="stat-table" id="mRegTable">
-                    <thead id="mRegHead"></thead>
-                    <tbody id="mRegBody"></tbody>
-                </table>
+            <!-- v2.11.9: Das Register war eine Tabelle mit sieben Spalten in
+                 einem waagerecht scrollenden Kasten -- 608 px Mindestbreite auf
+                 einem 390 px breiten Telefon. Wer seitwaerts schieben muss, um
+                 eine Zeile zu Ende zu lesen, liest die Liste nicht. Jetzt eine
+                 Datensatzliste (CLAUDE.md: `.rec-list` fuer viele
+                 gleichartige Datensaetze); die Spaltenkoepfe waren zugleich die
+                 Sortierung, deshalb steht die jetzt als eigenes Bedienelement
+                 darueber. -->
+            <div class="m-reg-sort">
+                <label for="mRegSort">Sortiert nach</label>
+                <select id="mRegSort"></select>
+                <button type="button" class="v-btn v-btn--sm" id="mRegDir"></button>
             </div>
+            <div class="rec-list" id="mRegList"></div>
             <div class="m-pager" id="mRegPager"></div>
         </div>
     </div>

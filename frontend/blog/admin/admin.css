@@ -38,8 +38,28 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .ba-unpub{background:var(--surface-2);color:var(--text-1);border:1px solid var(--line)}
 .ba-del{background:var(--danger-soft);color:var(--danger)}
 
+/* v2.11.10: Auf dem Telefon ist das kein Zwei-Spalten-Programm, sondern eine
+   Seite. Vorher blieb `body{overflow:hidden}` auch hier stehen: die Spalte
+   aus Liste und Editor musste in die Fensterhoehe passen, und der Fuss mit
+   „Veroeffentlichen“ und „Loeschen“ lag darunter — man konnte einen Beitrag
+   am Handy schreiben, aber nicht speichern. Jetzt scrollt die Seite normal,
+   die Beitragsliste bekommt eine Deckelung, damit sie den Editor nicht nach
+   unten schiebt, und die 2,5-rem-Innenabstaende des Editors (ein Fuenftel
+   der Breite auf einem 390-px-Display) fallen auf 1 rem. */
 @media(max-width:768px){
-    .ba-sidebar{width:100%}
-    .ba-app{flex-direction:column}
+    html, body{height:auto}
+    body{overflow:visible}
+    .ba-app{flex-direction:column;overflow:visible;min-height:0}
+    .ba-sidebar{width:100%;border-right:none;border-bottom:1px solid var(--line)}
+    .ba-list{flex:none;max-height:40vh}
     .ba-editor{border-top:1px solid var(--line)}
+    .ba-detail{min-height:0}
+    .nz-d-body{flex:none;overflow:visible;padding:1rem 0}
+    .nz-editor{min-height:55vh;padding:0 1rem 2rem}
+    .ba-head,.ba-subtitle,.ba-meta-row,.ba-visibility-row,.ba-foot,
+    .nz-toolbar{padding-left:1rem;padding-right:1rem}
+    .ba-meta-row label{min-width:0;flex:1 1 9rem}
+    /* 1,5 rem Titelschrift schneiden auf 390 px die Haelfte der Ueberschrift
+       ab, bevor man sie ueberhaupt gelesen hat. */
+    .ba-title{font-size:1.25rem}
 }
