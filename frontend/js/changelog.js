@@ -15,8 +15,8 @@
  */
 window.VEXBOB_CHANGELOG = [
     { v: 'v2.11.10', date: '2026-09-22', title: 'Der Ring sagt wieder, wie weit es ist', notes: [
-        'Der Fortschrittsring war ab etwa 95 % geschlossen und damit von „geschafft“ nicht mehr zu unterscheiden — die runden Enden des Bogens deckten die letzten Prozent zu.',
-        'Betroffen waren alle Ringe: das Sparziel ebenso wie die Nährwerte, wo der Halbring die Lücke sogar früher schloss.',
+        'Der Fortschrittsring war ab etwa 95 % geschlossen und damit von „geschafft“ nicht mehr zu unterscheiden.',
+        'Das galt überall: im Sparziel wie in den Nährwerten, dort sogar noch früher.',
     ]},
     { v: 'v2.11.9', date: '2026-09-21', title: 'Hörregister lesbar, Blog-Editor wieder da', notes: [
         'Nachgezogen aus v2.11.2: der Blog-Editor öffnete seit dieser Version eine leere Seite — ein Tippfehler machte die ganze Datei unlesbar, und der Browser führte sie stumm nicht aus.',

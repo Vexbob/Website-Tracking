@@ -1983,7 +1983,7 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
        runden Kappen ragen je --ring-w/2 ueber die Bogenenden hinaus und
        fuellen das Fehlende wieder auf. Ohne diesen Abzug schloss sich der
        Ring schon bei rund 95 % -- die letzten Prozent verschwanden unter
-       den Kappen, und "fast geschafft" sah aus wie "geschafft". Der
+       den Kappen, und „fast geschafft“ sah aus wie „geschafft“. Der
        negative dashoffset schiebt den Bogen um die halbe Kappe zurueck,
        damit er weiterhin exakt bei 12 Uhr anfaengt. */
     stroke-dasharray: max(0, calc(var(--ring-val) * var(--ring-c) - var(--ring-w))) var(--ring-c);
