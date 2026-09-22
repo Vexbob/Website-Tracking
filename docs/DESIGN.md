@@ -350,6 +350,11 @@ Eine Komponente, zwei Formen (`.v-ring` in `css/style.css`, Muster in
   Bewertung. Wo mehr ein Erfolg ist, dreht `.v-ring--gut` ihn auf `--ok`.
 - **`.is-unvollstaendig`** macht die Spur gestrichelt. Ein Wert, zu dem
   Angaben fehlen, darf nicht aussehen wie einer, zu dem alle da sind.
+- **Die runden Kappen werden abgezogen.** Der Bogen wird eine Strichbreite
+  kürzer gezeichnet, als der Anteil lang ist — die beiden Kappen legen sie
+  wieder drauf. Ohne den Abzug war jeder Ring gut vier Prozentpunkte zu voll
+  und ab etwa 95 % von „geschafft“ nicht mehr zu unterscheiden. Ein Ring, der
+  zu früh zugeht, nimmt der Zahl daneben das letzte Stück Weg.
 
 ## 8. Was wir nicht tun
 

@@ -52,6 +52,10 @@
         // als Zahl da.
         el.style.setProperty('--ring-over', Math.max(0, Math.min(1, quote - 1)).toFixed(4));
         el.classList.toggle('is-drueber', quote > 1);
+        // Bei 0 bekommt der Bogen eine gerade Kappe: eine runde Kappe ohne
+        // Bogen bliebe als Punkt stehen, und ein Punkt sieht nach einem
+        // kleinen Wert aus, wo gar keiner ist.
+        el.classList.toggle('is-leer', !(quote > 0));
         return quote;
     }
 

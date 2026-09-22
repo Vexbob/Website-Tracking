@@ -1948,6 +1948,11 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
      --ring-w      Strichbreite
      --ring-c      Umfang bei r=42; steht hier und wird nie von aussen gesetzt
 
+   Der gefuellte Bogen wird um --ring-w kuerzer gezeichnet, als der Anteil
+   lang ist: die runden Kappen legen die Strichbreite wieder drauf. Ohne
+   das waere jeder Ring um gut vier Prozentpunkte zu voll -- und die obersten
+   waeren von 100 % nicht zu unterscheiden.
+
    Ueber dem Ziel reitet ein zweiter Bogen in --warn von vorn ueber den
    vollen Ring -- mit butt-Kappe, damit die Stelle sichtbar bleibt, an der er
    anfaengt. Gelb und nicht rot: "mehr" ist keine Bewertung.
@@ -1974,9 +1979,16 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 .v-ring-fill {
     stroke: var(--ring-tone);
     stroke-linecap: round;
-    stroke-dasharray: var(--ring-c);
-    stroke-dashoffset: calc(var(--ring-c) * (1 - var(--ring-val)));
-    transition: stroke-dashoffset 0.6s var(--ease);
+    /* Gezeichnet wird eine Strichbreite KUERZER als der Anteil: die beiden
+       runden Kappen ragen je --ring-w/2 ueber die Bogenenden hinaus und
+       fuellen das Fehlende wieder auf. Ohne diesen Abzug schloss sich der
+       Ring schon bei rund 95 % -- die letzten Prozent verschwanden unter
+       den Kappen, und "fast geschafft" sah aus wie "geschafft". Der
+       negative dashoffset schiebt den Bogen um die halbe Kappe zurueck,
+       damit er weiterhin exakt bei 12 Uhr anfaengt. */
+    stroke-dasharray: max(0, calc(var(--ring-val) * var(--ring-c) - var(--ring-w))) var(--ring-c);
+    stroke-dashoffset: calc(var(--ring-w) / -2);
+    transition: stroke-dasharray 0.6s var(--ease);
 }
 .v-ring-over {
     stroke: var(--warn);
@@ -1985,6 +1997,9 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
     stroke-dashoffset: calc(var(--ring-c) * (1 - var(--ring-over)));
     transition: stroke-dashoffset 0.6s var(--ease);
 }
+/* Bei 0 bleibt nichts stehen: eine runde Kappe ohne Bogen waere ein Punkt,
+   und ein Punkt ist schon eine Aussage. */
+.v-ring.is-leer .v-ring-fill { stroke-linecap: butt; }
 .v-ring.is-unvollstaendig .v-ring-track {
     stroke-dasharray: 7 6;
     opacity: 0.6;
@@ -2029,9 +2044,14 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
    Viertel steht. Der Text sitzt in der Mulde. */
 .v-ring--halb { height: calc(var(--ring-size) * 0.6); overflow: hidden; }
 .v-ring--halb svg { height: var(--ring-size); transform: rotate(180deg); }
-.v-ring--halb .v-ring-fill,
 .v-ring--halb .v-ring-over { stroke-dasharray: calc(var(--ring-c) / 2) var(--ring-c); }
-.v-ring--halb .v-ring-fill { stroke-dashoffset: calc(var(--ring-c) / 2 * (1 - var(--ring-val))); }
+/* Halbe Strecke, gleicher Kappen-Abzug wie oben -- hier faellt er sogar
+   staerker ins Gewicht, weil eine Strichbreite an der halben Bogenlaenge
+   knapp 9 % sind. */
+.v-ring--halb .v-ring-fill {
+    stroke-dasharray: max(0, calc(var(--ring-val) * var(--ring-c) / 2 - var(--ring-w))) var(--ring-c);
+    stroke-dashoffset: calc(var(--ring-w) / -2);
+}
 .v-ring--halb .v-ring-over { stroke-dashoffset: calc(var(--ring-c) / 2 * (1 - var(--ring-over))); }
 .v-ring--halb .v-ring-txt { inset: 22% 0 0 0; justify-content: center; }
 /* Der Überschuss am Halbring: keine eigene Strecke, sondern die Farbe des
