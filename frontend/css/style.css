@@ -1948,6 +1948,16 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
      --ring-w      Strichbreite
      --ring-c      Umfang bei r=42; steht hier und wird nie von aussen gesetzt
 
+   --ring-w und --ring-c tragen ihre Einheit (px = eine Einheit des
+   viewBox-Systems, nicht ein Bildschirmpunkt). Das ist keine Kosmetik:
+   Firefox verwirft eine einheitenlose Zahl in stroke-dasharray und
+   stroke-dashoffset, sobald sie durch var()/calc() kommt. Die Eigenschaft
+   faellt dann auf ihren Anfangswert zurueck -- dasharray auf "none",
+   dashoffset auf 0 --, und beide Boegen laufen einmal ganz herum. Sichtbar
+   blieb davon der obere: ein voller Ring in --ok, bei jedem Prozentsatz.
+   Chrome nimmt die nackte Zahl an, deshalb war der Fehler nur in einem
+   Browser zu sehen.
+
    Der gefuellte Bogen wird um --ring-w kuerzer gezeichnet, als der Anteil
    lang ist: die runden Kappen legen die Strichbreite wieder drauf. Ohne
    das waere jeder Ring um gut vier Prozentpunkte zu voll -- und die obersten
@@ -1963,8 +1973,8 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
    ========================================================================== */
 .v-ring {
     --ring-size: 140px;
-    --ring-w: 12;
-    --ring-c: 263.894;
+    --ring-w: 12px;
+    --ring-c: 263.894px;
     --ring-tone: var(--accent);
     --ring-val: 0;
     --ring-over: 0;
@@ -1986,7 +1996,7 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
        den Kappen, und „fast geschafft“ sah aus wie „geschafft“. Der
        negative dashoffset schiebt den Bogen um die halbe Kappe zurueck,
        damit er weiterhin exakt bei 12 Uhr anfaengt. */
-    stroke-dasharray: max(0, calc(var(--ring-val) * var(--ring-c) - var(--ring-w))) var(--ring-c);
+    stroke-dasharray: max(0px, calc(var(--ring-val) * var(--ring-c) - var(--ring-w))) var(--ring-c);
     stroke-dashoffset: calc(var(--ring-w) / -2);
     transition: stroke-dasharray 0.6s var(--ease);
 }
@@ -2049,7 +2059,7 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
    staerker ins Gewicht, weil eine Strichbreite an der halben Bogenlaenge
    knapp 9 % sind. */
 .v-ring--halb .v-ring-fill {
-    stroke-dasharray: max(0, calc(var(--ring-val) * var(--ring-c) / 2 - var(--ring-w))) var(--ring-c);
+    stroke-dasharray: max(0px, calc(var(--ring-val) * var(--ring-c) / 2 - var(--ring-w))) var(--ring-c);
     stroke-dashoffset: calc(var(--ring-w) / -2);
 }
 .v-ring--halb .v-ring-over { stroke-dashoffset: calc(var(--ring-c) / 2 * (1 - var(--ring-over))); }
@@ -2071,7 +2081,7 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
    `drop-shadow` wird an genau dieser Kante mit abgeschnitten -- auf dem
    Bildschirm stand ein hell leuchtendes Rechteck um den Bogen. Der Ring
    traegt seine Wirkung ueber Groesse und Strichbreite, nicht ueber Licht. */
-.v-ring--hero { --ring-size: 200px; --ring-w: 12; }
+.v-ring--hero { --ring-size: 200px; --ring-w: 12px; }
 .v-ring--hero .v-ring-val { font-size: var(--fs-display); }
 .v-ring--hero .v-ring-unit { font-size: 0.8125rem; }
 .v-ring--hero .v-ring-lbl { font-size: 0.75rem; margin-top: 4px; }
@@ -2080,7 +2090,7 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
    Kreis von 78 px passt „EIWEISS“, aber nicht „KOHLENHYDRATE“: das Wort
    brach ueber den Bogen und kreuzte ihn auf beiden Seiten. Innen steht nur
    die Zahl, und die ist immer kurz. */
-.v-ring--sm { --ring-size: 78px; --ring-w: 9; margin-bottom: 1.05rem; }
+.v-ring--sm { --ring-size: 78px; --ring-w: 9px; margin-bottom: 1.05rem; }
 .v-ring--sm .v-ring-val { font-size: 0.9375rem; }
 .v-ring--sm .v-ring-unit { font-size: 0.625rem; margin-top: 1px; }
 .v-ring--sm .v-ring-lbl {

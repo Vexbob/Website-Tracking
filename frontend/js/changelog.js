@@ -14,9 +14,10 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
-    { v: 'v2.11.10', date: '2026-09-22', title: 'Der Ring sagt wieder, wie weit es ist', notes: [
+    { v: 'v2.11.11', date: '2026-09-22', title: 'Der Ring sagt wieder, wie weit es ist', notes: [
         'Der Fortschrittsring war ab etwa 95 % geschlossen und damit von „geschafft“ nicht mehr zu unterscheiden.',
         'Das galt überall: im Sparziel wie in den Nährwerten, dort sogar noch früher.',
+        'Nachgezogen: in Firefox war der Ring bei jedem Wert ganz voll und sagte damit gar nichts.',
     ]},
     { v: 'v2.11.9', date: '2026-09-21', title: 'Hörregister lesbar, Blog-Editor wieder da', notes: [
         'Nachgezogen aus v2.11.2: der Blog-Editor öffnete seit dieser Version eine leere Seite — ein Tippfehler machte die ganze Datei unlesbar, und der Browser führte sie stumm nicht aus.',
