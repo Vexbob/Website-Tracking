@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.15.0', date: '2026-09-23', title: 'CS2: die Zeile sagt auf einen Blick, was sie ist', notes: [
+        'Die Art des Gegenstands steht als Zeichen statt als Wort — zwölf davon, von der Kiste bis zur Stickerkapsel.',
+        'Abnutzung und StatTrak tragen größere Plaketten: zwischen FN und BS liegt beim Preis der Faktor drei.',
+        '„Selbst gespielt“ ist weggefallen — seit die Kopfzeile die Itemanzahl nennt, sagte die Angabe nichts mehr.',
+    ]},
     { v: 'v2.14.0', date: '2026-09-23', title: 'CS2: der Bestand wird eine Tabelle', notes: [
         'Die Positionen stehen jetzt als Tabelle, sortierbar nach Name, Stückpreis, Gesamtwert, Anzahl, Typ und Preisstand.',
         'Anzahl und Preis ändert man in der Zeile selbst; ein Klick auf den Namen kopiert ihn für die Marktsuche.',

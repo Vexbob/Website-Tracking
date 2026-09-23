@@ -138,8 +138,8 @@ def frische(preis_am: Any, jetzt: Optional[datetime] = None) -> str:
 def summiere(zeilen: Iterable[dict], jetzt: Optional[datetime] = None) -> dict:
     """Kopfzahlen ueber einen Bestand.
 
-    ``zeilen`` sind dicts mit ``quantity``, ``price_eur``, ``playskin``,
-    ``priced_at`` und -- fuer die Aufteilung -- ``category_id``.
+    ``zeilen`` sind dicts mit ``quantity``, ``price_eur``, ``priced_at``
+    und -- fuer die Aufteilung -- ``category_id``.
 
     Unvollstaendige Zeilen zaehlen NICHT mit und werden getrennt gezaehlt. Eine
     Summe, die fehlende Preise als null mitnimmt, ist nicht vorsichtig, sondern
@@ -154,8 +154,6 @@ def summiere(zeilen: Iterable[dict], jetzt: Optional[datetime] = None) -> dict:
     """
     gesamt_brutto = Decimal("0")
     gesamt_netto = Decimal("0")
-    spiel_brutto = Decimal("0")
-    spiel_netto = Decimal("0")
     gueltig = 0
     unvollstaendig = 0
     veraltet = 0
@@ -171,9 +169,6 @@ def summiere(zeilen: Iterable[dict], jetzt: Optional[datetime] = None) -> dict:
         stueck += int(z.get("quantity") or 0)
         gesamt_brutto += b
         gesamt_netto += netto(b)
-        if z.get("playskin"):
-            spiel_brutto += b
-            spiel_netto += netto(b)
         if frische(z.get("priced_at"), jetzt) in ("alt", "sehr_alt", "ohne"):
             veraltet += 1
         if z.get("category_id") is not None:
@@ -181,15 +176,9 @@ def summiere(zeilen: Iterable[dict], jetzt: Optional[datetime] = None) -> dict:
 
     gesamt_brutto = cent(gesamt_brutto)
     gesamt_netto = cent(gesamt_netto)
-    spiel_brutto = cent(spiel_brutto)
-    spiel_netto = cent(spiel_netto)
     return {
         "brutto": gesamt_brutto,
         "netto": gesamt_netto,
-        "playskin_brutto": spiel_brutto,
-        "playskin_netto": spiel_netto,
-        "invest_brutto": cent(gesamt_brutto - spiel_brutto),
-        "invest_netto": cent(gesamt_netto - spiel_netto),
         # ``zeilen`` sind ALLE Positionen, ``positionen`` nur die, die einen
         # Wert beitragen. Die Kopfzahl nennt ``zeilen`` -- sonst stuende ueber
         # einer Liste mit 116 Eintraegen die Zahl 113, und der Unterschied

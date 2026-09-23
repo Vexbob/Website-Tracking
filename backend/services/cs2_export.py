@@ -54,14 +54,14 @@ async def _sec_cs2_positions(db, user_id: int) -> list[str]:
     """
     rows = await db.fetch(
         "SELECT c.name AS kategorie, i.name AS gegenstand, p.wear, p.stattrak, "
-        "       p.playskin, p.quantity, p.price_eur, p.priced_at "
+        "       p.quantity, p.price_eur, p.priced_at "
         "  FROM cs2_positions p "
         "  JOIN cs2_items i      ON i.id = p.item_id "
         "  JOIN cs2_categories c ON c.id = i.category_id "
         " WHERE p.user_id=$1 "
         " ORDER BY (p.quantity * p.price_eur) DESC NULLS LAST, i.name", user_id)
     out = ["# SEKTION: CS2 - Bestand",
-           "Kategorie;Gegenstand;Abnutzung;StatTrak;Selbst gespielt;"
+           "Kategorie;Gegenstand;Abnutzung;StatTrak;"
            "Stueckzahl;Preis je Stueck;Brutto;Nach Gebuehr;Preisstand"]
     for r in rows:
         # Dieselbe Rechnung wie ueberall sonst. Die Gebuehr hier noch einmal
@@ -73,7 +73,6 @@ async def _sec_cs2_positions(db, user_id: int) -> list[str]:
             f'{_f(r["kategorie"] or "")};{_f(r["gegenstand"] or "")};'
             f'{_f(r["wear"] or "")};'
             f'{_f("ja" if r["stattrak"] else "nein")};'
-            f'{_f("ja" if r["playskin"] else "nein")};'
             f'{_ganz(r["quantity"])};'
             f'{_euro(r["price_eur"])};{_euro(brutto)};{_euro(netto)};'
             f'{"" if r["priced_at"] is None else r["priced_at"].isoformat()}')
@@ -97,19 +96,17 @@ async def _sec_cs2_snapshots(db, user_id: int, date_from, date_to) -> list[str]:
         werte.append(date_to)
         bed += f" AND taken_on <= ${len(werte)}"
     rows = await db.fetch(
-        "SELECT taken_on, total_gross, total_net, playskin_gross, playskin_net, "
+        "SELECT taken_on, total_gross, total_net, "
         "       rows_valid, rows_incomplete, stale_rows, note "
         "  FROM cs2_snapshots "
         f" WHERE user_id=$1{bed} ORDER BY taken_on", *werte)
     out = ["# SEKTION: CS2 - Festgehaltene Staende",
-           "Datum;Brutto;Nach Gebuehr;Davon selbst gespielt (brutto);"
-           "Davon selbst gespielt (netto);Positionen;Unvollstaendig;"
+           "Datum;Brutto;Nach Gebuehr;Positionen;Unvollstaendig;"
            "Ueberfaellige Preise;Anmerkung"]
     for r in rows:
         out.append(
             f'{r["taken_on"].isoformat()};{_euro(r["total_gross"])};'
-            f'{_euro(r["total_net"])};{_euro(r["playskin_gross"])};'
-            f'{_euro(r["playskin_net"])};{_ganz(r["rows_valid"])};'
+            f'{_euro(r["total_net"])};{_ganz(r["rows_valid"])};'
             f'{_ganz(r["rows_incomplete"])};{_ganz(r["stale_rows"])};'
             f'{_f(r["note"] or "")}')
     out.append("")

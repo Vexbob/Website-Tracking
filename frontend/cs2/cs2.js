@@ -45,6 +45,10 @@ const API = {
                                         { method: 'POST', body: { daten, uebernehmen: !!tun } }),
 };
 
+/* Die langen Namen der Abnutzung, fuer den Tooltip am Tag. Gefuellt aus dem
+   Katalog, damit die Liste nur an einer Stelle steht (cs2_rechnung.py). */
+const WEAR_LANG = {};
+
 const state = {
     katalog: null,
     filter: { suche: '', kategorien: [], faellig: false },
@@ -66,6 +70,63 @@ const SPALTEN = {
     typ:   { abwaerts: false },
     alter: { abwaerts: false },   // aelteste zuerst -- das ist die offene Arbeit
 };
+
+/* Ein Zeichen je Art von Gegenstand. Bewusst hier und nicht in
+   ``/js/ikon.js``: das sind die Zeichen dieses Moduls, so wie
+   ``nav-switcher.js`` seine Modulzeichen bei sich fuehrt -- ein Kistensymbol
+   hat in einem Rezeptmodul nichts zu suchen.
+
+   Dieselbe Zeichenart wie ueberall in Vexbob: 24er-Raster, nur Linien,
+   Strichstaerke 1.7. Keine Emoji -- ein Emoji ist auf jedem Geraet eine
+   andere Zeichnung, in einer Farbe, die niemand gewaehlt hat, und faellt
+   dort, wo die Schrift es nicht kennt, auf einen leeren Kasten zurueck.
+
+   Gesucht wird ueber den kleingeschriebenen Kategorienamen; wer eine
+   Kategorie umbenennt, bekommt das Ersatzzeichen und keine Luecke. Die
+   deutschen Zweitnamen stehen dabei, weil die Kategorien umbenennbar sind. */
+const TYP_ZEICHEN = {
+    skin:              '<path d="M3 8.5h11.5l2 2.5H21v2.5h-3.5l-2 2.5h-2L12 21H8.5l1.5-5H5'
+                     + 'a2 2 0 0 1-2-2z"/><path d="M10.5 13.5h4"/>',
+    case:              '<rect x="3" y="6.5" width="18" height="13" rx="2"/>'
+                     + '<path d="M3 11h18"/><path d="M10.5 11v2.5h3V11"/>',
+    container:         '<path d="M12 3.2l8.2 4.4v8.8L12 20.8 3.8 16.4V7.6z"/>'
+                     + '<path d="M3.8 7.6L12 12l8.2-4.4M12 12v8.8"/>',
+    sticker:           '<path d="M4.5 5.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8.5l-5.5 5.5h-7.5'
+                     + 'a2 2 0 0 1-2-2z"/><path d="M19.5 14h-3.5a2 2 0 0 0-2 2v3.5"/>',
+    'sticker capsule': '<rect x="7" y="3.5" width="10" height="17" rx="5"/><path d="M7 12h10"/>',
+    agent:             '<circle cx="12" cy="8" r="3.5"/>'
+                     + '<path d="M5 20c0-3.5 3.1-5.5 7-5.5s7 2 7 5.5"/>',
+    'music kit':       '<path d="M9 18V5.5l10-2V16"/>'
+                     + '<ellipse cx="6.5" cy="18" rx="2.5" ry="2.2"/>'
+                     + '<ellipse cx="16.5" cy="16" rx="2.5" ry="2.2"/>',
+    graffiti:          '<rect x="7.5" y="8.5" width="7" height="12" rx="1.2"/>'
+                     + '<path d="M9.5 8.5V6h3v2.5"/><circle cx="17.5" cy="4.5" r=".9"/>'
+                     + '<circle cx="20" cy="7" r=".9"/><circle cx="17.5" cy="9.5" r=".9"/>',
+    patch:             '<path d="M12 3.2l7 2.8v5.6c0 4.2-2.9 7.6-7 9.2-4.1-1.6-7-5-7-9.2V6z"/>',
+    charm:             '<circle cx="12" cy="5.5" r="2.5"/><path d="M12 8v2"/>'
+                     + '<path d="M12 10l5 4-5 6-5-6z"/>',
+    collectible:       '<circle cx="12" cy="15" r="5.2"/>'
+                     + '<path d="M8.6 10.9L6 3.2h12l-2.6 7.7"/><path d="M12 3.2v3.8"/>',
+    // Ohne Treffer: ein Anhaenger. Er sagt „irgendein Gegenstand“ und nicht
+    // „hier fehlt etwas“.
+    '': '<path d="M12.5 3.5H20v7.5l-8.8 8.8a1.6 1.6 0 0 1-2.3 0l-5.2-5.2a1.6 1.6 0 0 1 0-2.3z"/>'
+      + '<circle cx="16.5" cy="7" r="1.1"/>',
+};
+
+/* Deutsche Zweitnamen: die Kategorien lassen sich umbenennen. */
+const TYP_ZWEITNAMEN = {
+    kiste: 'case', kisten: 'case', waffe: 'skin', waffen: 'skin',
+    aufkleber: 'sticker', kapsel: 'sticker capsule', anhänger: 'charm',
+    behälter: 'container', sammlerstück: 'collectible', aufnäher: 'patch',
+};
+
+function typZeichen(name) {
+    const k = String(name || '').trim().toLowerCase();
+    const pfad = TYP_ZEICHEN[k] || TYP_ZEICHEN[TYP_ZWEITNAMEN[k]] || TYP_ZEICHEN[''];
+    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+        stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+        stroke-linejoin="round" aria-hidden="true">${pfad}</svg>`;
+}
 
 /* ---------------------------------------------------------------- Werkzeug */
 
@@ -268,10 +329,11 @@ function punktHtml(p) {
 }
 
 function zeileHtml(p) {
+    // StatTrak zuerst, dann die Abnutzung -- dieselbe Reihenfolge, in der sie
+    // im Marktnamen stehen: „StatTrak™ AK-47 | Ice Coaled (Minimal Wear)“.
     const marken = [
-        p.stattrak ? '<span class="cs-marke cs-marke--st">StatTrak™</span>' : '',
-        p.playskin ? '<span class="cs-marke cs-marke--ps">gespielt</span>' : '',
-        p.wear ? `<span class="cs-marke">${esc(p.wear)}</span>` : '',
+        p.stattrak ? '<span class="cs-tag cs-tag--st">StatTrak™</span>' : '',
+        p.wear ? `<span class="cs-tag cs-tag--wear" title="${esc(WEAR_LANG[p.wear] || p.wear)}">${esc(p.wear)}</span>` : '',
     ].filter(Boolean).join(' ');
     return `<tr class="${markeFuer(p)}${p.unvollstaendig ? ' cs-unvollstaendig' : ''}"
                 data-zeile="${p.id}">
@@ -298,7 +360,10 @@ function zeileHtml(p) {
                        aria-label="Anzahl für ${esc(p.item_name)}">
             </span>
         </td>
-        <td class="cs-sp-typ">${esc(p.category_name)}</td>
+        <td class="cs-sp-typ" data-label="Typ">
+            <span class="cs-typ" role="img" aria-label="${esc(p.category_name)}"
+                  title="${esc(p.category_name)}">${typZeichen(p.category_name)}</span>
+        </td>
         <td class="cs-alter" title="${p.priced_at ? esc(tagDatum(p.priced_at)) : 'nie'}">${esc(alterText(p))}</td>
         <td class="cs-sp-tun">
             <button type="button" class="cs-stift" data-position="${p.id}"
@@ -762,7 +827,6 @@ function formular(position) {
         </label>
         <div class="cs-schalter">
             <label><input type="checkbox" name="stattrak"${position && position.stattrak ? ' checked' : ''}> StatTrak™</label>
-            <label><input type="checkbox" name="playskin"${position && position.playskin ? ' checked' : ''}> Wird selbst gespielt</label>
         </div>
         <div class="cs-form-fuss">
             ${istNeu ? '' : '<button type="button" class="v-btn" data-weg="1">Löschen</button>'}
@@ -783,7 +847,6 @@ function formular(position) {
         if (!kat) return;
         form.querySelector('[name=wear]').closest('label').hidden = !kat.supports_wear;
         form.querySelector('[name=stattrak]').closest('label').hidden = !kat.supports_stattrak;
-        form.querySelector('[name=playskin]').closest('label').hidden = !kat.supports_playskin;
         liste.innerHTML = k.items.filter((i) => String(i.category_id) === String(katFeld.value))
             .map((i) => `<option value="${esc(i.name)}"></option>`).join('');
     };
@@ -815,7 +878,6 @@ function formular(position) {
             item_name: (f.get('item_name') || '').trim(),
             wear: f.get('wear') || null,
             stattrak: form.querySelector('[name=stattrak]').checked,
-            playskin: form.querySelector('[name=playskin]').checked,
             quantity: f.get('quantity') === '' ? null : Number(f.get('quantity')),
             price_eur: (f.get('price_eur') || '').trim() || null,
         };
@@ -981,6 +1043,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             () => location.reload());
         return;
     }
+    (state.katalog.wear || []).forEach((w) => { WEAR_LANG[w.wert] = w.label; });
     zeichneFilterKnoepfe();
     zeigeReiter((location.hash || '').replace('#', '') || 'bestand', true);
     await ladeBestand();

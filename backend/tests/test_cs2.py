@@ -10,6 +10,7 @@ Drei Gruppen, nach dem Muster von ``test_chess.py``:
    fest, den dieses Modul hatte -- siehe ``test_die_signatur_faengt_auch_leere_abnutzung``.
 """
 import asyncio
+import ast
 import os
 import pathlib
 import re
@@ -45,9 +46,9 @@ def test_netto_zieht_die_gebuehr_ab():
 
 def test_summe_zaehlt_unvollstaendige_getrennt():
     summe = r.summiere([
-        {"quantity": 2, "price_eur": Decimal("10.00"), "playskin": False},
-        {"quantity": None, "price_eur": Decimal("5.00"), "playskin": False},
-        {"quantity": 1, "price_eur": None, "playskin": False},
+        {"quantity": 2, "price_eur": Decimal("10.00")},
+        {"quantity": None, "price_eur": Decimal("5.00")},
+        {"quantity": 1, "price_eur": None},
     ])
     assert summe["brutto"] == Decimal("20.00")
     assert summe["positionen"] == 1
@@ -61,21 +62,27 @@ def test_netto_summiert_sich_aus_den_zeilen():
     3 x 0,06 = 0,18 gegen 0,85 x 0,21 = 0,18 -- hier gleich. Bei 0,03:
     3 x 0,03 = 0,09 gegen 0,85 x 0,09 = 0,08. Genau dieser Fall wird geprueft.
     """
-    zeilen = [{"quantity": 1, "price_eur": Decimal("0.03"), "playskin": False}] * 3
+    zeilen = [{"quantity": 1, "price_eur": Decimal("0.03")}] * 3
     summe = r.summiere(zeilen)
     einzeln = sum(r.netto(r.brutto(z["quantity"], z["price_eur"])) for z in zeilen)
     assert summe["netto"] == einzeln
 
 
-def test_playskin_zaehlt_im_gesamtwert_mit():
+def test_playskin_gibt_es_nicht_mehr():
+    """„Selbst gespielt“ ist mit 053 weggefallen -- auch aus der Rechnung.
+
+    Solange die Kopfzeile den gespielten Anteil auswies, war die Trennung eine
+    Auskunft. Seit dort die Itemanzahl steht, war sie nur noch eine Spalte,
+    die mitgeschleppt wurde. Ein uebriggebliebenes ``playskin`` an einer Zeile
+    darf die Summe jedenfalls nicht mehr veraendern.
+    """
     summe = r.summiere([
         {"quantity": 1, "price_eur": Decimal("100.00"), "playskin": True},
-        {"quantity": 1, "price_eur": Decimal("50.00"), "playskin": False},
+        {"quantity": 1, "price_eur": Decimal("50.00")},
     ])
     assert summe["brutto"] == Decimal("150.00")
-    assert summe["playskin_brutto"] == Decimal("100.00")
-    assert summe["invest_brutto"] == Decimal("50.00")
-    assert summe["playskin_brutto"] + summe["invest_brutto"] == summe["brutto"]
+    for weg in ("playskin_brutto", "playskin_netto", "invest_brutto", "invest_netto"):
+        assert weg not in summe, f"{weg} sollte es nicht mehr geben"
 
 
 @pytest.mark.parametrize("eingabe,erwartet", [
@@ -154,15 +161,14 @@ class AttrappeDB:
         self._pruefe(sql, args)
         if "FROM cs2_categories" in sql:
             return [{"id": 1, "name": "Skin", "supports_wear": True,
-                     "supports_stattrak": True, "supports_playskin": True,
-                     "sort_order": 0}]
+                     "supports_stattrak": True, "sort_order": 0}]
         if "FROM cs2_items" in sql:
             return [{"id": 3, "category_id": 1, "name": "AK-47 | Frontside Misty",
                      "positionen": 1}]
         if "FROM cs2_snapshots" in sql:
             return []
         return [{"id": 11, "item_id": 3, "wear": "FT",
-                 "stattrak": False, "playskin": False, "quantity": 2,
+                 "stattrak": False, "quantity": 2,
                  "price_eur": Decimal("16.10"),
                  "priced_at": datetime.now(timezone.utc), "created_at": None,
                  "item_name": "AK-47 | Frontside Misty", "category_id": 1,
@@ -251,14 +257,46 @@ def test_sortierung_faellt_auf_wert_zurueck():
 def test_regeln_raeumen_statt_abzulehnen():
     """Ein Case hat keine Abnutzung -- die Angabe faellt weg, die Position entsteht."""
     cr = _router()
-    ohne = {"supports_wear": False, "supports_stattrak": False, "supports_playskin": False}
-    assert cr._regeln_anwenden(ohne, "FT", True, True) == (None, False, False)
-    mit = {"supports_wear": True, "supports_stattrak": True, "supports_playskin": True}
-    assert cr._regeln_anwenden(mit, "FT", True, False) == ("FT", True, False)
+    ohne = {"supports_wear": False, "supports_stattrak": False}
+    assert cr._regeln_anwenden(ohne, "FT", True) == (None, False)
+    mit = {"supports_wear": True, "supports_stattrak": True}
+    assert cr._regeln_anwenden(mit, "FT", True) == ("FT", True)
 
 
 SQL_051 = BACKEND / "migrations" / "sql" / "051_cs2.sql"
 SQL_052 = BACKEND / "migrations" / "sql" / "052_cs2_ohne_lager.sql"
+SQL_053 = BACKEND / "migrations" / "sql" / "053_cs2_ohne_playskin.sql"
+
+QUELLEN = (
+    BACKEND / "routers" / "cs2_router.py",
+    BACKEND / "services" / "cs2_transfer.py",
+    BACKEND / "services" / "cs2_export.py",
+    BACKEND / "services" / "cs2_rechnung.py",
+)
+
+
+def _nur_code(pfad) -> str:
+    """Der Quelltext ohne Kommentare und ohne Docstrings.
+
+    Die Zeichenketten im Code bleiben stehen -- in ihnen steht das SQL, und
+    genau darin suchen die beiden Waechter unten. Nur die erklaerenden Texte
+    fallen weg: sie nennen die weggefallenen Spalten ausdruecklich beim Namen,
+    und ein Waechter, der seine eigene Begruendung als Verstoss liest, laesst
+    sich nur noch durch Schweigen zufriedenstellen.
+    """
+    quelle = pfad.read_text(encoding="utf-8")
+    zeilen = quelle.splitlines()
+    baum = ast.parse(quelle)
+    for knoten in ast.walk(baum):
+        if not isinstance(knoten, (ast.Module, ast.ClassDef,
+                                   ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        erste = (knoten.body or [None])[0]
+        if (isinstance(erste, ast.Expr) and isinstance(erste.value, ast.Constant)
+                and isinstance(erste.value.value, str)):
+            for nr in range(erste.lineno - 1, erste.end_lineno):
+                zeilen[nr] = ""
+    return "\n".join(z for z in zeilen if not z.lstrip().startswith("#"))
 
 
 def _ohne_kommentare(pfad) -> str:
@@ -282,8 +320,7 @@ def test_die_signatur_traegt_kein_lager_mehr():
     for datei in (BACKEND / "routers" / "cs2_router.py",
                   BACKEND / "services" / "cs2_transfer.py",
                   BACKEND / "services" / "cs2_export.py"):
-        code = "\n".join(z for z in datei.read_text(encoding="utf-8").splitlines()
-                         if not z.lstrip().startswith("#"))
+        code = _nur_code(datei)
         assert "storage_id" not in code, f"{datei.name} kennt noch storage_id"
         assert "cs2_storages" not in code, f"{datei.name} kennt noch cs2_storages"
 
@@ -323,9 +360,9 @@ def test_jedes_on_conflict_auf_positionen_nennt_denselben_ausdruck():
 def test_unbekannte_abnutzung_wird_abgelehnt():
     cr = _router()
     from fastapi import HTTPException
-    mit = {"supports_wear": True, "supports_stattrak": False, "supports_playskin": False}
+    mit = {"supports_wear": True, "supports_stattrak": False}
     with pytest.raises(HTTPException) as fehler:
-        cr._regeln_anwenden(mit, "XX", False, False)
+        cr._regeln_anwenden(mit, "XX", False)
     assert fehler.value.status_code == 400
 
 
@@ -385,14 +422,16 @@ def test_jede_unlesbare_angabe_nennt_ihre_position(feld, wert, stueck):
 def test_gelesene_angaben_haben_die_richtigen_typen():
     daten = t.pruefen(_dok(positionen=[{
         "kategorie": "Skin", "gegenstand": "AK-47 | Frontside Misty", "wear": "FT",
-        "stattrak": False, "playskin": True,
+        "stattrak": True, "playskin": True,
         "menge": "3", "preis": "16.10", "preis_am": "2026-09-22T10:13:16+00:00",
     }]))
     p = daten["positionen"][0]
     assert p["menge"] == 3 and isinstance(p["menge"], int)
     assert p["preis"] == Decimal("16.10")
     assert p["preis_am"].tzinfo is not None
-    assert p["playskin"] is True
+    assert p["stattrak"] is True
+    # ``playskin`` wird gelesen und verworfen, nicht abgelehnt.
+    assert "playskin" not in p
 
 
 def test_ein_zeitpunkt_ohne_zone_gilt_als_utc():
@@ -507,3 +546,35 @@ def test_kopfzahl_und_liste_zaehlen_dieselbe_menge():
     assert s["positionen"] == 1
     assert s["unvollstaendig"] == 2
     assert s["zeilen"] == s["positionen"] + s["unvollstaendig"]
+
+
+def test_die_signatur_traegt_kein_playskin_mehr():
+    """Nach 053 ist die Signatur (Nutzer, Gegenstand, Wear, StatTrak).
+
+    Derselbe Waechter wie fuer die Lager: bleibt irgendwo ein ``playskin``
+    stehen, findet das ``ON CONFLICT`` den Index nicht mehr, und der Import
+    legt Dubletten an, statt zusammenzufuehren.
+    """
+    sql = _ohne_kommentare(SQL_053)
+    assert "cs2_positions  DROP COLUMN IF EXISTS playskin" in sql
+    assert "cs2_categories DROP COLUMN IF EXISTS supports_playskin" in sql
+    assert "COALESCE(wear, \'\'::text), stattrak)" in sql
+    for datei in QUELLEN:
+        code = _nur_code(datei)
+        assert "playskin" not in code, f"{datei.name} kennt noch playskin"
+
+
+def test_die_beiden_wegfaelle_fuehren_zusammen_statt_zu_ueberschreiben():
+    """Der stille Verlust, gegen den 052 und 053 denselben Schritt brauchen.
+
+    Faellt eine Spalte aus der Signatur, werden vorher verschiedene Zeilen
+    gleich. Ohne das Zusammenfuehren nimmt ``ON CONFLICT DO UPDATE`` die
+    zuletzt eingefuegte, und die erste ist weg -- der Bestand haette hinterher
+    weniger Stuecke, ohne dass es irgendwo steht.
+    """
+    for datei in (SQL_052, SQL_053):
+        sql = _ohne_kommentare(datei)
+        assert "sum(quantity) OVER" in sql, f"{datei.name} addiert die Mengen nicht"
+        assert "row_number() OVER" in sql, f"{datei.name} kuert keine Siegerzeile"
+        assert "priced_at DESC NULLS LAST" in sql, \
+            f"{datei.name}: der Preis muss von der zuletzt gepflegten Zeile kommen"

@@ -90,24 +90,49 @@
    nicht fertig. */
 .cs-unvollstaendig .cs-gesamt { color: var(--text-4); }
 
-/* Merkmale am Gegenstand: StatTrak, selbst gespielt, Abnutzung. Kleine
-   Plaketten neben dem Namen, keine eigenen Spalten -- die waeren die ersten,
-   die auf dem Handy hinter dem Rand liegen. */
-.cs-marke {
+/* Merkmale am Gegenstand: StatTrak und Abnutzung. Plaketten neben dem
+   Namen, keine eigenen Spalten -- die waeren die ersten, die auf dem Handy
+   hinter dem Rand liegen.
+
+   Sie tragen bewusst Gewicht: FN und BS sind der Unterschied zwischen zwei
+   Preisen um den Faktor drei, und eine Angabe, nach der man suchen muss, hat
+   man beim Ueberfliegen nicht gelesen. Deshalb 0.75rem statt 0.625 und
+   Schriftstaerke 800 -- dieselbe Groesse wie die Metazeile daneben.
+
+   Zwei Rollen, zwei Farben: der Modulton gehoert StatTrak (Identitaet), die
+   Abnutzung bleibt neutral. Eine Farbskala von FN nach BS waere die
+   naheliegende Idee und die falsche -- Gelb und Rot tragen an dieser Zeile
+   schon das Alter des Preises, und zwei Bedeutungen auf einer Farbe sind
+   keine. */
+.cs-tag {
     display: inline-flex;
     align-items: center;
-    padding: 0.05rem 0.35rem;
-    border-radius: 5px;
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    background: var(--surface-2);
-    color: var(--text-3);
-    border: 1px solid var(--line);
+    padding: 0.1rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
     white-space: nowrap;
 }
-.cs-marke--st { background: var(--m-cs2-soft); color: var(--cs2-ton); border-color: transparent; }
-.cs-marke--ps { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.cs-tag--wear { background: var(--surface-3, var(--surface-2)); color: var(--text-1); border: 1px solid var(--border); }
+.cs-tag--st   { background: var(--m-cs2-soft); color: var(--cs2-ton); }
+
+/* Die Art des Gegenstands als Zeichen statt als Wort. Zwoelf Kategorien
+   ergeben zwoelf Woerter unterschiedlicher Laenge in einer Spalte, die
+   dadurch die breiteste wird -- und das Wort „Sticker Capsule“ sagt beim
+   Ueberfliegen nicht mehr als seine Form. Der Name steht im title und im
+   aria-label; ohne die waere die Spalte fuer ein Vorleseprogramm leer. */
+.cs-typ {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* --text-2 und nicht --text-3: das Zeichen traegt hier die Angabe, die
+       vorher das Wort trug. --text-4 waere ohnehin verboten, --text-3 ist
+       die Stufe fuer Beiwerk. */
+    color: var(--text-2);
+}
+.cs-tabelle tr:hover .cs-typ { color: var(--text-1); }
 
 /* ---------- Die Tabelle ---------- */
 /* Waagerecht scrollbar statt schmaler: sechs Spalten passen auf kein Telefon,
@@ -129,6 +154,9 @@
 .cs-sp-name {
     display: table-cell;
     max-width: 24rem;
+    /* Name und Plaketten gehoeren zusammen: der Umbruch dazwischen macht aus
+       einer Zeile zwei und laesst „BS“ unter dem Namen haengen. */
+    white-space: nowrap;
 }
 .cs-sp-name > * { vertical-align: middle; }
 .cs-sp-tun { width: 2.5rem; text-align: right; }
@@ -141,7 +169,14 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
+    /* ``width: auto; margin: 0`` sind Pflicht, keine Zier: die Form-Base in
+       css/style.css gibt JEDEM Knopf display:block, width:100% und
+       margin-bottom:0.75rem. Ohne die beiden Zeilen nimmt der Name die ganze
+       Spalte ein -- die Plakette daneben faellt dann in die naechste Zeile --
+       und die Tabellenzeile wird 69 statt 40 Pixel hoch. */
+    width: auto;
     max-width: 22rem;
+    margin: 0;
     padding: 0;
     border: 0;
     background: none;
@@ -155,6 +190,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    /* ``min-width: 0`` ist der Schalter, ohne den die drei Zeilen darueber
+       nichts tun: ein Flex-Kind hat von sich aus ``min-width: auto`` und
+       schrumpft deshalb nie unter seine Inhaltsbreite -- die Ellipse kaeme
+       nie zum Zug, der lange Name schoebe stattdessen die Plaketten aus der
+       Spalte. */
+    min-width: 0;
 }
 .cs-name:hover .cs-name-text { text-decoration: underline dotted; }
 .cs-name:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
@@ -201,6 +242,8 @@
     justify-content: center;
     width: 1.75rem;
     height: 1.75rem;
+    /* Wie oben: sonst traegt der Stift den margin-bottom der Form-Base. */
+    margin: 0;
     padding: 0;
     border: 0;
     border-radius: 6px;
@@ -262,7 +305,8 @@
     .cs-sp-typ    { grid-area: typ; }
     .cs-alter     { grid-area: alter; }
     .cs-sp-tun    { grid-area: tun; width: auto; }
-    .cs-sp-typ, .cs-alter { font-size: 0.75rem; color: var(--text-3); }
+    .cs-alter { font-size: 0.75rem; color: var(--text-3); }
+    .cs-sp-typ { display: flex; align-items: center; }
 
     /* Ohne Kopfzeile sagt nichts mehr, ob eine Zahl Stueckpreis oder Summe
        ist. Die Beschriftung kommt aus data-label und steht nur hier. */

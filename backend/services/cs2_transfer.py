@@ -9,23 +9,24 @@ entweder nichts oder das Falsche. Verknuepft wird ueber Namen -- Kategorie
 und Gegenstand --, und die legt der Import an, wenn es sie noch nicht gibt.
 
     {
-      "modul": "cs2", "fassung": 2, "erzeugt_am": "2026-09-23T10:00:00+00:00",
+      "modul": "cs2", "fassung": 3, "erzeugt_am": "2026-09-23T10:00:00+00:00",
       "kategorien":   [{"name": "Skin", "wear": true, "stattrak": true,
-                        "playskin": true, "reihenfolge": 0}],
+                        "reihenfolge": 0}],
       "gegenstaende": [{"kategorie": "Skin", "name": "AK-47 | Frontside Misty"}],
       "positionen":   [{"kategorie": "Skin", "gegenstand": "AK-47 | Frontside Misty",
-                        "wear": "FT", "stattrak": false, "playskin": true,
+                        "wear": "FT", "stattrak": false,
                         "menge": 1, "preis": "16.10",
                         "preis_am": "2026-09-22T10:13:16+00:00"}],
       "staende":      [{"datum": "2026-09-22", "brutto": "3089.81",
                         "je_kategorie": {"Case": "2520.21", …}, …}]
     }
 
-**Fassung 1 wird weiter gelesen.** Sie trug an jeder Position noch ein
-``lager``; seit dem Wegfall der Lagerzuordnung gehoert es nicht mehr zur
-Signatur. Der Import ignoriert das Feld -- und fuehrt Zeilen, die sich nur
-darin unterschieden, zusammen, statt sie einander ueberschreiben zu lassen.
-Siehe ``_zusammenfuehren``.
+**Die aelteren Fassungen werden weiter gelesen.** Fassung 1 trug an jeder
+Position noch ein ``lager``, Fassung 1 und 2 zusaetzlich ein ``playskin``;
+beide gehoeren seit 052 und 053 nicht mehr zur Signatur. Der Import
+ignoriert die Felder -- und fuehrt Zeilen, die sich nur darin unterschieden,
+zusammen, statt sie einander ueberschreiben zu lassen. Siehe
+``_zusammenfuehren``.
 
 Zwei Regeln, die den Import ungefaehrlich halten:
 
@@ -43,8 +44,8 @@ from typing import Optional
 # Was ``aufnehmen`` schreibt. ``LESBAR`` sagt, was ``pruefen`` annimmt: die
 # alte Fassung bleibt lesbar, weil sonst eine Datei wertlos waere, die jemand
 # vor dem Wegfall der Lager erzeugt hat.
-FASSUNG = 2
-LESBAR = (1, 2)
+FASSUNG = 3
+LESBAR = (1, 2, 3)
 
 WEAR_WERTE = ["FN", "MW", "FT", "WW", "BS"]
 
@@ -60,7 +61,7 @@ class TransferFehler(Exception):
 async def aufnehmen(db, user_id: int) -> dict:
     """Den ganzen Bestand als Uebertragungsdokument."""
     kategorien = await db.fetch(
-        "SELECT name, supports_wear, supports_stattrak, supports_playskin, sort_order "
+        "SELECT name, supports_wear, supports_stattrak, sort_order "
         "  FROM cs2_categories WHERE user_id=$1 ORDER BY sort_order, name", user_id)
     items = await db.fetch(
         "SELECT c.name AS kategorie, i.name FROM cs2_items i "
@@ -68,13 +69,13 @@ async def aufnehmen(db, user_id: int) -> dict:
         " WHERE i.user_id=$1 ORDER BY c.name, i.name", user_id)
     positionen = await db.fetch(
         "SELECT c.name AS kategorie, i.name AS gegenstand, p.wear, p.stattrak, "
-        "       p.playskin, p.quantity, p.price_eur, p.priced_at "
+        "       p.quantity, p.price_eur, p.priced_at "
         "  FROM cs2_positions p "
         "  JOIN cs2_items i      ON i.id = p.item_id "
         "  JOIN cs2_categories c ON c.id = i.category_id "
         " WHERE p.user_id=$1 ORDER BY c.name, i.name", user_id)
     staende = await db.fetch(
-        "SELECT id, taken_on, total_gross, total_net, playskin_gross, playskin_net, "
+        "SELECT id, taken_on, total_gross, total_net, "
         "       rows_valid, rows_incomplete, stale_rows, note "
         "  FROM cs2_snapshots WHERE user_id=$1 ORDER BY taken_on", user_id)
     # Die Aufteilung je Stand -- wieder ueber den Namen, nicht ueber die id.
@@ -93,12 +94,11 @@ async def aufnehmen(db, user_id: int) -> dict:
         "erzeugt_am": datetime.now(timezone.utc).isoformat(),
         "kategorien": [{"name": r["name"], "wear": r["supports_wear"],
                         "stattrak": r["supports_stattrak"],
-                        "playskin": r["supports_playskin"],
                         "reihenfolge": r["sort_order"]} for r in kategorien],
         "gegenstaende": [{"kategorie": r["kategorie"], "name": r["name"]} for r in items],
         "positionen": [{
             "kategorie": r["kategorie"], "gegenstand": r["gegenstand"],
-            "wear": r["wear"], "stattrak": r["stattrak"], "playskin": r["playskin"],
+            "wear": r["wear"], "stattrak": r["stattrak"],
             "menge": r["quantity"],
             "preis": None if r["price_eur"] is None else str(r["price_eur"]),
             "preis_am": None if r["priced_at"] is None else r["priced_at"].isoformat(),
@@ -106,8 +106,6 @@ async def aufnehmen(db, user_id: int) -> dict:
         "staende": [{
             "datum": r["taken_on"].isoformat(),
             "brutto": str(r["total_gross"]), "netto": str(r["total_net"]),
-            "playskin_brutto": str(r["playskin_gross"]),
-            "playskin_netto": str(r["playskin_net"]),
             "positionen": r["rows_valid"], "unvollstaendig": r["rows_incomplete"],
             "veraltet": r["stale_rows"], "notiz": r["note"],
             "je_kategorie": aufteilung.get(r["id"], {}),
@@ -189,8 +187,6 @@ def _staende_pruefen(roh) -> list:
             "datum": _datum(s["datum"], wo),
             "brutto": _betrag(s.get("brutto"), wo) or Decimal("0"),
             "netto": _betrag(s.get("netto"), wo) or Decimal("0"),
-            "playskin_brutto": _betrag(s.get("playskin_brutto"), wo) or Decimal("0"),
-            "playskin_netto": _betrag(s.get("playskin_netto"), wo) or Decimal("0"),
             "positionen": _ganz(s.get("positionen"), wo),
             "unvollstaendig": _ganz(s.get("unvollstaendig"), wo),
             "veraltet": _ganz(s.get("veraltet"), wo),
@@ -242,12 +238,13 @@ def pruefen(dok) -> dict:
                 raise TransferFehler(f"{wo}: „{p.get('menge')}“ ist keine Stückzahl.")
             if menge < 0:
                 raise TransferFehler(f"{wo}: eine Stückzahl unter null ergibt keinen Sinn.")
-        # ``lager`` aus Fassung 1 wird bewusst nicht uebernommen: es gehoert
-        # nicht mehr zur Signatur. Es abzulehnen waere haerter als noetig --
-        # ein Feld zu viel macht eine Datei nicht unlesbar.
+        # ``lager`` (Fassung 1) und ``playskin`` (1 und 2) werden bewusst
+        # nicht uebernommen: sie gehoeren nicht mehr zur Signatur. Sie
+        # abzulehnen waere haerter als noetig -- ein Feld zu viel macht eine
+        # Datei nicht unlesbar.
         sauber.append({
             "kategorie": kat, "gegenstand": name, "wear": wear,
-            "stattrak": bool(p.get("stattrak")), "playskin": bool(p.get("playskin")),
+            "stattrak": bool(p.get("stattrak")),
             "menge": menge,
             "preis": _betrag(p.get("preis"), wo),
             "preis_am": _zeitpunkt(p.get("preis_am"), wo),
@@ -266,9 +263,10 @@ def pruefen(dok) -> dict:
 def _zusammenfuehren(positionen: list) -> tuple:
     """Zeilen mit gleicher Signatur zu einer machen -- und sagen, wie viele.
 
-    Noetig fuer Fassung 1: dort konnte derselbe Gegenstand in zwei Lagern
-    stehen, und ohne diesen Schritt traefen beide Zeilen im Import auf
-    dieselbe Signatur. ``ON CONFLICT DO UPDATE`` nimmt dann die zuletzt
+    Noetig fuer die aelteren Fassungen: dort konnte derselbe Gegenstand in
+    zwei Lagern stehen (1) oder einmal gespielt und einmal nicht (1 und 2),
+    und ohne diesen Schritt traefen beide Zeilen im Import auf dieselbe
+    Signatur. ``ON CONFLICT DO UPDATE`` nimmt dann die zuletzt
     eingefuegte, und die erste waere STILL verschwunden -- der Bestand haette
     hinterher weniger Stuecke, ohne dass es irgendwo staende.
 
@@ -279,7 +277,7 @@ def _zusammenfuehren(positionen: list) -> tuple:
     raus: dict = {}
     doppelt = 0
     for p in positionen:
-        s = (p["kategorie"], p["gegenstand"], p["wear"], p["stattrak"], p["playskin"])
+        s = (p["kategorie"], p["gegenstand"], p["wear"], p["stattrak"])
         alt = raus.get(s)
         if alt is None:
             raus[s] = dict(p)
@@ -306,17 +304,17 @@ def _zusammenfuehren(positionen: list) -> tuple:
 async def _bestand_nach_signatur(db, user_id: int) -> dict:
     rows = await db.fetch(
         "SELECT c.name AS kategorie, i.name AS gegenstand, p.wear, p.stattrak, "
-        "       p.playskin, p.quantity, p.price_eur "
+        "       p.quantity, p.price_eur "
         "  FROM cs2_positions p "
         "  JOIN cs2_items i      ON i.id = p.item_id "
         "  JOIN cs2_categories c ON c.id = i.category_id "
         " WHERE p.user_id=$1", user_id)
-    return {(r["kategorie"], r["gegenstand"], r["wear"], r["stattrak"],
-             r["playskin"]): r for r in rows}
+    return {(r["kategorie"], r["gegenstand"], r["wear"], r["stattrak"]): r
+            for r in rows}
 
 
 def _signatur(p: dict) -> tuple:
-    return (p["kategorie"], p["gegenstand"], p["wear"], p["stattrak"], p["playskin"])
+    return (p["kategorie"], p["gegenstand"], p["wear"], p["stattrak"])
 
 
 async def vorschau(db, user_id: int, daten: dict) -> dict:
@@ -383,15 +381,14 @@ async def einspielen(db, user_id: int, daten: dict) -> dict:
             r = regeln.get(name, {})
             kat_id[name] = await db.fetchval(
                 "INSERT INTO cs2_categories (user_id, name, supports_wear, "
-                "       supports_stattrak, supports_playskin, sort_order) "
-                "VALUES ($1,$2,$3,$4,$5,$6) "
+                "       supports_stattrak, sort_order) "
+                "VALUES ($1,$2,$3,$4,$5) "
                 "ON CONFLICT (user_id, name) DO UPDATE SET "
                 "       supports_wear=EXCLUDED.supports_wear, "
-                "       supports_stattrak=EXCLUDED.supports_stattrak, "
-                "       supports_playskin=EXCLUDED.supports_playskin "
+                "       supports_stattrak=EXCLUDED.supports_stattrak "
                 "RETURNING id",
                 user_id, name, bool(r.get("wear")), bool(r.get("stattrak")),
-                bool(r.get("playskin")), int(r.get("reihenfolge") or 0))
+                int(r.get("reihenfolge") or 0))
 
         item_id = {}
         for g in daten["gegenstaende"]:
@@ -411,18 +408,18 @@ async def einspielen(db, user_id: int, daten: dict) -> dict:
                     "RETURNING id", user_id, kat_id[p["kategorie"]], p["gegenstand"])
             war_da = await db.fetchval(
                 "SELECT 1 FROM cs2_positions WHERE user_id=$1 AND item_id=$2 "
-                "  AND wear IS NOT DISTINCT FROM $3 AND stattrak=$4 AND playskin=$5",
-                user_id, item_id[schluessel], p["wear"], p["stattrak"], p["playskin"])
+                "  AND wear IS NOT DISTINCT FROM $3 AND stattrak=$4",
+                user_id, item_id[schluessel], p["wear"], p["stattrak"])
             await db.execute(
                 "INSERT INTO cs2_positions (user_id, item_id, wear, "
-                "       stattrak, playskin, quantity, price_eur, priced_at) "
-                "VALUES ($1,$2,$3,$4,$5,$6::int,$7::numeric,$8) "
-                "ON CONFLICT (user_id, item_id, COALESCE(wear, ''::text), stattrak, playskin) "
+                "       stattrak, quantity, price_eur, priced_at) "
+                "VALUES ($1,$2,$3,$4,$5::int,$6::numeric,$7) "
+                "ON CONFLICT (user_id, item_id, COALESCE(wear, ''::text), stattrak) "
                 "DO UPDATE SET quantity=EXCLUDED.quantity, "
                 "              price_eur=EXCLUDED.price_eur, "
                 "              priced_at=EXCLUDED.priced_at",
                 user_id, item_id[schluessel], p["wear"], p["stattrak"],
-                p["playskin"], p["menge"], p["preis"], p["preis_am"])
+                p["menge"], p["preis"], p["preis_am"])
             if war_da:
                 geaendert += 1
             else:
@@ -434,19 +431,15 @@ async def einspielen(db, user_id: int, daten: dict) -> dict:
                 continue
             snap_id = await db.fetchval(
                 "INSERT INTO cs2_snapshots (user_id, taken_on, total_gross, total_net, "
-                "       playskin_gross, playskin_net, rows_valid, rows_incomplete, "
-                "       stale_rows, note) "
-                "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) "
+                "       rows_valid, rows_incomplete, stale_rows, note) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7,$8) "
                 "ON CONFLICT (user_id, taken_on) DO UPDATE SET "
                 "       total_gross=EXCLUDED.total_gross, total_net=EXCLUDED.total_net, "
-                "       playskin_gross=EXCLUDED.playskin_gross, "
-                "       playskin_net=EXCLUDED.playskin_net, "
                 "       rows_valid=EXCLUDED.rows_valid, "
                 "       rows_incomplete=EXCLUDED.rows_incomplete, "
                 "       stale_rows=EXCLUDED.stale_rows, note=EXCLUDED.note "
                 "RETURNING id",
-                user_id, s["datum"], s["brutto"], s["netto"],
-                s["playskin_brutto"], s["playskin_netto"], s["positionen"],
+                user_id, s["datum"], s["brutto"], s["netto"], s["positionen"],
                 s["unvollstaendig"], s["veraltet"], s["notiz"])
             # Die Aufteilung wird ersetzt, nicht ergaenzt: ein Stand hat genau
             # eine, und zwei uebereinander waeren doppelte Betraege.

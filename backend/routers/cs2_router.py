@@ -113,7 +113,6 @@ class PositionNeu(BaseModel):
     item_name: str
     wear: Optional[str] = None
     stattrak: bool = False
-    playskin: bool = False
     quantity: Optional[int] = None
     price_eur: Optional[str] = None
 
@@ -122,7 +121,6 @@ class PositionAenderung(BaseModel):
     item_name: Optional[str] = None
     wear: Optional[str] = None
     stattrak: Optional[bool] = None
-    playskin: Optional[bool] = None
     quantity: Optional[int] = None
     price_eur: Optional[str] = None
 
@@ -221,7 +219,7 @@ async def _zeilen(db, user_id: int, wo: str, werte: list,
                   grenze: int = HOECHSTENS) -> list:
     """Die Positionen samt allem, was die Oberflaeche zeigt."""
     return await db.fetch(
-        f"""SELECT p.id, p.item_id, p.wear, p.stattrak, p.playskin,
+        f"""SELECT p.id, p.item_id, p.wear, p.stattrak,
                    p.quantity, p.price_eur, p.priced_at, p.created_at,
                    i.name AS item_name, i.category_id,
                    c.name AS category_name,
@@ -269,14 +267,14 @@ async def _item_finden_oder_anlegen(db, user_id: int, category_id: int, name: st
 
 async def _kategorie_regeln(db, user_id: int, category_id: int) -> dict:
     row = await db.fetchrow(
-        "SELECT supports_wear, supports_stattrak, supports_playskin "
+        "SELECT supports_wear, supports_stattrak "
         "  FROM cs2_categories WHERE id=$1 AND user_id=$2", category_id, user_id)
     if not row:
         raise HTTPException(404, "Diese Kategorie gibt es nicht.")
     return dict(row)
 
 
-def _regeln_anwenden(regeln: dict, wear, stattrak, playskin) -> tuple:
+def _regeln_anwenden(regeln: dict, wear, stattrak) -> tuple:
     """Was die Kategorie nicht kennt, wird geraeumt statt abgelehnt.
 
     Ein Case hat keine Abnutzung. Eine Eingabe dafuer ist kein Fehler, sondern
@@ -288,8 +286,7 @@ def _regeln_anwenden(regeln: dict, wear, stattrak, playskin) -> tuple:
     elif wear not in (None, "") and wear not in rechnung.WEAR_WERTE:
         raise HTTPException(400, f"„{wear}“ ist keine Abnutzung.")
     return (wear or None,
-            bool(stattrak) if regeln["supports_stattrak"] else False,
-            bool(playskin) if regeln["supports_playskin"] else False)
+            bool(stattrak) if regeln["supports_stattrak"] else False)
 
 
 # =========================================================================
@@ -300,7 +297,7 @@ def _regeln_anwenden(regeln: dict, wear, stattrak, playskin) -> tuple:
 async def katalog(db=Depends(get_db), user=Depends(get_current_user)):
     """Kategorien und Items -- alles, woraus die Formulare waehlen."""
     kategorien = await db.fetch(
-        "SELECT id, name, supports_wear, supports_stattrak, supports_playskin, sort_order "
+        "SELECT id, name, supports_wear, supports_stattrak, sort_order "
         "  FROM cs2_categories WHERE user_id=$1 ORDER BY sort_order, name", user["id"])
     items = await db.fetch(
         "SELECT i.id, i.category_id, i.name, "
@@ -356,7 +353,7 @@ async def ueberblick(suche: Optional[str] = None, kategorien: Optional[str] = No
     """
     wo, werte = _bestand_filter(user["id"], suche, kategorien, nur_faellig)
     rows = await db.fetch(
-        f"""SELECT p.quantity, p.price_eur, p.playskin, p.priced_at, i.category_id
+        f"""SELECT p.quantity, p.price_eur, p.priced_at, i.category_id
             {_BESTAND_VON} WHERE {wo}""", *werte)
     summe = rechnung.summiere([dict(r) for r in rows])
 
@@ -370,7 +367,7 @@ async def ueberblick(suche: Optional[str] = None, kategorien: Optional[str] = No
         return raus
 
     verlauf = await db.fetch(
-        "SELECT taken_on, total_gross, total_net, playskin_gross, "
+        "SELECT taken_on, total_gross, total_net, "
         "       rows_valid, rows_incomplete, stale_rows, note "
         "  FROM cs2_snapshots WHERE user_id=$1 "
         "   AND ($2 = 0 OR taken_on >= CURRENT_DATE - $2::int) "
@@ -398,10 +395,6 @@ async def ueberblick(suche: Optional[str] = None, kategorien: Optional[str] = No
         "bestand": {
             "brutto": float(summe["brutto"]),
             "netto": float(summe["netto"]),
-            "playskin_brutto": float(summe["playskin_brutto"]),
-            "playskin_netto": float(summe["playskin_netto"]),
-            "invest_brutto": float(summe["invest_brutto"]),
-            "invest_netto": float(summe["invest_netto"]),
             "zeilen": summe["zeilen"],
             "positionen": summe["positionen"],
             "unvollstaendig": summe["unvollstaendig"],
@@ -428,8 +421,7 @@ async def position_anlegen(request: Request, daten: PositionNeu,
     ihn immer ersetzt und damit bei jedem Nachkauf den alten Stand verloren.
     """
     regeln = await _kategorie_regeln(db, user["id"], daten.category_id)
-    wear, stattrak, playskin = _regeln_anwenden(
-        regeln, daten.wear, daten.stattrak, daten.playskin)
+    wear, stattrak = _regeln_anwenden(regeln, daten.wear, daten.stattrak)
     item_id = await _item_finden_oder_anlegen(
         db, user["id"], daten.category_id, daten.item_name)
 
@@ -438,21 +430,20 @@ async def position_anlegen(request: Request, daten: PositionNeu,
 
     row = await db.fetchrow(
         """INSERT INTO cs2_positions
-               (user_id, item_id, wear, stattrak, playskin,
-                quantity, price_eur, priced_at)
-           -- ``$7`` traegt seinen Typ ausdruecklich: er steht einmal als Wert
+               (user_id, item_id, wear, stattrak, quantity, price_eur, priced_at)
+           -- ``$6`` traegt seinen Typ ausdruecklich: er steht einmal als Wert
            -- und einmal in einem CASE, und Postgres kann ihn dort sonst nicht
-           -- bestimmen (AmbiguousParameterError). Dasselbe gilt fuer $6.
-           VALUES ($1,$2,$3,$4,$5,$6::int,$7::numeric,
-                   CASE WHEN $7::numeric IS NULL THEN NULL ELSE now() END)
-           ON CONFLICT (user_id, item_id, COALESCE(wear, ''::text), stattrak, playskin)
+           -- bestimmen (AmbiguousParameterError). Dasselbe gilt fuer $5.
+           VALUES ($1,$2,$3,$4,$5::int,$6::numeric,
+                   CASE WHEN $6::numeric IS NULL THEN NULL ELSE now() END)
+           ON CONFLICT (user_id, item_id, COALESCE(wear, ''::text), stattrak)
            DO UPDATE SET
                quantity  = COALESCE(cs2_positions.quantity, 0) + COALESCE(EXCLUDED.quantity, 0),
                price_eur = COALESCE(EXCLUDED.price_eur, cs2_positions.price_eur),
                priced_at = CASE WHEN EXCLUDED.price_eur IS NULL
                                 THEN cs2_positions.priced_at ELSE now() END
            RETURNING id""",
-        user["id"], item_id, wear, stattrak, playskin, menge, preis)
+        user["id"], item_id, wear, stattrak, menge, preis)
     return await _eine_position(db, user["id"], row["id"])
 
 
@@ -469,11 +460,10 @@ async def position_aendern(request: Request, pid: int, daten: PositionAenderung,
         raise HTTPException(404, "Diese Position gibt es nicht.")
 
     regeln = await _kategorie_regeln(db, user["id"], alt["category_id"])
-    wear, stattrak, playskin = _regeln_anwenden(
+    wear, stattrak = _regeln_anwenden(
         regeln,
         alt["wear"] if daten.wear is None else daten.wear,
-        alt["stattrak"] if daten.stattrak is None else daten.stattrak,
-        alt["playskin"] if daten.playskin is None else daten.playskin)
+        alt["stattrak"] if daten.stattrak is None else daten.stattrak)
 
     item_id = alt["item_id"]
     if daten.item_name:
@@ -490,12 +480,11 @@ async def position_aendern(request: Request, pid: int, daten: PositionAenderung,
     try:
         await db.execute(
             """UPDATE cs2_positions
-                  SET item_id=$3, wear=$4, stattrak=$5, playskin=$6,
-                      quantity=$7::int, price_eur=$8::numeric,
-                      priced_at = CASE WHEN $9::boolean THEN now() ELSE priced_at END
+                  SET item_id=$3, wear=$4, stattrak=$5,
+                      quantity=$6::int, price_eur=$7::numeric,
+                      priced_at = CASE WHEN $8::boolean THEN now() ELSE priced_at END
                 WHERE id=$1 AND user_id=$2""",
-            pid, user["id"], item_id, wear, stattrak, playskin,
-            menge, preis, preis_neu)
+            pid, user["id"], item_id, wear, stattrak, menge, preis, preis_neu)
     except Exception as e:
         if "idx_cs2_positions_signatur" in str(e) or "duplicate key" in str(e).lower():
             raise HTTPException(
@@ -539,7 +528,7 @@ async def position_loeschen(request: Request, pid: int,
 
 async def _eine_position(db, user_id: int, pid: int) -> dict:
     row = await db.fetchrow(
-        f"""SELECT p.id, p.item_id, p.wear, p.stattrak, p.playskin,
+        f"""SELECT p.id, p.item_id, p.wear, p.stattrak,
                    p.quantity, p.price_eur, p.priced_at, p.created_at,
                    i.name AS item_name, i.category_id, c.name AS category_name
             {_BESTAND_VON} WHERE p.id=$1 AND p.user_id=$2""", pid, user_id)
@@ -614,8 +603,8 @@ async def item_loeschen(request: Request, iid: int,
 async def snapshots(tage: int = Query(365, ge=0, le=3650),
                     db=Depends(get_db), user=Depends(get_current_user)):
     rows = await db.fetch(
-        "SELECT id, taken_on, created_at, total_gross, total_net, playskin_gross, "
-        "       playskin_net, rows_valid, rows_incomplete, stale_rows, note "
+        "SELECT id, taken_on, created_at, total_gross, total_net, "
+        "       rows_valid, rows_incomplete, stale_rows, note "
         "  FROM cs2_snapshots WHERE user_id=$1 "
         "   AND ($2 = 0 OR taken_on >= CURRENT_DATE - $2::int) "
         " ORDER BY taken_on DESC", user["id"], tage)
@@ -633,25 +622,24 @@ async def snapshot_festhalten(request: Request, daten: SnapshotEingabe,
     zweiter Aufruf am selben Tag ersetzt den Eintrag.
     """
     rows = await db.fetch(
-        f"""SELECT p.quantity, p.price_eur, p.playskin, p.priced_at, i.category_id
+        f"""SELECT p.quantity, p.price_eur, p.priced_at, i.category_id
             {_BESTAND_VON} WHERE p.user_id=$1""", user["id"])
     summe = rechnung.summiere([dict(r) for r in rows])
 
     async with db.transaction():
         snap = await db.fetchrow(
             """INSERT INTO cs2_snapshots
-                   (user_id, taken_on, total_gross, total_net, playskin_gross,
-                    playskin_net, rows_valid, rows_incomplete, stale_rows, note)
-               VALUES ($1, CURRENT_DATE, $2,$3,$4,$5,$6,$7,$8,$9)
+                   (user_id, taken_on, total_gross, total_net,
+                    rows_valid, rows_incomplete, stale_rows, note)
+               VALUES ($1, CURRENT_DATE, $2,$3,$4,$5,$6,$7)
                ON CONFLICT (user_id, taken_on) DO UPDATE SET
                    created_at=now(), total_gross=EXCLUDED.total_gross,
-                   total_net=EXCLUDED.total_net, playskin_gross=EXCLUDED.playskin_gross,
-                   playskin_net=EXCLUDED.playskin_net, rows_valid=EXCLUDED.rows_valid,
+                   total_net=EXCLUDED.total_net, rows_valid=EXCLUDED.rows_valid,
                    rows_incomplete=EXCLUDED.rows_incomplete,
                    stale_rows=EXCLUDED.stale_rows, note=EXCLUDED.note
                RETURNING id, taken_on""",
-            user["id"], summe["brutto"], summe["netto"], summe["playskin_brutto"],
-            summe["playskin_netto"], summe["positionen"], summe["unvollstaendig"],
+            user["id"], summe["brutto"], summe["netto"],
+            summe["positionen"], summe["unvollstaendig"],
             summe["veraltet"], (daten.note or "").strip() or None)
         await db.execute("DELETE FROM cs2_snapshot_categories WHERE snapshot_id=$1", snap["id"])
         for kid, wert in summe["je_kategorie"].items():
@@ -662,8 +650,8 @@ async def snapshot_festhalten(request: Request, daten: SnapshotEingabe,
     logger.info("CS2: Stand fuer %s festgehalten (%s Positionen, %s EUR)",
                 snap["taken_on"], summe["positionen"], summe["brutto"])
     return ser(await db.fetchrow(
-        "SELECT id, taken_on, created_at, total_gross, total_net, playskin_gross, "
-        "       playskin_net, rows_valid, rows_incomplete, stale_rows, note "
+        "SELECT id, taken_on, created_at, total_gross, total_net, "
+        "       rows_valid, rows_incomplete, stale_rows, note "
         "  FROM cs2_snapshots WHERE id=$1", snap["id"]), decimals_as_float=True)
 
 
