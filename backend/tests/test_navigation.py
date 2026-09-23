@@ -81,9 +81,6 @@ NICHT_GESICHERT = {
     # kein Bestand -- die daraus gelesenen Werte stehen in health_*.
     "health_import_log":
         "Rohdaten-Protokoll, die Messwerte selbst stehen in health_*",
-    # In Migration 032 wieder entfernt; die Tabelle gibt es nicht mehr.
-    "health_shortcut_samples":
-        "in Migration 032 gedroppt",
     # Einladungen sind Verwaltung, kein persoenlicher Bestand; ein
     # zurueckgespielter Einladungscode waere sogar unerwuenscht.
     "invite_tokens":
@@ -96,12 +93,20 @@ NICHT_GESICHERT = {
 
 
 def _tabellen_mit_user_id() -> dict:
-    """Jede per Migration angelegte Tabelle, die eine user_id traegt.
+    """Jede Tabelle, die es HEUTE gibt und die eine user_id traegt.
 
     Zwei Wege fuehren dahin: die Spalte steht im CREATE TABLE, oder sie kam
     spaeter per ALTER TABLE dazu (Migration 005 hat so den Mehrbenutzerbetrieb
     nachgeruestet). Nur den ersten zu pruefen, haelt die halbe Sparziel-Welt
     faelschlich fuer nutzerlos.
+
+    **Ein DROP TABLE nimmt die Tabelle wieder heraus.** Die Migrationen sind
+    eine Geschichte und kein Schema: was 051 anlegt, kann 052 wieder
+    entfernen, und danach ist es keine Tabelle mehr, die ein Backup vergessen
+    koennte. Ohne diesen Schritt musste jede gestrichene Tabelle in
+    ``NICHT_GESICHERT`` nachgetragen werden -- in eine Liste, die
+    ausdruecklich fuer bewusste Entscheidungen da ist und nicht fuer
+    Buchhaltung, die sich aus den Dateien selbst ablesen laesst.
     """
     gefunden = {}
     for datei in sorted(MIGRATIONEN.glob("*.sql")):
@@ -116,8 +121,29 @@ def _tabellen_mit_user_id() -> dict:
                 r"ALTER TABLE\s+([a-z0-9_]+)\s+ADD COLUMN[^;]*?\buser_id\b",
                 text, re.S):
             gefunden.setdefault(treffer.group(1), datei.name)
+        # Nach den Anlagen derselben Datei, damit eine Migration eine Tabelle
+        # auch anlegen und wieder wegnehmen darf.
+        for treffer in re.finditer(
+                r"DROP TABLE (?:IF EXISTS )?([a-z0-9_, ]+)", text):
+            for name in treffer.group(1).split(","):
+                gefunden.pop(name.strip(), None)
     assert len(gefunden) > 20, "Migrationen nicht gelesen -- Regex kaputt?"
     return gefunden
+
+
+def test_eine_gestrichene_tabelle_wird_nicht_mehr_verlangt():
+    """Der Waechter liest eine Geschichte, kein Schema.
+
+    ``health_shortcut_samples`` (032) und ``cs2_storages`` (052) sind per
+    DROP TABLE wieder verschwunden. Sie in ``backup.TABLES_ORDERED`` zu
+    verlangen, hiesse ein Backup ueber eine Tabelle zu fordern, die es nicht
+    gibt -- und der Lauf bricht dann mit einem Fehler aus der Datenbank ab.
+    """
+    tabellen = _tabellen_mit_user_id()
+    for weg in ("health_shortcut_samples", "cs2_storages"):
+        assert weg not in tabellen, f"{weg} wurde gedroppt und darf hier fehlen"
+    # Und die Gegenprobe: was noch da ist, steht auch noch drin.
+    assert "cs2_positions" in tabellen
 
 
 def test_jede_nutzertabelle_wird_gesichert():

@@ -42,10 +42,13 @@ TABLES_ORDERED = [
     "dismissed_product_merges",
     "dismissed_store_merges",
     # Health-Modul (v1.22.0)
-    # health_metrics ist die Tagestabelle aus dem Handbetrieb (CSV-Export,
-    # services/health_ingest.py) -- aelter als der Rest, aber weiter in
-    # Benutzung und deshalb kein Altbestand, den man weglassen darf.
-    "health_metrics",
+    # ``health_metrics`` stand hier bis v2.14.0 mit der Begruendung, es sei
+    # die Tagestabelle aus dem Handbetrieb. Das stimmte nicht mehr: Migration
+    # 023 hat sie gedroppt, und der CSV-Import schreibt trotz des
+    # Funktionsnamens ``_ingest_health_metrics_csv`` nach
+    # ``health_metric_samples``. Der Eintrag lief ins Leere -- ``_table_exists``
+    # hat ihn bei jedem Lauf still uebersprungen. Gefunden hat ihn der
+    # Waechter in test_navigation.py, seit er DROP TABLE mitliest.
     "health_api_keys",
     "health_metric_samples",
     "health_blood_pressure",
@@ -92,16 +95,14 @@ TABLES_ORDERED = [
     "food_bridge_dismissed",
     # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
     # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
-    # CS2-Modul. Kategorien und Lager zuerst: Items zeigen auf die
-    # Kategorie, Positionen auf beide, die Snapshot-Aufteilungen auf den
-    # Snapshot.
+    # CS2-Modul. Kategorien zuerst: Items zeigen auf die Kategorie,
+    # Positionen auf die Items, die Snapshot-Aufteilung auf den Snapshot.
+    # Die Lagertabellen gab es bis v2.13.0; Migration 052 hat sie entfernt.
     "cs2_categories",
-    "cs2_storages",
     "cs2_items",
     "cs2_positions",
     "cs2_snapshots",
     "cs2_snapshot_categories",
-    "cs2_snapshot_storages",
     "user_prefs",
 ]
 
@@ -129,10 +130,9 @@ PARENT_SCOPE = {
     "food_item_sizes":           ("item_id", "food_items"),
     "food_dish_items":           ("dish_id", "food_dishes"),
     "food_dish_images":          ("dish_id", "food_dishes"),
-    # Die beiden Aufteilungen haben keine user_id -- ohne Eintrag landen
-    # im Backup EINES Kontos die Zeilen ALLER.
+    # Die Aufteilung hat keine user_id -- ohne Eintrag landen im Backup
+    # EINES Kontos die Zeilen ALLER.
     "cs2_snapshot_categories":   ("snapshot_id", "cs2_snapshots"),
-    "cs2_snapshot_storages":     ("snapshot_id", "cs2_snapshots"),
 }
 
 def _ser_value(v):

@@ -1,25 +1,21 @@
 """CS2-Router — Bestand an Spielgegenstaenden, sein Zeitwert und dessen Pflege.
 
 Endpoints:
-  GET    /api/cs2/catalog              — Kategorien, Lager, Items fuer die Formulare
-  GET    /api/cs2/overview             — Kopfzahlen, Aufteilungen, Verlauf
+  GET    /api/cs2/catalog              — Kategorien und Items fuer die Formulare
+  GET    /api/cs2/overview             — Kopfzahlen, Aufteilung, Verlauf
   GET    /api/cs2/positions            — der Bestand, gefiltert und sortiert
   POST   /api/cs2/positions            — Position anlegen (fuehrt zusammen)
   PATCH  /api/cs2/positions/{id}       — Position aendern
   DELETE /api/cs2/positions/{id}       — Position entfernen
   PUT    /api/cs2/positions/{id}/preis — nur den Preis bestaetigen
-  GET    /api/cs2/pflege               — was einen neuen Preis braucht
   POST   /api/cs2/items                — Item anlegen
   PUT    /api/cs2/items/{id}           — Item umbenennen
   DELETE /api/cs2/items/{id}           — Item loeschen (nur ohne Positionen)
-  POST   /api/cs2/storages             — Lager anlegen
-  PUT    /api/cs2/storages/{id}        — Lager umbenennen
-  DELETE /api/cs2/storages/{id}        — Lager loeschen (Positionen ziehen um)
   GET    /api/cs2/snapshots            — Verlauf
   POST   /api/cs2/snapshots            — Stand von heute festhalten
   POST   /api/cs2/import               — Bestand aus einer Datei uebernehmen
 
-Drei Entscheidungen tragen das Ganze:
+Vier Entscheidungen tragen das Ganze:
 
 1. **Liste und Kopfzahlen bauen ihren Filter aus DERSELBEN Funktion.**
    ``_bestand_filter`` liefert die WHERE-Klausel und ihre Werte; die Liste und
@@ -39,6 +35,13 @@ Drei Entscheidungen tragen das Ganze:
    habe nachgesehen, es stimmt noch" ist die haeufigste Auskunft bei
    Handpflege und geht sonst verloren. Wer nur die Menge aendert, ruft PATCH
    -- das laesst den Preisstand in Ruhe.
+
+4. **Sortiert wird im Server, nicht im Browser.** Die Liste ist eine Tabelle
+   mit sortierbaren Spalten, und die Grenze von 1000 Zeilen macht das
+   notwendig: nach einer im Browser sortierten Teilmenge stuende oben nicht
+   das Groesste, sondern das Groesste der geladenen Haelfte. Welche Spalten
+   es gibt, steht in ``SORTIERSPALTEN`` -- und nur dort, damit keine Eingabe
+   in ein ORDER BY gelangt.
 """
 # KEIN ``from __future__ import annotations`` in dieser Datei. Es macht jede
 # Annotation zu einer Zeichenkette, und das Pydantic dieser App (2.5.3) kann
@@ -70,14 +73,35 @@ router = APIRouter(tags=["cs2"])
 # die Kopfzahlen kommen ohnehin aus einer eigenen Abfrage ueber alles.
 HOECHSTENS = 1000
 
-SORTIERUNGEN = {
-    "wert":      "brutto DESC NULLS LAST, i.name ASC",
-    "name":      "i.name ASC",
-    "menge":     "p.quantity DESC NULLS LAST, i.name ASC",
-    "preis":     "p.price_eur DESC NULLS LAST, i.name ASC",
-    "alter":     "p.priced_at ASC NULLS FIRST, i.name ASC",
-    "kategorie": "c.sort_order ASC, c.name ASC, i.name ASC",
+# Die Spalten, nach denen die Tabelle sortieren kann. Eine geschlossene Liste:
+# was hier nicht steht, gelangt auch nicht ins ORDER BY -- die Sortierung ist
+# der einzige Teil der Abfrage, der nicht als Parameter gebunden werden kann.
+SORTIERSPALTEN = {
+    "name":  ["i.name"],
+    "preis": ["p.price_eur"],              # je Stueck
+    "wert":  ["(p.quantity * p.price_eur)"],  # gesamt
+    "menge": ["p.quantity"],
+    "typ":   ["c.sort_order", "c.name"],
+    "alter": ["p.priced_at"],              # zuletzt aktualisiert
 }
+STANDARD_SORTIERUNG = "wert"
+
+
+def _ordnung(sortierung: Optional[str], richtung: Optional[str]) -> str:
+    """Das ORDER BY zu einer Spaltenwahl -- nur aus ``SORTIERSPALTEN``.
+
+    **Leere Werte sind immer die kleinsten.** Postgres sortiert NULL von Haus
+    aus als groessten Wert, und damit stuenden die Zeilen ohne Preis bei
+    "teuerste zuerst" ganz oben und bei "zuletzt aktualisiert, aelteste
+    zuerst" ganz unten -- beides das Gegenteil dessen, was die Spalte meint.
+    Eine Zeile ohne Preisstand ist die aelteste, nicht die juengste.
+    """
+    spalten = SORTIERSPALTEN.get(sortierung or "", SORTIERSPALTEN[STANDARD_SORTIERUNG])
+    auf = (richtung or "").lower() in ("auf", "asc")
+    richtung_sql = "ASC NULLS FIRST" if auf else "DESC NULLS LAST"
+    teile = [f"{s} {richtung_sql}" for s in spalten]
+    teile.append("i.name ASC")   # damit gleiche Werte eine feste Reihenfolge haben
+    return ", ".join(teile)
 
 
 # =========================================================================
@@ -87,7 +111,6 @@ SORTIERUNGEN = {
 class PositionNeu(BaseModel):
     category_id: int
     item_name: str
-    storage_id: Optional[int] = None
     wear: Optional[str] = None
     stattrak: bool = False
     playskin: bool = False
@@ -97,7 +120,6 @@ class PositionNeu(BaseModel):
 
 class PositionAenderung(BaseModel):
     item_name: Optional[str] = None
-    storage_id: Optional[int] = None
     wear: Optional[str] = None
     stattrak: Optional[bool] = None
     playskin: Optional[bool] = None
@@ -127,13 +149,12 @@ class SnapshotEingabe(BaseModel):
 # =========================================================================
 
 def _bestand_filter(user_id: int, suche: Optional[str], kategorien: Optional[str],
-                    lager: Optional[str], nur_faellig: bool,
-                    ab_index: int = 1) -> tuple[str, list]:
+                    nur_faellig: bool, ab_index: int = 1) -> tuple[str, list]:
     """WHERE-Klausel und Werte fuer den Bestand -- die EINE Fassung.
 
-    Wird von der Liste, von den Kopfzahlen und von der Pflegeansicht benutzt.
-    Getrennte Fassungen waeren getrennte Grundgesamtheiten, und der Unterschied
-    faellt erst auf, wenn eine Zahl schon falsch dastand.
+    Wird von der Liste und von den Kopfzahlen benutzt. Getrennte Fassungen
+    waeren getrennte Grundgesamtheiten, und der Unterschied faellt erst auf,
+    wenn eine Zahl schon falsch dastand.
 
     ``ab_index`` sagt, bei welchem ``$n`` die Werte anfangen -- so laesst sich
     die Klausel in eine Abfrage einhaengen, die vorher schon Parameter hat.
@@ -143,15 +164,14 @@ def _bestand_filter(user_id: int, suche: Optional[str], kategorien: Optional[str
     n = ab_index + 1
 
     if suche:
-        teile.append(f"(i.name ILIKE ${n} OR c.name ILIKE ${n} OR s.name ILIKE ${n})")
+        teile.append(f"(i.name ILIKE ${n} OR c.name ILIKE ${n})")
         werte.append(f"%{suche.strip()}%")
         n += 1
-    for spalte, roh in (("p.storage_id", lager), ("i.category_id", kategorien)):
-        ids = _id_liste(roh)
-        if ids:
-            teile.append(f"{spalte} = ANY(${n}::int[])")
-            werte.append(ids)
-            n += 1
+    ids = _id_liste(kategorien)
+    if ids:
+        teile.append(f"i.category_id = ANY(${n}::int[])")
+        werte.append(ids)
+        n += 1
     if nur_faellig:
         # Nie bepreist zaehlt mit: eine Zeile ohne Preis ist die faelligste.
         teile.append(f"(p.priced_at IS NULL OR p.priced_at < now() - ${n}::interval)")
@@ -193,23 +213,22 @@ _BESTAND_VON = """
       FROM cs2_positions p
       JOIN cs2_items     i ON i.id = p.item_id
       JOIN cs2_categories c ON c.id = i.category_id
-      JOIN cs2_storages  s ON s.id = p.storage_id
 """
 
 
-async def _zeilen(db, user_id: int, wo: str, werte: list, ordnung: str = "wert",
+async def _zeilen(db, user_id: int, wo: str, werte: list,
+                  sortierung: str = STANDARD_SORTIERUNG, richtung: str = "ab",
                   grenze: int = HOECHSTENS) -> list:
     """Die Positionen samt allem, was die Oberflaeche zeigt."""
     return await db.fetch(
-        f"""SELECT p.id, p.item_id, p.storage_id, p.wear, p.stattrak, p.playskin,
+        f"""SELECT p.id, p.item_id, p.wear, p.stattrak, p.playskin,
                    p.quantity, p.price_eur, p.priced_at, p.created_at,
                    i.name AS item_name, i.category_id,
                    c.name AS category_name,
-                   s.name AS storage_name,
                    (p.quantity * p.price_eur) AS brutto
             {_BESTAND_VON}
              WHERE {wo}
-             ORDER BY {SORTIERUNGEN.get(ordnung, SORTIERUNGEN['wert'])}
+             ORDER BY {_ordnung(sortierung, richtung)}
              LIMIT {int(grenze)}""",
         *werte)
 
@@ -230,19 +249,6 @@ def _position_raus(row) -> dict:
     d["unvollstaendig"] = row["quantity"] is None or row["price_eur"] is None
     d["markt_name"] = rechnung.markt_name(row["item_name"], row["wear"], row["stattrak"])
     return d
-
-
-async def _lager_standard(db, user_id: int) -> int:
-    """Das Auffanglager. Fehlt es, wird es angelegt -- ohne ist nichts ablegbar."""
-    vorhanden = await db.fetchval(
-        "SELECT id FROM cs2_storages WHERE user_id=$1 AND is_default LIMIT 1", user_id)
-    if vorhanden:
-        return vorhanden
-    return await db.fetchval(
-        "INSERT INTO cs2_storages (user_id, name, is_default, sort_order) "
-        "VALUES ($1, 'Unsortiert', TRUE, 0) "
-        "ON CONFLICT (user_id, name) DO UPDATE SET is_default=TRUE RETURNING id",
-        user_id)
 
 
 async def _item_finden_oder_anlegen(db, user_id: int, category_id: int, name: str) -> int:
@@ -292,22 +298,16 @@ def _regeln_anwenden(regeln: dict, wear, stattrak, playskin) -> tuple:
 
 @router.get("/api/cs2/catalog")
 async def katalog(db=Depends(get_db), user=Depends(get_current_user)):
-    """Kategorien, Lager und Items -- alles, woraus die Formulare waehlen."""
+    """Kategorien und Items -- alles, woraus die Formulare waehlen."""
     kategorien = await db.fetch(
         "SELECT id, name, supports_wear, supports_stattrak, supports_playskin, sort_order "
         "  FROM cs2_categories WHERE user_id=$1 ORDER BY sort_order, name", user["id"])
-    lager = await db.fetch(
-        "SELECT s.id, s.name, s.is_default, s.sort_order, "
-        "       (SELECT COUNT(*) FROM cs2_positions p WHERE p.storage_id = s.id) AS positionen "
-        "  FROM cs2_storages s WHERE s.user_id=$1 ORDER BY s.is_default DESC, s.sort_order, s.name",
-        user["id"])
     items = await db.fetch(
         "SELECT i.id, i.category_id, i.name, "
         "       (SELECT COUNT(*) FROM cs2_positions p WHERE p.item_id = i.id) AS positionen "
         "  FROM cs2_items i WHERE i.user_id=$1 ORDER BY i.name", user["id"])
     return {
         "kategorien": [ser(r) for r in kategorien],
-        "lager": [ser(r) for r in lager],
         "items": [ser(r) for r in items],
         "wear": [{"wert": w, "label": rechnung.WEAR_LANG[w]} for w in rechnung.WEAR_WERTE],
         "gebuehr": float(rechnung.GEBUEHR),
@@ -322,13 +322,13 @@ async def katalog(db=Depends(get_db), user=Depends(get_current_user)):
 
 @router.get("/api/cs2/positions")
 async def positionen(suche: Optional[str] = None, kategorien: Optional[str] = None,
-                     lager: Optional[str] = None, nur_faellig: bool = False,
-                     sortierung: str = "wert",
+                     nur_faellig: bool = False,
+                     sortierung: str = STANDARD_SORTIERUNG, richtung: str = "ab",
                      db=Depends(get_db), user=Depends(get_current_user)):
     """Der Bestand. Die Kopfzahlen dazu stehen in ``/overview`` -- mit
     demselben Filter, damit beide dieselbe Menge meinen."""
-    wo, werte = _bestand_filter(user["id"], suche, kategorien, lager, nur_faellig)
-    rows = await _zeilen(db, user["id"], wo, werte, sortierung)
+    wo, werte = _bestand_filter(user["id"], suche, kategorien, nur_faellig)
+    rows = await _zeilen(db, user["id"], wo, werte, sortierung, richtung)
     gesamt = await db.fetchval(
         f"SELECT COUNT(*) {_BESTAND_VON} WHERE {wo}", *werte)
     return {
@@ -338,12 +338,14 @@ async def positionen(suche: Optional[str] = None, kategorien: Optional[str] = No
         # Ehrlich sagen, wenn die Liste nur ein Stueck zeigt -- sonst steht
         # eine grosse Zahl ueber wenigen Zeilen.
         "gekuerzt": int(gesamt or 0) > len(rows),
+        "sortierung": sortierung if sortierung in SORTIERSPALTEN else STANDARD_SORTIERUNG,
+        "richtung": "auf" if (richtung or "").lower() in ("auf", "asc") else "ab",
     }
 
 
 @router.get("/api/cs2/overview")
 async def ueberblick(suche: Optional[str] = None, kategorien: Optional[str] = None,
-                     lager: Optional[str] = None, nur_faellig: bool = False,
+                     nur_faellig: bool = False,
                      tage: int = Query(365, ge=0, le=3650),
                      db=Depends(get_db), user=Depends(get_current_user)):
     """Kopfzahlen ueber den gefilterten Bestand, Verlauf ueber den Zeitraum.
@@ -352,17 +354,14 @@ async def ueberblick(suche: Optional[str] = None, kategorien: Optional[str] = No
     auf einen Monat einzuschraenken hiesse, eine Frage zu beantworten, die
     niemand gestellt hat.
     """
-    wo, werte = _bestand_filter(user["id"], suche, kategorien, lager, nur_faellig)
+    wo, werte = _bestand_filter(user["id"], suche, kategorien, nur_faellig)
     rows = await db.fetch(
-        f"""SELECT p.quantity, p.price_eur, p.playskin, p.priced_at,
-                   i.category_id, p.storage_id
+        f"""SELECT p.quantity, p.price_eur, p.playskin, p.priced_at, i.category_id
             {_BESTAND_VON} WHERE {wo}""", *werte)
     summe = rechnung.summiere([dict(r) for r in rows])
 
     namen_kat = {r["id"]: r["name"] for r in await db.fetch(
         "SELECT id, name FROM cs2_categories WHERE user_id=$1", user["id"])}
-    namen_lag = {r["id"]: r["name"] for r in await db.fetch(
-        "SELECT id, name FROM cs2_storages WHERE user_id=$1", user["id"])}
 
     def aufteilung(werte_je_id: dict, namen: dict) -> list:
         raus = [{"id": k, "name": namen.get(k, "?"), "brutto": float(v)}
@@ -393,7 +392,7 @@ async def ueberblick(suche: Optional[str] = None, kategorien: Optional[str] = No
             "prozent": float(rechnung.cent(diff / Decimal(str(vorher["total_gross"])) * 100)),
         }
 
-    top = await _zeilen(db, user["id"], wo, werte, "wert", grenze=5)
+    top = await _zeilen(db, user["id"], wo, werte, "wert", "ab", grenze=5)
 
     return {
         "bestand": {
@@ -403,17 +402,17 @@ async def ueberblick(suche: Optional[str] = None, kategorien: Optional[str] = No
             "playskin_netto": float(summe["playskin_netto"]),
             "invest_brutto": float(summe["invest_brutto"]),
             "invest_netto": float(summe["invest_netto"]),
+            "zeilen": summe["zeilen"],
             "positionen": summe["positionen"],
             "unvollstaendig": summe["unvollstaendig"],
             "veraltet": summe["veraltet"],
             "stueck": summe["stueck"],
         },
         "je_kategorie": aufteilung(summe["je_kategorie"], namen_kat),
-        "je_lager": aufteilung(summe["je_lager"], namen_lag),
         "top": [_position_raus(r) for r in top],
         "verlauf": [ser(r, decimals_as_float=True) for r in verlauf],
         "veraenderung": veraenderung,
-        "gefiltert": bool(suche or kategorien or lager or nur_faellig),
+        "gefiltert": bool(suche or kategorien or nur_faellig),
     }
 
 
@@ -433,31 +432,27 @@ async def position_anlegen(request: Request, daten: PositionNeu,
         regeln, daten.wear, daten.stattrak, daten.playskin)
     item_id = await _item_finden_oder_anlegen(
         db, user["id"], daten.category_id, daten.item_name)
-    storage_id = daten.storage_id or await _lager_standard(db, user["id"])
-    if not await db.fetchval(
-            "SELECT 1 FROM cs2_storages WHERE id=$1 AND user_id=$2", storage_id, user["id"]):
-        raise HTTPException(404, "Dieses Lager gibt es nicht.")
 
     preis = _preis(daten.price_eur)
     menge = daten.quantity
 
     row = await db.fetchrow(
         """INSERT INTO cs2_positions
-               (user_id, item_id, storage_id, wear, stattrak, playskin,
+               (user_id, item_id, wear, stattrak, playskin,
                 quantity, price_eur, priced_at)
-           -- ``$8`` traegt seinen Typ ausdruecklich: er steht einmal als Wert
+           -- ``$7`` traegt seinen Typ ausdruecklich: er steht einmal als Wert
            -- und einmal in einem CASE, und Postgres kann ihn dort sonst nicht
-           -- bestimmen (AmbiguousParameterError). Dasselbe gilt fuer $7.
-           VALUES ($1,$2,$3,$4,$5,$6,$7::int,$8::numeric,
-                   CASE WHEN $8::numeric IS NULL THEN NULL ELSE now() END)
-           ON CONFLICT (user_id, item_id, COALESCE(wear, ''::text), stattrak, playskin, storage_id)
+           -- bestimmen (AmbiguousParameterError). Dasselbe gilt fuer $6.
+           VALUES ($1,$2,$3,$4,$5,$6::int,$7::numeric,
+                   CASE WHEN $7::numeric IS NULL THEN NULL ELSE now() END)
+           ON CONFLICT (user_id, item_id, COALESCE(wear, ''::text), stattrak, playskin)
            DO UPDATE SET
                quantity  = COALESCE(cs2_positions.quantity, 0) + COALESCE(EXCLUDED.quantity, 0),
                price_eur = COALESCE(EXCLUDED.price_eur, cs2_positions.price_eur),
                priced_at = CASE WHEN EXCLUDED.price_eur IS NULL
                                 THEN cs2_positions.priced_at ELSE now() END
            RETURNING id""",
-        user["id"], item_id, storage_id, wear, stattrak, playskin, menge, preis)
+        user["id"], item_id, wear, stattrak, playskin, menge, preis)
     return await _eine_position(db, user["id"], row["id"])
 
 
@@ -484,11 +479,6 @@ async def position_aendern(request: Request, pid: int, daten: PositionAenderung,
     if daten.item_name:
         item_id = await _item_finden_oder_anlegen(
             db, user["id"], alt["category_id"], daten.item_name)
-    storage_id = daten.storage_id or alt["storage_id"]
-    if not await db.fetchval(
-            "SELECT 1 FROM cs2_storages WHERE id=$1 AND user_id=$2", storage_id, user["id"]):
-        raise HTTPException(404, "Dieses Lager gibt es nicht.")
-
     preis = alt["price_eur"]
     preis_neu = False
     if daten.price_eur is not None:
@@ -500,17 +490,17 @@ async def position_aendern(request: Request, pid: int, daten: PositionAenderung,
     try:
         await db.execute(
             """UPDATE cs2_positions
-                  SET item_id=$3, storage_id=$4, wear=$5, stattrak=$6, playskin=$7,
-                      quantity=$8::int, price_eur=$9::numeric,
-                      priced_at = CASE WHEN $10::boolean THEN now() ELSE priced_at END
+                  SET item_id=$3, wear=$4, stattrak=$5, playskin=$6,
+                      quantity=$7::int, price_eur=$8::numeric,
+                      priced_at = CASE WHEN $9::boolean THEN now() ELSE priced_at END
                 WHERE id=$1 AND user_id=$2""",
-            pid, user["id"], item_id, storage_id, wear, stattrak, playskin,
+            pid, user["id"], item_id, wear, stattrak, playskin,
             menge, preis, preis_neu)
     except Exception as e:
         if "idx_cs2_positions_signatur" in str(e) or "duplicate key" in str(e).lower():
             raise HTTPException(
                 400, "Diese Position gibt es schon — gleicher Gegenstand, "
-                     "gleiche Ausführung, gleiches Lager.")
+                     "gleiche Ausführung.")
         raise
     return await _eine_position(db, user["id"], pid)
 
@@ -549,38 +539,13 @@ async def position_loeschen(request: Request, pid: int,
 
 async def _eine_position(db, user_id: int, pid: int) -> dict:
     row = await db.fetchrow(
-        f"""SELECT p.id, p.item_id, p.storage_id, p.wear, p.stattrak, p.playskin,
+        f"""SELECT p.id, p.item_id, p.wear, p.stattrak, p.playskin,
                    p.quantity, p.price_eur, p.priced_at, p.created_at,
-                   i.name AS item_name, i.category_id,
-                   c.name AS category_name, s.name AS storage_name
+                   i.name AS item_name, i.category_id, c.name AS category_name
             {_BESTAND_VON} WHERE p.id=$1 AND p.user_id=$2""", pid, user_id)
     if not row:
         raise HTTPException(404, "Diese Position gibt es nicht.")
     return _position_raus(row)
-
-
-# =========================================================================
-# Pflege
-# =========================================================================
-
-@router.get("/api/cs2/pflege")
-async def pflege(db=Depends(get_db), user=Depends(get_current_user)):
-    """Was einen neuen Preis braucht, aelteste zuerst.
-
-    Die eigentliche Arbeit dieses Moduls. Weil kein Dienst die Preise liefert,
-    ist die Reihenfolge das Werkzeug: wer oben anfaengt, arbeitet die Liste von
-    der groessten Unsicherheit her ab.
-    """
-    wo, werte = _bestand_filter(user["id"], None, None, None, True)
-    rows = await _zeilen(db, user["id"], wo, werte, "alter")
-    alle = await db.fetchval(
-        f"SELECT COUNT(*) {_BESTAND_VON} WHERE p.user_id=$1", user["id"])
-    return {
-        "faellig": [_position_raus(r) for r in rows],
-        "offen": len(rows),
-        "bestand": int(alle or 0),
-        "alt_ab_tagen": rechnung.ALT_AB_TAGEN,
-    }
 
 
 # =========================================================================
@@ -641,93 +606,6 @@ async def item_loeschen(request: Request, iid: int,
     return {"geloescht": iid}
 
 
-@router.post("/api/cs2/storages")
-@limiter.limit(LIMIT_WRITE_RARE)
-async def lager_anlegen(request: Request, daten: NameEingabe,
-                        db=Depends(get_db), user=Depends(get_current_user)):
-    name = (daten.name or "").strip()
-    if not name:
-        raise HTTPException(400, "Das Lager braucht einen Namen.")
-    vorhanden = await db.fetchval(
-        "SELECT id FROM cs2_storages WHERE user_id=$1 AND name=$2", user["id"], name)
-    if vorhanden:
-        raise HTTPException(400, f"Ein Lager „{name}“ gibt es schon.")
-    row = await db.fetchrow(
-        "INSERT INTO cs2_storages (user_id, name, sort_order) "
-        "VALUES ($1,$2,(SELECT COALESCE(MAX(sort_order),0)+1 FROM cs2_storages WHERE user_id=$1)) "
-        "RETURNING id, name, is_default, sort_order", user["id"], name)
-    return ser(row)
-
-
-@router.put("/api/cs2/storages/{sid}")
-@limiter.limit(LIMIT_WRITE_RARE)
-async def lager_umbenennen(request: Request, sid: int, daten: NameEingabe,
-                           db=Depends(get_db), user=Depends(get_current_user)):
-    name = (daten.name or "").strip()
-    if not name:
-        raise HTTPException(400, "Das Lager braucht einen Namen.")
-    doppelt = await db.fetchval(
-        "SELECT id FROM cs2_storages WHERE user_id=$1 AND name=$2 AND id<>$3",
-        user["id"], name, sid)
-    if doppelt:
-        raise HTTPException(400, f"Ein Lager „{name}“ gibt es schon.")
-    getroffen = await db.execute(
-        "UPDATE cs2_storages SET name=$3 WHERE id=$1 AND user_id=$2", sid, user["id"], name)
-    if getroffen.endswith(" 0"):
-        raise HTTPException(404, "Dieses Lager gibt es nicht.")
-    return ser(await db.fetchrow(
-        "SELECT id, name, is_default, sort_order FROM cs2_storages WHERE id=$1", sid))
-
-
-@router.delete("/api/cs2/storages/{sid}")
-@limiter.limit(LIMIT_WRITE_RARE)
-async def lager_loeschen(request: Request, sid: int,
-                         db=Depends(get_db), user=Depends(get_current_user)):
-    """Lager loeschen, Positionen ziehen ins Auffanglager.
-
-    Sie mit dem Lager zu loeschen waere der bequemere Weg und der falsche: ein
-    Lagerort ist eine Ordnung, kein Besitz. Das Auffanglager selbst bleibt.
-    """
-    row = await db.fetchrow(
-        "SELECT id, is_default FROM cs2_storages WHERE id=$1 AND user_id=$2", sid, user["id"])
-    if not row:
-        raise HTTPException(404, "Dieses Lager gibt es nicht.")
-    if row["is_default"]:
-        raise HTTPException(
-            400, "Das Auffanglager bleibt — dorthin ziehen die Positionen "
-                 "gelöschter Lager um.")
-    ziel = await _lager_standard(db, user["id"])
-    umgezogen = 0
-    async with db.transaction():
-        # Was im Ziel schon steht, wird zusammengefuehrt statt abgelehnt --
-        # sonst scheitert das Loeschen an einer Dublette, die der Nutzer gar
-        # nicht sieht.
-        await db.execute(
-            """UPDATE cs2_positions z SET quantity = COALESCE(z.quantity,0) + COALESCE(q.quantity,0)
-                 FROM cs2_positions q
-                WHERE q.storage_id=$1 AND z.storage_id=$2 AND z.user_id=$3
-                  AND q.user_id=$3 AND q.item_id=z.item_id
-                  AND q.wear IS NOT DISTINCT FROM z.wear
-                  AND q.stattrak=z.stattrak AND q.playskin=z.playskin""",
-            sid, ziel, user["id"])
-        await db.execute(
-            """DELETE FROM cs2_positions q
-                WHERE q.storage_id=$1 AND q.user_id=$3
-                  AND EXISTS (SELECT 1 FROM cs2_positions z
-                               WHERE z.storage_id=$2 AND z.user_id=$3
-                                 AND z.item_id=q.item_id
-                                 AND z.wear IS NOT DISTINCT FROM q.wear
-                                 AND z.stattrak=q.stattrak AND z.playskin=q.playskin)""",
-            sid, ziel, user["id"])
-        ergebnis = await db.execute(
-            "UPDATE cs2_positions SET storage_id=$2 WHERE storage_id=$1 AND user_id=$3",
-            sid, ziel, user["id"])
-        umgezogen = int(ergebnis.rsplit(" ", 1)[-1] or 0)
-        await db.execute("DELETE FROM cs2_storages WHERE id=$1 AND user_id=$2",
-                         sid, user["id"])
-    return {"geloescht": sid, "umgezogen": umgezogen, "ziel": ziel}
-
-
 # =========================================================================
 # Verlauf
 # =========================================================================
@@ -755,8 +633,7 @@ async def snapshot_festhalten(request: Request, daten: SnapshotEingabe,
     zweiter Aufruf am selben Tag ersetzt den Eintrag.
     """
     rows = await db.fetch(
-        f"""SELECT p.quantity, p.price_eur, p.playskin, p.priced_at,
-                   i.category_id, p.storage_id
+        f"""SELECT p.quantity, p.price_eur, p.playskin, p.priced_at, i.category_id
             {_BESTAND_VON} WHERE p.user_id=$1""", user["id"])
     summe = rechnung.summiere([dict(r) for r in rows])
 
@@ -777,15 +654,10 @@ async def snapshot_festhalten(request: Request, daten: SnapshotEingabe,
             summe["playskin_netto"], summe["positionen"], summe["unvollstaendig"],
             summe["veraltet"], (daten.note or "").strip() or None)
         await db.execute("DELETE FROM cs2_snapshot_categories WHERE snapshot_id=$1", snap["id"])
-        await db.execute("DELETE FROM cs2_snapshot_storages WHERE snapshot_id=$1", snap["id"])
         for kid, wert in summe["je_kategorie"].items():
             await db.execute(
                 "INSERT INTO cs2_snapshot_categories (snapshot_id, category_id, gross) "
                 "VALUES ($1,$2,$3)", snap["id"], kid, wert)
-        for lid, wert in summe["je_lager"].items():
-            await db.execute(
-                "INSERT INTO cs2_snapshot_storages (snapshot_id, storage_id, gross) "
-                "VALUES ($1,$2,$3)", snap["id"], lid, wert)
 
     logger.info("CS2: Stand fuer %s festgehalten (%s Positionen, %s EUR)",
                 snap["taken_on"], summe["positionen"], summe["brutto"])

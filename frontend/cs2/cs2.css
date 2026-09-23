@@ -1,10 +1,12 @@
 /* cs2.css — das CS2-Modul.
  *
- * Flaechen, Knoepfe, Kopfzahlen (.stat-kpi), Listen (.rec-list, .rank-list),
- * Diagrammrahmen (.chart-wrap), Filterknoepfe (.filter-popover), leere
- * Zustaende und Skeletons kommen aus css/style.css und css/statistics.css.
- * Hier steht nur, was es sonst nirgends gibt: die drei Frische-Stufen eines
- * Preises, die Pflegezeile und der Fortschrittsbalken darueber.
+ * Flaechen, Knoepfe, Kopfzahlen (.stat-kpi), die sortierbare Tabelle
+ * (.stat-table samt .sort-btn und .sort-arrow), Listen (.rec-list,
+ * .rank-list), Diagrammrahmen (.chart-wrap), Filterknoepfe (.filter-popover),
+ * leere Zustaende und Skeletons kommen aus css/style.css und
+ * css/statistics.css. Hier steht nur, was es sonst nirgends gibt: die drei
+ * Frische-Stufen eines Preises, der Punkt daneben und die Felder, die
+ * mitten in der Tabelle stehen.
  *
  * Farbe: der Modulton traegt die Identitaet, --warn und --danger tragen das
  * Alter eines Preises. Beides sind Tokens -- kein Hex-Wert unterhalb von
@@ -13,7 +15,16 @@
  */
 
 :root {
-    /* Der Modulton steht in css/style.css bei den uebrigen. */
+    /* Beim Einhaengen in Vexbob wandern diese zwei Zeilen nach css/style.css
+       zu den uebrigen Modultoenen; hier stehen sie, damit die Seite auch
+       eigenstaendig ihre Identitaet hat.
+
+       Fuchsia liegt im einzigen freien Bereich der Modultoene: 33 Grad von
+       Violett (--m-admin, #b79cff) und 37 Grad von Rosa (--m-health, #fb85c4)
+       entfernt, damit die Zeichen in der Leiste nebeneinander unterscheidbar
+       bleiben. Kontrast gegen --surface-1: 7,4:1. */
+    --m-cs2: #e879f9;
+    --m-cs2-soft: rgba(232, 121, 249, 0.16);
 
     --cs2-ton: var(--figure, var(--m-cs2));
 }
@@ -23,42 +34,49 @@
    sie die Ueberschrift nicht verdoppelt. */
 .v-card-head h3 .v-card-sub { font-weight: 400; margin-left: 0.4rem; }
 
+/* Beschriftung, die nur vorgelesen wird. Die Spalte mit dem Stift hat keine
+   sichtbare Ueberschrift -- eine leere Zelle waere fuer ein Vorleseprogramm
+   aber eine namenlose Spalte. */
+.cs-nur-vorlesen {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 /* ---------- Filterleiste ---------- */
 .cs-suche {
     flex: 1 1 14rem;
     min-width: 0;
     margin: 0;
 }
-.cs-suche--voll { width: 100%; margin-bottom: 0.875rem; }
-
-/* Der Zaehler am Reiter: wie viele Preise ueberfaellig sind. Er steht dort und
-   nicht in einer Meldung, weil er eine Menge ist und keine Nachricht -- eine
-   Null blendet ihn aus. */
-.cs-zaehler {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.25rem;
-    height: 1.25rem;
-    padding: 0 0.3rem;
-    margin-left: 0.4rem;
-    border-radius: 999px;
-    background: var(--warn-soft);
-    color: var(--warn);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
 
 /* ---------- Frische eines Preises ----------
-   Die Marke links an der Zeile traegt sie. Drei Stufen plus "nie bepreist" --
-   und das ist bewusst eine eigene Stufe: ein fehlender Preis ist kein alter
-   Preis, und eine Zeile ohne Wert darf nicht aussehen wie eine mit einem
-   ueberholten. */
+   Drei Stufen plus "nie bepreist" -- und das ist bewusst eine eigene Stufe:
+   ein fehlender Preis ist kein alter Preis, und eine Zeile ohne Wert darf
+   nicht aussehen wie eine mit einem ueberholten. */
 .cs-frisch    { --tone: var(--ok); }
 .cs-alt       { --tone: var(--warn); }
 .cs-sehr-alt  { --tone: var(--danger); }
 .cs-ohne      { --tone: var(--text-4); }
+
+/* Der Punkt neben dem Namen: ab 30 Tagen gelb, ab 60 rot, ohne Preis grau.
+   Er steht NUR an den Zeilen, die etwas brauchen -- ein Zeichen an jeder
+   Zeile markiert nichts mehr.
+
+   Ein eigenes Element und kein ::before am Namen: der Name traegt schon den
+   Kopiervorgang, und ein Pseudo-Element liesse sich nicht beschriften. */
+.cs-punkt {
+    flex: 0 0 auto;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--tone, var(--warn));
+}
+/* Ohne Preis bleibt der Punkt hohl: nichts drin, nichts gemessen. */
+.cs-ohne .cs-punkt { background: transparent; border: 1.5px solid var(--text-4); }
 
 .cs-alter {
     font-variant-numeric: tabular-nums;
@@ -70,11 +88,11 @@
 
 /* Eine Zeile ohne Menge oder Preis. Kein Rot: sie ist nicht falsch, nur noch
    nicht fertig. */
-.cs-unvollstaendig .rec-val { color: var(--text-4); font-weight: 600; }
+.cs-unvollstaendig .cs-gesamt { color: var(--text-4); }
 
-/* Merkmale am Gegenstand: StatTrak und selbst gespielt. Kleine Plaketten in
-   der Metazeile, keine eigene Spalte -- auf dem Handy waere sie die erste,
-   die hinter dem Rand liegt. */
+/* Merkmale am Gegenstand: StatTrak, selbst gespielt, Abnutzung. Kleine
+   Plaketten neben dem Namen, keine eigenen Spalten -- die waeren die ersten,
+   die auf dem Handy hinter dem Rand liegen. */
 .cs-marke {
     display: inline-flex;
     align-items: center;
@@ -86,91 +104,196 @@
     background: var(--surface-2);
     color: var(--text-3);
     border: 1px solid var(--line);
+    white-space: nowrap;
 }
 .cs-marke--st { background: var(--m-cs2-soft); color: var(--cs2-ton); border-color: transparent; }
 .cs-marke--ps { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
 
-/* ---------- Pflege ---------- */
-.cs-pflege-kopf { margin-bottom: 1rem; }
+/* ---------- Die Tabelle ---------- */
+/* Waagerecht scrollbar statt schmaler: sechs Spalten passen auf kein Telefon,
+   und eine versteckte Spalte ist eine Angabe, die nur auf dem grossen
+   Bildschirm existiert. */
+.cs-tabelle-huelle {
+    overflow-x: auto;
+    margin: 0 -0.25rem;
+    padding: 0 0.25rem;
+}
+.cs-tabelle { min-width: 46rem; }
+.cs-tabelle td { vertical-align: middle; }
+.cs-tabelle tr:hover td { background: var(--surface-2); }
 
-.cs-fortschritt {
-    height: 6px;
-    border-radius: 999px;
-    background: var(--surface-2);
-    overflow: hidden;
+/* NICHT ``td.name`` aus statistics.css: das setzt display:flex, und eine
+   Zelle, die kein table-cell mehr ist, faellt aus dem Raster -- ihre
+   Unterkante liegt dann woanders als die der Nachbarzellen. Hier bleibt die
+   Zelle eine Zelle, und der Inhalt darin ist der Flex-Kasten. */
+.cs-sp-name {
+    display: table-cell;
+    max-width: 24rem;
 }
-.cs-fortschritt > i {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--grad-progress, var(--cs2-ton));
-    transition: width var(--dur-2, 0.35s) var(--ease);
-}
-.cs-hinweis {
-    margin: 0.625rem 0 0;
-    font-size: 0.8125rem;
-    color: var(--text-3);
-}
+.cs-sp-name > * { vertical-align: middle; }
+.cs-sp-tun { width: 2.5rem; text-align: right; }
 
-/* Eine Pflegezeile: links der Gegenstand, rechts das Feld. Die ganze Zeile
-   ist auf die eine Handlung ausgerichtet, die hier ansteht. */
-.cs-pflege-zeile {
-    display: grid;
-    grid-template-columns: 2.5rem 1fr auto;
-    gap: 0.75rem;
+/* Der Name ist ein Knopf, weil er etwas tut: anklicken kopiert den
+   Marktnamen. Er sieht aber nicht wie ein Knopf aus -- das waere an jeder
+   Zeile ein Bedienelement zu viel. Die Einladung steht im Unterstrich beim
+   Ueberfahren und im title. */
+.cs-name {
+    display: inline-flex;
     align-items: center;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid var(--line);
-}
-.cs-pflege-zeile:last-child { border-bottom: 0; }
-.cs-pflege-zeile.is-erledigt { opacity: 0.45; }
-
-.cs-pflege-name {
-    min-width: 0;
+    gap: 0.4rem;
+    max-width: 22rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
     font-weight: 600;
     color: var(--text-1);
-    overflow-wrap: anywhere;
+    text-align: left;
+    cursor: copy;
 }
-.cs-pflege-meta {
-    display: block;
-    margin-top: 2px;
-    font-size: 0.75rem;
-    color: var(--text-3);
-    font-weight: 400;
+.cs-name-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.cs-pflege-feld {
-    display: flex;
+.cs-name:hover .cs-name-text { text-decoration: underline dotted; }
+.cs-name:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
+
+/* ---------- Felder mitten in der Tabelle ---------- */
+/* Sie sehen erst beim Ueberfahren wie Felder aus. Sechs sichtbare Rahmen je
+   Zeile waeren ein Formular, und die Tabelle soll zuerst lesbar sein. */
+.cs-feld-huelle {
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.2rem;
+    justify-content: flex-end;
 }
-/* Keine eigene font-size: die Form-Base setzt --eingabe-schrift. Ein kleineres
-   Feld laesst iOS die Seite heranzoomen und danach nicht zurueck. */
-.cs-pflege-feld input {
-    width: 7rem;
+.cs-feld-huelle > i {
+    font-style: normal;
+    color: var(--text-4);
+    font-size: 0.75rem;
+}
+/* Keine eigene font-size: die Form-Base setzt --eingabe-schrift. Ein
+   kleineres Feld laesst iOS die Seite heranzoomen und danach nicht zurueck. */
+.cs-feld {
+    width: 5.5rem;
     margin: 0;
+    padding: 0.25rem 0.4rem;
     text-align: right;
+    font-variant-numeric: tabular-nums;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--text-1);
+    font-weight: 600;
 }
+.cs-feld--menge { width: 4.5rem; }
+.cs-feld:hover  { border-color: var(--line); }
+.cs-feld:focus  { background: var(--surface-1); border-color: var(--cs2-ton); outline: none; }
+.cs-feld.is-laeuft   { opacity: 0.5; }
+/* Kurz gruen: die Bestaetigung, dass es drin ist. Ein Toast je Zelle waere
+   bei einer Preisrunde ein Dauerfeuer. */
+.cs-feld.is-gesichert { border-color: var(--ok); background: var(--ok-soft); }
+
+.cs-stift {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-4);
+    cursor: pointer;
+}
+.cs-stift:hover { background: var(--surface-2); color: var(--text-1); }
+.cs-stift:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* ---------- Beruehrungsziele ----------
    Mit BEIDEN Bedingungen, nicht nur pointer:coarse -- die zweite trifft im
    kopflosen Browser nie zu, und eine Regel, die man nicht ansehen kann, ist
    eine Behauptung. */
+/* Die Sortierwahl fuer schmale Schirme steht auf breiten nicht im Weg: dort
+   ist die Kopfzeile selbst der Schalter. */
+.cs-nur-schmal { display: none; }
+.cs-richtung { font-variant-numeric: tabular-nums; min-width: 2.5rem; }
+
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
-    .cs-pflege-zeile {
-        grid-template-columns: 2.25rem 1fr;
-        grid-template-areas: "marke name" ".     feld";
-    }
-    .cs-pflege-zeile > :nth-child(1) { grid-area: marke; }
-    .cs-pflege-zeile > :nth-child(2) { grid-area: name; }
-    .cs-pflege-feld  { grid-area: feld; justify-content: flex-start; min-height: 44px; }
-    .cs-pflege-feld input { width: 100%; max-width: 10rem; }
     .cs-suche { flex-basis: 100%; }
+    .cs-nur-schmal { display: flex; gap: 0.5rem; align-items: center; }
+
+    /* ---------- Die Tabelle stapelt sich ----------
+       Waagerecht scrollen ist auf dem Telefon keine Loesung, sondern die
+       Regel, gegen die DESIGN ausdruecklich steht: wer schieben muss, um das
+       Ergebnis zu sehen, liest die Liste nicht. Sechs Spalten passen nicht
+       nebeneinander -- also stehen sie uebereinander, mit ihrer Beschriftung
+       davor. Eine Spalte wegzulassen waere die schlechtere Loesung: das
+       waere eine Angabe, die es nur auf dem grossen Bildschirm gibt.
+
+       Sortiert wird dann ueber das Auswahlfeld oben, nicht ueber die
+       Kopfzeile -- die gibt es hier nicht mehr. */
+    .cs-tabelle-huelle { overflow-x: visible; margin: 0; padding: 0; }
+    .cs-tabelle { min-width: 0; }
+    .cs-tabelle thead { display: none; }
+    .cs-tabelle, .cs-tabelle tbody, .cs-tabelle tr, .cs-tabelle td {
+        display: block;
+        width: auto;
+    }
+    .cs-tabelle tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+        grid-template-areas:
+            "name  name   name"
+            "preis menge  gesamt"
+            "typ   alter  tun";
+        gap: 0.35rem 0.75rem;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--line);
+    }
+    .cs-tabelle tr:last-child { border-bottom: 0; }
+    .cs-tabelle td { padding: 0; border: 0; }
+    .cs-sp-name   { grid-area: name; }
+    .cs-sp-preis  { grid-area: preis; }
+    .cs-sp-menge  { grid-area: menge; }
+    .cs-gesamt    { grid-area: gesamt; font-weight: 700; color: var(--text-1); }
+    .cs-sp-typ    { grid-area: typ; }
+    .cs-alter     { grid-area: alter; }
+    .cs-sp-tun    { grid-area: tun; width: auto; }
+    .cs-sp-typ, .cs-alter { font-size: 0.75rem; color: var(--text-3); }
+
+    /* Ohne Kopfzeile sagt nichts mehr, ob eine Zahl Stueckpreis oder Summe
+       ist. Die Beschriftung kommt aus data-label und steht nur hier. */
+    .cs-sp-preis::before, .cs-sp-menge::before, .cs-gesamt::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-4);
+    }
+    .cs-sp-preis .cs-feld-huelle, .cs-sp-menge .cs-feld-huelle { justify-content: flex-start; }
+    .cs-name { max-width: 100%; }
+
+    /* Auf dem Telefon ist der Rahmen immer da: ohne Ueberfahren gibt es
+       keinen Hinweis, dass die Zahl ein Feld ist. */
+    .cs-feld { border-color: var(--line); min-height: 44px; width: 100%; }
+    .cs-stift { width: 2.75rem; height: 2.75rem; }
+    .cs-richtung { min-height: 44px; }
 }
 
 /* ---------- Übernahme aus einer Datei ---------- */
 /* Die Ablegefläche selbst kommt aus css/style.css (.dropzone). Hier steht nur
    die Vorschau darunter -- sie ist kein eigener Baustein, sondern eine Karte
    aus vorhandenen Teilen. */
+.cs-hinweis {
+    margin: 0.625rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--text-3);
+}
 .cs-vorschau { margin-top: 1rem; }
 .cs-vorschau .cs-hinweis { margin-top: 0.4rem; }
 .cs-vorschau .cs-hinweis strong { color: var(--text-1); }

@@ -14,6 +14,7 @@
 <script src="/js/config.js"></script>
 <script src="/js/version.js"></script>
 <script src="/js/api.js"></script>
+<script src="/js/ikon.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/modal.js"></script>
 <script src="/js/sw-update.js"></script>
@@ -37,7 +38,6 @@
 
     <div class="tabs">
         <button class="tab-btn active" data-tab="bestand">Bestand</button>
-        <button class="tab-btn" data-tab="pflege">Pflege<span class="cs-zaehler" id="csPflegeZahl" hidden></span></button>
         <button class="tab-btn" data-tab="verlauf">Verlauf</button>
         <button class="tab-btn" data-tab="verwaltung">Verwaltung</button>
     </div>
@@ -45,7 +45,7 @@
     <!-- ================= Bestand ================= -->
     <div id="tab-bestand">
         <div class="stat-filterbar">
-            <input type="search" id="csSuche" placeholder="Gegenstand, Kategorie oder Lager suchen"
+            <input type="search" id="csSuche" placeholder="Gegenstand oder Kategorie suchen"
                    aria-label="Bestand durchsuchen" class="cs-suche">
             <div class="filter-popover-wrap" id="csKatWrap">
                 <button type="button" class="filter-toggle-btn" id="csKatBtn" aria-expanded="false">
@@ -53,22 +53,20 @@
                 </button>
                 <div class="filter-popover" id="csKatPop" hidden></div>
             </div>
-            <div class="filter-popover-wrap" id="csLagWrap">
-                <button type="button" class="filter-toggle-btn" id="csLagBtn" aria-expanded="false">
-                    Lager<span class="filter-badge" id="csLagBadge" hidden></span>
-                </button>
-                <div class="filter-popover" id="csLagPop" hidden></div>
-            </div>
             <button type="button" class="stat-chip" id="csFaellig">Nur überfällige</button>
-            <div class="stat-filter-slot">
-                <select id="csSort" aria-label="Sortierung" class="v-select">
-                    <option value="wert">Nach Wert</option>
-                    <option value="alter">Nach Preisalter</option>
-                    <option value="name">Nach Name</option>
-                    <option value="menge">Nach Stückzahl</option>
-                    <option value="preis">Nach Stückpreis</option>
-                    <option value="kategorie">Nach Kategorie</option>
+            <!-- Nur auf schmalen Schirmen: dort gibt es keine Kopfzeile zum
+                 Anklicken. Beide Wege schreiben dieselbe Sortierung. -->
+            <div class="stat-filter-slot cs-nur-schmal">
+                <select id="csSort" aria-label="Sortieren nach" class="v-select">
+                    <option value="wert">Preis gesamt</option>
+                    <option value="preis">Preis je Stück</option>
+                    <option value="menge">Anzahl</option>
+                    <option value="name">Name</option>
+                    <option value="typ">Typ</option>
+                    <option value="alter">Zuletzt aktualisiert</option>
                 </select>
+                <button type="button" class="stat-chip cs-richtung" id="csRichtung"
+                        aria-label="Absteigend sortiert, umschalten">▼</button>
             </div>
         </div>
 
@@ -77,7 +75,7 @@
                 <div class="stat-kpi-value"><span class="skel skel-line short"></span></div></div>
             <div class="stat-kpi"><div class="stat-kpi-label">Nach Gebühr</div>
                 <div class="stat-kpi-value"><span class="skel skel-line short"></span></div></div>
-            <div class="stat-kpi"><div class="stat-kpi-label">Selbst gespielt</div>
+            <div class="stat-kpi"><div class="stat-kpi-label">Itemanzahl</div>
                 <div class="stat-kpi-value"><span class="skel skel-line short"></span></div></div>
             <div class="stat-kpi"><div class="stat-kpi-label">Positionen</div>
                 <div class="stat-kpi-value"><span class="skel skel-line short"></span></div></div>
@@ -86,10 +84,7 @@
         <div class="stat-card">
             <div class="stat-card-head">
                 <h3>Aufteilung</h3>
-                <div class="stat-mini-toggle" id="csAufteilungWahl">
-                    <button type="button" class="active" data-dim="kategorie">Kategorie</button>
-                    <button type="button" data-dim="lager">Lager</button>
-                </div>
+                <span class="stat-range-lbl">nach Kategorie</span>
             </div>
             <div id="csAufteilung"><span class="skel skel-block"></span></div>
         </div>
@@ -99,27 +94,28 @@
                 <h3>Positionen <span class="v-card-sub" id="csListeKopf"></span></h3>
                 <button type="button" class="v-btn v-btn--sm" id="csNeu">+ Position</button>
             </div>
-            <div id="csListe">
-                <span class="skel skel-line long"></span>
-                <span class="skel skel-line"></span>
-                <span class="skel skel-line short"></span>
+            <!-- Waagerecht scrollbar statt schmaler: sechs Spalten passen auf
+                 kein Telefon, und eine versteckte Spalte ist eine Angabe, die
+                 nur auf dem grossen Bildschirm existiert. -->
+            <div class="cs-tabelle-huelle">
+                <table class="stat-table cs-tabelle" id="csTabelle">
+                    <thead>
+                        <tr id="csKopfzeile">
+                            <th class="sort" data-sort="name">Name</th>
+                            <th class="sort num" data-sort="preis">Preis je Stück</th>
+                            <th class="sort num" data-sort="wert">Preis gesamt</th>
+                            <th class="sort num" data-sort="menge">Anzahl</th>
+                            <th class="sort" data-sort="typ">Typ</th>
+                            <th class="sort" data-sort="alter">Zuletzt aktualisiert</th>
+                            <th class="cs-sp-tun"><span class="cs-nur-vorlesen">Ändern</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="csListe">
+                        <tr><td colspan="7"><span class="skel skel-block"></span></td></tr>
+                    </tbody>
+                </table>
             </div>
-        </div>
-    </div>
-
-    <!-- ================= Pflege ================= -->
-    <div id="tab-pflege" hidden>
-        <div class="v-card cs-pflege-kopf">
-            <div class="v-card-head">
-                <h3>Preise nachtragen</h3>
-                <span class="v-card-sub" id="csPflegeSub">Die ältesten zuerst.</span>
-            </div>
-            <div class="cs-fortschritt"><i id="csFortschritt" style="width:0%"></i></div>
-            <p class="cs-hinweis" id="csPflegeStand"></p>
-        </div>
-        <div id="csPflege">
-            <span class="skel skel-line long"></span>
-            <span class="skel skel-line"></span>
+            <div id="csListeLeer"></div>
         </div>
     </div>
 
@@ -148,13 +144,6 @@
     <div id="tab-verwaltung" hidden>
         <div class="v-card">
             <div class="v-card-head">
-                <h3>Lager</h3>
-                <button type="button" class="v-btn v-btn--sm" id="csLagerNeu">+ Lager</button>
-            </div>
-            <div id="csLagerListe"><span class="skel skel-line"></span></div>
-        </div>
-        <div class="v-card">
-            <div class="v-card-head">
                 <h3>Bestand übernehmen</h3>
                 <span class="v-card-sub">Aus einer Datei vom Rechner</span>
             </div>
@@ -166,16 +155,6 @@
                 <input type="file" id="csDatei" accept="application/json,.json" hidden>
             </div>
             <div id="csImport"></div>
-        </div>
-
-        <div class="v-card">
-            <div class="v-card-head">
-                <h3>Gegenstände</h3>
-                <span class="v-card-sub" id="csItemKopf"></span>
-            </div>
-            <input type="search" id="csItemSuche" placeholder="Gegenstand suchen"
-                   aria-label="Gegenstände durchsuchen" class="cs-suche cs-suche--voll">
-            <div id="csItemListe"><span class="skel skel-line"></span></div>
         </div>
     </div>
 

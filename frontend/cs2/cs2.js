@@ -1,24 +1,31 @@
 /* cs2.js — der CS2-Bestand.
  *
- * Vier Reiter, eine Frage je Reiter:
- *   Bestand     was ist da und was waere es wert
- *   Pflege      welcher Preis ist zu alt, um noch fuer sich zu sprechen
+ * Drei Reiter, eine Frage je Reiter:
+ *   Bestand     was ist da, was waere es wert, und wie alt sind die Preise
  *   Verlauf     wie hat sich das entwickelt
- *   Verwaltung  Lager und Gegenstaende
+ *   Verwaltung  einen Bestand aus einer Datei uebernehmen
  *
- * Drei Regeln, die das Modul durchhaelt:
+ * Vier Regeln, die das Modul durchhaelt:
  *
- * 1. **Gerechnet wird im Server.** Die Kopfzahlen kommen aus /overview mit
- *    denselben Filterwerten wie die Liste, nicht aus den geladenen Zeilen.
- *    Sonst stuenden eine grosse Zahl und ein Ausschnitt nebeneinander, ohne
- *    dass man der Zahl ansieht, welche Menge sie meint.
+ * 1. **Gerechnet und sortiert wird im Server.** Die Kopfzahlen kommen aus
+ *    /overview mit denselben Filterwerten wie die Liste, nicht aus den
+ *    geladenen Zeilen. Und die Tabelle sortiert nicht das, was gerade da
+ *    ist: bei 1000 Zeilen Obergrenze stuende oben sonst nicht das Groesste,
+ *    sondern das Groesste der geladenen Haelfte.
  *
  * 2. **Ein gescheiterter Abruf ist kein leerer Bestand.** Jede Ladefunktion
  *    schreibt ihren Fehler DORTHIN, wo die Daten stuenden, mit dem Weg
  *    zurueck daneben -- nie in eine leere Liste und nie nur in einen Toast,
  *    der nach Sekunden weg ist.
  *
- * 3. **Kein eigener Dialog, kein eigener Zeitraum, kein eigener Export.**
+ * 3. **Was man aendert, aendert man an Ort und Stelle.** Anzahl und Preis
+ *    sind Felder in der Zeile, kein Dialog. Der Preis geht dabei ueber
+ *    ``PUT .../preis`` und bewegt damit den Preisstand -- "nachgesehen,
+ *    stimmt noch" ist die haeufigste Auskunft bei Handpflege. Deshalb
+ *    braucht es keine eigene Pflegeseite mehr: die Arbeit findet dort statt,
+ *    wo die Zahl steht.
+ *
+ * 4. **Kein eigener Dialog, kein eigener Zeitraum, kein eigener Export.**
  *    VexModal, VexRange und der Gesamt-Export der Seite sind da.
  */
 'use strict';
@@ -32,25 +39,32 @@ const API = {
     preis:     (id, p)       => apiCall('/api/cs2/positions/' + id + '/preis',
                                         { method: 'PUT', body: { price_eur: p } }),
     entfernen: (id)          => apiCall('/api/cs2/positions/' + id, { method: 'DELETE' }),
-    pflege:    ()            => apiCall('/api/cs2/pflege'),
     staende:   (tage)        => apiCall('/api/cs2/snapshots?tage=' + tage),
     festhalten:()            => apiCall('/api/cs2/snapshots', { method: 'POST', body: {} }),
-    lagerNeu:  (n)           => apiCall('/api/cs2/storages', { method: 'POST', body: { name: n } }),
-    lagerName: (id, n)       => apiCall('/api/cs2/storages/' + id, { method: 'PUT', body: { name: n } }),
-    lagerWeg:  (id)          => apiCall('/api/cs2/storages/' + id, { method: 'DELETE' }),
-    itemName:  (id, n)       => apiCall('/api/cs2/items/' + id, { method: 'PUT', body: { name: n } }),
-    itemWeg:   (id)          => apiCall('/api/cs2/items/' + id, { method: 'DELETE' }),
     einlesen:  (daten, tun)  => apiCall('/api/cs2/import',
                                         { method: 'POST', body: { daten, uebernehmen: !!tun } }),
 };
 
 const state = {
     katalog: null,
-    filter: { suche: '', kategorien: [], lager: [], faellig: false, sortierung: 'wert' },
-    aufteilung: 'kategorie',
+    filter: { suche: '', kategorien: [], faellig: false },
+    sortierung: 'wert',
+    richtung: 'ab',
     tage: 365,
     chart: null,
-    itemSuche: '',
+    zeilen: [],
+};
+
+/* Die Spalten der Tabelle. ``zahl`` sagt, ob sie rechtsbuendig steht, und
+   ``abwaerts`` welche Richtung beim ersten Klick gemeint ist: bei Geld und
+   Mengen will man das Groesste zuerst, bei Namen das A. */
+const SPALTEN = {
+    name:  { abwaerts: false },
+    preis: { abwaerts: true },
+    wert:  { abwaerts: true },
+    menge: { abwaerts: true },
+    typ:   { abwaerts: false },
+    alter: { abwaerts: false },   // aelteste zuerst -- das ist die offene Arbeit
 };
 
 /* ---------------------------------------------------------------- Werkzeug */
@@ -113,14 +127,13 @@ function frageKette() {
     const teile = [];
     if (f.suche) teile.push('suche=' + encodeURIComponent(f.suche));
     if (f.kategorien.length) teile.push('kategorien=' + f.kategorien.join(','));
-    if (f.lager.length) teile.push('lager=' + f.lager.join(','));
     if (f.faellig) teile.push('nur_faellig=true');
     return teile;
 }
 
 /* ------------------------------------------------------------------ Reiter */
 
-const REITER = ['bestand', 'pflege', 'verlauf', 'verwaltung'];
+const REITER = ['bestand', 'verlauf', 'verwaltung'];
 
 function zeigeReiter(name, still) {
     if (!REITER.includes(name)) name = REITER[0];
@@ -133,25 +146,27 @@ function zeigeReiter(name, still) {
     });
     if (!still) location.hash = name;
     if (name === 'verlauf') ladeVerlauf();
-    if (name === 'pflege') ladePflege();
-    if (name === 'verwaltung') zeichneVerwaltung();
 }
 
 /* ----------------------------------------------------------------- Bestand */
 
 async function ladeBestand() {
-    const q = frageKette();
     const listeEl = document.getElementById('csListe');
+    const q = frageKette();
     try {
         const [ueber, liste] = await Promise.all([
             API.ueberblick('?' + q.concat('tage=' + state.tage).join('&')),
-            API.liste('?' + q.concat('sortierung=' + state.filter.sortierung).join('&')),
+            API.liste('?' + q.concat('sortierung=' + state.sortierung,
+                                     'richtung=' + state.richtung).join('&')),
         ]);
         zeichneKpi(ueber);
         zeichneAufteilung(ueber);
         zeichneListe(liste);
     } catch (e) {
-        zeigeFehler(listeEl, 'Der Bestand konnte nicht geladen werden: ' + e.message, ladeBestand);
+        listeEl.innerHTML = '';
+        document.getElementById('csTabelle').hidden = true;
+        zeigeFehler(document.getElementById('csListeLeer'),
+                    'Der Bestand konnte nicht geladen werden: ' + e.message, ladeBestand);
         zeigeFehler(document.getElementById('csAufteilung'),
                     'Auch die Aufteilung fehlt dadurch.', ladeBestand);
     }
@@ -168,18 +183,23 @@ function zeichneKpi(u) {
             label: 'Bestand brutto', wert: eur(b.brutto),
             sub: v ? `<span class="stat-kpi-delta ${richtung}">${pfeil} ${eur(Math.abs(v.brutto))}</span>
                       seit ${esc(tagDatum(v.seit))}`
-                   : `${zahl(b.stueck)} Einzelstücke`,
+                   : 'noch kein früherer Stand zum Vergleich',
         },
         {
             label: 'Nach Gebühr', wert: eur(b.netto),
             sub: `geschätzter Erlös, abzüglich ${Math.round((state.katalog?.gebuehr || 0.15) * 100)} % Gebühr`,
         },
         {
-            label: 'Selbst gespielt', wert: eur(b.playskin_brutto),
-            sub: `Rest als Anlage: ${eur(b.invest_brutto)}`,
+            label: 'Itemanzahl', wert: zahl(b.stueck),
+            sub: b.positionen
+                ? `Einzelstücke · Ø ${zahl(Math.round(b.stueck / b.positionen))} je Position`
+                : 'Einzelstücke',
         },
         {
-            label: 'Positionen', wert: zahl(b.positionen),
+            // ``zeilen``, nicht ``positionen``: dieselbe Menge, die unten in
+            // der Tabelle steht. ``positionen`` waere nur, was einen Wert
+            // beitraegt -- eine andere Frage, und daneben steht ihre Antwort.
+            label: 'Positionen', wert: zahl(b.zeilen),
             sub: [b.unvollstaendig ? `${zahl(b.unvollstaendig)} unvollständig` : '',
                   b.veraltet ? `${zahl(b.veraltet)} überfällig` : '']
                  .filter(Boolean).join(' · ') || 'alle vollständig und aktuell',
@@ -191,15 +211,11 @@ function zeichneKpi(u) {
             <div class="stat-kpi-value">${esc(k.wert)}</div>
             <div class="stat-kpi-sub">${k.sub}</div>
         </div>`).join('');
-
-    const zaehler = document.getElementById('csPflegeZahl');
-    zaehler.hidden = !b.veraltet;
-    zaehler.textContent = b.veraltet || '';
 }
 
 function zeichneAufteilung(u) {
     const el = document.getElementById('csAufteilung');
-    const daten = state.aufteilung === 'lager' ? u.je_lager : u.je_kategorie;
+    const daten = u.je_kategorie;
     if (!daten.length) {
         zeigeLeer(el, 'Noch nichts im Bestand, das sich aufteilen ließe.');
         return;
@@ -220,6 +236,8 @@ function zeichneAufteilung(u) {
                   .reduce((s, z) => s + z.brutto, 0)))} übrige</div>` : ''}`;
 }
 
+/* ------------------------------------------------------------ Die Tabelle */
+
 function markeFuer(p) {
     const stufe = { frisch: 'cs-frisch', alt: 'cs-alt', sehr_alt: 'cs-sehr-alt', ohne: 'cs-ohne' };
     return stufe[p.frische] || 'cs-frisch';
@@ -227,62 +245,274 @@ function markeFuer(p) {
 
 function alterText(p) {
     if (p.alter_tage == null) return 'nie bepreist';
-    if (p.alter_tage === 0) return 'heute gepflegt';
-    if (p.alter_tage === 1) return 'gestern gepflegt';
-    return `vor ${zahl(p.alter_tage)} Tagen gepflegt`;
+    if (p.alter_tage === 0) return 'heute';
+    if (p.alter_tage === 1) return 'gestern';
+    return `vor ${zahl(p.alter_tage)} Tagen`;
+}
+
+/* Der Punkt neben dem Namen. Er erscheint, sobald ein Preis aelter ist als
+   die Frist aus dem Katalog (30 Tage) -- gelb dafuer, rot ab der doppelten
+   Frist, und grau, wenn nie ein Preis dastand. Das ist ausdruecklich eine
+   eigene Stufe: kein Preis ist kein alter Preis.
+
+   Frische Zeilen bekommen KEINEN Punkt. Ein Zeichen, das an jeder Zeile
+   steht, sagt nichts mehr aus; es soll die Ausnahme markieren. */
+function punktHtml(p) {
+    if (p.frische === 'frisch') return '';
+    const wort = {
+        alt: `Preis ist ${p.alter_tage} Tage alt`,
+        sehr_alt: `Preis ist ${p.alter_tage} Tage alt`,
+        ohne: 'Für diese Position steht noch kein Preis',
+    }[p.frische] || '';
+    return `<span class="cs-punkt" role="img" aria-label="${esc(wort)}" title="${esc(wort)}"></span>`;
 }
 
 function zeileHtml(p) {
     const marken = [
         p.stattrak ? '<span class="cs-marke cs-marke--st">StatTrak™</span>' : '',
         p.playskin ? '<span class="cs-marke cs-marke--ps">gespielt</span>' : '',
+        p.wear ? `<span class="cs-marke">${esc(p.wear)}</span>` : '',
     ].filter(Boolean).join(' ');
-    const meta = [
-        esc(p.category_name),
-        p.wear ? esc(p.wear) : '',
-        esc(p.storage_name),
-        `<span class="cs-alter">${esc(alterText(p))}</span>`,
-    ].filter(Boolean).join('<span class="sep">·</span>');
-    return `<button type="button" class="rec-row ${markeFuer(p)}${p.unvollstaendig ? ' cs-unvollstaendig' : ''}"
-                    data-position="${p.id}">
-        <span class="rec-mark">${esc((p.item_name || '?').slice(0, 1).toUpperCase())}</span>
-        <span class="rec-main">
-            <span class="rec-title">${esc(p.item_name)} ${marken}</span>
-            <span class="rec-meta">${meta}</span>
-        </span>
-        <span class="rec-side">
-            <span class="rec-val">${p.brutto == null ? 'unvollständig' : esc(eur(p.brutto))}</span>
-            <span class="rec-sub">${p.quantity == null ? '– Stück' : zahl(p.quantity) + ' ×'} ${p.price_eur == null ? '–' : esc(eur(p.price_eur))}</span>
-        </span>
-        <span class="rec-go" aria-hidden="true">›</span>
-    </button>`;
+    return `<tr class="${markeFuer(p)}${p.unvollstaendig ? ' cs-unvollstaendig' : ''}"
+                data-zeile="${p.id}">
+        <td class="cs-sp-name">
+            <button type="button" class="cs-name" data-kopieren="${esc(p.markt_name)}"
+                    title="Anklicken kopiert „${esc(p.markt_name)}“">
+                ${punktHtml(p)}<span class="cs-name-text">${esc(p.item_name)}</span>
+            </button>${marken ? ' ' + marken : ''}
+        </td>
+        <td class="num cs-sp-preis" data-label="Je Stück">
+            <span class="cs-feld-huelle">
+                <input type="text" inputmode="decimal" class="cs-feld" data-feld="preis"
+                       data-id="${p.id}" data-wert="${esc(preisFeld(p.price_eur))}"
+                       value="${esc(preisFeld(p.price_eur))}" placeholder="0,00"
+                       aria-label="Preis je Stück für ${esc(p.item_name)}"><i aria-hidden="true">€</i>
+            </span>
+        </td>
+        <td class="num cs-gesamt" data-label="Gesamt">${p.brutto == null ? '–' : esc(eur(p.brutto))}</td>
+        <td class="num cs-sp-menge" data-label="Anzahl">
+            <span class="cs-feld-huelle">
+                <input type="text" inputmode="numeric" class="cs-feld cs-feld--menge" data-feld="menge"
+                       data-id="${p.id}" data-wert="${p.quantity == null ? '' : p.quantity}"
+                       value="${p.quantity == null ? '' : p.quantity}" placeholder="–"
+                       aria-label="Anzahl für ${esc(p.item_name)}">
+            </span>
+        </td>
+        <td class="cs-sp-typ">${esc(p.category_name)}</td>
+        <td class="cs-alter" title="${p.priced_at ? esc(tagDatum(p.priced_at)) : 'nie'}">${esc(alterText(p))}</td>
+        <td class="cs-sp-tun">
+            <button type="button" class="cs-stift" data-position="${p.id}"
+                    aria-label="${esc(p.item_name)} ändern">${
+                window.VexIkon ? VexIkon.svg('stift', 16) : ''}</button>
+        </td>
+    </tr>`;
+}
+
+/* Auf dem Telefon gibt es keine Kopfzeile zum Anklicken -- dort steht
+   dieselbe Wahl als Auswahlfeld in der Filterleiste. Beide schreiben in
+   dieselbe Zustandsgroesse; zwei Sortierungen nebeneinander waeren zwei
+   Antworten auf dieselbe Frage. */
+function zeichneSortWahl() {
+    const wahl = document.getElementById('csSort');
+    if (wahl) wahl.value = state.sortierung;
+    const knopf = document.getElementById('csRichtung');
+    if (knopf) {
+        const auf = state.richtung === 'auf';
+        knopf.textContent = auf ? '\u25b2' : '\u25bc';
+        knopf.setAttribute('aria-label',
+            auf ? 'Aufsteigend sortiert, umschalten' : 'Absteigend sortiert, umschalten');
+    }
+}
+
+function zeichneKopfzeile() {
+    const kopf = document.getElementById('csKopfzeile');
+    kopf.querySelectorAll('th.sort').forEach((th) => {
+        const aktiv = th.dataset.sort === state.sortierung;
+        th.classList.toggle('is-sorted', aktiv);
+        const pfeil = aktiv ? (state.richtung === 'auf' ? '▲' : '▼') : '';
+        const text = th.dataset.label || (th.dataset.label = th.textContent.trim());
+        th.setAttribute('aria-sort',
+            aktiv ? (state.richtung === 'auf' ? 'ascending' : 'descending') : 'none');
+        th.innerHTML = `<button type="button" class="sort-btn"
+            aria-label="Nach ${esc(text)} sortieren">${esc(text)}<span
+            class="sort-arrow" aria-hidden="true">${pfeil}</span></button>`;
+    });
+    zeichneSortWahl();
 }
 
 function zeichneListe(d) {
-    const el = document.getElementById('csListe');
+    const koerper = document.getElementById('csListe');
+    const leer = document.getElementById('csListeLeer');
+    const tabelle = document.getElementById('csTabelle');
     const kopf = document.getElementById('csListeKopf');
+    state.zeilen = d.positionen;
     kopf.textContent = d.gekuerzt
         ? `${zahl(d.gezeigt)} von ${zahl(d.gesamt)} gezeigt`
         : `${zahl(d.gesamt)} ${d.gesamt === 1 ? 'Position' : 'Positionen'}`;
+    zeichneKopfzeile();
+
     if (!d.positionen.length) {
+        koerper.innerHTML = '';
+        tabelle.hidden = true;
         const gefiltert = frageKette().length > 0;
-        zeigeLeer(el,
+        zeigeLeer(leer,
             gefiltert ? 'Kein Gegenstand passt auf diesen Filter.'
                       : 'Noch nichts erfasst. Die erste Position legst du oben rechts an.',
             gefiltert ? { text: 'Filter zurücksetzen', tun: filterLeeren }
                       : { text: '+ Position', tun: () => formular() });
         return;
     }
-    el.innerHTML = `<div class="rec-list">${d.positionen.map(zeileHtml).join('')}</div>`;
+    leer.innerHTML = '';
+    tabelle.hidden = false;
+    koerper.innerHTML = d.positionen.map(zeileHtml).join('');
 }
 
 function filterLeeren() {
-    state.filter = { suche: '', kategorien: [], lager: [], faellig: false,
-                     sortierung: state.filter.sortierung };
+    state.filter = { suche: '', kategorien: [], faellig: false };
     document.getElementById('csSuche').value = '';
     document.getElementById('csFaellig').classList.remove('active');
     zeichneFilterKnoepfe();
     ladeBestand();
+}
+
+function sortiereNach(spalte) {
+    if (!SPALTEN[spalte]) return;
+    if (state.sortierung === spalte) {
+        state.richtung = state.richtung === 'auf' ? 'ab' : 'auf';
+    } else {
+        state.sortierung = spalte;
+        state.richtung = SPALTEN[spalte].abwaerts ? 'ab' : 'auf';
+    }
+    ladeBestand();
+}
+
+/* ------------------------------------------------- Kopieren und Bearbeiten */
+
+/* Kopiert wird der MARKTNAME, nicht bloss der angezeigte: er traegt StatTrak
+   und Abnutzung mit und ist damit das, was man drueben ins Suchfeld legt.
+   Der Toast sagt wortwoertlich, was in der Zwischenablage liegt -- sonst
+   koennte man es nur durch Einfuegen herausfinden. */
+async function kopiere(text) {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            // Ohne sicheren Kontext gibt es die Zwischenablage-API nicht.
+            const hilf = document.createElement('textarea');
+            hilf.value = text;
+            hilf.setAttribute('readonly', '');
+            hilf.style.position = 'fixed';
+            hilf.style.opacity = '0';
+            document.body.appendChild(hilf);
+            hilf.select();
+            const ging = document.execCommand('copy');
+            document.body.removeChild(hilf);
+            if (!ging) throw new Error('Der Browser hat das Kopieren abgelehnt.');
+        }
+        melde('success', `Kopiert: ${text}`);
+    } catch (e) {
+        melde('error', 'Kopieren ging nicht: ' + e.message);
+    }
+}
+
+/* Eine geaenderte Zelle speichern.
+
+   Der Preis geht ueber den Preis-Endpunkt und bewegt damit den Preisstand,
+   die Menge ueber PATCH und laesst ihn in Ruhe. Das ist der ganze Unterschied
+   zwischen "ich habe nachgesehen" und "es sind jetzt mehr". */
+/* Ein abgelehnter Wert wird zurueckgenommen, nicht stehen gelassen.
+
+   Sonst steht in der Zelle „drei“, waehrend gespeichert 6 ist -- und nichts
+   an der Zeile sagt, welche der beiden Zahlen gilt. Die Regel dieser Tabelle
+   ist, dass ein Feld zeigt, was gespeichert ist; eine abgelehnte Eingabe ist
+   keine Ausnahme davon. Der alte Wert bleibt markiert, damit Tippen ihn
+   sofort ersetzt. */
+function zurueck(feld, satz) {
+    feld.value = feld.dataset.wert;
+    melde('error', satz);
+    feld.focus();
+    feld.select();
+    return false;
+}
+
+async function feldSpeichern(feld) {
+    const roh = feld.value.trim();
+    if (roh === feld.dataset.wert) return false;
+    const id = Number(feld.dataset.id);
+    const menge = feld.dataset.feld === 'menge';
+
+    // Leeren ist kein Loeschen: beide Endpunkte lesen "nichts" als "nichts
+    // aendern". Das stillschweigend zurueckzusetzen waere eine Aenderung, die
+    // verschwindet -- also wird es gesagt.
+    if (!roh) {
+        return zurueck(feld, menge ? 'Die Anzahl lässt sich hier nicht leeren.'
+                                   : 'Der Preis lässt sich hier nicht leeren.');
+    }
+    if (menge && !/^\d+$/.test(roh)) {
+        return zurueck(feld, `„${roh}“ ist keine Stückzahl.`);
+    }
+
+    feld.classList.add('is-laeuft');
+    try {
+        const p = menge ? await API.aendern(id, { quantity: Number(roh) })
+                        : await API.preis(id, roh);
+        zeileNachziehen(feld.closest('tr'), p);
+        feld.dataset.wert = menge ? String(p.quantity)
+                                  : preisFeld(p.price_eur);
+        feld.value = feld.dataset.wert;
+        feld.classList.remove('is-laeuft');
+        feld.classList.add('is-gesichert');
+        setTimeout(() => feld.classList.remove('is-gesichert'), 900);
+        ladeBestandStill();
+        return true;
+    } catch (e) {
+        feld.classList.remove('is-laeuft');
+        return zurueck(feld, e.message);
+    }
+}
+
+/* Nur die Zelle nachziehen, die sich mitaendert -- nicht die ganze Liste.
+   Ein Neuaufbau waehrend des Tippens wuerde die Zeile unter dem Finger
+   wegsortieren, sobald nach Preis oder Wert sortiert ist. */
+function zeileNachziehen(tr, p) {
+    if (!tr || !p) return;
+    tr.className = markeFuer(p) + (p.unvollstaendig ? ' cs-unvollstaendig' : '');
+    tr.dataset.zeile = p.id;
+    const gesamt = tr.querySelector('.cs-gesamt');
+    if (gesamt) gesamt.textContent = p.brutto == null ? '–' : eur(p.brutto);
+    const alter = tr.querySelector('.cs-alter');
+    if (alter) {
+        alter.textContent = alterText(p);
+        alter.title = p.priced_at ? tagDatum(p.priced_at) : 'nie';
+    }
+    const punkt = tr.querySelector('.cs-name');
+    if (punkt) {
+        const alt = punkt.querySelector('.cs-punkt');
+        if (alt) alt.remove();
+        punkt.insertAdjacentHTML('afterbegin', punktHtml(p));
+    }
+}
+
+/* Weiter zum naechsten Feld derselben Spalte -- der Takt, in dem man eine
+   Preisrunde abarbeitet. */
+function naechstesFeld(feld, schritt) {
+    const alle = [...document.querySelectorAll(
+        `#csListe .cs-feld[data-feld="${feld.dataset.feld}"]`)];
+    const i = alle.indexOf(feld);
+    const ziel = alle[i + (schritt || 1)];
+    if (ziel) { ziel.focus(); ziel.select(); }
+    else feld.blur();
+}
+
+/* Der Bestand im Hintergrund nachziehen: was dasteht, bleibt stehen, falls es
+   schiefgeht. Eine Fehlerseite ueber gueltigen Zahlen waere ein Rueckschritt. */
+async function ladeBestandStill() {
+    try {
+        const q = frageKette();
+        const ueber = await API.ueberblick('?' + q.concat('tage=' + state.tage).join('&'));
+        zeichneKpi(ueber);
+        zeichneAufteilung(ueber);
+    } catch (e) { /* der sichtbare Stand bleibt */ }
 }
 
 /* ------------------------------------------------------- Filter-Aufklapper */
@@ -312,98 +542,14 @@ function baueFilterPopover(id, eintraege, gewaehlt, beiAenderung) {
 }
 
 function zeichneFilterKnoepfe() {
-    const paare = [
-        ['csKatBadge', state.filter.kategorien.length],
-        ['csLagBadge', state.filter.lager.length],
-    ];
-    paare.forEach(([id, n]) => {
-        const b = document.getElementById(id);
-        b.hidden = !n;
-        b.textContent = n || '';
-        b.closest('.filter-popover-wrap').querySelector('.filter-toggle-btn')
-            .classList.toggle('has-active', !!n);
-    });
+    const b = document.getElementById('csKatBadge');
+    const n = state.filter.kategorien.length;
+    b.hidden = !n;
+    b.textContent = n || '';
+    b.closest('.filter-popover-wrap').querySelector('.filter-toggle-btn')
+        .classList.toggle('has-active', !!n);
     baueFilterPopover('csKatPop', state.katalog.kategorien, state.filter.kategorien,
         (ids) => { state.filter.kategorien = ids; zeichneFilterKnoepfe(); ladeBestand(); });
-    baueFilterPopover('csLagPop', state.katalog.lager, state.filter.lager,
-        (ids) => { state.filter.lager = ids; zeichneFilterKnoepfe(); ladeBestand(); });
-}
-
-/* ------------------------------------------------------------------ Pflege */
-
-async function ladePflege() {
-    const el = document.getElementById('csPflege');
-    try {
-        const d = await API.pflege();
-        zeichnePflege(d);
-    } catch (e) {
-        zeigeFehler(el, 'Die Pflegeliste konnte nicht geladen werden: ' + e.message, ladePflege);
-    }
-}
-
-function zeichnePflege(d) {
-    const el = document.getElementById('csPflege');
-    const sub = document.getElementById('csPflegeSub');
-    const stand = document.getElementById('csPflegeStand');
-    const erledigt = d.bestand - d.offen;
-
-    sub.textContent = `Älteste zuerst · überfällig ab ${d.alt_ab_tagen} Tagen`;
-    document.getElementById('csFortschritt').style.width =
-        (d.bestand ? (erledigt / d.bestand) * 100 : 100).toFixed(1) + '%';
-    stand.textContent = d.offen
-        ? `${zahl(d.offen)} von ${zahl(d.bestand)} Positionen brauchen einen neuen Preis.`
-        : `Alle ${zahl(d.bestand)} Positionen sind aktuell.`;
-
-    if (!d.faellig.length) {
-        zeigeLeer(el, d.bestand
-            ? 'Nichts überfällig — jeder Preis ist jünger als ' + d.alt_ab_tagen + ' Tage.'
-            : 'Noch nichts erfasst, also auch nichts zu pflegen.');
-        return;
-    }
-    el.innerHTML = `<div class="v-card">${d.faellig.map((p) => `
-        <div class="cs-pflege-zeile ${markeFuer(p)}" data-pflege="${p.id}">
-            <span class="rec-mark">${esc((p.item_name || '?').slice(0, 1).toUpperCase())}</span>
-            <span class="cs-pflege-name">${esc(p.item_name)}${p.wear ? ' · ' + esc(p.wear) : ''}
-                <span class="cs-pflege-meta">${p.price_eur == null ? 'noch kein Preis'
-                    : 'zuletzt ' + esc(eur(p.price_eur))}<span class="sep">·</span><span class="cs-alter">${esc(alterText(p))}</span><span class="sep">·</span>${zahl(p.quantity || 0)} ×</span>
-            </span>
-            <span class="cs-pflege-feld">
-                <input type="text" inputmode="decimal" aria-label="Neuer Preis für ${esc(p.item_name)}"
-                       placeholder="${p.price_eur == null ? '0,00' : preisFeld(p.price_eur)}">
-                <span aria-hidden="true">€</span>
-            </span>
-        </div>`).join('')}</div>`;
-}
-
-async function preisSpeichern(zeile, wert) {
-    const id = Number(zeile.dataset.pflege);
-    const feld = zeile.querySelector('input');
-    try {
-        await API.preis(id, wert);
-        zeile.classList.add('is-erledigt');
-        feld.disabled = true;
-        melde('success', 'Preis bestätigt');
-        // Zum naechsten offenen Feld weiter -- das ist der Takt dieser Ansicht.
-        const offen = [...document.querySelectorAll('.cs-pflege-zeile:not(.is-erledigt) input')];
-        if (offen.length) offen[0].focus();
-        else ladePflege();
-        ladeBestandStill();
-    } catch (e) {
-        melde('error', e.message);
-        feld.focus();
-        feld.select();
-    }
-}
-
-/* Der Bestand im Hintergrund nachziehen: was dasteht, bleibt stehen, falls es
-   schiefgeht. Eine Fehlerseite ueber gueltigen Zahlen waere ein Rueckschritt. */
-async function ladeBestandStill() {
-    try {
-        const q = frageKette();
-        const ueber = await API.ueberblick('?' + q.concat('tage=' + state.tage).join('&'));
-        zeichneKpi(ueber);
-        zeichneAufteilung(ueber);
-    } catch (e) { /* der sichtbare Stand bleibt */ }
 }
 
 /* ----------------------------------------------------------------- Verlauf */
@@ -492,94 +638,6 @@ async function standFesthalten() {
     }
 }
 
-/* -------------------------------------------------------------- Verwaltung */
-
-function zeichneVerwaltung() {
-    const lagerEl = document.getElementById('csLagerListe');
-    lagerEl.innerHTML = `<div class="rec-list">${state.katalog.lager.map((l) => `
-        <button type="button" class="rec-row" data-lager="${l.id}">
-            <span class="rec-mark" style="--tone:var(--cs2-ton)">${esc(l.name.slice(0, 1).toUpperCase())}</span>
-            <span class="rec-main">
-                <span class="rec-title">${esc(l.name)}</span>
-                <span class="rec-meta">${l.is_default ? 'Auffanglager<span class="sep">·</span>' : ''}${zahl(l.positionen)} Positionen</span>
-            </span>
-            <span class="rec-go" aria-hidden="true">›</span>
-        </button>`).join('')}</div>`;
-
-    const suche = state.itemSuche.toLowerCase();
-    const items = state.katalog.items.filter((i) => !suche || i.name.toLowerCase().includes(suche));
-    const katName = Object.fromEntries(state.katalog.kategorien.map((k) => [k.id, k.name]));
-    document.getElementById('csItemKopf').textContent =
-        `${zahl(items.length)} von ${zahl(state.katalog.items.length)}`;
-    const itemEl = document.getElementById('csItemListe');
-    if (!items.length) {
-        zeigeLeer(itemEl, suche ? 'Kein Gegenstand mit diesem Namen.'
-                                : 'Noch keine Gegenstände. Sie entstehen beim Anlegen einer Position.');
-        return;
-    }
-    itemEl.innerHTML = `<div class="rec-list">${items.slice(0, 300).map((i) => `
-        <button type="button" class="rec-row" data-item="${i.id}">
-            <span class="rec-mark" style="--tone:var(--cs2-ton)">${esc(i.name.slice(0, 1).toUpperCase())}</span>
-            <span class="rec-main">
-                <span class="rec-title">${esc(i.name)}</span>
-                <span class="rec-meta">${esc(katName[i.category_id] || '?')}<span class="sep">·</span>${zahl(i.positionen)} Positionen</span>
-            </span>
-            <span class="rec-go" aria-hidden="true">›</span>
-        </button>`).join('')}</div>`;
-}
-
-async function lagerDialog(id) {
-    const lager = state.katalog.lager.find((l) => l.id === id);
-    if (!lager) return;
-    const neu = await askPrompt({
-        title: 'Lager umbenennen', text: 'Wie soll es heißen?', value: lager.name,
-        ok: 'Umbenennen',
-    });
-    if (neu && neu.trim() && neu.trim() !== lager.name) {
-        try { await API.lagerName(id, neu.trim()); melde('success', 'Umbenannt'); await neuLaden(); }
-        catch (e) { melde('error', e.message); }
-        return;
-    }
-    if (neu !== null) return;
-    if (lager.is_default) return;
-    const weg = await askConfirm({
-        title: 'Lager löschen?',
-        text: `„${lager.name}“ entfernen. Die ${lager.positionen} Position(en) darin ziehen ins Auffanglager — gelöscht wird nichts davon.`,
-        confirmText: 'Löschen', danger: true,
-    });
-    if (!weg) return;
-    try {
-        const r = await API.lagerWeg(id);
-        melde('success', r.umgezogen ? `${r.umgezogen} Position(en) umgezogen` : 'Lager gelöscht');
-        await neuLaden();
-    } catch (e) { melde('error', e.message); }
-}
-
-async function itemDialog(id) {
-    const item = state.katalog.items.find((i) => i.id === id);
-    if (!item) return;
-    const neu = await askPrompt({
-        title: 'Gegenstand umbenennen',
-        text: item.positionen
-            ? `Der neue Name gilt sofort für alle ${item.positionen} Position(en).`
-            : 'Zu diesem Gegenstand gibt es noch keine Position.',
-        value: item.name, ok: 'Umbenennen',
-    });
-    if (neu && neu.trim() && neu.trim() !== item.name) {
-        try { await API.itemName(id, neu.trim()); melde('success', 'Umbenannt'); await neuLaden(); }
-        catch (e) { melde('error', e.message); }
-        return;
-    }
-    if (neu !== null || item.positionen) return;
-    const weg = await askConfirm({
-        title: 'Gegenstand löschen?', text: `„${item.name}“ aus der Liste nehmen.`,
-        confirmText: 'Löschen', danger: true,
-    });
-    if (!weg) return;
-    try { await API.itemWeg(id); melde('success', 'Gelöscht'); await neuLaden(); }
-    catch (e) { melde('error', e.message); }
-}
-
 /* ------------------------------------------------------------ Übernahme */
 
 /* Erst zeigen, dann tun. Ein Import, der beim Loslassen der Datei 116 Zeilen
@@ -609,7 +667,7 @@ function zeigeVorschau(dok, v, dateiname) {
         <span class="rec-mark" style="--tone:var(--cs2-ton)">${esc((p.gegenstand || '?').slice(0, 1).toUpperCase())}</span>
         <span class="rec-main">
             <span class="rec-title">${esc(p.gegenstand)}</span>
-            <span class="rec-meta">${esc(p.kategorie)}${p.wear ? '<span class="sep">·</span>' + esc(p.wear) : ''}<span class="sep">·</span>${esc(p.lager)}</span>
+            <span class="rec-meta">${esc(p.kategorie)}${p.wear ? '<span class="sep">·</span>' + esc(p.wear) : ''}</span>
         </span>
         <span class="rec-side">
             <span class="rec-val">${zahl(p.menge)} × ${esc(eur(p.preis))}</span>
@@ -630,11 +688,13 @@ function zeigeVorschau(dok, v, dateiname) {
             ${v.bleibt_stehen ? `<p class="cs-hinweis">${zahl(v.bleibt_stehen)} Position(en)
                im Bestand kommen in der Datei nicht vor. Sie bleiben stehen —
                eine Übernahme löscht nichts.</p>` : ''}
+            ${v.zusammengefuehrt ? `<p class="cs-hinweis">${zahl(v.zusammengefuehrt)} Zeile(n)
+               der Datei unterschieden sich nur im Lager, das es nicht mehr gibt.
+               Sie wurden zu einer zusammengefasst — die Stückzahlen addiert.</p>` : ''}
             ${v.neue_kategorien.length ? `<p class="cs-hinweis">Neue Kategorien:
                ${v.neue_kategorien.map(esc).join(', ')}</p>` : ''}
-            ${v.neue_lager.length ? `<p class="cs-hinweis">Neue Lager:
-               ${v.neue_lager.map(esc).join(', ')}</p>` : ''}
-            ${v.staende ? `<p class="cs-hinweis">Dazu ${zahl(v.staende)} festgehaltene Stände.</p>` : ''}
+            ${v.staende ? `<p class="cs-hinweis">Dazu ${zahl(v.staende)} festgehaltene Stände
+               für den Verlauf.</p>` : ''}
             ${v.beispiele_neu.length ? `<div class="cs-beispiele">
                <span class="cs-label">Neu, zum Beispiel</span>
                <div class="rec-list">${v.beispiele_neu.map(p => zeile(p, false)).join('')}</div></div>` : ''}
@@ -644,7 +704,7 @@ function zeigeVorschau(dok, v, dateiname) {
             <div class="cs-form-fuss">
                 <button type="button" class="v-btn" data-abbruch="1">Verwerfen</button>
                 <button type="button" class="v-btn v-btn--primary" data-uebernehmen="1"
-                        ${v.neu + v.geaendert ? '' : 'disabled'}>Übernehmen</button>
+                        ${v.neu + v.geaendert + v.staende ? '' : 'disabled'}>Übernehmen</button>
             </div>
         </div>`;
     el.querySelector('[data-abbruch]').addEventListener('click', () => { el.innerHTML = ''; });
@@ -654,7 +714,8 @@ function zeigeVorschau(dok, v, dateiname) {
         knopf.classList.add('is-loading');
         try {
             const { uebernommen } = await API.einlesen(dok, true);
-            melde('success', `${uebernommen.neu} neu, ${uebernommen.geaendert} aktualisiert`);
+            melde('success', `${uebernommen.neu} neu, ${uebernommen.geaendert} aktualisiert`
+                + (uebernommen.staende ? `, ${uebernommen.staende} Stände` : ''));
             el.innerHTML = '';
             document.getElementById('csDatei').value = '';
             await neuLaden();
@@ -677,14 +738,9 @@ function formular(position) {
         `<option value="${e.id}"${String(e.id) === String(aktiv) ? ' selected' : ''}>${esc(e.name)}</option>`).join('');
 
     const html = `<form class="cs-form" id="csForm">
-        <div class="cs-form-reihe">
-            <label><span class="cs-label">Kategorie</span>
-                <select name="category_id"${istNeu ? '' : ' disabled'}>${optionen(k.kategorien, gewaehlteKat)}</select>
-            </label>
-            <label><span class="cs-label">Lager</span>
-                <select name="storage_id">${optionen(k.lager, position ? position.storage_id : k.lager[0]?.id)}</select>
-            </label>
-        </div>
+        <label><span class="cs-label">Kategorie</span>
+            <select name="category_id"${istNeu ? '' : ' disabled'}>${optionen(k.kategorien, gewaehlteKat)}</select>
+        </label>
         <label><span class="cs-label">Gegenstand</span>
             <input type="text" name="item_name" list="csItemVorschlag" autocomplete="off"
                    value="${esc(position ? position.item_name : '')}" placeholder="AK-47 | Frontside Misty">
@@ -720,7 +776,7 @@ function formular(position) {
     const liste = form.querySelector('#csItemVorschlag');
 
     /* Was die Kategorie nicht kennt, wird ausgeblendet statt abgelehnt. Ein
-       Case hat keine Abnutzung — das Feld dafuer stehen zu lassen und die
+       Case hat keine Abnutzung -- das Feld dafuer stehen zu lassen und die
        Eingabe hinterher zu verwerfen, waere eine Frage ohne Antwort. */
     const regelnAnwenden = () => {
         const kat = k.kategorien.find((x) => String(x.id) === String(katFeld.value));
@@ -757,7 +813,6 @@ function formular(position) {
         const f = new FormData(form);
         const koerper = {
             item_name: (f.get('item_name') || '').trim(),
-            storage_id: Number(f.get('storage_id')) || null,
             wear: f.get('wear') || null,
             stattrak: form.querySelector('[name=stattrak]').checked,
             playskin: form.querySelector('[name=playskin]').checked,
@@ -779,23 +834,12 @@ function formular(position) {
     });
 }
 
-async function oeffnePosition(id) {
-    try {
-        const d = await API.liste('?' + frageKette().concat(
-            'sortierung=' + state.filter.sortierung).join('&'));
-        const p = d.positionen.find((x) => x.id === id);
-        if (p) formular(p);
-    } catch (e) { melde('error', e.message); }
-}
-
 /* ------------------------------------------------------------------- Start */
 
 async function neuLaden() {
     state.katalog = await API.katalog();
     zeichneFilterKnoepfe();
     await ladeBestand();
-    if (!document.getElementById('tab-verwaltung').hidden) zeichneVerwaltung();
-    if (!document.getElementById('tab-pflege').hidden) ladePflege();
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -824,10 +868,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             ladeBestand();
         }, 250);
     });
-    document.getElementById('csSort').addEventListener('change', (ev) => {
-        state.filter.sortierung = ev.target.value;
-        ladeBestand();
-    });
     document.getElementById('csFaellig').addEventListener('click', (ev) => {
         state.filter.faellig = !state.filter.faellig;
         ev.target.classList.toggle('active', state.filter.faellig);
@@ -835,12 +875,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.getElementById('csNeu').addEventListener('click', () => formular());
     document.getElementById('csSnapshot').addEventListener('click', standFesthalten);
-    document.getElementById('csLagerNeu').addEventListener('click', async () => {
-        const name = await askPrompt({ title: 'Lager anlegen', text: 'Wie soll es heißen?', ok: 'Anlegen' });
-        if (!name || !name.trim()) return;
-        try { await API.lagerNeu(name.trim()); melde('success', 'Angelegt'); await neuLaden(); }
-        catch (e) { melde('error', e.message); }
+
+    document.getElementById('csKopfzeile').addEventListener('click', (ev) => {
+        const th = ev.target.closest('th.sort');
+        if (th) sortiereNach(th.dataset.sort);
     });
+    document.getElementById('csSort').addEventListener('change', (ev) => {
+        state.sortierung = ev.target.value;
+        state.richtung = SPALTEN[state.sortierung].abwaerts ? 'ab' : 'auf';
+        ladeBestand();
+    });
+    document.getElementById('csRichtung').addEventListener('click', () => {
+        state.richtung = state.richtung === 'auf' ? 'ab' : 'auf';
+        ladeBestand();
+    });
+
     const drop = document.getElementById('csDrop');
     const feld = document.getElementById('csDatei');
     drop.addEventListener('click', () => feld.click());
@@ -859,20 +908,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     drop.addEventListener('drop', (ev) => {
         const d = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
         if (d) dateiGelesen(d);
-    });
-
-    document.getElementById('csItemSuche').addEventListener('input', (ev) => {
-        state.itemSuche = ev.target.value.trim();
-        zeichneVerwaltung();
-    });
-
-    document.getElementById('csAufteilungWahl').addEventListener('click', (ev) => {
-        const knopf = ev.target.closest('[data-dim]');
-        if (!knopf) return;
-        state.aufteilung = knopf.dataset.dim;
-        document.querySelectorAll('#csAufteilungWahl button').forEach(
-            (b) => b.classList.toggle('active', b === knopf));
-        ladeBestandStill();
     });
 
     // Aufklapper: der Knopf schaltet, ein Klick daneben schliesst.
@@ -894,31 +929,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Eine Zeile oeffnet ihren Vorgang. Kein Papierkorb an jeder Zeile: er
-    // waere das groesste Ziel fuer den seltensten Handgriff.
+    // Der Name kopiert, der Stift oeffnet. Zwei Ziele in einer Zeile, und
+    // beide sind angeschrieben -- der Name ueber sein title, der Stift ueber
+    // sein aria-label.
     document.addEventListener('click', (ev) => {
-        const pos = ev.target.closest('[data-position]');
-        if (pos) { oeffnePosition(Number(pos.dataset.position)); return; }
-        const lag = ev.target.closest('[data-lager]');
-        if (lag) { lagerDialog(Number(lag.dataset.lager)); return; }
-        const item = ev.target.closest('[data-item]');
-        if (item) { itemDialog(Number(item.dataset.item)); }
+        const name = ev.target.closest('[data-kopieren]');
+        if (name) { kopiere(name.dataset.kopieren); return; }
+        const stift = ev.target.closest('[data-position]');
+        if (stift) {
+            const p = state.zeilen.find((x) => x.id === Number(stift.dataset.position));
+            if (p) formular(p);
+        }
     });
 
-    // Pflege: Eingabe bestaetigen und weiter zur naechsten Zeile.
-    document.addEventListener('keydown', (ev) => {
-        if (ev.key !== 'Enter') return;
-        const zeile = ev.target.closest('.cs-pflege-zeile');
-        if (!zeile) return;
-        ev.preventDefault();
-        const wert = ev.target.value.trim();
-        if (!wert) {
-            const offen = [...document.querySelectorAll('.cs-pflege-zeile:not(.is-erledigt) input')];
-            const i = offen.indexOf(ev.target);
-            if (i >= 0 && offen[i + 1]) offen[i + 1].focus();
-            return;
+    // Die Felder in der Tabelle: Enter bestaetigt und geht weiter, Tab und
+    // Klick daneben bestaetigen auch (change), Escape nimmt zurueck.
+    const liste = document.getElementById('csListe');
+    liste.addEventListener('keydown', (ev) => {
+        const f = ev.target.closest('.cs-feld');
+        if (!f) return;
+        if (ev.key === 'Enter') {
+            ev.preventDefault();
+            feldSpeichern(f).then(() => naechstesFeld(f, 1));
+        } else if (ev.key === 'Escape') {
+            ev.preventDefault();
+            f.value = f.dataset.wert;
+            f.blur();
         }
-        preisSpeichern(zeile, wert);
+    });
+    liste.addEventListener('change', (ev) => {
+        const f = ev.target.closest('.cs-feld');
+        if (f) feldSpeichern(f);
+    });
+    liste.addEventListener('focusin', (ev) => {
+        const f = ev.target.closest('.cs-feld');
+        if (f) f.select();
     });
 
     if (window.VexRange) {
@@ -930,7 +975,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         state.katalog = await API.katalog();
     } catch (e) {
-        zeigeFehler(document.getElementById('csListe'),
+        document.getElementById('csTabelle').hidden = true;
+        zeigeFehler(document.getElementById('csListeLeer'),
             'Die Stammdaten konnten nicht geladen werden: ' + e.message,
             () => location.reload());
         return;

@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.14.0', date: '2026-09-23', title: 'CS2: der Bestand wird eine Tabelle', notes: [
+        'Die Positionen stehen jetzt als Tabelle, sortierbar nach Name, Stückpreis, Gesamtwert, Anzahl, Typ und Preisstand.',
+        'Anzahl und Preis ändert man in der Zeile selbst; ein Klick auf den Namen kopiert ihn für die Marktsuche.',
+        'Ein gelber Punkt neben dem Namen zeigt Preise über 30 Tagen — der Reiter „Pflege“ entfällt dadurch.',
+        'Die Lagerzuordnung ist weg: sie beantwortete keine Frage, die dieses Modul stellt.',
+        'Der Verlauf aus der Vorgängerfassung reist beim Import mit — zehn Stände ab März.',
+    ]},
     { v: 'v2.13.0', date: '2026-09-23', title: 'CS2 nimmt einen Bestand entgegen', notes: [
         'Der Reiter „Verwaltung“ nimmt eine Bestandsdatei entgegen — hineinziehen, Vorschau ansehen, übernehmen.',
         'Die Vorschau sagt vorher, was neu wäre und was sich ändert, mit Beispielen dazu.',

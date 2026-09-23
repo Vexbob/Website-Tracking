@@ -139,8 +139,7 @@ def summiere(zeilen: Iterable[dict], jetzt: Optional[datetime] = None) -> dict:
     """Kopfzahlen ueber einen Bestand.
 
     ``zeilen`` sind dicts mit ``quantity``, ``price_eur``, ``playskin``,
-    ``priced_at`` und -- fuer die Aufteilungen -- ``category_id`` und
-    ``storage_id``.
+    ``priced_at`` und -- fuer die Aufteilung -- ``category_id``.
 
     Unvollstaendige Zeilen zaehlen NICHT mit und werden getrennt gezaehlt. Eine
     Summe, die fehlende Preise als null mitnimmt, ist nicht vorsichtig, sondern
@@ -162,7 +161,6 @@ def summiere(zeilen: Iterable[dict], jetzt: Optional[datetime] = None) -> dict:
     veraltet = 0
     stueck = 0
     je_kategorie: dict[int, Decimal] = {}
-    je_lager: dict[int, Decimal] = {}
 
     for z in zeilen:
         b = brutto(z.get("quantity"), z.get("price_eur"))
@@ -180,8 +178,6 @@ def summiere(zeilen: Iterable[dict], jetzt: Optional[datetime] = None) -> dict:
             veraltet += 1
         if z.get("category_id") is not None:
             je_kategorie[z["category_id"]] = je_kategorie.get(z["category_id"], Decimal("0")) + b
-        if z.get("storage_id") is not None:
-            je_lager[z["storage_id"]] = je_lager.get(z["storage_id"], Decimal("0")) + b
 
     gesamt_brutto = cent(gesamt_brutto)
     gesamt_netto = cent(gesamt_netto)
@@ -194,12 +190,17 @@ def summiere(zeilen: Iterable[dict], jetzt: Optional[datetime] = None) -> dict:
         "playskin_netto": spiel_netto,
         "invest_brutto": cent(gesamt_brutto - spiel_brutto),
         "invest_netto": cent(gesamt_netto - spiel_netto),
+        # ``zeilen`` sind ALLE Positionen, ``positionen`` nur die, die einen
+        # Wert beitragen. Die Kopfzahl nennt ``zeilen`` -- sonst stuende ueber
+        # einer Liste mit 116 Eintraegen die Zahl 113, und der Unterschied
+        # waere eine Rechenart und keine Auskunft. Wie viele unvollstaendig
+        # sind, steht daneben.
+        "zeilen": gueltig + unvollstaendig,
         "positionen": gueltig,
         "unvollstaendig": unvollstaendig,
         "veraltet": veraltet,
         "stueck": stueck,
         "je_kategorie": {k: cent(v) for k, v in je_kategorie.items()},
-        "je_lager": {k: cent(v) for k, v in je_lager.items()},
     }
 
 
