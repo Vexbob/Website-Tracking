@@ -167,6 +167,24 @@
     .cs-suche { flex-basis: 100%; }
 }
 
+/* ---------- Übernahme aus einer Datei ---------- */
+/* Die Ablegefläche selbst kommt aus css/style.css (.dropzone). Hier steht nur
+   die Vorschau darunter -- sie ist kein eigener Baustein, sondern eine Karte
+   aus vorhandenen Teilen. */
+.cs-vorschau { margin-top: 1rem; }
+.cs-vorschau .cs-hinweis { margin-top: 0.4rem; }
+.cs-vorschau .cs-hinweis strong { color: var(--text-1); }
+.cs-beispiele { margin-top: 0.875rem; }
+.cs-beispiele .cs-label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-4);
+}
+
 /* ---------- Formular im Dialog ---------- */
 .cs-form { display: grid; gap: 0.875rem; }
 .cs-form-reihe { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }

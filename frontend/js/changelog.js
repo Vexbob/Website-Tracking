@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.13.0', date: '2026-09-23', title: 'CS2 nimmt einen Bestand entgegen', notes: [
+        'Der Reiter „Verwaltung“ nimmt eine Bestandsdatei entgegen — hineinziehen, Vorschau ansehen, übernehmen.',
+        'Die Vorschau sagt vorher, was neu wäre und was sich ändert, mit Beispielen dazu.',
+        'Übernommen wird zusammengeführt, nie gelöscht: was die Datei nicht nennt, bleibt stehen.',
+        'Damit läuft der Tracker vom Rechner auf die Website um; ab dann wird nur noch hier gepflegt.',
+    ]},
     { v: 'v2.12.1', date: '2026-09-23', title: 'CS2: der Bestand zieht ein', notes: [
         'Neues Modul: Bestand an CS2-Gegenständen, was er heute wert wäre und wie alt die Preise sind.',
         'Preise kommen von Hand — der Reiter „Pflege“ legt die ältesten zuerst vor und springt nach jeder Eingabe weiter.',

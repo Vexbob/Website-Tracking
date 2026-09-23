@@ -218,7 +218,11 @@ _SCHREIBWEISEN = {
     "Mag-7": "MAG-7", "Mac-10": "MAC-10", "Ssg 08": "SSG 08", "Scar-20": "SCAR-20",
     "Ump-45": "UMP-45", "Xm1014": "XM1014", "Tec-9": "Tec-9", "Famas": "FAMAS",
     "Galil Ar": "Galil AR", "M249": "M249", "Five-Seven": "Five-SeveN",
-    "Zeus X27": "Zeus x27", "Nv": "NV", "Cs:Go": "CS:GO", "R8 Revolver": "R8 Revolver",
+    "Zeus X27": "Zeus x27", "Nv": "NV", "R8 Revolver": "R8 Revolver",
+    # Nach dem Doppelpunkt faengt fuer ``wort()`` kein neues Wort an, also wird
+    # aus "cs:go" ein "Cs:go" und nicht "Cs:Go" -- die Liste muss die Form
+    # treffen, die wirklich entsteht.
+    "Cs:go": "CS:GO", "Cs:Go": "CS:GO",
 }
 
 # Tippfehler, die im Bestand wirklich vorkamen.

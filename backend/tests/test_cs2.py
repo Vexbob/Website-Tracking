@@ -296,3 +296,77 @@ def test_unbekannte_abnutzung_wird_abgelehnt():
     with pytest.raises(HTTPException) as fehler:
         cr._regeln_anwenden(mit, "XX", False, False)
     assert fehler.value.status_code == 400
+
+
+# =========================================================================
+# 4. Die Uebernahme aus einer Datei
+# =========================================================================
+
+from services import cs2_transfer as t                      # noqa: E402
+
+
+def _dok(**mehr) -> dict:
+    d = {"modul": "cs2", "fassung": t.FASSUNG, "positionen": []}
+    d.update(mehr)
+    return d
+
+
+def test_fremde_datei_wird_mit_einem_satz_abgelehnt():
+    """Die Meldung landet im Toast -- sie muss ein Satz sein, kein Code."""
+    for murks, stueck in [
+        ({"modul": "musik", "fassung": 1, "positionen": []}, "Modul"),
+        (_dok(fassung=99), "Fassung"),
+        ({"modul": "cs2", "fassung": t.FASSUNG}, "positionen"),
+        ("kein Objekt", "Übertragungsdokument"),
+    ]:
+        with pytest.raises(t.TransferFehler) as fehler:
+            t.pruefen(murks)
+        assert stueck in str(fehler.value)
+        assert str(fehler.value).endswith((".", "!"))
+
+
+def test_eine_position_ohne_namen_bricht_den_ganzen_lauf():
+    """Halb gelesen waere schlimmer als abgelehnt: man saehe nicht, was fehlt."""
+    with pytest.raises(t.TransferFehler) as fehler:
+        t.pruefen(_dok(positionen=[
+            {"kategorie": "Skin", "gegenstand": "AK-47 | X", "menge": 1},
+            {"kategorie": "Skin", "gegenstand": "  ", "menge": 1},
+        ]))
+    assert "Position 2" in str(fehler.value)
+
+
+@pytest.mark.parametrize("feld,wert,stueck", [
+    ("wear", "XX", "Abnutzung"),
+    ("menge", "viele", "Stückzahl"),
+    ("menge", -3, "unter null"),
+    ("preis", "abc", "Betrag"),
+    ("preis", "-5", "unter null"),
+    ("preis_am", "irgendwann", "Zeitpunkt"),
+])
+def test_jede_unlesbare_angabe_nennt_ihre_position(feld, wert, stueck):
+    p = {"kategorie": "Case", "gegenstand": "Chroma 3", "menge": 1}
+    p[feld] = wert
+    with pytest.raises(t.TransferFehler) as fehler:
+        t.pruefen(_dok(positionen=[p]))
+    assert stueck in str(fehler.value) and "Position 1" in str(fehler.value)
+
+
+def test_gelesene_angaben_haben_die_richtigen_typen():
+    daten = t.pruefen(_dok(positionen=[{
+        "kategorie": "Skin", "gegenstand": "AK-47 | Frontside Misty", "wear": "FT",
+        "stattrak": False, "playskin": True, "lager": "Inventory",
+        "menge": "3", "preis": "16.10", "preis_am": "2026-09-22T10:13:16+00:00",
+    }]))
+    p = daten["positionen"][0]
+    assert p["menge"] == 3 and isinstance(p["menge"], int)
+    assert p["preis"] == Decimal("16.10")
+    assert p["preis_am"].tzinfo is not None
+    assert p["playskin"] is True
+
+
+def test_ein_zeitpunkt_ohne_zone_gilt_als_utc():
+    """Sonst verschiebt sich das Preisalter um die Zeitzone des Rechners."""
+    daten = t.pruefen(_dok(positionen=[{
+        "kategorie": "Case", "gegenstand": "Chroma 3", "menge": 1,
+        "preis": "1.00", "preis_am": "2026-09-22T10:00:00"}]))
+    assert daten["positionen"][0]["preis_am"].tzinfo is not None

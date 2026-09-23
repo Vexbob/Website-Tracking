@@ -17,6 +17,7 @@ Endpoints:
   DELETE /api/cs2/storages/{id}        — Lager loeschen (Positionen ziehen um)
   GET    /api/cs2/snapshots            — Verlauf
   POST   /api/cs2/snapshots            — Stand von heute festhalten
+  POST   /api/cs2/import               — Bestand aus einer Datei uebernehmen
 
 Drei Entscheidungen tragen das Ganze:
 
@@ -60,6 +61,7 @@ from database import get_db
 from deps import logger, limiter, LIMIT_WRITE_FREQUENT, LIMIT_WRITE_RARE, LIMIT_WRITE_STANDARD
 from helpers import ser
 from services import cs2_rechnung as rechnung
+from services import cs2_transfer as transfer
 
 router = APIRouter(tags=["cs2"])
 
@@ -791,3 +793,48 @@ async def snapshot_festhalten(request: Request, daten: SnapshotEingabe,
         "SELECT id, taken_on, created_at, total_gross, total_net, playskin_gross, "
         "       playskin_net, rows_valid, rows_incomplete, stale_rows, note "
         "  FROM cs2_snapshots WHERE id=$1", snap["id"]), decimals_as_float=True)
+
+
+# =========================================================================
+# Uebernahme aus einer Datei
+# =========================================================================
+
+class ImportEingabe(BaseModel):
+    # Das Dokument selbst -- geprueft wird es in ``cs2_transfer``, nicht hier.
+    # Ein Pydantic-Modell ueber die ganze Datei waere eine zweite Beschreibung
+    # desselben Formats, und die beiden liefen auseinander.
+    daten: dict
+    # Vorgabe ist die Vorschau. Ein Import, der beim ersten Aufruf schreibt,
+    # sieht sich niemand vorher an.
+    uebernehmen: bool = False
+
+
+@router.post("/api/cs2/import")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def bestand_uebernehmen(request: Request, eingabe: ImportEingabe,
+                              db=Depends(get_db), user=Depends(get_current_user)):
+    """Einen Bestand aus einer Datei uebernehmen -- erst zeigen, dann tun.
+
+    Ohne ``uebernehmen`` kommt nur die Vorschau zurueck: wie viele Positionen
+    neu waeren, wie viele sich aenderten, und je fuenf Beispiele dazu. Das ist
+    keine Hoeflichkeit -- eine Datei, die still 116 Zeilen umschreibt, ist
+    nicht ueberpruefbar.
+
+    Geloescht wird dabei nie. Was die Datei nicht nennt, bleibt stehen; die
+    Vorschau sagt auch, wie viele das waeren.
+    """
+    try:
+        daten = transfer.pruefen(eingabe.daten)
+    except transfer.TransferFehler as e:
+        raise HTTPException(400, str(e))
+
+    if not eingabe.uebernehmen:
+        return {"vorschau": await transfer.vorschau(db, user["id"], daten)}
+
+    try:
+        ergebnis = await transfer.einspielen(db, user["id"], daten)
+    except transfer.TransferFehler as e:
+        raise HTTPException(400, str(e))
+    logger.info("CS2: Bestand uebernommen (%s neu, %s geaendert, %s Staende)",
+                ergebnis["neu"], ergebnis["geaendert"], ergebnis["staende"])
+    return {"uebernommen": ergebnis}

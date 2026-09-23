@@ -155,6 +155,21 @@
         </div>
         <div class="v-card">
             <div class="v-card-head">
+                <h3>Bestand übernehmen</h3>
+                <span class="v-card-sub">Aus einer Datei vom Rechner</span>
+            </div>
+            <div class="dropzone" id="csDrop" tabindex="0" role="button"
+                 aria-label="Bestandsdatei auswählen oder hineinziehen">
+                <span class="dropzone-icon" aria-hidden="true">📦</span>
+                <span class="dropzone-title">Bestandsdatei hierher ziehen</span>
+                <span class="dropzone-sub">oder tippen zum Auswählen — .json aus <code>ausgeben.py</code></span>
+                <input type="file" id="csDatei" accept="application/json,.json" hidden>
+            </div>
+            <div id="csImport"></div>
+        </div>
+
+        <div class="v-card">
+            <div class="v-card-head">
                 <h3>Gegenstände</h3>
                 <span class="v-card-sub" id="csItemKopf"></span>
             </div>

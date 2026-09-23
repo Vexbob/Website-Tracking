@@ -40,6 +40,8 @@ const API = {
     lagerWeg:  (id)          => apiCall('/api/cs2/storages/' + id, { method: 'DELETE' }),
     itemName:  (id, n)       => apiCall('/api/cs2/items/' + id, { method: 'PUT', body: { name: n } }),
     itemWeg:   (id)          => apiCall('/api/cs2/items/' + id, { method: 'DELETE' }),
+    einlesen:  (daten, tun)  => apiCall('/api/cs2/import',
+                                        { method: 'POST', body: { daten, uebernehmen: !!tun } }),
 };
 
 const state = {
@@ -578,6 +580,92 @@ async function itemDialog(id) {
     catch (e) { melde('error', e.message); }
 }
 
+/* ------------------------------------------------------------ Übernahme */
+
+/* Erst zeigen, dann tun. Ein Import, der beim Loslassen der Datei 116 Zeilen
+   umschreibt, ist nicht überprüfbar — und die Regel dazu steht in DESIGN:
+   wer etwas ersetzt, zeigt vorher, was er ersetzen würde. */
+async function dateiGelesen(datei) {
+    const el = document.getElementById('csImport');
+    el.innerHTML = '<span class="skel skel-line"></span><span class="skel skel-line short"></span>';
+    let dok;
+    try {
+        dok = JSON.parse(await datei.text());
+    } catch (e) {
+        zeigeFehler(el, `„${datei.name}“ ist keine lesbare JSON-Datei.`, () => { el.innerHTML = ''; });
+        return;
+    }
+    try {
+        const { vorschau } = await API.einlesen(dok, false);
+        zeigeVorschau(dok, vorschau, datei.name);
+    } catch (e) {
+        zeigeFehler(el, e.message, () => { el.innerHTML = ''; });
+    }
+}
+
+function zeigeVorschau(dok, v, dateiname) {
+    const el = document.getElementById('csImport');
+    const zeile = (p, mitAlt) => `<div class="rec-row">
+        <span class="rec-mark" style="--tone:var(--cs2-ton)">${esc((p.gegenstand || '?').slice(0, 1).toUpperCase())}</span>
+        <span class="rec-main">
+            <span class="rec-title">${esc(p.gegenstand)}</span>
+            <span class="rec-meta">${esc(p.kategorie)}${p.wear ? '<span class="sep">·</span>' + esc(p.wear) : ''}<span class="sep">·</span>${esc(p.lager)}</span>
+        </span>
+        <span class="rec-side">
+            <span class="rec-val">${zahl(p.menge)} × ${esc(eur(p.preis))}</span>
+            ${mitAlt ? `<span class="rec-sub">bisher ${zahl(p.menge_alt)} × ${esc(eur(p.preis_alt))}</span>` : ''}
+        </span></div>`;
+
+    const teile = [];
+    if (v.neu) teile.push(`<strong>${zahl(v.neu)}</strong> neu`);
+    if (v.geaendert) teile.push(`<strong>${zahl(v.geaendert)}</strong> geändert`);
+    if (v.gleich) teile.push(`${zahl(v.gleich)} unverändert`);
+
+    el.innerHTML = `
+        <div class="cs-vorschau">
+            <p class="cs-hinweis"><strong>${esc(dateiname)}</strong> enthält
+               ${zahl(v.positionen)} ${v.positionen === 1 ? 'Position' : 'Positionen'}${
+                 v.erzeugt_am ? ` vom ${esc(tagDatum(v.erzeugt_am))}` : ''}:
+               ${teile.join(' · ') || 'nichts davon ist neu'}.</p>
+            ${v.bleibt_stehen ? `<p class="cs-hinweis">${zahl(v.bleibt_stehen)} Position(en)
+               im Bestand kommen in der Datei nicht vor. Sie bleiben stehen —
+               eine Übernahme löscht nichts.</p>` : ''}
+            ${v.neue_kategorien.length ? `<p class="cs-hinweis">Neue Kategorien:
+               ${v.neue_kategorien.map(esc).join(', ')}</p>` : ''}
+            ${v.neue_lager.length ? `<p class="cs-hinweis">Neue Lager:
+               ${v.neue_lager.map(esc).join(', ')}</p>` : ''}
+            ${v.staende ? `<p class="cs-hinweis">Dazu ${zahl(v.staende)} festgehaltene Stände.</p>` : ''}
+            ${v.beispiele_neu.length ? `<div class="cs-beispiele">
+               <span class="cs-label">Neu, zum Beispiel</span>
+               <div class="rec-list">${v.beispiele_neu.map(p => zeile(p, false)).join('')}</div></div>` : ''}
+            ${v.beispiele_geaendert.length ? `<div class="cs-beispiele">
+               <span class="cs-label">Geändert, zum Beispiel</span>
+               <div class="rec-list">${v.beispiele_geaendert.map(p => zeile(p, true)).join('')}</div></div>` : ''}
+            <div class="cs-form-fuss">
+                <button type="button" class="v-btn" data-abbruch="1">Verwerfen</button>
+                <button type="button" class="v-btn v-btn--primary" data-uebernehmen="1"
+                        ${v.neu + v.geaendert ? '' : 'disabled'}>Übernehmen</button>
+            </div>
+        </div>`;
+    el.querySelector('[data-abbruch]').addEventListener('click', () => { el.innerHTML = ''; });
+    el.querySelector('[data-uebernehmen]').addEventListener('click', async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        knopf.classList.add('is-loading');
+        try {
+            const { uebernommen } = await API.einlesen(dok, true);
+            melde('success', `${uebernommen.neu} neu, ${uebernommen.geaendert} aktualisiert`);
+            el.innerHTML = '';
+            document.getElementById('csDatei').value = '';
+            await neuLaden();
+        } catch (e) {
+            melde('error', e.message);
+            knopf.disabled = false;
+            knopf.classList.remove('is-loading');
+        }
+    });
+}
+
 /* ---------------------------------------------------------------- Formular */
 
 function formular(position) {
@@ -753,6 +841,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         try { await API.lagerNeu(name.trim()); melde('success', 'Angelegt'); await neuLaden(); }
         catch (e) { melde('error', e.message); }
     });
+    const drop = document.getElementById('csDrop');
+    const feld = document.getElementById('csDatei');
+    drop.addEventListener('click', () => feld.click());
+    drop.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); feld.click(); }
+    });
+    feld.addEventListener('change', () => {
+        if (feld.files && feld.files[0]) dateiGelesen(feld.files[0]);
+    });
+    ['dragenter', 'dragover'].forEach((art) => drop.addEventListener(art, (ev) => {
+        ev.preventDefault(); drop.classList.add('drag');
+    }));
+    ['dragleave', 'drop'].forEach((art) => drop.addEventListener(art, (ev) => {
+        ev.preventDefault(); drop.classList.remove('drag');
+    }));
+    drop.addEventListener('drop', (ev) => {
+        const d = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+        if (d) dateiGelesen(d);
+    });
+
     document.getElementById('csItemSuche').addEventListener('input', (ev) => {
         state.itemSuche = ev.target.value.trim();
         zeichneVerwaltung();
