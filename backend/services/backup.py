@@ -92,6 +92,16 @@ TABLES_ORDERED = [
     "food_bridge_dismissed",
     # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
     # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
+    # CS2-Modul. Kategorien und Lager zuerst: Items zeigen auf die
+    # Kategorie, Positionen auf beide, die Snapshot-Aufteilungen auf den
+    # Snapshot.
+    "cs2_categories",
+    "cs2_storages",
+    "cs2_items",
+    "cs2_positions",
+    "cs2_snapshots",
+    "cs2_snapshot_categories",
+    "cs2_snapshot_storages",
     "user_prefs",
 ]
 
@@ -119,6 +129,10 @@ PARENT_SCOPE = {
     "food_item_sizes":           ("item_id", "food_items"),
     "food_dish_items":           ("dish_id", "food_dishes"),
     "food_dish_images":          ("dish_id", "food_dishes"),
+    # Die beiden Aufteilungen haben keine user_id -- ohne Eintrag landen
+    # im Backup EINES Kontos die Zeilen ALLER.
+    "cs2_snapshot_categories":   ("snapshot_id", "cs2_snapshots"),
+    "cs2_snapshot_storages":     ("snapshot_id", "cs2_snapshots"),
 }
 
 def _ser_value(v):

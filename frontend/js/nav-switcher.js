@@ -67,6 +67,9 @@
         // v1.97.0 -- das Tagebuch ist ein eigenes Modul mit eigener Tabelle.
         // Es fragt nur, WAS es gab und ob es normal oder uebermaessig war;
         // Mengen gibt es dort nicht einmal als Spalte.
+        { href: '/cs2/',        label: '🎯 CS2',             public: false, icon: 'cs2',   short: 'CS2',
+          tone: '--m-cs2',
+          sub: 'Bestand an Spielgegenständen und sein Zeitwert', status: 'neu' },
         { href: '/essen/',      label: '🍽️ Essenstagebuch', public: false, icon: 'meal',  short: 'Essen',
           tone: '--m-essen',
           sub: 'Hinschreiben, was es gab — mehr nicht' },
@@ -553,6 +556,10 @@
         music:  '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
         news:   '<path d="M4 5h11a1 1 0 0 1 1 1v13H5a1 1 0 0 1-1-1V5Z"/><path d="M16 9h3a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 8.5h5M7 12h5M7 15.5h3"/>',
         users:  '<circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5M15.5 14.8A5.5 5.5 0 0 1 20.5 20"/>',
+        // Eine Kiste, keine Waffe: gut vier Fuenftel des Werts stecken in
+        // Kisten, und eine geschlossene Form bleibt bei 22 Pixeln
+        // erkennbar, wo eine Waffensilhouette zu Strichen zerfaellt.
+        cs2:    '<path d="M3.2 8.6h17.6v9.9a1.6 1.6 0 0 1-1.6 1.6H4.8a1.6 1.6 0 0 1-1.6-1.6Z"/><path d="M2.4 4.6h19.2v4H2.4z"/><path d="M10 12.4h4"/>',
         // Bauer statt Springer: die Pferdefigur verliert bei 22 Pixeln ihre
         // Silhouette, der Bauer bleibt erkennbar.
         chess:  '<circle cx="12" cy="6.2" r="2.7"/><path d="M9.4 10.6h5.2"/><path d="M10.2 10.6c.1 2.9-1.2 4.7-2.4 6.4h8.4c-1.2-1.7-2.5-3.5-2.4-6.4"/><path d="M7.8 17 6.6 20.4h10.8L16.2 17"/>',

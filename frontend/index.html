@@ -143,11 +143,12 @@
             if (!grid || !sec || !wip.length) return;
             grid.innerHTML = wip.map(m => {
                 const teile = m.label.split(' ');
-                const icon = teile.shift() || '';
+                teile.shift();                       // das Emoji der Registry
                 const name = teile.join(' ');
                 const ton = m.tone ? ('--tone:var(' + m.tone + ')') : '';
                 return '<a href="' + m.href + '" class="tile">'
-                    + '<div class="tile-icon v-icon-tile" style="' + ton + '">' + icon + '</div>'
+                    + '<div class="tile-icon v-icon-tile" style="' + ton + '">'
+                    + VexNav.iconSvg(m) + '</div>'
                     + '<div class="tile-text"><div class="tile-title">' + name + '</div>'
                     + '<div class="tile-sub">' + (m.sub || '') + '</div></div></a>';
             }).join('');

@@ -49,6 +49,7 @@ NAV_TABS_PREF = "ui_nav_tabs"
 ALLOWED_NAV_TABS = [
     "/", "/sparziel/", "/ausgaben/", "/notizen/", "/health/", "/musik/",
     "/blog/", "/blog/admin/", "/admin/", "/schach/", "/essen/", "/naehrwerte/",
+    "/cs2/",
 ]
 
 # Pfade, die es als Modul nicht mehr gibt, aber noch in gespeicherten

@@ -71,6 +71,12 @@
     /* Der Tracker (v1.98.0). Himmelblau steht zwischen --m-ausgaben
        (cyan-gruen) und --m-notizen (periwinkle) und ist von beiden am
        Icon zu unterscheiden. */
+    /* CS2 traegt Fuchsia. Es liegt im einzigen freien Bereich der
+       Modultoene: 33 Grad von --m-admin (#b79cff) und 37 Grad von
+       --m-health (#fb85c4) entfernt, damit die drei Zeichen in der Leiste
+       nebeneinander unterscheidbar bleiben (7,4:1 gegen --surface-1). */
+    --m-cs2:      #e879f9;
+    --m-cs2-soft: rgba(232, 121, 249, 0.16);
     --m-naehrwerte: #38bdf8;
     --m-naehrwerte-soft: rgba(56,189,248,0.16);
 

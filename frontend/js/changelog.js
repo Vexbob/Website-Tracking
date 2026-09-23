@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.12.0', date: '2026-09-23', title: 'CS2: der Bestand zieht ein', notes: [
+        'Neues Modul: Bestand an CS2-Gegenständen, was er heute wert wäre und wie alt die Preise sind.',
+        'Preise kommen von Hand — der Reiter „Pflege“ legt die ältesten zuerst vor und springt nach jeder Eingabe weiter.',
+        'Ein Stand lässt sich für den Tag festhalten; daraus wird der Verlauf.',
+        'Übernommen aus dem bisherigen Desktop-Programm: 116 Positionen, 152 Gegenstände, 7 Lager.',
+        'Auf der Startseite tragen jetzt auch die Kacheln unter „In Arbeit“ ihr Zeichen statt eines Emoji.',
+    ]},
     { v: 'v2.11.11', date: '2026-09-22', title: 'Der Ring sagt wieder, wie weit es ist', notes: [
         'Der Fortschrittsring war ab etwa 95 % geschlossen und damit von „geschafft“ nicht mehr zu unterscheiden.',
         'Das galt überall: im Sparziel wie in den Nährwerten, dort sogar noch früher.',

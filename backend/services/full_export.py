@@ -32,6 +32,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from services import food_mahlzeit as mahlzeiten
+# Die beiden CS2-Sektionen stehen im Modul selbst, damit der Umzug eine
+# Datei ist und nicht hundertzwanzig Zeilen mitten in dieser hier.
+from services.cs2_export import _sec_cs2_positions, _sec_cs2_snapshots
 from helpers import (
     _export_csv_field as _f,
     _export_amt as _amt,  # noqa: F401  (kompatibel gehalten fuer moegliche Reimporte)
@@ -279,6 +282,13 @@ EXPORT_SECTIONS: list[dict] = [
      "label": "Zugfolgen als PGN (eine Zeile je Partie)"},
     {"key": "chess_ratings", "group": "schach", "aggregatable": False, "dated": True,
      "label": "Wertungsverlauf (ein Tag je Disziplin)"},
+    # CS2. Der Bestand traegt KEINEN Zeitraum: er ist ein Stand von jetzt,
+    # und ein Filter, der nichts bedeutet, liefert stillschweigend immer
+    # dieselbe Liste. Die Staende sind die Historie und tragen ihn.
+    {"key": "cs2_positions", "group": "cs2", "aggregatable": False, "dated": False,
+     "label": "Bestand (Gegenstand, Menge, Preis, Preisstand)"},
+    {"key": "cs2_snapshots", "group": "cs2", "aggregatable": False, "dated": True,
+     "label": "Festgehaltene Staende (ein Tag je Zeile)"},
     {"key": "notes", "group": "notizen", "aggregatable": False, "dated": False,
      "label": "Notizen samt Text, Farbe und Schlagworten"},
 ]
@@ -290,6 +300,7 @@ EXPORT_GROUPS: list[dict] = [
     {"key": "musik", "label": "Musik"},
     {"key": "ernaehrung", "label": "Ernährung"},
     {"key": "schach", "label": "Schach"},
+    {"key": "cs2", "label": "CS2"},
     {"key": "notizen", "label": "Notizen"},
 ]
 
@@ -1442,6 +1453,11 @@ async def _build_sections_teil(db, user, picked: list[str], date_from, date_to,
     # verschiedener Disziplinen waere eine Zahl ohne Bedeutung. Die Partien
     # dagegen fassen sich sehr wohl zusammen, und das ist die Form, in der man
     # sie meistens will: Anzahl und Wertungsaenderung je Disziplin.
+    if "cs2_positions" in want:
+        out.append(("cs2_positions", await _sec_cs2_positions(db, uid)))
+    if "cs2_snapshots" in want:
+        out.append(("cs2_snapshots",
+                    await _sec_cs2_snapshots(db, uid, date_from, date_to)))
     if "chess_games" in want:
         out.append(("chess_games",
                     await _sec_chess_games(db, uid, date_from, date_to,

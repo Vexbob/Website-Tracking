@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0c10">
+<meta name="description" content="CS2-Bestand: Gegenstände, ihr Zeitwert und wie aktuell die Preise sind.">
+<title>CS2-Bestand — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/statistics.css">
+<link rel="stylesheet" href="/cs2/cs2.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav-switcher.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/sw-update.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/range-filter.js"></script>
+</head>
+<body>
+<nav class="navbar">
+    <span class="nav-title">CS2</span>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+
+<main class="wide">
+    <header class="page-head">
+        <h1>🎯 CS2-Bestand</h1>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="bestand">Bestand</button>
+        <button class="tab-btn" data-tab="pflege">Pflege<span class="cs-zaehler" id="csPflegeZahl" hidden></span></button>
+        <button class="tab-btn" data-tab="verlauf">Verlauf</button>
+        <button class="tab-btn" data-tab="verwaltung">Verwaltung</button>
+    </div>
+
+    <!-- ================= Bestand ================= -->
+    <div id="tab-bestand">
+        <div class="stat-filterbar">
+            <input type="search" id="csSuche" placeholder="Gegenstand, Kategorie oder Lager suchen"
+                   aria-label="Bestand durchsuchen" class="cs-suche">
+            <div class="filter-popover-wrap" id="csKatWrap">
+                <button type="button" class="filter-toggle-btn" id="csKatBtn" aria-expanded="false">
+                    Kategorien<span class="filter-badge" id="csKatBadge" hidden></span>
+                </button>
+                <div class="filter-popover" id="csKatPop" hidden></div>
+            </div>
+            <div class="filter-popover-wrap" id="csLagWrap">
+                <button type="button" class="filter-toggle-btn" id="csLagBtn" aria-expanded="false">
+                    Lager<span class="filter-badge" id="csLagBadge" hidden></span>
+                </button>
+                <div class="filter-popover" id="csLagPop" hidden></div>
+            </div>
+            <button type="button" class="stat-chip" id="csFaellig">Nur überfällige</button>
+            <div class="stat-filter-slot">
+                <select id="csSort" aria-label="Sortierung" class="v-select">
+                    <option value="wert">Nach Wert</option>
+                    <option value="alter">Nach Preisalter</option>
+                    <option value="name">Nach Name</option>
+                    <option value="menge">Nach Stückzahl</option>
+                    <option value="preis">Nach Stückpreis</option>
+                    <option value="kategorie">Nach Kategorie</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="stat-kpi-grid" id="csKpi">
+            <div class="stat-kpi"><div class="stat-kpi-label">Bestand brutto</div>
+                <div class="stat-kpi-value"><span class="skel skel-line short"></span></div></div>
+            <div class="stat-kpi"><div class="stat-kpi-label">Nach Gebühr</div>
+                <div class="stat-kpi-value"><span class="skel skel-line short"></span></div></div>
+            <div class="stat-kpi"><div class="stat-kpi-label">Selbst gespielt</div>
+                <div class="stat-kpi-value"><span class="skel skel-line short"></span></div></div>
+            <div class="stat-kpi"><div class="stat-kpi-label">Positionen</div>
+                <div class="stat-kpi-value"><span class="skel skel-line short"></span></div></div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>Aufteilung</h3>
+                <div class="stat-mini-toggle" id="csAufteilungWahl">
+                    <button type="button" class="active" data-dim="kategorie">Kategorie</button>
+                    <button type="button" data-dim="lager">Lager</button>
+                </div>
+            </div>
+            <div id="csAufteilung"><span class="skel skel-block"></span></div>
+        </div>
+
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Positionen <span class="v-card-sub" id="csListeKopf"></span></h3>
+                <button type="button" class="v-btn v-btn--sm" id="csNeu">+ Position</button>
+            </div>
+            <div id="csListe">
+                <span class="skel skel-line long"></span>
+                <span class="skel skel-line"></span>
+                <span class="skel skel-line short"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= Pflege ================= -->
+    <div id="tab-pflege" hidden>
+        <div class="v-card cs-pflege-kopf">
+            <div class="v-card-head">
+                <h3>Preise nachtragen</h3>
+                <span class="v-card-sub" id="csPflegeSub">Die ältesten zuerst.</span>
+            </div>
+            <div class="cs-fortschritt"><i id="csFortschritt" style="width:0%"></i></div>
+            <p class="cs-hinweis" id="csPflegeStand"></p>
+        </div>
+        <div id="csPflege">
+            <span class="skel skel-line long"></span>
+            <span class="skel skel-line"></span>
+        </div>
+    </div>
+
+    <!-- ================= Verlauf ================= -->
+    <div id="tab-verlauf" hidden>
+        <div class="stat-filterbar">
+            <div id="csRange"></div>
+            <div class="stat-filter-slot">
+                <button type="button" class="v-btn v-btn--primary" id="csSnapshot">Stand festhalten</button>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>Wert über die Zeit</h3>
+                <span class="stat-range-lbl">Immer der ganze Bestand, ungefiltert</span>
+            </div>
+            <div class="chart-wrap"><canvas id="csChart"></canvas></div>
+        </div>
+        <div class="v-card">
+            <div class="v-card-head"><h3>Festgehaltene Stände</h3></div>
+            <div id="csStaende"><span class="skel skel-line"></span></div>
+        </div>
+    </div>
+
+    <!-- ================= Verwaltung ================= -->
+    <div id="tab-verwaltung" hidden>
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Lager</h3>
+                <button type="button" class="v-btn v-btn--sm" id="csLagerNeu">+ Lager</button>
+            </div>
+            <div id="csLagerListe"><span class="skel skel-line"></span></div>
+        </div>
+        <div class="v-card">
+            <div class="v-card-head">
+                <h3>Gegenstände</h3>
+                <span class="v-card-sub" id="csItemKopf"></span>
+            </div>
+            <input type="search" id="csItemSuche" placeholder="Gegenstand suchen"
+                   aria-label="Gegenstände durchsuchen" class="cs-suche cs-suche--voll">
+            <div id="csItemListe"><span class="skel skel-line"></span></div>
+        </div>
+    </div>
+
+    <div class="version-tag"></div>
+</main>
+
+<script src="/cs2/cs2.js"></script>
+</body>
+</html>

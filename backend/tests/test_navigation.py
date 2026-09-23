@@ -107,13 +107,13 @@ def _tabellen_mit_user_id() -> dict:
     for datei in sorted(MIGRATIONEN.glob("*.sql")):
         text = datei.read_text(encoding="utf-8")
         for treffer in re.finditer(
-                r"CREATE TABLE (?:IF NOT EXISTS )?([a-z_]+)\s*\((.*?)\n\);",
+                r"CREATE TABLE (?:IF NOT EXISTS )?([a-z0-9_]+)\s*\((.*?)\n\);",
                 text, re.S):
             name, koerper = treffer.group(1), treffer.group(2)
             if re.search(r"\buser_id\b", koerper):
                 gefunden.setdefault(name, datei.name)
         for treffer in re.finditer(
-                r"ALTER TABLE\s+([a-z_]+)\s+ADD COLUMN[^;]*?\buser_id\b",
+                r"ALTER TABLE\s+([a-z0-9_]+)\s+ADD COLUMN[^;]*?\buser_id\b",
                 text, re.S):
             gefunden.setdefault(treffer.group(1), datei.name)
     assert len(gefunden) > 20, "Migrationen nicht gelesen -- Regex kaputt?"

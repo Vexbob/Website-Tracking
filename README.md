@@ -76,6 +76,15 @@ Der ausführliche Teil: Mengen, Kalorien, Makros und eigene Tagesziele.
 - **Gerichte mit Foto** — ein Rezept anlegen ist auf dem Handy ein Blatt über das ganze Bild: Name, Foto, dann die Zutaten. Das Suchfeld klebt oben und sucht über Bestand **und** Katalog; unten läuft die Summe mit.
 - **Die Brücke** — schaltest du die Nährwerte ein, schlägt das Modul vor, was du im Tagebuch oft notiert hast. Es liest dabei nur: ein Tagebuch-Eintrag wird nicht nachträglich zu einer Menge.
 
+### 🎯 CS2-Bestand
+Führt Buch über die eigenen CS2-Gegenstände und darüber, was sie heute wert wären — ein Bestand, kein Handelsbuch.
+
+- **Kein Kaufpreis, kein Gewinn — mit Absicht.** Eine Position ist eine über Jahre gewachsene Menge, zu verschiedenen Zeiten bei verschiedenen Anbietern gekauft. Ein Einstandspreis je Position wäre keine nachgetragene Angabe, sondern eine erfundene, die danach wie eine gemessene aussieht. Wer Gewinn rechnen will, braucht ein anderes Datenmodell, keine Spalte mehr an diesem.
+- **Preise kommen von Hand, und deshalb zählt ihr Alter.** Jede Position trägt ihren Preisstand; ab 30 Tagen gilt sie als überfällig, ab 60 als deutlich überfällig. Der Reiter „Pflege“ legt die ältesten zuerst vor, und Enter springt zur nächsten Zeile — ein Preis wird dabei *bestätigt*, auch wenn er gleich bleibt.
+- **Was eine Kategorie zulässt, steht an der Kategorie.** Abnutzung und StatTrak gibt es nur bei Skins, „selbst gespielt“ bei Skins und Agenten. Eine Angabe, die die Kategorie nicht kennt, wird geräumt statt abgelehnt.
+- **Aufteilung und Verlauf** — nach Kategorie oder Lager, dazu ein Tages-Stand, den man festhalten kann. Die Kopfzahlen rechnet der Server über denselben Filter wie die Liste, nicht der Browser über das Geladene.
+- **Selbst gespielt vs. Anlage** — Skins, die im eigenen Inventar benutzt werden, zählen im Gesamtwert mit, werden aber getrennt ausgewiesen.
+
 ### 📰 Blog
 Das einzige nach außen sichtbare Modul: `/blog/` ist ohne Anmeldung lesbar, geschrieben wird im Admin-Bereich.
 

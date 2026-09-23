@@ -1,0 +1,204 @@
+/* cs2.css — das CS2-Modul.
+ *
+ * Flaechen, Knoepfe, Kopfzahlen (.stat-kpi), Listen (.rec-list, .rank-list),
+ * Diagrammrahmen (.chart-wrap), Filterknoepfe (.filter-popover), leere
+ * Zustaende und Skeletons kommen aus css/style.css und css/statistics.css.
+ * Hier steht nur, was es sonst nirgends gibt: die drei Frische-Stufen eines
+ * Preises, die Pflegezeile und der Fortschrittsbalken darueber.
+ *
+ * Farbe: der Modulton traegt die Identitaet, --warn und --danger tragen das
+ * Alter eines Preises. Beides sind Tokens -- kein Hex-Wert unterhalb von
+ * :root, und der Ton immer in der Form var(--figure, var(--m-cs2)), damit die
+ * Einstellung "Zahlen und Diagramme" greift.
+ */
+
+:root {
+    /* Der Modulton steht in css/style.css bei den uebrigen. */
+
+    --cs2-ton: var(--figure, var(--m-cs2));
+}
+
+/* Die Zaehlung steht neben der Ueberschrift, nicht darunter: sie gehoert zur
+   Frage "wie viele" und nicht zu einer eigenen Zeile. Normalgewicht, damit
+   sie die Ueberschrift nicht verdoppelt. */
+.v-card-head h3 .v-card-sub { font-weight: 400; margin-left: 0.4rem; }
+
+/* ---------- Filterleiste ---------- */
+.cs-suche {
+    flex: 1 1 14rem;
+    min-width: 0;
+    margin: 0;
+}
+.cs-suche--voll { width: 100%; margin-bottom: 0.875rem; }
+
+/* Der Zaehler am Reiter: wie viele Preise ueberfaellig sind. Er steht dort und
+   nicht in einer Meldung, weil er eine Menge ist und keine Nachricht -- eine
+   Null blendet ihn aus. */
+.cs-zaehler {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.3rem;
+    margin-left: 0.4rem;
+    border-radius: 999px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Frische eines Preises ----------
+   Die Marke links an der Zeile traegt sie. Drei Stufen plus "nie bepreist" --
+   und das ist bewusst eine eigene Stufe: ein fehlender Preis ist kein alter
+   Preis, und eine Zeile ohne Wert darf nicht aussehen wie eine mit einem
+   ueberholten. */
+.cs-frisch    { --tone: var(--ok); }
+.cs-alt       { --tone: var(--warn); }
+.cs-sehr-alt  { --tone: var(--danger); }
+.cs-ohne      { --tone: var(--text-4); }
+
+.cs-alter {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.cs-alt .cs-alter      { color: var(--warn); }
+.cs-sehr-alt .cs-alter { color: var(--danger); }
+.cs-ohne .cs-alter     { color: var(--text-4); }
+
+/* Eine Zeile ohne Menge oder Preis. Kein Rot: sie ist nicht falsch, nur noch
+   nicht fertig. */
+.cs-unvollstaendig .rec-val { color: var(--text-4); font-weight: 600; }
+
+/* Merkmale am Gegenstand: StatTrak und selbst gespielt. Kleine Plaketten in
+   der Metazeile, keine eigene Spalte -- auf dem Handy waere sie die erste,
+   die hinter dem Rand liegt. */
+.cs-marke {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.05rem 0.35rem;
+    border-radius: 5px;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: var(--surface-2);
+    color: var(--text-3);
+    border: 1px solid var(--line);
+}
+.cs-marke--st { background: var(--m-cs2-soft); color: var(--cs2-ton); border-color: transparent; }
+.cs-marke--ps { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+
+/* ---------- Pflege ---------- */
+.cs-pflege-kopf { margin-bottom: 1rem; }
+
+.cs-fortschritt {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    overflow: hidden;
+}
+.cs-fortschritt > i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--grad-progress, var(--cs2-ton));
+    transition: width var(--dur-2, 0.35s) var(--ease);
+}
+.cs-hinweis {
+    margin: 0.625rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--text-3);
+}
+
+/* Eine Pflegezeile: links der Gegenstand, rechts das Feld. Die ganze Zeile
+   ist auf die eine Handlung ausgerichtet, die hier ansteht. */
+.cs-pflege-zeile {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--line);
+}
+.cs-pflege-zeile:last-child { border-bottom: 0; }
+.cs-pflege-zeile.is-erledigt { opacity: 0.45; }
+
+.cs-pflege-name {
+    min-width: 0;
+    font-weight: 600;
+    color: var(--text-1);
+    overflow-wrap: anywhere;
+}
+.cs-pflege-meta {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: var(--text-3);
+    font-weight: 400;
+}
+.cs-pflege-feld {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+/* Keine eigene font-size: die Form-Base setzt --eingabe-schrift. Ein kleineres
+   Feld laesst iOS die Seite heranzoomen und danach nicht zurueck. */
+.cs-pflege-feld input {
+    width: 7rem;
+    margin: 0;
+    text-align: right;
+}
+
+/* ---------- Beruehrungsziele ----------
+   Mit BEIDEN Bedingungen, nicht nur pointer:coarse -- die zweite trifft im
+   kopflosen Browser nie zu, und eine Regel, die man nicht ansehen kann, ist
+   eine Behauptung. */
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .cs-pflege-zeile {
+        grid-template-columns: 2.25rem 1fr;
+        grid-template-areas: "marke name" ".     feld";
+    }
+    .cs-pflege-zeile > :nth-child(1) { grid-area: marke; }
+    .cs-pflege-zeile > :nth-child(2) { grid-area: name; }
+    .cs-pflege-feld  { grid-area: feld; justify-content: flex-start; min-height: 44px; }
+    .cs-pflege-feld input { width: 100%; max-width: 10rem; }
+    .cs-suche { flex-basis: 100%; }
+}
+
+/* ---------- Formular im Dialog ---------- */
+.cs-form { display: grid; gap: 0.875rem; }
+.cs-form-reihe { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+@media (max-width: 560px) { .cs-form-reihe { grid-template-columns: 1fr; } }
+.cs-form label { display: block; }
+.cs-form .cs-label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-4);
+}
+.cs-form input, .cs-form select { margin: 0; width: 100%; }
+.cs-schalter {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.cs-schalter label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--text-2);
+}
+.cs-schalter input { width: auto; margin: 0; }
+.cs-form-fuss {
+    display: flex;
+    gap: 0.625rem;
+    justify-content: flex-end;
+    margin-top: 0.25rem;
+}
+@media (max-width: 560px) { .cs-form-fuss > * { flex: 1; } }
