@@ -39,9 +39,16 @@ Drei Entscheidungen tragen das Ganze:
    Handpflege und geht sonst verloren. Wer nur die Menge aendert, ruft PATCH
    -- das laesst den Preisstand in Ruhe.
 """
-from __future__ import annotations
-
-from datetime import date, datetime, timedelta, timezone
+# KEIN ``from __future__ import annotations`` in dieser Datei. Es macht jede
+# Annotation zu einer Zeichenkette, und das Pydantic dieser App (2.5.3) kann
+# die Vorwaertsreferenz im Endpunkt nicht mehr aufloesen:
+#
+#     PydanticUndefinedAnnotation: name 'PositionNeu' is not defined
+#
+# Der Import von ``main`` bricht dabei ab, also startet die GANZE App nicht --
+# nicht nur dieses Modul. Neuere Pydantic-Fassungen verzeihen es, deshalb faellt
+# es nur gegen die gepinnten Versionen aus ``requirements.txt`` auf.
+from datetime import timedelta
 from decimal import Decimal
 from typing import Optional
 
