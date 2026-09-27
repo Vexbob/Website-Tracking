@@ -80,6 +80,31 @@
     --m-naehrwerte: #38bdf8;
     --m-naehrwerte-soft: rgba(56,189,248,0.16);
 
+    /* Die Messgrößen des Gesundheitsmoduls (v1.59.0). Dreizehn Größen
+       brauchen dreizehn unterscheidbare Töne -- Identitätsfarben wie die
+       Modultöne, nur modulintern. Bis v2.19.0 standen sie in health.css;
+       seit v2.20.0 hier, wo jedes andere Token steht. */
+    --h-steps:     #7ab8ff;
+    --h-energy:    #ffb04d;
+    --h-resthr:    #fb85c4;
+    --h-hr:        #ff8a99;
+    --h-walkhr:    #34e2cd;
+    --h-hrv:       #b79cff;
+    --h-recovery:  #5eea92;
+    --h-weight:    #4fd6c4;
+    --h-vo2:       #8fa8ff;
+    --h-swim:      #5cc8ff;
+    --h-oxygen:    #45d9f0;
+    --h-distance:  #b6e84a;
+    --h-speed:     #ff9d5c;
+    /* Schlafphasen sind eine Skala, keine Kategorien: ein Farbton, fünf
+       Helligkeiten -- „Wach“ fällt bewusst heraus. */
+    --h-sleep-deep:  #7c74f0;
+    --h-sleep-core:  #969bff;
+    --h-sleep-rem:   #bcc6ff;
+    --h-sleep-rest:  #dbe1ff;
+    --h-sleep-awake: #ffcb45;
+
     /* =====================================================================
        Verlaufs-Presets (v1.74.0)
        ---------------------------------------------------------------------
@@ -2783,6 +2808,9 @@ html { scrollbar-color: var(--line-strong) transparent; }
     border-top: 1px solid var(--line);
 }
 .modal-fuss .v-btn { flex: none; }
+/* Im bildschirmfüllenden Dialog steht der Fuß unten am Rand, nicht direkt
+   unter einer kurzen Liste (dieselbe Regel wie bei .ern-dlg-fuss). */
+.modal-box--voll .modal-body > .modal-fuss { margin-top: auto; }
 .modal-fuss > :first-child:not(.v-btn--danger) { margin-left: auto; }
 .modal-fuss .v-btn--danger { margin-right: auto; }
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {

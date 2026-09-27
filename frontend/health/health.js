@@ -1,12 +1,32 @@
-/* Gesundheit-Modul (v1.25.0) — Frontend-Logik.
+/* Gesundheit-Modul — Frontend-Logik (neu gebaut in v2.20.0).
  * Nutzt apiCall()/API_BASE aus /js/api.js. Chart.js fuer alle Diagramme.
  *
- * Architektur:
- *   - HEALTH_API                : API-Bindings (unveraendert kompatibel)
- *   - Chart-Theme (chartTheme)  : reagiert auf Dark/Light-Wechsel und liefert
- *                                  konsistente Achsen-/Tooltip-Farben
- *   - Bootstrap                 : setzt Tabs auf, laedt Dashboard
- *   - Pro Tab: initX() + loadX()
+ * Was sich in v2.20.0 geaendert hat, und warum:
+ *
+ *   - Vier Reiter statt fuenf. Der „Überblick“ ersetzt das Dashboard; die
+ *     Einstellungen (Schluessel, Protokoll, Import, Loeschen) braucht man
+ *     selten und stehen als Zeilen unten im Überblick, jede oeffnet einen
+ *     Dialog (DESIGN 6d). Alte Anker (#dashboard, #einstellungen) fuehren
+ *     weiter an die richtige Stelle.
+ *   - Oben die Buehne: der letzte VOLLE Tag gegen den eigenen Schnitt der
+ *     dreissig Tage davor. Die Daten kommen per taeglichem Upload, der
+ *     juengste Tag ist gestern; ein angebrochener heutiger Tag zaehlt auf dem
+ *     Überblick nirgends mit (abgeschlossen()). Ein Ring sagt „wie viel von
+ *     einem Ziel“ (DESIGN 7a); ein fremdes Ziel wie „10.000 Schritte“ waere
+ *     eine Behauptung, die in keiner Einstellung steht -- der eigene Schnitt
+ *     ist eine Zahl aus den Daten.
+ *   - Keine Emoji mehr an Kacheln und Knoepfen: sie ueberlappten die
+ *     Beschriftung (🔥 ueber „Aktive Energie (7 Tage)“). Eine Messgroesse
+ *     traegt ihren Farbpunkt -- dieselbe Farbe wie ihre Kurve.
+ *   - Workouts sind eine Liste; Details, Pulsverlauf und Loeschen stehen im
+ *     Dialog statt als zwei Knoepfe an jeder Karte.
+ *   - Eine Messgroesse ohne Werte im Zeitraum steht nicht als leere Karte da,
+ *     sondern ist in einer Zeile darunter genannt.
+ *
+ * Die Rechnungen (Mittel ohne Messluecken, gleitender Durchschnitt, Schlaf
+ * auf der Uhrzeit-Achse, Median statt Mittel bei Zubettgehzeiten) sind
+ * unveraendert -- sie standen richtig und haben jede ihre Begruendung
+ * weiter unten.
  */
 
 const HEALTH_API = {
@@ -22,7 +42,7 @@ const HEALTH_API = {
                        + (type ? `&workout_type=${encodeURIComponent(type)}` : '')),
     workoutDetail: (id) => apiCall(`/api/health/workouts/${id}`),
     // v1.46.1: Reihenfolge der Vitalwerte-Karten (serverseitig, damit sie auf
-    // allen Geraeten gleich ist — wie bei den Wochenzielen im Sparziel-Modul)
+    // allen Geraeten gleich ist)
     metricOrder:    () => apiCall('/api/health/metric-order'),
     saveMetricOrder: (order) => apiCall('/api/health/metric-order', {
         method: 'PUT', headers: {'Content-Type':'application/json'},
@@ -50,43 +70,48 @@ const HEALTH_API = {
     clearImports:  () => apiCall('/api/health/imports', { method: 'DELETE' }),
 };
 
-// Farben kommen aus den Tokens in health.css -- der Helfer steht deshalb
-// vor den Tabellen, die ihn brauchen.
+// Farben kommen aus den Tokens (css/style.css, --h-*) -- der Helfer steht
+// deshalb vor den Tabellen, die ihn brauchen.
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
+// ``ton`` ist der Name des Tokens: im HTML steht er als var(), im Diagramm
+// wird er zur Farbe aufgeloest.
 const METRIC_LABELS = {
-    steps:           { label: 'Schritte', unit: '', icon: '👟', color: cssVar('--h-steps'), cumulative: true },
-    active_energy:   { label: 'Aktive Energie', unit: 'kcal', icon: '🔥', color: cssVar('--h-energy'), cumulative: true },
-    resting_hr:      { label: 'Ruhepuls', unit: 'bpm', icon: '🛋️', color: cssVar('--h-resthr') },
-    heart_rate:      { label: 'Herzfrequenz', unit: 'bpm', icon: '❤️', color: cssVar('--h-hr') },
-    walking_hr_avg:  { label: 'Ø-HF Gehen', unit: 'bpm', icon: '🚶', color: cssVar('--h-walkhr') },
-    hrv:             { label: 'HRV', unit: 'ms', icon: '📈', color: cssVar('--h-hrv') },
-    cardio_recovery: { label: 'Kardio-Erholung', unit: 'bpm', icon: '💪', color: cssVar('--h-recovery') },
-    weight:          { label: 'Gewicht', unit: 'kg', icon: '⚖️', color: cssVar('--h-weight') },
-    vo2_max:         { label: 'VO2max', unit: 'ml/kg/min', icon: '🫁', color: cssVar('--h-vo2') },
-    swim_distance:   { label: 'Schwimmdistanz', unit: 'm', icon: '🏊', color: cssVar('--h-swim'), cumulative: true },
-    blood_oxygen:    { label: 'Blutsauerstoff', unit: '%', icon: '🫧', color: cssVar('--h-oxygen') },
-    walking_distance:{ label: 'Geh-/Laufstrecke', unit: 'km', icon: '🛣️', color: cssVar('--h-distance'), cumulative: true },
-    walking_speed:   { label: 'Gehgeschwindigkeit', unit: 'km/h', icon: '💨', color: cssVar('--h-speed') },
+    steps:           { label: 'Schritte', unit: '', ton: '--h-steps', cumulative: true },
+    active_energy:   { label: 'Aktive Energie', unit: 'kcal', ton: '--h-energy', cumulative: true },
+    resting_hr:      { label: 'Ruhepuls', unit: 'bpm', ton: '--h-resthr' },
+    heart_rate:      { label: 'Herzfrequenz', unit: 'bpm', ton: '--h-hr' },
+    walking_hr_avg:  { label: 'Ø-HF Gehen', unit: 'bpm', ton: '--h-walkhr' },
+    hrv:             { label: 'HRV', unit: 'ms', ton: '--h-hrv' },
+    cardio_recovery: { label: 'Kardio-Erholung', unit: 'bpm', ton: '--h-recovery' },
+    weight:          { label: 'Gewicht', unit: 'kg', ton: '--h-weight' },
+    vo2_max:         { label: 'VO2max', unit: 'ml/kg/min', ton: '--h-vo2' },
+    swim_distance:   { label: 'Schwimmdistanz', unit: 'm', ton: '--h-swim', cumulative: true },
+    blood_oxygen:    { label: 'Blutsauerstoff', unit: '%', ton: '--h-oxygen' },
+    walking_distance:{ label: 'Geh-/Laufstrecke', unit: 'km', ton: '--h-distance', cumulative: true },
+    walking_speed:   { label: 'Gehgeschwindigkeit', unit: 'km/h', ton: '--h-speed' },
 };
+Object.keys(METRIC_LABELS).forEach(k => { METRIC_LABELS[k].color = cssVar(METRIC_LABELS[k].ton); });
 
+// Die Sportart traegt ein Emoji als Marke -- wie ein Kategorie-Zeichen, kein
+// Bedienelement (DESIGN 8).
 const WORKOUT_META = {
-    'Running':          { icon: '🏃', cls: 'run',      de: 'Laufen' },
-    'Cycling':          { icon: '🚴', cls: 'bike',     de: 'Radfahren' },
-    'Swimming':         { icon: '🏊', cls: 'swim',     de: 'Schwimmen' },
-    'Walking':          { icon: '🚶', cls: 'walk',     de: 'Gehen' },
-    'StrengthTraining': { icon: '🏋️', cls: 'strength', de: 'Krafttraining' },
-    'HIKE':             { icon: '🥾', cls: 'hike',     de: 'Wandern' },
-    'Outdoor Spaziergang':{icon: '🚶', cls: 'walk',    de: 'Outdoor Spaziergang' },
-    'Schwimmbad Schwimmen':{icon:'🏊', cls: 'swim',    de: 'Schwimmen (Pool)' },
-    'Outdoor Laufen':   { icon: '🏃', cls: 'run',      de: 'Outdoor Laufen' },
+    'Running':          { icon: '🏃', de: 'Laufen' },
+    'Cycling':          { icon: '🚴', de: 'Radfahren' },
+    'Swimming':         { icon: '🏊', de: 'Schwimmen', swim: true },
+    'Walking':          { icon: '🚶', de: 'Gehen' },
+    'StrengthTraining': { icon: '🏋️', de: 'Krafttraining' },
+    'HIKE':             { icon: '🥾', de: 'Wandern' },
+    'Outdoor Spaziergang':{icon: '🚶', de: 'Outdoor Spaziergang' },
+    'Schwimmbad Schwimmen':{icon:'🏊', de: 'Schwimmen (Pool)', swim: true },
+    'Outdoor Laufen':   { icon: '🏃', de: 'Outdoor Laufen' },
 };
-function wMeta(t) { return WORKOUT_META[t] || { icon: '🏋️', cls: '', de: t || 'Workout' }; }
+function wMeta(t) { return WORKOUT_META[t] || { icon: '🏋️', de: t || 'Workout' }; }
 // Schwimmen wird anders gerechnet als Laufen/Radfahren: Distanz in Metern,
 // Pace in min/100 m. Neben den bekannten Typen greift ein Namens-Fallback,
 // damit auch kuenftige Apple-Bezeichnungen ("Freiwasserschwimmen") passen.
 function isSwimWorkout(t) {
-    if (wMeta(t).cls === 'swim') return true;
+    if (wMeta(t).swim) return true;
     return /schwimm|swim/i.test(t || '');
 }
 
@@ -98,7 +123,7 @@ function showToast(msg, isErr) {
     t.classList.toggle('err', !!isErr);
     t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
 }
 function fmt1(n) { return (n == null || Number.isNaN(+n)) ? '–' : Number(n).toFixed(1).replace('.', ','); }
 function fmt0(n) { return (n == null || Number.isNaN(+n)) ? '–' : Math.round(Number(n)).toLocaleString('de-DE'); }
@@ -109,14 +134,31 @@ function fmtHM(iso) { return iso ? new Date(iso).toLocaleTimeString('de-DE', { h
 function fmtDuration(min) {
     if (min == null) return '–';
     const h = Math.floor(min / 60), m = Math.round(min % 60);
-    return h > 0 ? `${h}h ${m}min` : `${m} min`;
+    return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }
 function escHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function pctDelta(cur, prev) {
     if (!prev || !cur) return null;
     return ((cur - prev) / prev) * 100;
+}
+function ikon(name, groesse) { return window.VexIkon ? VexIkon.svg(name, groesse || 18) : ''; }
+// Das Datum in der Ortszeit; toISOString() rechnet in UTC.
+function isoTag(d) { const z = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); }
+function tagName(iso) {
+    try { return new Date(iso + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }); }
+    catch (e) { return iso; }
+}
+/* Eine Tokenfarbe mit Deckkraft -- fuer Balken und Flaechen im Diagramm.
+   Chart.js reicht Farben an die Leinwand weiter, und die kennt kein
+   color-mix(); die Tokens sind Hexwerte, also von Hand. */
+function tonAlpha(farbe, a) {
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(farbe || '').trim());
+    if (!m) return farbe;
+    let h = m[1];
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
 }
 
 // v1.39.1: Durchschnitt ohne Messluecken.
@@ -126,8 +168,6 @@ function pctDelta(cur, prev) {
 // obwohl an dem Tag gar nicht "wenig passiert" ist. Als Messluecke gilt daher
 // alles unter 20 % des Medians der Reihe — der Median ist gegenueber genau
 // solchen Ausreissern robust, ein Mittelwert waere es nicht.
-// Bei nicht-kumulativen Metriken (Puls, Gewicht, HRV, …) greift die Regel
-// praktisch nie, weil echte Messwerte dort nie auf 20 % des Medians fallen.
 const GAP_FRACTION = 0.2;
 function gapThreshold(values) {
     const vals = values.map(Number).filter(Number.isFinite);
@@ -149,11 +189,8 @@ function cleanAverage(values) {
     };
 }
 
-// Gleitender Durchschnitt als Trendlinie — zentriert, d. h. das Fenster liegt
-// je zur Haelfte vor und hinter dem Punkt. Anders als bei einem nachlaufenden
-// Fenster (wie in der Ausgaben-Statistik, wo die Reihe fortlaufend waechst)
-// liegen hier alle Daten des Zeitraums schon vor, es gibt also keinen Grund
-// fuer den Versatz. Messluecken (< threshold) fliessen nicht ein.
+// Gleitender Durchschnitt als Trendlinie — zentriert. Messluecken (< threshold)
+// fliessen nicht ein.
 function rollingAverage(values, win, threshold) {
     const half = Math.floor(win / 2);
     return values.map((_, i) => {
@@ -166,15 +203,13 @@ function rollingAverage(values, win, threshold) {
         return n ? sum / n : null;
     });
 }
-// Fensterbreite passend zur Reihenlaenge: kurze Zeitraeume brauchen ein
-// schmales Fenster, sonst buegelt die Linie den ganzen Verlauf platt.
+// Fensterbreite passend zur Reihenlaenge.
 function trendWindow(n) {
     const win = n <= 10 ? 3 : n <= 40 ? 7 : n <= 120 ? 14 : 30;
     return Math.max(2, Math.min(win, n));
 }
 
 // ---------- Chart-Theme ----------
-// Farben kommen aus den Tokens (docs/DESIGN.md), nicht aus Hex-Werten im JS.
 function chartTheme() {
     return {
         text:    cssVar('--text-1'),
@@ -182,7 +217,6 @@ function chartTheme() {
         grid:    cssVar('--chart-grid'),
         border:  cssVar('--line-strong'),
         surface: cssVar('--surface-3'),
-        series:  ['--chart-1','--chart-2','--chart-3','--chart-4','--chart-5','--chart-6'].map(cssVar),
     };
 }
 function chartDefaults(overrides) {
@@ -193,12 +227,7 @@ function chartDefaults(overrides) {
         plugins: {
             legend: { labels: { color: th.muted, boxWidth: 8, boxHeight: 8, font: { size: 11 },
                                 usePointStyle: true, pointStyle: 'circle' } },
-            tooltip: {
-                backgroundColor: th.surface, borderColor: th.border, borderWidth: 1,
-                titleColor: th.text, bodyColor: cssVar('--text-2'), padding: 10, cornerRadius: 12,
-                displayColors: true, boxPadding: 3,
-                callbacks: { title: vexFullTitle },
-            },
+            tooltip: themedTooltip(),
         },
         scales: {
             // Kein senkrechtes Gitter, keine Achsenrahmen -- die Linie zaehlt.
@@ -209,16 +238,14 @@ function chartDefaults(overrides) {
         },
     }, overrides || {});
 }
-// Sparklines: minimales Achsen-loses Setup
 // chartDefaults ersetzt bei einem `plugins`-Override den kompletten Block --
-// wer nur die Legende abschaltet, verliert sonst das getunte Tooltip-Styling
-// (und damit die Dark-Mode-Farben). Dieser Helfer liefert es zum Wiedereinsetzen.
+// dieser Helfer liefert das Tooltip-Styling zum Wiedereinsetzen.
 function themedTooltip(extra) {
     const th = chartTheme();
     const e = extra || {};
     const out = Object.assign({
         backgroundColor: th.surface, borderColor: th.border, borderWidth: 1,
-        titleColor: th.text, bodyColor: th.text, padding: 10, cornerRadius: 8,
+        titleColor: th.text, bodyColor: cssVar('--text-2'), padding: 10, cornerRadius: 12,
         displayColors: true, boxPadding: 3,
     }, e);
     // callbacks muss zusammengefuehrt werden, nicht ersetzt: sonst nimmt ein
@@ -228,8 +255,7 @@ function themedTooltip(extra) {
 }
 
 // Die Achse zeigt "05.09.", der Tooltip zeigt "Fr, 05.09.2026". Die
-// ausgeschriebene Fassung haengt als $vexFull am Diagramm, damit sie beim
-// Aktualisieren mitwandert, ohne dass die Optionen neu gebaut werden muessen.
+// ausgeschriebene Fassung haengt als $vexFull am Diagramm.
 function vexFullTitle(items) {
     if (!items || !items.length) return '';
     const full = items[0].chart && items[0].chart.$vexFull;
@@ -242,177 +268,66 @@ function setChartDates(chart, isoList) {
     chart.$vexFull = (isoList || []).map(v => VexCharts.fullDay(v));
 }
 
-function sparkOptions(color) {
-    return {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales: { x: { display: false }, y: { display: false } },
-        elements: { point: { radius: 0 }, line: { tension: 0.35, borderColor: color, borderWidth: 2 } },
-    };
+// ---------- Dialoge ----------
+function dialog(titel, html, opts) {
+    const d = VexModal.open(escHtml(titel), html, opts || {});
+    if (window.VexIkon) VexIkon.einsetzen(d.root);
+    return d;
+}
+function beiKlick(d, sel, fn) {
+    const el = d.root.querySelector(sel);
+    if (el) el.addEventListener('click', fn);
 }
 
-// ---------- Tabs ----------
-const H_TABS = ['dashboard', 'vitalwerte', 'schlaf', 'workouts', 'einstellungen'];
+// ---------- Reiter ----------
+const H_TABS = ['ueberblick', 'vitalwerte', 'schlaf', 'workouts'];
+// Lesezeichen aus der Zeit vor v2.20.0 landen an der neuen Stelle.
+const ALTE_ANKER = { dashboard: 'ueberblick', einstellungen: 'ueberblick', heute: 'ueberblick' };
 
 function activateTab(t) {
+    const zuDaten = t === 'einstellungen';
+    t = ALTE_ANKER[t] || t;
     if (H_TABS.indexOf(t) < 0) t = H_TABS[0];
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+    document.querySelectorAll('.tabs .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
     H_TABS.forEach(id => {
         const el = document.getElementById('tab-' + id);
-        if (el) el.style.display = (id === t) ? '' : 'none';
+        if (el) el.hidden = id !== t;
     });
-    // Der Reiter steht in der Adresse -- wie im Schachmodul. Ein Neuladen
-    // landet dort, wo man war, und ein Link auf die Schlafdaten ist ein Link
-    // auf die Schlafdaten. Der erste Reiter bleibt ohne Anhaengsel.
+    // Der Reiter steht in der Adresse. Der erste bleibt ohne Anhaengsel.
     history.replaceState(null, '', t === H_TABS[0] ? location.pathname : '#' + t);
     if (t === 'vitalwerte' && !state.vitalInit) initVitalwerte();
     if (t === 'schlaf' && !state.sleepInit) initSchlaf();
-    if (t === 'workouts' && !state.workoutsLoaded) initWorkouts();
-    if (t === 'einstellungen' && !state.keysLoaded) initEinstellungen();
+    if (t === 'workouts' && !state.workoutsInit) initWorkouts();
+    if (zuDaten) {
+        const liste = document.getElementById('hDatenListe');
+        if (liste) setTimeout(() => liste.scrollIntoView({ block: 'center' }), 60);
+    }
 }
 
 // ---------- Zentraler State ----------
 const state = {
     summary: null,
-    metricsCache: {},
-    activityMode: 'steps',
-    activityChart: null,
+    dashSeries: null,
     vitalRange: null, vitalInit: false,
     metricCards: null, metricChartMap: {},   // v1.46.0: Karten bleiben stehen,
                                              // nur die Daten werden getauscht
     metricOrder: null, sortableMetrics: null,
-
     chartBp: null, chartGlucose: null,
     sleepRange: null, sleepInit: false, chartSleepTimes: null,
     sleepUsable: [], sleepWindows: [],   // Naechte hinter den Balken (Tooltip)
-    workoutsLoaded: false, workoutsAll: [], workoutFilter: '', workoutRange: null,
-    workoutHrCharts: {},
-    keysLoaded: false,
-    sparkCharts: [],
+    workoutsInit: false, workoutsAll: null, workoutFilter: '', workoutRange: null,
+    workoutHrChart: null,
 };
 
-// ---------- Dashboard ----------
-async function loadDashboard() {
-    const grid = document.getElementById('hDashKpis');
-    try {
-        const [summary, stepsRows, energyRows, hrRows, restRows] = await Promise.all([
-            HEALTH_API.summary(),
-            HEALTH_API.metricSeries('steps', 14).catch(() => []),
-            HEALTH_API.metricSeries('active_energy', 14).catch(() => []),
-            HEALTH_API.metricSeries('heart_rate', 14).catch(() => []),
-            HEALTH_API.metricSeries('resting_hr', 14).catch(() => []),
-        ]);
-        state.summary = summary;
-        state.dashSeries = { steps: stepsRows, active_energy: energyRows, heart_rate: hrRows, resting_hr: restRows };
-
-        const sum7 = (arr) => arr.slice(-7).reduce((s, r) => s + (Number(r.qty) || 0), 0);
-        const sumPrev7 = (arr) => arr.slice(-14, -7).reduce((s, r) => s + (Number(r.qty) || 0), 0);
-        const avg7 = (arr) => { const s = arr.slice(-7); if (!s.length) return null;
-            return s.reduce((a, r) => a + (Number(r.qty) || 0), 0) / s.length; };
-        const avgPrev7 = (arr) => { const s = arr.slice(-14, -7); if (!s.length) return null;
-            return s.reduce((a, r) => a + (Number(r.qty) || 0), 0) / s.length; };
-
-        const stepsSum = sum7(stepsRows), stepsPrev = sumPrev7(stepsRows);
-        const enSum = sum7(energyRows), enPrev = sumPrev7(energyRows);
-        const restAvg = avg7(restRows), restPrev = avgPrev7(restRows);
-
-        const tiles = [
-            // Ohne Sparkline: direkt darunter steht dieselbe Reihe als
-            // grosses Diagramm. Die Kachel traegt die Zahl und den Vergleich
-            // zur Vorwoche -- das ist, was die Kurve NICHT sagt.
-            { icon: '👟', label: 'Schritte (7 Tage)', value: fmt0(stepsSum),
-              delta: pctDelta(stepsSum, stepsPrev), higherIsBetter: true,
-              spark: null, color: cssVar('--h-steps') },
-            { icon: '🔥', label: 'Aktive Energie (7 Tage)', value: fmt0(enSum) + ' kcal',
-              delta: pctDelta(enSum, enPrev), higherIsBetter: true,
-              spark: null, color: cssVar('--h-energy') },
-            { icon: '🛋️', label: 'Ø Ruhepuls (7 Tage)',
-              value: restAvg != null ? fmt0(restAvg) + ' bpm' : '–',
-              delta: pctDelta(restAvg, restPrev), higherIsBetter: false,
-              spark: restRows.slice(-14).map(r => Number(r.qty) || 0), color: cssVar('--h-resthr') },
-            { icon: '🏋️', label: 'Workouts diese Woche',
-              value: fmt0(summary.workouts_this_week), delta: null, spark: null, color: cssVar('--h-walkhr') },
-        ];
-
-        state.sparkCharts.forEach(c => c && c.destroy());
-        state.sparkCharts = [];
-
-        grid.innerHTML = tiles.map((t, i) => {
-            let deltaHtml = '';
-            if (t.delta != null && Number.isFinite(t.delta) && Math.abs(t.delta) >= 1) {
-                const up = t.delta > 0;
-                const good = (up && t.higherIsBetter) || (!up && !t.higherIsBetter);
-                const cls = good ? 'down' : 'up';
-                deltaHtml = `<span class="stat-kpi-delta ${cls}">${up ? '▲' : '▼'} ${Math.abs(t.delta).toFixed(0)}%</span>`;
-            }
-            const sparkHtml = t.spark && t.spark.some(v => v > 0)
-                ? `<div class="h-kpi-spark"><canvas id="hDashSpark${i}"></canvas></div>` : '';
-            return `<div class="stat-kpi">
-                <div class="stat-kpi-icon">${t.icon}</div>
-                <div class="stat-kpi-label">${t.label}</div>
-                <div class="stat-kpi-value">${t.value}</div>
-                ${deltaHtml ? `<div class="stat-kpi-sub">${deltaHtml}<span>vs. Vorwoche</span></div>` : ''}
-                ${sparkHtml}
-            </div>`;
-        }).join('');
-
-        tiles.forEach((t, i) => {
-            if (!t.spark || !t.spark.some(v => v > 0)) return;
-            const canvas = document.getElementById('hDashSpark' + i);
-            if (!canvas) return;
-            const ch = new Chart(canvas.getContext('2d'), {
-                type: 'line',
-                data: { labels: t.spark.map((_, j) => j), datasets: [{
-                    data: t.spark, fill: true,
-                    backgroundColor: t.color + '22', borderColor: t.color,
-                }] },
-                options: sparkOptions(t.color),
-            });
-            state.sparkCharts.push(ch);
-        });
-
-        renderSleepBlock('hDashSleep', summary.sleep_last);
-        renderHeartOverview(summary, hrRows, restRows);
-        renderInsights(summary, { stepsSum, stepsPrev, enSum, enPrev, restAvg, restPrev });
-        renderActivityChart();
-    } catch (e) {
-        grid.innerHTML = `<div class="stat-empty">Fehler beim Laden: ${escHtml(e.message)}</div>`;
-    }
-}
-
-function renderInsights(s, extras) {
-    const box = document.getElementById('hDashInsights');
-    const items = [];
-    if (extras.stepsSum >= 70000) items.push({ icon:'🎯', txt:`Starke Woche — <strong>${fmt0(extras.stepsSum)}</strong> Schritte in 7 Tagen.` });
-    else if (extras.stepsSum > 0 && extras.stepsSum < 20000) items.push({ icon:'💡', txt:`Wenig Aktivität diese Woche (<strong>${fmt0(extras.stepsSum)}</strong> Schritte).` });
-    if (extras.restAvg != null && extras.restPrev != null && (extras.restAvg - extras.restPrev) <= -2)
-        items.push({ icon:'💚', txt:`Ruhepuls <strong>${fmt0(extras.restAvg)}</strong> bpm — ${fmt0(extras.restPrev - extras.restAvg)} bpm besser als Vorwoche.` });
-    if (extras.restAvg != null && extras.restAvg >= 80)
-        items.push({ icon:'⚠️', txt:`Erhöhter Ruhepuls (<strong>${fmt0(extras.restAvg)}</strong> bpm) — evtl. Erholung einplanen.` });
-    // v1.39.1: Der frueher hier stehende Schlaf-Insight ist entfallen — er hat
-    // die rohen `asleep_minutes` benutzt und damit (siehe renderSleepBlock)
-    // regelmaessig zu wenig angezeigt, direkt neben der korrekten Karte
-    // "Letzte Nacht". Doppelte, widerspruechliche Angabe statt Mehrwert.
-    if (s.workouts_this_week >= 4) items.push({ icon:'🔥', txt:`<strong>${s.workouts_this_week}</strong> Workouts diese Woche — respektabel!` });
-    box.innerHTML = items.map(i => `<div class="insight"><span class="icon">${i.icon}</span><span>${i.txt}</span></div>`).join('');
-}
-
-function renderSleepBlock(elId, sl) {
-    const el = document.getElementById(elId);
-    if (!sl) { el.className = 'h-empty'; el.textContent = 'Noch keine Daten synchronisiert.'; return; }
-    el.className = '';
+// ---------- Schlaf einer Nacht ----------
+// v1.36.1: Apple's `asleep_minutes` zaehlt oft nur den "asleep unspecified"-
+// Anteil und ignoriert Core/Deep/REM. Wenn Phasen vorhanden sind, ist deren
+// Summe die verlaessliche geschlafene Zeit.
+function nachtZahlen(sl) {
     const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-    // Fallback: fehlt asleep_minutes, nutze die Summe der Phasen
     const phases = num(sl.core_minutes) + num(sl.deep_minutes) + num(sl.rem_minutes);
     const rawAsleep = num(sl.asleep_minutes);
-    // v1.36.1 Bugfix: Apple's `asleep_minutes` zaehlt oft nur den
-    // "asleep unspecified"-Anteil und ignoriert Core/Deep/REM. Wenn Phasen
-    // vorhanden sind, ist deren Summe die verlaessliche geschlafene Zeit.
-    // Vorher hat der Header teils weniger angezeigt als die einzelne
-    // Phasen-Legende (z. B. Core 4 h + Tief 1,5 h + REM 1 h = 6,5 h, Header
-    // aber "5 h") -- genau das ist der vom User gemeldete Fall.
     const asleepMin = phases > 0 ? Math.max(phases, rawAsleep) : rawAsleep;
-    // Fallback fuer in_bed: sleep + awake oder Zeitspanne
     let inBedMin = num(sl.in_bed_minutes);
     if (inBedMin <= 0) {
         const awake = num(sl.awake_minutes);
@@ -422,64 +337,224 @@ function renderSleepBlock(elId, sl) {
             if (diff > 0) inBedMin = diff;
         }
     }
-    const total = phases + num(sl.awake_minutes);
-    const pct = (v) => total ? (100 * (v||0) / total).toFixed(1) : 0;
-    const pctInt = (v) => total ? Math.round(100 * (v||0) / total) : 0;
-    const asleepH = asleepMin / 60;
-    const inBedH  = inBedMin  / 60;
-    const eff = inBedH > 0 ? (asleepH / inBedH) * 100 : null;
+    return { phases, asleepMin, inBedMin, awake: num(sl.awake_minutes) };
+}
+
+// ---------- Überblick ----------
+/* Nur abgeschlossene Tage. Der Upload kommt einmal am Tag und bringt die
+   Tage bis gestern; steht doch eine Zeile fuer heute da, ist sie ein
+   angebrochener Tag -- als Tageswert, in der Wochensumme und als letzter
+   Balken wuerde sie eine zu kleine Zahl behaupten. */
+function abgeschlossen(rows) {
+    const heute = isoTag(new Date());
+    return (rows || []).filter(r => String(r.sample_date || r.recorded_at || '').slice(0, 10) < heute);
+}
+
+async function loadDashboard() {
+    try {
+        const [summary, stepsRows, energyRows, hrRows, restRows, sleepRows] = await Promise.all([
+            HEALTH_API.summary(),
+            HEALTH_API.metricSeries('steps', 31).catch(() => []),
+            HEALTH_API.metricSeries('active_energy', 31).catch(() => []),
+            HEALTH_API.metricSeries('heart_rate', 14).catch(() => []),
+            HEALTH_API.metricSeries('resting_hr', 14).catch(() => []),
+            HEALTH_API.sleep(31).catch(() => []),
+        ]);
+        state.summary = summary;
+        const steps = abgeschlossen(stepsRows), energy = abgeschlossen(energyRows);
+        const hr = abgeschlossen(hrRows), rest = abgeschlossen(restRows);
+        state.dashSeries = { steps: steps, active_energy: energy, heart_rate: hr,
+                             resting_hr: rest, sleep: sleepRows };
+        zeichneBuehne(summary, steps, energy, rest, sleepRows);
+        renderSleepBlock('hDashSleep', summary.sleep_last);
+        renderHeartOverview(summary, hr, rest);
+        renderInsights(summary, steps, rest);
+        renderActivityChart();
+    } catch (e) {
+        buehneFehler(e);
+    }
+    loadDashWorkouts();
+    datenStand();
+}
+
+function buehneFehler(e) {
+    document.getElementById('hTagMarke').textContent = 'Gesundheit';
+    document.getElementById('hSchritte').textContent = '–';
+    document.getElementById('hSchritteSub').textContent = 'Konnte nicht geladen werden';
+    const box = document.getElementById('hDashSleep');
+    box.innerHTML = `<div class="empty is-error"><p class="empty-text">${escHtml(e && e.message || 'Laden fehlgeschlagen')}</p>
+        <button type="button" class="v-btn v-btn--sm" onclick="loadDashboard()">Erneut versuchen</button></div>`;
+    document.getElementById('hDashHeart').innerHTML = '';
+}
+
+/* Der Tag auf der Buehne ist der juengste abgeschlossene mit Daten --
+   normalerweise gestern. Die Marke nennt ihn mit Datum; liegt er weiter
+   zurueck (ein Upload fiel aus), steht „Zuletzt“ davor. Der Schnitt kommt
+   aus den dreissig Tagen DAVOR, ohne Messluecken (cleanAverage). */
+function tagUndSchnitt(rows) {
+    const mitDatum = (rows || []).filter(r => Number.isFinite(Number(r.qty)));
+    if (!mitDatum.length) return null;
+    const letzte = mitDatum[mitDatum.length - 1];
+    const tag = String(letzte.sample_date || letzte.recorded_at || '').slice(0, 10);
+    const davor = mitDatum.filter(r => String(r.sample_date || r.recorded_at || '').slice(0, 10) < tag)
+                          .slice(-30).map(r => Number(r.qty));
+    return { tag, wert: Number(letzte.qty), schnitt: cleanAverage(davor).avg };
+}
+
+function zeichneBuehne(summary, stepsRows, energyRows, restRows, sleepRows) {
+    const gestern = isoTag(new Date(Date.now() - 86400000));
+    const s = tagUndSchnitt(stepsRows);
+    const marke = document.getElementById('hTagMarke');
+    if (s) {
+        marke.textContent = (s.tag === gestern ? 'Gestern' : 'Zuletzt') + ' · ' + tagName(s.tag);
+    } else {
+        marke.textContent = 'Letzter voller Tag';
+    }
+
+    // Schritte: die Heldenzahl im Halbring
+    const elS = document.getElementById('hSchritte');
+    const subS = document.getElementById('hSchritteSub');
+    const ringS = document.getElementById('hRingSchritte');
+    if (s) {
+        const vorher = Number(elS.dataset.wert || 0);
+        VexRing.zaehle(vorher, s.wert, 700, v => { elS.textContent = fmt0(v); });
+        elS.dataset.wert = s.wert;
+        VexRing.set(ringS, { wert: s.wert, ziel: s.schnitt || s.wert || 1 });
+        subS.textContent = s.schnitt
+            ? `Schritte · ${fmt0(100 * s.wert / s.schnitt)} % von Ø ${fmt0(s.schnitt)}`
+            : 'Schritte';
+    } else {
+        elS.textContent = '–';
+        subS.textContent = 'Noch keine Schritte synchronisiert';
+        VexRing.set(ringS, { wert: 0, ziel: 1 });
+    }
+
+    // Aktive Energie des Tages gegen den Schnitt
+    const e = tagUndSchnitt(energyRows);
+    const ringE = document.getElementById('hRingEnergie');
+    document.getElementById('hEnergie').textContent = e ? fmt0(e.wert) : '–';
+    document.getElementById('hEnergieSub').textContent = e && e.schnitt ? `Ø ${fmt0(e.schnitt)} kcal` : '';
+    VexRing.set(ringE, { wert: e ? e.wert : 0, ziel: e && e.schnitt ? e.schnitt : 1 });
+
+    // Schlaf: die letzte Nacht gegen den Schnitt der Naechte davor
+    const nacht = summary && summary.sleep_last ? nachtZahlen(summary.sleep_last) : null;
+    const ringN = document.getElementById('hRingSchlaf');
+    const letzteNacht = summary && summary.sleep_last ? String(summary.sleep_last.sleep_date || '') : '';
+    const vorige = (sleepRows || []).filter(r => String(r.sleep_date || '') < letzteNacht)
+        .map(r => nachtZahlen(r).asleepMin).filter(v => v >= 60);
+    const schnittN = vorige.length ? vorige.reduce((a, v) => a + v, 0) / vorige.length : null;
+    document.getElementById('hSchlaf').textContent = nacht && nacht.asleepMin ? fmt1(nacht.asleepMin / 60) : '–';
+    document.getElementById('hSchlafSub').textContent = schnittN ? `Ø ${fmt1(schnittN / 60)} Std.` : '';
+    VexRing.set(ringN, { wert: nacht ? nacht.asleepMin : 0, ziel: schnittN || (nacht && nacht.asleepMin) || 1 });
+
+    // Fakten: Ruhepuls der Woche (mit Richtung), HRV, Workouts
+    const rest7 = restRows.slice(-7).map(r => Number(r.qty)).filter(Number.isFinite);
+    const restPrev = restRows.slice(-14, -7).map(r => Number(r.qty)).filter(Number.isFinite);
+    const avg = (a) => a.length ? a.reduce((x, v) => x + v, 0) / a.length : null;
+    const r7 = avg(rest7), rp = avg(restPrev);
+    const elR = document.getElementById('hFRuhe');
+    elR.innerHTML = r7 != null ? `${fmt0(r7)}<small>bpm</small>` : '–';
+    // Ein niedrigerer Ruhepuls ist die gute Richtung.
+    elR.classList.toggle('gh-gut', r7 != null && rp != null && rp - r7 >= 1);
+    elR.classList.toggle('gh-acht', r7 != null && rp != null && r7 - rp >= 3);
+    const hrv = summary && summary.hrv && summary.hrv.last ? summary.hrv.last.qty : null;
+    document.getElementById('hFHrv').innerHTML = hrv != null ? `${fmt0(hrv)}<small>ms</small>` : '–';
+    document.getElementById('hFWork').innerHTML = summary
+        ? `${fmt0(summary.workouts_this_week)}<small>in 7 Tagen</small>` : '–';
+}
+
+function renderInsights(s, stepsRows, restRows) {
+    const box = document.getElementById('hDashInsights');
+    const sum = (arr) => arr.reduce((a, r) => a + (Number(r.qty) || 0), 0);
+    const avg = (arr) => arr.length ? arr.reduce((a, r) => a + (Number(r.qty) || 0), 0) / arr.length : null;
+    const stepsSum = sum(stepsRows.slice(-7));
+    const restAvg = avg(restRows.slice(-7)), restPrev = avg(restRows.slice(-14, -7));
+    const items = [];
+    if (stepsSum >= 70000) items.push({ ton: 'var(--ok)', txt: `Starke Woche: <strong>${fmt0(stepsSum)}</strong> Schritte in sieben Tagen.` });
+    else if (stepsSum > 0 && stepsSum < 20000) items.push({ ton: 'var(--info)', txt: `Ruhige Woche: <strong>${fmt0(stepsSum)}</strong> Schritte in sieben Tagen.` });
+    if (restAvg != null && restPrev != null && (restAvg - restPrev) <= -2)
+        items.push({ ton: 'var(--ok)', txt: `Ruhepuls <strong>${fmt0(restAvg)}</strong> bpm, ${fmt0(restPrev - restAvg)} bpm unter der Vorwoche.` });
+    if (restAvg != null && restAvg >= 80)
+        items.push({ ton: 'var(--warn)', txt: `Erhöhter Ruhepuls (<strong>${fmt0(restAvg)}</strong> bpm). Vielleicht Erholung einplanen.` });
+    // v1.39.1: Kein Schlaf-Hinweis -- er benutzte die rohen `asleep_minutes`
+    // und widersprach damit der Karte „Letzte Nacht“ direkt daneben.
+    if (s.workouts_this_week >= 4) items.push({ ton: 'var(--ok)', txt: `<strong>${s.workouts_this_week}</strong> Workouts in sieben Tagen.` });
+    box.innerHTML = items.map(i => `<div class="gh-hinweis" style="--ton:${i.ton}"><span>${i.txt}</span></div>`).join('');
+}
+
+function renderSleepBlock(elId, sl) {
+    const el = document.getElementById(elId);
+    const sub = document.getElementById('hNachtSub');
+    if (!sl) {
+        if (sub) sub.textContent = '';
+        el.innerHTML = '<div class="empty"><p class="empty-text">Noch keine Nacht synchronisiert. Auto Health Export schickt Schlaf, sobald eine Uhr ihn aufzeichnet.</p></div>';
+        return;
+    }
+    const z = nachtZahlen(sl);
+    const total = z.phases + z.awake;
+    const pct = (v) => total ? (100 * (v || 0) / total).toFixed(1) : 0;
+    const pctInt = (v) => total ? Math.round(100 * (v || 0) / total) : 0;
+    const eff = z.inBedMin > 0 ? (z.asleepMin / z.inBedMin) * 100 : null;
     const effCls = eff == null ? '' : eff >= 90 ? 'good' : eff >= 80 ? 'mid' : 'low';
     const effHtml = eff != null ? `<span class="h-sleep-eff ${effCls}">Effizienz ${fmt0(eff)} %</span>` : '';
     const timeRange = (sl.sleep_start && sl.sleep_end) ? `${fmtHM(sl.sleep_start)} → ${fmtHM(sl.sleep_end)}` : '';
+    // Das Datum einer Nacht ist der Tag, an dem sie endet.
+    if (sub) sub.textContent = sl.sleep_date ? 'Nacht zum ' + tagName(String(sl.sleep_date).slice(0, 10)) : '';
+    const phase = (lbl, key, ton) => `<span><span class="h-phase-dot" style="--ton:var(${ton})"></span>${lbl} <strong>${fmt1((sl[key] || 0) / 60)} h</strong> <em>${pctInt(sl[key])} %</em></span>`;
     el.innerHTML = `
         <div class="h-sleep-block">
             <div class="h-sleep-head">
-                <span class="h-big">${fmt1(asleepH)} h</span>
-                <span class="h-sub">geschlafen · ${fmtDateFull(sl.sleep_date)}${timeRange ? ' · ' + timeRange : ''}</span>
+                <span class="h-big">${fmt1(z.asleepMin / 60)} h</span>
+                <span class="h-sub">geschlafen${timeRange ? ' · ' + timeRange : ''}</span>
                 ${effHtml}
             </div>
             ${total ? `<div class="h-phase-bars">
-                <span class="h-phase-core" style="width:${pct(sl.core_minutes)}%"></span>
                 <span class="h-phase-deep" style="width:${pct(sl.deep_minutes)}%"></span>
+                <span class="h-phase-core" style="width:${pct(sl.core_minutes)}%"></span>
                 <span class="h-phase-rem" style="width:${pct(sl.rem_minutes)}%"></span>
                 <span class="h-phase-awake" style="width:${pct(sl.awake_minutes)}%"></span>
             </div>
             <div class="h-phase-legend">
-                <span><span class="h-phase-dot" style="background:var(--blue)"></span>Core <strong>${fmt1((sl.core_minutes||0)/60)} h</strong> <em>${pctInt(sl.core_minutes)} %</em></span>
-                <span><span class="h-phase-dot" style="background:var(--purple)"></span>Tief <strong>${fmt1((sl.deep_minutes||0)/60)} h</strong> <em>${pctInt(sl.deep_minutes)} %</em></span>
-                <span><span class="h-phase-dot" style="background:var(--teal)"></span>REM <strong>${fmt1((sl.rem_minutes||0)/60)} h</strong> <em>${pctInt(sl.rem_minutes)} %</em></span>
-                <span><span class="h-phase-dot" style="background:var(--orange)"></span>Wach <strong>${fmt1((sl.awake_minutes||0)/60)} h</strong> <em>${pctInt(sl.awake_minutes)} %</em></span>
+                ${phase('Tief', 'deep_minutes', '--h-sleep-deep')}
+                ${phase('Kern', 'core_minutes', '--h-sleep-core')}
+                ${phase('REM', 'rem_minutes', '--h-sleep-rem')}
+                ${phase('Wach', 'awake_minutes', '--h-sleep-awake')}
             </div>` : ''}
         </div>`;
 }
 
 function renderHeartOverview(s, hrRows, restRows) {
     const el = document.getElementById('hDashHeart');
-    const hr7 = hrRows.slice(-7);
-    const rest7 = restRows.slice(-7);
-    const avg = (arr) => arr.length ? arr.reduce((a, r) => a + (Number(r.qty)||0), 0) / arr.length : null;
+    const avg = (arr) => arr.length ? arr.reduce((a, r) => a + (Number(r.qty) || 0), 0) / arr.length : null;
+    const rest7 = avg(restRows.slice(-7)), restPrev = avg(restRows.slice(-14, -7));
+    const hr7 = avg(hrRows.slice(-7));
     const hrvLast = s.hrv && s.hrv.last ? s.hrv.last.qty : null;
     const vo2Last = s.vo2_max && s.vo2_max.last ? s.vo2_max.last.qty : null;
+    let restSub = '', restCls = '';
+    if (rest7 != null && restPrev != null && Math.abs(rest7 - restPrev) >= 1) {
+        const besser = rest7 < restPrev;
+        restSub = `${besser ? '−' : '+'}${fmt0(Math.abs(rest7 - restPrev))} zur Vorwoche`;
+        restCls = besser ? 'gut' : (rest7 - restPrev >= 3 ? 'acht' : '');
+    }
     const items = [
-        { lbl: 'Ø Ruhepuls', val: avg(rest7) != null ? fmt0(avg(rest7)) : '–', sub: 'bpm' },
-        { lbl: 'Ø Herzfrequenz', val: avg(hr7) != null ? fmt0(avg(hr7)) : '–', sub: 'bpm' },
-        { lbl: 'HRV (letzt.)', val: hrvLast != null ? fmt0(hrvLast) : '–', sub: 'ms' },
-        { lbl: 'VO2max', val: vo2Last != null ? fmt1(vo2Last) : '–', sub: 'ml/kg/min' },
+        { lbl: 'Ø Ruhepuls', val: rest7 != null ? fmt0(rest7) : '–', unit: 'bpm', sub: restSub, cls: restCls },
+        { lbl: 'Ø Herzfrequenz', val: hr7 != null ? fmt0(hr7) : '–', unit: 'bpm' },
+        { lbl: 'HRV, zuletzt', val: hrvLast != null ? fmt0(hrvLast) : '–', unit: 'ms' },
+        { lbl: 'VO2max', val: vo2Last != null ? fmt1(vo2Last) : '–', unit: 'ml/kg/min' },
     ];
-    el.className = '';
     el.innerHTML = `<div class="h-heart-grid">${items.map(i => `
         <div class="h-heart-item">
             <div class="h-heart-lbl">${i.lbl}</div>
-            <div class="h-heart-val">${i.val} <small>${i.sub}</small></div>
+            <div class="h-heart-val">${i.val}<small>${i.unit}</small></div>
+            ${i.sub ? `<div class="h-heart-sub ${i.cls || ''}">${i.sub}</div>` : ''}
         </div>`).join('')}</div>`;
 }
 
-/* Beide Kurven, nebeneinander. `renderActivityChart` hiess frueher so, weil
-   es nur eine gab -- der Name bleibt als Einstieg, gebaut werden zwei. */
+/* Beide Kurven, nebeneinander (v1.93.0: zeigen statt umschalten). */
 function renderActivityChart() {
     const tage = (state.dashSeries && state.dashSeries.steps) || [];
     const lbl = document.getElementById('hDashActivityLbl');
-    if (lbl) lbl.textContent = tage.length ? '· ' + Math.min(14, tage.length) + ' Tage' : '';
+    if (lbl) lbl.textContent = tage.length ? Math.min(14, tage.length) + ' Tage' : '';
     _aktivitaetKurve('hDashActivity', 'steps', 'hDashStepsTitle', 'activityChart');
     _aktivitaetKurve('hDashEnergy', 'active_energy', 'hDashEnergyTitle', 'energyChart');
 }
@@ -490,15 +565,13 @@ function _aktivitaetKurve(canvasId, metrik, titelId, merker) {
     const rows = (state.dashSeries && state.dashSeries[metrik]) || [];
     const data = rows.slice(-14);
     const meta = METRIC_LABELS[metrik];
-    // Die Zahl steht ueber ihrer eigenen Kurve, in deren Farbe -- so muss
-    // man die Legende nicht lesen, um zu wissen, welche welche ist.
+    // Die Zahl steht ueber ihrer eigenen Kurve, in deren Farbe.
     const titel = document.getElementById(titelId);
     if (titel) {
         const summe = data.slice(-7).reduce((s, r) => s + (Number(r.qty) || 0), 0);
-        titel.innerHTML = '<span style="color:' + meta.color + '">'
-            + fmt0(summe) + ' ' + (meta.unit || '') + '</span> <small>'
-            + meta.label + ' · 7 Tage</small>';
+        titel.innerHTML = `<span style="--ton:var(${meta.ton})">${fmt0(summe)} ${meta.unit || ''}</span> <small>${meta.label} · 7 Tage</small>`;
     }
+    const th = chartTheme();
     if (state[merker]) state[merker].destroy();
     state[merker] = new Chart(canvas.getContext('2d'), {
         type: 'bar',
@@ -507,33 +580,75 @@ function _aktivitaetKurve(canvasId, metrik, titelId, merker) {
             datasets: [{
                 label: `${meta.label} (${meta.unit || '–'})`,
                 data: data.map(r => Number(r.qty) || 0),
-                backgroundColor: meta.color + 'cc',
-                borderRadius: 6,
+                backgroundColor: tonAlpha(meta.color, 0.85),
+                borderRadius: 6, borderSkipped: false, barPercentage: 0.72,
             }],
         },
         options: chartDefaults({
             plugins: {
                 legend: { display: false },
-                tooltip: {
-                    backgroundColor: chartTheme().surface, borderColor: chartTheme().border,
-                    borderWidth: 1, titleColor: chartTheme().text, bodyColor: chartTheme().text,
-                    padding: 10, cornerRadius: 8,
-                    callbacks: { title: vexFullTitle,
-                                 label: (ctx) => ` ${fmt0(ctx.raw)} ${meta.unit || ''}`.trim() },
-                },
+                tooltip: themedTooltip({ displayColors: false,
+                    callbacks: { label: (ctx) => ` ${fmt0(ctx.raw)} ${meta.unit || ''}`.trim() } }),
             },
             scales: {
-                x: { ticks: { color: chartTheme().muted }, grid: { display: false } },
-                y: { ticks: { color: chartTheme().muted }, grid: { color: chartTheme().grid }, beginAtZero: true },
+                x: { ticks: { color: th.muted, font: { size: 10 }, maxRotation: 0, autoSkipPadding: 10 },
+                     grid: { display: false }, border: { display: false } },
+                y: { ticks: { color: th.muted, font: { size: 10 }, maxTicksLimit: 4 },
+                     grid: { color: th.grid }, border: { display: false }, beginAtZero: true },
             },
         }),
     });
     setChartDates(state[merker], data.map(r => r.sample_date || r.recorded_at));
 }
 
+// Die letzten Workouts auf „Heute“: dieselbe Liste wie im Reiter, nur kurz.
+async function loadDashWorkouts() {
+    const box = document.getElementById('hDashWorkouts');
+    try {
+        if (!state.workoutsAll) state.workoutsAll = await HEALTH_API.workouts();
+        const rows = state.workoutsAll.slice().sort((a, b) => new Date(b.start_at) - new Date(a.start_at)).slice(0, 3);
+        box.innerHTML = rows.length
+            ? `<div class="rec-list gh-wo">${rows.map(workoutZeile).join('')}</div>`
+            : '<div class="empty"><p class="empty-text">Noch keine Workouts synchronisiert.</p></div>';
+    } catch (e) {
+        box.innerHTML = `<div class="empty is-error"><p class="empty-text">Die Workouts konnten nicht geladen werden.</p>
+            <button type="button" class="v-btn v-btn--sm" onclick="loadDashWorkouts()">Erneut versuchen</button></div>`;
+    }
+}
+
+/* Wie frisch die Daten sind, steht an zwei Stellen: in der Zeile „iPhone-
+   Verbindung“ und oben rechts auf der Buehne. Beides kommt aus dem
+   Import-Protokoll -- das Datum einer Tageszeile ist der Tag, nicht die
+   Uhrzeit des letzten Syncs. */
+async function datenStand() {
+    try {
+        const [keys, imports] = await Promise.all([
+            HEALTH_API.apiKeys().catch(() => null),
+            HEALTH_API.imports(1).catch(() => null),
+        ]);
+        const aktiv = keys ? keys.filter(k => !k.revoked_at).length : null;
+        const letzter = imports && imports.length ? imports[0].created_at : null;
+        const teile = [];
+        if (aktiv != null) teile.push(aktiv === 1 ? '1 Schlüssel aktiv' : `${aktiv} Schlüssel aktiv`);
+        if (letzter) teile.push('letzter Sync ' + fmtDateTime(letzter));
+        if (teile.length) document.getElementById('hDatenVerbindung').textContent = teile.join(' · ');
+        if (letzter) {
+            const heute = isoTag(new Date());
+            document.getElementById('hStand').textContent = 'Sync ' + (isoTag(new Date(letzter)) === heute
+                ? 'heute ' + fmtHM(letzter) : fmtDateTime(letzter));
+        }
+        if (imports && imports.length) document.getElementById('hDatenProtokoll').textContent =
+            'Zuletzt ' + fmtDateTime(imports[0].created_at) + ' · ' + importStatsSummary(imports[0].stats);
+    } catch (e) { /* die Zeilen behalten ihren Standardtext */ }
+}
+
 // ---------- Vitalwerte ----------
 function initVitalwerte() {
     state.vitalInit = true;
+    // Nach dem Loeschen von Daten wird neu aufgebaut -- auf derselben
+    // Leinwand darf dann nicht noch das alte Diagramm haengen.
+    if (state.chartBp) state.chartBp.destroy();
+    if (state.chartGlucose) state.chartGlucose.destroy();
     state.chartBp = new Chart(document.getElementById('hChartBp').getContext('2d'), {
         type: 'line',
         data: { labels: [], datasets: [
@@ -559,19 +674,11 @@ function initVitalwerte() {
     });
 }
 
-// v1.45.0: Jede Metrik bekommt ihr eigenes Diagramm. Vorher gab es eine
-// Kachelreihe als Auswahl plus EIN grosses Diagramm — fuer den Vergleich
-// zweier Metriken musste man hin- und herklicken, waehrend Blutdruck und
-// Blutzucker (mit deutlich weniger Datenpunkten) dauerhaft sichtbar waren.
-//
+// v1.45.0: Jede Metrik bekommt ihr eigenes Diagramm (zeigen statt umschalten).
 // v1.46.0: Beim Wechsel des Zeitraums werden Karten und Chart-Instanzen NICHT
-// mehr neu gebaut. Vorher flog das Raster raus und wurde durch "Lade …"
-// ersetzt — sichtbares Flackern und jedes Mal ein Aufbau von null. Jetzt
-// bleiben die Diagramme stehen, bekommen die neuen Daten zugewiesen und
-// animieren per Chart.js von den alten Werten auf die neuen.
+// neu gebaut -- sie bekommen die neuen Daten und animieren hinein.
 // Gespeicherte Reihenfolge auf die bekannten Metriken anwenden: erst die
-// sortierten, dann alles, was der Nutzer noch nie in der Hand hatte (neue
-// Metriken landen so hinten statt zu verschwinden).
+// sortierten, dann alles, was der Nutzer noch nie in der Hand hatte.
 function orderedMetricKeys() {
     const all = Object.keys(METRIC_LABELS);
     const saved = (state.metricOrder || []).filter(k => all.includes(k));
@@ -583,15 +690,18 @@ async function loadMetricCharts() {
     if (!box) return;
 
     if (!state.metricCards) {
-        // Reihenfolge einmalig holen; scheitert das, bleibt die Default-Folge.
         try {
             const r = await HEALTH_API.metricOrder();
             state.metricOrder = (r && r.order) || [];
         } catch (e) { state.metricOrder = []; }
         state.metricCards = {};
-        box.innerHTML = '';
+        // Die Platzhalter bleiben stehen, bis die ersten Zahlen da sind; die
+        // Karten warten verborgen (is-empty). Sonst stuenden dreizehn leere
+        // Karten da, und die Haelfte verschwaende einen Augenblick spaeter
+        // wieder -- die ganze Seite sprang.
         orderedMetricKeys().forEach(k => {
             const card = buildMetricShell(k);
+            card.classList.add('is-empty');
             box.appendChild(card);
             state.metricCards[k] = card;
         });
@@ -603,32 +713,40 @@ async function loadMetricCharts() {
     box.classList.add('is-loading');
     const rowsList = await Promise.all(
         keys.map(k => HEALTH_API.metricSeries(k, range.fetchDays).catch(() => [])));
-    // Zwischenzeitlicher Zeitraum-Wechsel: das spaetere Ergebnis gewinnt,
-    // ein veraltetes ueberschreibt die frischeren Daten nicht mehr.
+    // Zwischenzeitlicher Zeitraum-Wechsel: das spaetere Ergebnis gewinnt.
     if (state.vitalRange !== range) return;
     box.classList.remove('is-loading');
-    // Der Endpunkt kennt nur "die letzten N Tage" -- ein zurueckliegendes
-    // Fenster wird deshalb hier zugeschnitten.
     keys.forEach((k, i) => updateMetricCard(
         k, VexRange.clip(rowsList[i], ['sample_date', 'recorded_at'], range), range.days));
+    box.querySelectorAll('.gh-skel-karte').forEach(el => el.remove());
+    document.getElementById('hBpBox').hidden = false;
+
+    // Was im Zeitraum nichts hat, steht in einer Zeile -- nicht als leere Karte.
+    const ohne = keys.filter(k => state.metricCards[k].classList.contains('is-empty'))
+                     .map(k => METRIC_LABELS[k].label);
+    const ohneEl = document.getElementById('hMetricOhne');
+    ohneEl.hidden = !ohne.length;
+    ohneEl.textContent = ohne.length ? 'Ohne Werte in diesem Zeitraum: ' + ohne.join(', ') + '.' : '';
+    const mit = keys.length - ohne.length;
+    document.getElementById('hVitalInfo').textContent =
+        `${mit} ${mit === 1 ? 'Messgröße' : 'Messgrößen'} mit Werten · ${range.label || 'Zeitraum'}`;
 }
 
-// Gleiche Wert-Ermittlung wie fuer die Chart-Linie (qty, sonst avg_value),
-// damit Kopfzahl, Statistik und Kurve nicht auf verschiedenen Zahlen basieren.
+// Gleiche Wert-Ermittlung wie fuer die Chart-Linie (qty, sonst avg_value).
 function metricValueOf(r) {
     const v = Number(r.qty);
     return Number.isFinite(v) ? v : Number(r.avg_value);
 }
 
-// Leere Karte samt Canvas — Inhalt kommt aus updateMetricCard().
 function buildMetricShell(key) {
     const meta = METRIC_LABELS[key];
     const card = document.createElement('div');
-    card.className = 'stat-card h-metric-card';
+    card.className = 'h-metric-card';
     card.dataset.metric = key;
     card.innerHTML = `
+        <span class="drag-handle" title="Ziehen zum Sortieren" aria-hidden="true">${ikon('griff', 16)}</span>
         <div class="h-metric-head">
-            <div class="h-metric-name"><span class="drag-handle" title="Ziehen zum Sortieren">⠿</span><span class="h-metric-ico">${meta.icon}</span>${escHtml(meta.label)}</div>
+            <div class="h-metric-name"><span class="gh-punkt" style="--ton:var(${meta.ton})"></span>${escHtml(meta.label)}</div>
             <div class="h-metric-big" data-role="big">–</div>
         </div>
         <div class="h-metric-stats" data-role="stats"></div>
@@ -648,8 +766,7 @@ function updateMetricCard(key, rows, days) {
 
     let headline = '–', stats = 'Keine Daten in diesem Zeitraum';
     if (vals.length) {
-        // Ø, Min und Max beziehen sich auf die echten Messtage — Messluecken
-        // wuerden sonst als Rekord-Tief in der Statistik landen.
+        // Ø, Min und Max beziehen sich auf die echten Messtage.
         const { avg, values: solid, skipped } = cleanAverage(vals);
         const fmtV = (v) => v >= 100 ? fmt0(v) : fmt1(v);
         const base = solid.length ? solid : vals;
@@ -690,15 +807,13 @@ function updateMetricCard(key, rows, days) {
     ch.update();
 }
 
-// Drag & Drop wie bei Achievements/Wochenzielen: Anfassen nur am Griff, auf
-// dem Touchscreen mit kurzer Verzoegerung, damit Scrollen weiter funktioniert.
+// Drag & Drop: Anfassen nur am Griff, auf dem Touchscreen mit kurzer
+// Verzoegerung, damit Scrollen weiter funktioniert.
 function initMetricSortable(box) {
     if (state.sortableMetrics) return;
     if (typeof Sortable === 'undefined') {
-        // Sortable.min.js laedt mit `defer` und ist beim ersten Rendern unter
-        // Umstaenden noch nicht da (health.js selbst laeuft undeferred am
-        // Body-Ende). Dann einmal nach dem load-Event nachziehen, statt das
-        // Sortieren still gar nicht zu aktivieren.
+        // Sortable.min.js laedt mit `defer` -- dann einmal nach dem
+        // load-Event nachziehen, statt das Sortieren still wegzulassen.
         window.addEventListener('load', () => initMetricSortable(box), { once: true });
         return;
     }
@@ -740,17 +855,15 @@ function mountMetricChart(key, labels, data, trend, win) {
             datasets: [
                 {
                     label: `${meta.label}${meta.unit ? ' (' + meta.unit + ')' : ''}`,
-                    data, borderColor: meta.color, backgroundColor: meta.color + '1f',
+                    data, borderColor: meta.color, backgroundColor: tonAlpha(meta.color, 0.12),
                     tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2,
                     order: VexCharts.ORDER.VALUE,
                 },
-                // Gleitende Ø-/Trendlinie (ohne Messluecken, siehe rollingAverage).
-                // Sie liegt UEBER der Wertlinie: bei sprunghaften Daten
-                // verschwand sie sonst unter deren Flaeche. Eine kleinere
-                // `order` heisst bei Chart.js weiter oben (siehe js/charts.js).
+                // Gleitende Ø-/Trendlinie (ohne Messluecken). Sie liegt UEBER
+                // der Wertlinie (kleinere `order` = weiter oben, js/charts.js).
                 {
                     label: `Ø gleitend (${win})`, data: trend,
-                    borderColor: th.text, borderWidth: 2, borderDash: [5, 4],
+                    borderColor: th.text, borderWidth: 1.5, borderDash: [5, 4],
                     tension: 0.35, fill: false, pointRadius: 0, spanGaps: true,
                     order: VexCharts.ORDER.TREND,
                 },
@@ -760,9 +873,9 @@ function mountMetricChart(key, labels, data, trend, win) {
             plugins: { legend: { display: false }, tooltip: themedTooltip() },
             scales: {
                 x: { ticks: { color: th.muted, maxRotation: 0, autoSkipPadding: 20,
-                              font: { size: 10 } }, grid: { display: false } },
-                y: { ticks: { color: th.muted, font: { size: 10 }, maxTicksLimit: 5 },
-                     grid: { color: th.grid }, beginAtZero: false },
+                              font: { size: 10 } }, grid: { display: false }, border: { display: false } },
+                y: { ticks: { color: th.muted, font: { size: 10 }, maxTicksLimit: 4 },
+                     grid: { color: th.grid }, border: { display: false }, beginAtZero: false },
             },
         }),
     });
@@ -781,9 +894,8 @@ async function loadBpGlucoseCharts() {
         kurveOk('hChartBp');
     } catch (e) {
         // Bei Messwerten ist ein stiller Fehler der schlimmste: die alte
-        // Kurve bleibt stehen, man liest sie als aktuell und trifft eine
-        // Entscheidung ueber die eigene Gesundheit auf einem Stand von
-        // gestern. Also sagen, dass sie nicht frisch ist.
+        // Kurve bleibt stehen, man liest sie als aktuell. Also sagen, dass
+        // sie nicht frisch ist.
         kurveFehler('hChartBp');
     }
     try {
@@ -801,8 +913,8 @@ async function loadBpGlucoseCharts() {
 }
 
 /* Ein Streifen ueber der Kurve statt einer leeren Flaeche: die Kurve selbst
-   bleibt sichtbar (sie war ja richtig), traegt aber sichtbar den Vermerk,
-   dass der letzte Abruf nicht durchkam. */
+   bleibt sichtbar, traegt aber den Vermerk, dass der letzte Abruf nicht
+   durchkam. */
 function kurveFehler(canvasId) {
     const c = document.getElementById(canvasId);
     if (!c || !c.parentElement) return;
@@ -823,8 +935,7 @@ function kurveOk(canvasId) {
 }
 
 // ---------- Schlaf ----------
-// Stunden-Offset ab 18:00 -> "HH:MM". Werte ueber 24 sind erlaubt (eine Nacht
-// darf ueber die 18:00-Grenze des Folgetags hinausreichen) und wrappen sauber.
+// Stunden-Offset ab 18:00 -> "HH:MM". Werte ueber 24 wrappen sauber.
 function sleepOffsetToClock(v) {
     let h = (18 + Number(v)) % 24;
     if (h < 0) h += 24;
@@ -836,15 +947,12 @@ function sleepOffsetToClock(v) {
 
 // v1.46.0: Phasen und Schlaffenster stecken in EINEM Diagramm. Die y-Achse ist
 // die Uhrzeit, jede Nacht ein Balken von der Zubettgeh- bis zur Aufstehzeit,
-// und die Phasen kacheln diesen Balken mit ihrer ECHTEN Dauer (keine Normierung
-// auf eine gemeinsame Grundlinie). Technisch sind das mehrere Floating-Bar-
-// Datasets im selben x-Slot (`x.stacked` gruppiert sie uebereinander,
-// `y.stacked` bleibt aus, damit Chart.js die Werte nicht zusaetzlich addiert) --
-// die Segmentgrenzen rechnen wir selbst aus.
+// und die Phasen kacheln diesen Balken mit ihrer ECHTEN Dauer. Technisch sind
+// das mehrere Floating-Bar-Datasets im selben x-Slot (`x.stacked` gruppiert
+// sie uebereinander, `y.stacked` bleibt aus).
 //
 // Was die Daten NICHT hergeben: die zeitliche Lage der Phasen. Apple liefert je
-// Nacht nur Summen. Die Laenge jedes Abschnitts stimmt daher, seine Position im
-// Balken ist eine feste Reihenfolge und keine Messung -- kein Hypnogramm.
+// Nacht nur Summen -- die Reihenfolge im Balken ist fest, kein Hypnogramm.
 const SLEEP_SEGMENTS = [
     { key: 'deep',   label: 'Tief',              color: cssVar('--h-sleep-deep') },
     { key: 'core',   label: 'Kern',              color: cssVar('--h-sleep-core') },
@@ -855,13 +963,12 @@ const SLEEP_SEGMENTS = [
 
 function initSchlaf() {
     state.sleepInit = true;
+    if (state.chartSleepTimes) state.chartSleepTimes.destroy();
     const th = chartTheme();
     state.chartSleepTimes = new Chart(document.getElementById('hChartSleepTimes').getContext('2d'), {
         type: 'bar',
         data: { labels: [], datasets: [
-            // Dataset 0 ist der helle Rahmen "Zeit im Bett". Er liegt unter den
-            // Phasen und bleibt dort sichtbar, wo die Summe der Phasen die
-            // Bettzeit nicht ganz ausfuellt.
+            // Dataset 0 ist der helle Rahmen "Zeit im Bett".
             { label: 'Im Bett', data: [], backgroundColor: th.grid,
               borderColor: th.border, borderWidth: 1, borderSkipped: false,
               borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.9 },
@@ -870,16 +977,9 @@ function initSchlaf() {
                 borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.9,
             })),
             // v1.46.5: Was hinter der 18:00-Kante liegt, wird in DERSELBEN
-            // Spalte ab der Oberkante weitergezeichnet — die Achse ist ein
-            // 24-h-Kreis, oben und unten sind dieselbe Uhrzeit. Diese Datasets
-            // sind die Fortsetzung: gleicher Aufbau, gleiche Farben.
-            //
-            // Vorher lief der Rest in der FOLGESPALTE weiter (v1.46.4). Das
-            // war falsch: die naechste Spalte ist die naechste aufgezeichnete
-            // Nacht und oft nicht der naechste Tag — bei einer Luecke von zwei
-            // Wochen behauptete der Balken einen Schlaf, den es dort nie gab.
-            // Und die betroffenen Naechte enden gar nicht spaet, sie BEGINNEN
-            // vor 18:00 (z.B. 16:30 bis 01:30); ihr Rest gehoert derselben Nacht.
+            // Spalte ab der Oberkante weitergezeichnet -- die Achse ist ein
+            // 24-h-Kreis. Die naechste Spalte ist die naechste aufgezeichnete
+            // Nacht und oft nicht der naechste Tag.
             { label: 'Im Bett (Fortsetzung)', data: [], backgroundColor: th.grid,
               borderColor: th.border, borderWidth: 1, borderSkipped: false,
               borderRadius: 4, wrap: true, barPercentage: 0.8, categoryPercentage: 0.9 },
@@ -887,8 +987,7 @@ function initSchlaf() {
                 label: seg.label + ' (nach 18:00)', data: [], backgroundColor: seg.color,
                 wrap: true, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.9,
             })),
-            // Die beiden duennen gruenen Kanten: unten, wo der Balken die
-            // 18:00-Grenze reisst, und oben, wo er wieder einsetzt.
+            // Die duennen gruenen Kanten an der Bruchstelle.
             { label: 'über 18:00 hinaus', data: [], backgroundColor: cssVar('--ok'),
               marker: true, borderSkipped: false,
               barPercentage: 0.8, categoryPercentage: 0.9 },
@@ -898,18 +997,17 @@ function initSchlaf() {
         ] },
         options: chartDefaults({
             plugins: {
-                legend: { labels: { color: th.text, boxWidth: 12, font: { size: 11 },
-                    // Die Fortsetzung benutzt dieselben Farben wie der
-                    // Hauptteil und bekommt deshalb keinen zweiten Eintrag.
-                    // Der gruene Eintrag taucht nur auf, wenn wirklich eine
-                    // Nacht ueber die Kante laeuft.
+                legend: { position: 'bottom', labels: { color: th.muted, boxWidth: 8, boxHeight: 8,
+                    usePointStyle: true, pointStyle: 'circle', font: { size: 11 },
+                    // Die Fortsetzung hat dieselben Farben wie der Hauptteil
+                    // und bekommt keinen zweiten Eintrag. Der gruene Eintrag
+                    // taucht nur auf, wenn eine Nacht ueber die Kante laeuft.
                     filter: (item, data) => {
                         const ds = data.datasets[item.datasetIndex];
                         if (ds.wrap) return false;
                         return !ds.marker || (ds.data || []).some(v => Array.isArray(v));
                     } } },
                 tooltip: themedTooltip({
-                    // Segmente ohne Dauer wuerden den Tooltip nur zumuellen.
                     // Segmente ohne Dauer wuerden den Tooltip nur zumuellen, und
                     // die obere Bruchkante teilt sich die Zeile mit der unteren.
                     filter: (item) => Array.isArray(item.raw) && (item.raw[1] - item.raw[0]) > 0.01
@@ -932,12 +1030,11 @@ function initSchlaf() {
                 }),
             },
             scales: {
-                x: { stacked: true, ticks: { color: th.muted, maxRotation: 0, autoSkipPadding: 12 },
-                     grid: { display: false } },
+                x: { stacked: true, ticks: { color: th.muted, maxRotation: 0, autoSkipPadding: 12, font: { size: 10 } },
+                     grid: { display: false }, border: { display: false } },
                 y: { stacked: false, reverse: true, min: 0, max: 24,
-                     ticks: { color: th.muted, stepSize: 3, callback: (v) => sleepOffsetToClock(v) },
-                     grid: { color: th.grid },
-                     title: { display: true, text: 'Uhrzeit', color: th.muted } },
+                     ticks: { color: th.muted, stepSize: 3, font: { size: 10 }, callback: (v) => sleepOffsetToClock(v) },
+                     grid: { color: th.grid }, border: { display: false } },
             },
         }),
     });
@@ -952,14 +1049,13 @@ async function loadSleepChart() {
         const rows = VexRange.clip(await HEALTH_API.sleep(range.fetchDays),
                                    'sleep_date', range);
         const kpiBox = document.getElementById('hSleepKpis');
+        const info = document.getElementById('hSleepInfo');
         if (!rows.length) {
-            kpiBox.innerHTML = `<div class="stat-empty" style="grid-column:1/-1">
-                Keine Schlaf-Daten für diesen Zeitraum. Auto Health Export exportiert
-                Schlaf nur, wenn Apple Watch getragen wurde (oder ein anderer Tracker
-                die Schlafphasen liefert).
-            </div>`;
+            kpiBox.innerHTML = '';
+            info.textContent = 'Keine Nacht in diesem Zeitraum';
             const emptyNote = document.getElementById('hSleepNote');
-            if (emptyNote) emptyNote.textContent = '';
+            if (emptyNote) emptyNote.textContent = 'Auto Health Export schickt Schlaf nur, wenn eine Uhr '
+                + 'ihn aufzeichnet (oder ein anderer Tracker die Phasen liefert).';
             state.sleepUsable = []; state.sleepWindows = [];
             renderSleepRhythm([]);
             state.chartSleepTimes.data.labels = [];
@@ -967,10 +1063,8 @@ async function loadSleepChart() {
             state.chartSleepTimes.update();
             return;
         }
-        // Ø nur ueber Naechte mit tatsaechlichem Wert; sonst verwaessern Null-
-        // Naechte (z.B. Tage ohne Apple-Watch) den Schnitt komplett. Zusaetzlich
-        // fallen wir auf die Phasen zurueck, wenn das Feld selbst leer ist,
-        // damit die KPIs mit dem Balken-Chart konsistent bleiben.
+        // Ø nur ueber Naechte mit tatsaechlichem Wert; faellt das Feld leer
+        // aus, zaehlen die Phasen -- damit KPIs und Diagramm uebereinstimmen.
         const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
         const asleepMin = (r) => {
             const v = num(r.asleep_minutes);
@@ -1001,57 +1095,37 @@ async function loadSleepChart() {
         };
 
         // v1.40.2: Naechte mit unter 1 h Gesamtschlaf sind praktisch immer
-        // Tage ohne getragene Apple Watch (kurz zum Laden abgelegt, spaet
-        // angelegt, Mittagsschlaf-Fragment). Sie zaehlten bisher voll mit und
-        // haben alle Ø-Werte nach unten gezogen.
-        // Das Gate ist bewusst die GESAMTE Schlafdauer der Nacht und nicht die
-        // jeweilige Phase: sonst wuerde eine Nacht nur aus einzelnen Kacheln
-        // fallen (z.B. ohne Tiefschlaf-Anteil) und die vier Kacheln bezoegen
-        // sich auf unterschiedliche Naechte -- Ø-Effizienz und Ø-Dauer waeren
-        // dann nicht mehr miteinander vergleichbar.
+        // Tage ohne getragene Uhr. Das Gate ist die GESAMTE Schlafdauer der
+        // Nacht, damit sich alle Kacheln auf dieselben Naechte beziehen.
         const MIN_SLEEP_MIN = 60;
         const usable = rows.filter(r => (asleepMin(r) || 0) >= MIN_SLEEP_MIN);
         const skippedNights = rows.length - usable.length;
 
         // v1.46.2: Ohne Zubettgeh- UND Aufstehzeit laesst sich eine Nacht auf
-        // der Uhrzeit-Achse nicht platzieren -- sie stand bisher als leere
-        // Spalte mit Datum im Diagramm. Solche Naechte kommen z.B. aus der
-        // alten Tages-CSV, die die Schlafphasen ohne Zeitstempel liefert.
-        // Sie fliegen aus dem Diagramm, bleiben aber in den Ø-Kacheln: ihre
-        // Dauer ist echt gemessen, nur eben ohne Uhrzeit. Die Notiz unter den
-        // Kacheln benennt beide Faelle, damit nichts still verschwindet.
+        // der Uhrzeit-Achse nicht platzieren. Sie fliegt aus dem Diagramm,
+        // bleibt aber in den Ø-Kacheln; die Notiz darunter benennt das.
         const plotted = usable.filter(r => r.sleep_start && r.sleep_end
             && toOffset(r.sleep_start) != null && toOffset(r.sleep_end) != null);
         const undatedNights = usable.length - plotted.length;
         state.sleepUsable = plotted;
-        // Ein Balken je Nacht: [Zubettgehen, Aufstehen] als Offset ab 18:00.
-        // Endet eine Nacht rechnerisch vor ihrem Start (Einschlafen vor 18:00),
-        // laeuft sie ueber die Tagesgrenze — dann +24 und die Achse waechst mit,
-        // statt den Balken verkehrt herum zu zeichnen.
         const windows = plotted.map(r => {
             const a = toOffset(r.sleep_start), b = toOffset(r.sleep_end);
             if (a == null || b == null) return null;
             return [a, b <= a ? b + 24 : b];
         });
-        // `sleepWindows` behaelt die UNGEKAPPTEN Zeiten — Tooltip und Fusszeile
-        // sollen die echte Aufstehzeit nennen, auch wenn der Balken gekappt ist.
+        // `sleepWindows` behaelt die UNGEKAPPTEN Zeiten fuer Tooltip und Fusszeile.
         state.sleepWindows = windows;
         const AXIS_END = 24;   // 18:00 des Folgetags
-        // Der Balken bis zur 18:00-Kante ...
         const clipped = windows.map(w => w ? [w[0], Math.min(w[1], AXIS_END)] : null);
-        // ... und der Rest, der oben in DERSELBEN Spalte weiterlaeuft. Er hoert
-        // spaetestens am eigenen Zubettgeh-Zeitpunkt auf: laenger als 24 h ist
-        // keine Nacht, und der Balken darf sich nicht selbst ueberlappen.
+        // Der Rest laeuft oben in DERSELBEN Spalte weiter und hoert spaetestens
+        // am eigenen Zubettgeh-Zeitpunkt auf.
         const wrapped = windows.map(w => (w && w[1] > AXIS_END + 1e-6)
             ? [0, Math.min(w[1] - AXIS_END, w[0])] : null);
-        // Duenne gruene Kanten an der Bruchstelle: unten am Achsenende, oben
-        // dort, wo die Nacht wieder einsetzt.
         const cutLow  = wrapped.map(x => x ? [AXIS_END - 0.2, AXIS_END] : null);
         const cutHigh = wrapped.map(x => x ? [0, 0.2] : null);
 
         // Phasen kacheln das Fenster ab der Zubettgeh-Kante mit ihrer echten
-        // Dauer. Ueberschiesst die Summe das Fenster (Rundung in der Quelle),
-        // wird am Fensterende abgeschnitten statt darueber hinaus gemalt.
+        // Dauer; was ueberschiesst, wird am Fensterende abgeschnitten.
         const segH = (r) => {
             const h = (v) => (num(v) || 0) / 60;
             const phases = h(r.deep_minutes) + h(r.core_minutes) + h(r.rem_minutes);
@@ -1061,11 +1135,6 @@ async function loadSleepChart() {
                 awake: h(r.awake_minutes),
             };
         };
-        // Gekachelt wird ueber das GANZE Fenster, auch ueber die 18:00-Kante
-        // hinweg; jedes Segment wird an der Kante geteilt. Der Teil davor
-        // landet im Hauptbalken, der Teil dahinter oben in derselben Spalte --
-        // eine Phase, die genau auf der Kante liegt, erscheint dadurch in
-        // beiden Stuecken mit ihrer jeweils richtigen Laenge.
         const segData = SLEEP_SEGMENTS.map(() => []);
         const segWrap = SLEEP_SEGMENTS.map(() => []);
         plotted.forEach((r, i) => {
@@ -1113,20 +1182,18 @@ async function loadSleepChart() {
         }).filter(v => v != null);
         const avgEff = effList.length ? effList.reduce((s,v)=>s+v,0) / effList.length : null;
 
-        const fmtH = (min) => min == null ? '–' : fmt1(min / 60) + ' h';
+        const fmtH = (min) => min == null ? '<span class="gh-leer">–</span>' : fmt1(min / 60) + '<small>h</small>';
         const kpis = [
-            { icon: '😴', label: 'Ø Schlafdauer', value: fmtH(meanAsleepMin) },
-            { icon: '🛏️', label: 'Ø Im Bett',    value: fmtH(meanInBedMin) },
-            { icon: '🌊', label: 'Ø Tiefschlaf', value: fmtH(meanDeepMin) },
-            { icon: '✨', label: 'Ø Effizienz',  value: avgEff != null ? fmt0(avgEff) + ' %' : '–' },
+            { label: 'Ø Schlafdauer', value: fmtH(meanAsleepMin) },
+            { label: 'Ø Im Bett',     value: fmtH(meanInBedMin) },
+            { label: 'Ø Tiefschlaf',  value: fmtH(meanDeepMin) },
+            { label: 'Ø Effizienz',   value: avgEff != null ? fmt0(avgEff) + '<small>%</small>' : '<span class="gh-leer">–</span>' },
         ];
         kpiBox.innerHTML = kpis.map(k => `
-            <div class="stat-kpi"><div class="stat-kpi-icon">${k.icon}</div>
-                <div class="stat-kpi-label">${k.label}</div>
-                <div class="stat-kpi-value">${k.value}</div></div>`).join('');
+            <div class="gh-kpi"><div class="gh-kpi-lbl">${k.label}</div><div class="gh-kpi-val">${k.value}</div></div>`).join('');
+        info.textContent = `${usable.length} ${usable.length === 1 ? 'Nacht' : 'Nächte'} · ${range.label || 'Zeitraum'}`;
 
-        // Transparenz statt stiller Filterung: Kacheln und Diagramme zeigen
-        // dieselben Naechte, die Zeile darunter nennt die Zahl der weggelassenen.
+        // Transparenz statt stiller Filterung: die Zeile nennt, was fehlt.
         const note = document.getElementById('hSleepNote');
         if (note) {
             const nights = (n) => n === 1 ? '1 Nacht' : n + ' Nächte';
@@ -1142,35 +1209,13 @@ async function loadSleepChart() {
             }
             note.textContent = parts.join(' ');
         }
-    } catch (e) { showToast('Fehler: ' + e.message, true); }
+    } catch (e) { showToast('Schlaf laden fehlgeschlagen: ' + e.message, true); }
 }
 
-// v1.46.2: Typische Zubettgeh-/Aufstehzeit mit Streuung.
-//
-// Gerechnet wird auf den 18:00-Offsets, nicht auf der Uhrzeit selbst: sonst
-// waere der Mittelwert aus 23:30 und 00:30 die Mittagszeit statt Mitternacht.
-// Innerhalb des 18:00-Fensters sind die Werte linear, Mittelwert und
-// Standardabweichung sind dort also unproblematisch.
-//
-// v1.71.0: Median und typischer Bereich statt Mittelwert ± Standardabweichung.
-//
-// Die alte Fassung war eine echte Stichproben-Standardabweichung (n-1), hatte
-// aber zwei Schwaechen, die genau bei Zubettgehzeiten zuschlagen:
-//
-//   1. „±“ verspricht eine symmetrische Streuung. Zubettgehzeiten sind aber
-//      rechtsschief -- man geht gelegentlich sehr viel spaeter ins Bett, aber
-//      nie sehr viel frueher. Eine einzige durchgemachte Nacht verschob
-//      Mittelwert UND Streuung sichtbar.
-//   2. Die Naht des 18:00-Fensters. Eine „Nacht“, die vor 18:00 beginnt (ein
-//      Mittagsschlaf ab einer Stunde zaehlt mit), landete bei Offset 23,x
-//      statt -0,x. Ein solcher Eintrag unter dreissig Naechten verschob den
-//      Schnitt um eine Dreiviertelstunde und blies die Streuung auf.
-//
-// Median und Quartilsabstand loesen (1), das Neuverankern um den Median
-// loest (2): ein Wert, der mehr als zwoelf Stunden vom Median entfernt liegt,
-// liegt in Wahrheit auf der anderen Seite der Tagesgrenze und wird dorthin
-// zurueckgeholt. Das ist der uebliche Umgang mit Uhrzeiten und macht die
-// Kennzahl unabhaengig davon, wo das Fenster zufaellig aufgeschnitten wurde.
+// v1.46.2 / v1.71.0: Typische Zubettgeh-/Aufstehzeit als Median mit dem
+// Bereich der mittleren Haelfte. Gerechnet auf den 18:00-Offsets und um den
+// Median neu verankert -- sonst waere der Mittelwert aus 23:30 und 00:30 die
+// Mittagszeit, und eine Nacht vor 18:00 verzoege alles.
 function quantile(sorted, p) {
     if (!sorted.length) return null;
     if (sorted.length === 1) return sorted[0];
@@ -1179,8 +1224,7 @@ function quantile(sorted, p) {
     return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
 }
 
-// ``circular`` fuer Uhrzeiten, ohne fuer Dauern (eine Schlafdauer hat keine
-// Tagesgrenze, die man ueberschreiten koennte).
+// ``circular`` fuer Uhrzeiten, ohne fuer Dauern.
 function spreadStats(values, circular) {
     const arr = values.filter(v => Number.isFinite(v));
     if (!arr.length) return null;
@@ -1211,20 +1255,17 @@ function renderSleepRhythm(windows) {
     const wake = spreadStats(valid.map(w => w[1]), true);
     const span = spreadStats(valid.map(w => w[1] - w[0]), false);
     const items = [
-        { lbl: '🌙 Zubettgehen', st: bed,  clock: true },
-        { lbl: '☀️ Aufstehen',   st: wake, clock: true },
-        { lbl: '🛏️ Zeit im Bett', st: span, clock: false },
+        { lbl: 'Zubettgehen', st: bed,  clock: true },
+        { lbl: 'Aufstehen',   st: wake, clock: true },
+        { lbl: 'Zeit im Bett', st: span, clock: false },
     ];
     // Liegt die Haelfte der Naechte ueber mehr als zwei Stunden verteilt, ist
-    // auch der Median wenig wert (Nacht- und Tagschlaf gemischt). Das
-    // dazuzuschreiben ist ehrlicher, als die Zahl fuer sich stehen zu lassen.
+    // auch der Median wenig wert -- das steht dann dabei.
     const WOBBLY_H = 2;
     box.innerHTML = items.map(i => {
         const st = i.st;
         const fmtV = (v) => i.clock ? sleepOffsetToClock(v) : fmt1(v) + ' h';
         const iqr = (st && st.q1 != null && st.q3 != null) ? st.q3 - st.q1 : null;
-        // Der typische Bereich statt "±": er sagt, wo die mittlere Haelfte der
-        // Naechte liegt, und muss dafuer nicht symmetrisch sein.
         const range = (iqr != null && st.n > 2)
             ? `meist ${fmtV(st.q1)}–${fmtV(st.q3)}` : null;
         const nights = valid.length === 1 ? '1 Nacht' : valid.length + ' Nächte';
@@ -1241,34 +1282,38 @@ function renderSleepRhythm(windows) {
 
 // ---------- Workouts ----------
 async function initWorkouts() {
-    state.workoutsLoaded = true;
+    state.workoutsInit = true;
     try {
-        state.workoutsAll = await HEALTH_API.workouts();
+        if (!state.workoutsAll) state.workoutsAll = await HEALTH_API.workouts();
     } catch (e) {
-        document.getElementById('hWorkoutList').innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
+        state.workoutsInit = false;
+        document.getElementById('hWorkoutList').innerHTML = `<div class="empty is-error"><p class="empty-text">Die Workouts konnten nicht geladen werden.</p>
+            <button type="button" class="v-btn v-btn--sm" onclick="initWorkouts()">Erneut versuchen</button></div>`;
         return;
     }
     const chipsBox = document.getElementById('hWorkoutTypeChips');
+    // Beim Neuaufbau (nach dem Loeschen) nicht zweimal dieselben Chips.
+    chipsBox.innerHTML = '<button type="button" class="v-chip is-active" data-type="">Alle</button>';
+    state.workoutFilter = '';
     const types = [...new Set(state.workoutsAll.map(w => w.workout_type).filter(Boolean))];
     types.forEach(t => {
         const btn = document.createElement('button');
-        btn.className = 'stat-chip';
+        btn.type = 'button';
+        btn.className = 'v-chip';
         btn.dataset.type = t;
-        btn.innerHTML = `${wMeta(t).icon} ${escHtml(wMeta(t).de)}`;
+        btn.textContent = wMeta(t).de;
         chipsBox.appendChild(btn);
     });
-    chipsBox.querySelectorAll('.stat-chip').forEach(btn => {
+    chipsBox.querySelectorAll('.v-chip').forEach(btn => {
         btn.addEventListener('click', () => {
-            chipsBox.querySelectorAll('.stat-chip').forEach(c => c.classList.remove('active'));
-            btn.classList.add('active');
+            chipsBox.querySelectorAll('.v-chip').forEach(c => c.classList.toggle('is-active', c === btn));
             state.workoutFilter = btn.dataset.type || '';
             renderWorkouts();
         });
     });
-    // v1.43.1: Zeitraum — die Kennzahlen darueber beziehen sich auf den
-    // gewaehlten Zeitraum, nicht mehr zwangslaeufig auf die gesamte Historie.
-    // Seit v1.60.0 liegt er hinter demselben Knopf wie ueberall; er meldet
-    // beim Einhaengen einmal und zeichnet damit die Liste zum ersten Mal.
+    // v1.43.1: Zeitraum -- die Kennzahlen beziehen sich auf den gewaehlten
+    // Zeitraum. Der Knopf meldet beim Einhaengen einmal und zeichnet damit
+    // die Liste zum ersten Mal.
     VexRange.mount(document.getElementById('hWorkoutRange'), {
         preset: 'all',
         onChange: (r) => { state.workoutRange = r; renderWorkouts(); },
@@ -1279,62 +1324,73 @@ function renderWorkouts() {
     const range = state.workoutRange || VexRange.resolve('all');
     const byType = state.workoutsAll.filter(
         w => !state.workoutFilter || w.workout_type === state.workoutFilter);
-    // Workouts liegen ohnehin vollstaendig im Browser -- das Fenster wird
-    // deshalb hier geschnitten und nicht nachgeladen.
-    const rows = VexRange.clip(byType, 'start_at', range);
+    // Workouts liegen vollstaendig im Browser -- das Fenster wird hier
+    // geschnitten und nicht nachgeladen.
+    const rows = VexRange.clip(byType, 'start_at', range)
+        .slice().sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
     const kpiBox = document.getElementById('hWorkoutKpis');
     const rangeEl = document.getElementById('hWorkoutRangeLbl');
     const list = document.getElementById('hWorkoutList');
-    if (rangeEl) rangeEl.textContent = range.preset === 'all'
-        ? 'Gesamter Zeitraum' : range.label;
+    if (rangeEl) rangeEl.textContent = range.preset === 'all' ? 'Gesamter Zeitraum' : range.label;
     if (!rows.length) {
         kpiBox.innerHTML = '';
-        list.className = 'h-empty';
-        list.innerHTML = state.workoutsAll.length
-            ? 'Keine Workouts in diesem Zeitraum.'
-            : 'Noch keine Workouts synchronisiert.';
+        list.innerHTML = `<div class="empty"><p class="empty-text">${state.workoutsAll.length
+            ? 'Keine Workouts in diesem Zeitraum. Ein längerer Zeitraum oder eine andere Sportart zeigt mehr.'
+            : 'Noch keine Workouts synchronisiert.'}</p></div>`;
         return;
     }
     const totalMin = rows.reduce((s, w) => s + (Number(w.duration_min) || 0), 0);
-    // Durchschnitte nur ueber die Workouts bilden, die den Wert wirklich
-    // mitbringen — sonst zieht jedes Workout ohne Kalorienwert den Schnitt
-    // nach unten.
+    // Durchschnitte nur ueber die Workouts, die den Wert wirklich mitbringen.
     const durArr = rows.map(w => Number(w.duration_min)).filter(v => Number.isFinite(v) && v > 0);
     const kcalArr = rows.map(w => Number(w.active_energy_kcal)).filter(Number.isFinite);
     const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
     const avgDur = avgOf(durArr);
     const avgKcal = avgOf(kcalArr);
-    // Puls: nur plausible Werte mitteln. Bis v1.43.0 hat der CSV-Import bei
-    // manchen Exporten die HRV-Spalte (ms) als Puls gespeichert; Migration 029
-    // raeumt die Altlasten weg, dieser Filter faengt alles ab, was trotzdem
-    // noch danebenliegt.
+    // Puls: nur plausible Werte mitteln (Migration 029 raeumt Altlasten weg,
+    // dieser Filter faengt ab, was trotzdem noch danebenliegt).
     const hrArr = rows.map(w => Number(w.avg_heart_rate))
                       .filter(v => Number.isFinite(v) && v >= 30 && v <= 240);
     const avgHr = avgOf(hrArr);
     const kpis = [
-        // Die Anzahl ist die Zahl, wegen der man auf diesen Reiter geht --
-        // "wie oft war ich draussen". Die Gesamtzeit steht als Einordnung
-        // darunter, statt die Kopfzeile zu belegen.
-        { icon:'🏋️', lbl:'Workouts', val: fmt0(rows.length),
-          sub: fmtDuration(totalMin) + ' insgesamt' },
-        { icon:'⌛', lbl:'Ø Dauer', val: avgDur != null ? fmtDuration(avgDur) : '–' },
-        { icon:'🔥', lbl:'Ø Kalorien (aktiv)', val: avgKcal != null ? fmt0(avgKcal) + ' kcal' : '–' },
-        { icon:'❤️', lbl:'Ø Puls', val: avgHr != null ? fmt0(avgHr) + ' bpm' : '–',
+        // Die Anzahl ist die Zahl, wegen der man auf diesen Reiter geht.
+        { lbl: 'Workouts', val: fmt0(rows.length), sub: fmtDuration(totalMin) + ' insgesamt' },
+        { lbl: 'Ø Dauer', val: avgDur != null ? fmtDuration(avgDur) : '–' },
+        { lbl: 'Ø Energie', val: avgKcal != null ? fmt0(avgKcal) + '<small>kcal</small>' : '–' },
+        { lbl: 'Ø Puls', val: avgHr != null ? fmt0(avgHr) + '<small>bpm</small>' : '–',
           sub: avgHr != null
               ? `aus ${hrArr.length} von ${rows.length} Workout${rows.length === 1 ? '' : 's'}`
               : 'kein Pulswert importiert' },
     ];
     kpiBox.innerHTML = kpis.map(k => `
-        <div class="stat-kpi"><div class="stat-kpi-icon">${k.icon}</div>
-            <div class="stat-kpi-label">${k.lbl}</div>
-            <div class="stat-kpi-value">${k.val}</div>
-            ${k.sub ? `<div class="stat-kpi-sub">${k.sub}</div>` : ''}</div>`).join('');
-    list.className = '';
-    list.innerHTML = rows.map(w => renderWorkoutCard(w)).join('');
+        <div class="gh-kpi"><div class="gh-kpi-lbl">${k.lbl}</div>
+            <div class="gh-kpi-val">${k.val}</div>
+            ${k.sub ? `<div class="gh-kpi-sub">${k.sub}</div>` : ''}</div>`).join('');
+    list.innerHTML = `<div class="rec-list gh-wo">${rows.map(workoutZeile).join('')}</div>`;
 }
 
-function renderWorkoutCard(w) {
+function workoutDistanz(w) {
+    const dist = Number(w.distance_m);
+    if (!(Number.isFinite(dist) && dist > 0)) return null;
+    return (dist >= 1000 && !isSwimWorkout(w.workout_type)) ? fmt1(dist / 1000) + ' km' : fmt0(dist) + ' m';
+}
+
+// Eine Zeile je Workout: die Marke sagt die Sportart, der Wert am Rand die
+// Energie. Die Zeile oeffnet den Dialog mit allem Weiteren.
+function workoutZeile(w) {
     const m = wMeta(w.workout_type);
+    const meta = [fmtDateTime(w.start_at), fmtDuration(w.duration_min), workoutDistanz(w)].filter(Boolean);
+    const kcal = Number(w.active_energy_kcal);
+    return `<button type="button" class="rec-row" id="hwo_${w.id}" onclick="dlgWorkout(${w.id})">
+        <span class="rec-mark" style="--tone:var(--gh-ton)"><span class="gh-sport" aria-hidden="true">${m.icon}</span></span>
+        <span class="rec-main"><span class="rec-title">${escHtml(m.de)}</span>
+            <span class="rec-meta">${meta.map(escHtml).join('<span class="sep">·</span>')}</span></span>
+        <span class="rec-side">${Number.isFinite(kcal) ? `<span class="rec-val">${fmt0(kcal)}<small>kcal</small></span>` : ''}
+            ${w.avg_heart_rate ? `<span class="rec-sub">Ø ${fmt0(w.avg_heart_rate)} bpm</span>` : ''}</span>
+        <span class="rec-go">${ikon('pfeil', 16)}</span>
+    </button>`;
+}
+
+function workoutKacheln(w) {
     const swim = isSwimWorkout(w.workout_type);
     const dist = Number(w.distance_m);
     const hasDist = Number.isFinite(dist) && dist > 0;
@@ -1342,9 +1398,8 @@ function renderWorkoutCard(w) {
         ? ((dist >= 1000 && !swim) ? fmt1(dist/1000) + ' <small>km</small>'
                                    : fmt0(dist) + ' <small>m</small>')
         : null;
-    // Pace nur fuer Distanz-Sportarten. Beim Schwimmen ist die uebliche (und
-    // von der Uhr angezeigte) Einheit min/100 m — dieselbe Einheit in min/km
-    // waere zwar rechnerisch dasselbe, aber als "38:00" nicht lesbar.
+    // Pace nur fuer Distanz-Sportarten. Beim Schwimmen ist die uebliche
+    // Einheit min/100 m -- in min/km waere sie als "38:00" nicht lesbar.
     let paceStr = null;
     if (hasDist && (w.duration_min > 0)) {
         const refM = swim ? 100 : 1000;
@@ -1354,11 +1409,10 @@ function renderWorkoutCard(w) {
             let mm = Math.floor(pace);
             let ss = Math.round((pace - mm) * 60);
             if (ss === 60) { mm += 1; ss = 0; }
-            paceStr = `${mm}:${String(ss).padStart(2,'0')} `
-                + `<small>min/${swim ? '100 m' : 'km'}</small>`;
+            paceStr = `${mm}:${String(ss).padStart(2,'0')} <small>min/${swim ? '100 m' : 'km'}</small>`;
         }
     }
-    const tiles = [
+    return [
         { lbl:'Dauer', val: fmtDuration(w.duration_min) },
         w.active_energy_kcal != null ? { lbl:'Aktive Energie', val: fmt0(w.active_energy_kcal) + ' <small>kcal</small>' } : null,
         w.total_energy_kcal != null && w.total_energy_kcal !== w.active_energy_kcal
@@ -1371,32 +1425,64 @@ function renderWorkoutCard(w) {
         w.elevation_m != null && w.elevation_m > 0
             ? { lbl:'Aufstieg', val: fmt0(w.elevation_m) + ' <small>m</small>' } : null,
     ].filter(Boolean);
-    return `
-        <div class="h-workout-card" data-wid="${w.id}">
-            <div class="h-workout-head">
-                <div class="h-workout-icon ${m.cls}">${m.icon}</div>
-                <div class="h-workout-main">
-                    <div class="h-workout-title">${escHtml(m.de)}</div>
-                    <div class="h-workout-sub">${fmtDateTime(w.start_at)}</div>
-                </div>
-                <button class="h-workout-more" onclick="toggleWorkoutExtras(${w.id})"
-                        aria-expanded="false" title="Zusatzdaten">＋</button>
-                <button class="h-workout-del" onclick="deleteWorkout(${w.id})"
-                        title="Workout löschen">✕</button>
-            </div>
-            <div class="h-workout-detail-grid">
-                ${tiles.map(t => `<div class="h-workout-detail-tile">
-                    <div class="h-workout-detail-lbl">${t.lbl}</div>
-                    <div class="h-workout-detail-val">${t.val}</div>
-                </div>`).join('')}
-            </div>
-            <div class="h-workout-extras-wrap" id="hwx-${w.id}" style="display:none"></div>
-        </div>`;
 }
 
-// Puls-Minutenreihe eines Workouts. Die Erholungswerte nach dem Trainingsende
-// bekommen eine eigene, gestrichelte Linie -- sie gehoeren zeitlich dahinter
-// und wuerden den Verlauf sonst als Teil des Trainings ausweisen.
+const EXTRA_LABELS = {
+    resting_energy_kcal: 'Ruhe-Energie (kcal)',
+    intensity_kcal_h_kg: 'Intensität (kcal/h·kg)',
+    max_speed_kmh: 'Max. Geschwindigkeit (km/h)',
+    avg_speed_kmh: 'Ø Geschwindigkeit (km/h)',
+    flights_climbed: 'Etagen gestiegen',
+    elevation_descended_m: 'Abstieg (m)',
+    step_count: 'Schritte', cadence_spm: 'Schrittfrequenz (spm)',
+    swim_stroke_count: 'Schwimmzüge', swim_cadence_spm: 'Schwimmkadenz (spm)',
+    lap_length_m: 'Rundenlänge (m)', swolf: 'SWOLF',
+    temperature_c: 'Temperatur (°C)', humidity_pct: 'Luftfeuchtigkeit (%)',
+    cycling_speed_kmh: 'Rad-Geschwindigkeit (km/h)', cycling_power_w: 'Rad-Leistung (W)',
+};
+
+/* Alles zu einem Workout in einem Dialog: Werte, Pulsverlauf, Zusatzdaten
+   und -- einen Griff tiefer -- Loeschen. Bis v2.19.0 standen „＋“ und „✕“
+   an jeder Karte; der Papierkorb neben dem haeufigsten Griff ist die
+   Regel, gegen die DESIGN 6d steht. */
+async function dlgWorkout(id) {
+    const w = (state.workoutsAll || []).find(x => x.id === id);
+    if (!w) return;
+    const m = wMeta(w.workout_type);
+    const d = dialog(m.de + ' · ' + fmtDateTime(w.start_at), `
+        <div class="h-workout-detail-grid">${workoutKacheln(w).map(t => `<div class="h-workout-detail-tile">
+            <div class="h-workout-detail-lbl">${t.lbl}</div><div class="h-workout-detail-val">${t.val}</div></div>`).join('')}</div>
+        <div id="hwxDetail"><span class="skel skel-block"></span></div>
+        <div class="modal-fuss">
+            <button type="button" class="v-btn v-btn--danger" data-weg>${ikon('muell', 16)} Löschen</button>
+            <button type="button" class="v-btn" data-zu>Schließen</button>
+        </div>`, { breit: true, beimSchliessen: () => {
+            if (state.workoutHrChart) { state.workoutHrChart.destroy(); state.workoutHrChart = null; }
+        } });
+    beiKlick(d, '[data-zu]', () => d.close());
+    beiKlick(d, '[data-weg]', async () => { if (await deleteWorkout(id)) d.close(); });
+    const box = document.getElementById('hwxDetail');
+    try {
+        const det = await HEALTH_API.workoutDetail(id);
+        if (!box.isConnected) return;
+        const extras = (det.extra_metrics || []).filter(x => x.value != null && Math.abs(x.value) > 0.0001);
+        const series = det.hr_series || [], recovery = det.hr_recovery || [];
+        const chartHtml = (series.length + recovery.length) >= 2
+            ? `<div class="h-workout-hr"><div class="h-workout-hr-lbl">Pulsverlauf</div>
+                   <div style="height:170px;position:relative"><canvas id="hwhr-${id}"></canvas></div></div>` : '';
+        const tableHtml = extras.length ? `<div class="h-workout-extras"><table>${extras.map(x => `
+                <tr><td>${escHtml(EXTRA_LABELS[x.metric_key] || x.metric_key)}</td>
+                    <td>${fmt1(x.value)}${x.unit ? ' ' + escHtml(x.unit) : ''}</td></tr>`).join('')}
+            </table></div>` : '';
+        box.innerHTML = (chartHtml + tableHtml) || '<p class="h-hint">Zu diesem Workout gibt es keine Zusatzdaten.</p>';
+        if (chartHtml) mountWorkoutHrChart(id, series, recovery);
+    } catch (e) {
+        if (box.isConnected) box.innerHTML = `<p class="h-kurve-alt">Die Zusatzdaten konnten nicht geladen werden.</p>`;
+    }
+}
+
+// Puls-Minutenreihe eines Workouts. Die Erholung nach dem Trainingsende
+// bekommt eine eigene, gestrichelte Linie.
 function mountWorkoutHrChart(id, series, recovery) {
     const canvas = document.getElementById('hwhr-' + id);
     if (!canvas || typeof Chart === 'undefined') return;
@@ -1412,14 +1498,13 @@ function mountWorkoutHrChart(id, series, recovery) {
     const fullLabels = pts.map(p => (window.VexCharts ? VexCharts.fullDay(p.at) + ' · ' : '') + fmtHM(p.at));
     const during = pts.map(p => p.during ? Number(p.v) : null);
     const after  = pts.map(p => p.during ? null : Number(p.v));
-    // Anschluss ohne Luecke: die Erholungslinie beginnt am letzten Messpunkt
-    // des Trainings statt einen Sprung zu zeigen.
+    // Anschluss ohne Luecke: die Erholungslinie beginnt am letzten Messpunkt.
     const lastDuring = during.reduce((acc, v, i) => v != null ? i : acc, -1);
     if (lastDuring >= 0 && after.some(v => v != null)) after[lastDuring] = during[lastDuring];
 
     const th = chartTheme();
-    if (state.workoutHrCharts[id]) state.workoutHrCharts[id].destroy();
-    state.workoutHrCharts[id] = new Chart(canvas.getContext('2d'), {
+    if (state.workoutHrChart) state.workoutHrChart.destroy();
+    state.workoutHrChart = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
             labels,
@@ -1434,200 +1519,130 @@ function mountWorkoutHrChart(id, series, recovery) {
         },
         options: chartDefaults({
             plugins: {
-                legend: { labels: { color: th.text, boxWidth: 10, font: { size: 10 } } },
+                legend: { labels: { color: th.muted, boxWidth: 8, boxHeight: 8, usePointStyle: true,
+                                    pointStyle: 'circle', font: { size: 10 } } },
                 tooltip: themedTooltip(),
             },
             scales: {
                 x: { ticks: { color: th.muted, maxRotation: 0, autoSkipPadding: 24,
-                              font: { size: 10 } }, grid: { display: false } },
+                              font: { size: 10 } }, grid: { display: false }, border: { display: false } },
                 y: { ticks: { color: th.muted, font: { size: 10 }, maxTicksLimit: 5 },
-                     grid: { color: th.grid }, beginAtZero: false },
+                     grid: { color: th.grid }, border: { display: false }, beginAtZero: false },
             },
         }),
     });
-    state.workoutHrCharts[id].$vexFull = fullLabels;
+    state.workoutHrChart.$vexFull = fullLabels;
 }
 
-async function toggleWorkoutExtras(id) {
-    const card = document.querySelector(`.h-workout-card[data-wid="${id}"]`);
-    if (!card) return;
-    const wrap = document.getElementById('hwx-' + id);
-    const btn = card.querySelector('.h-workout-more');
-    if (wrap.style.display !== 'none') {
-        wrap.style.display = 'none';
-        btn.textContent = '＋'; btn.setAttribute('aria-expanded', 'false');
-        return;
-    }
-    if (!wrap.dataset.loaded) {
-        wrap.innerHTML = '<div class="stat-loading">Lade Zusatzdaten …</div>';
-        wrap.style.display = '';
-        try {
-            const w = await HEALTH_API.workoutDetail(id);
-            const extras = (w.extra_metrics || []).filter(x => x.value != null && Math.abs(x.value) > 0.0001);
-            const extraLabels = {
-                resting_energy_kcal: 'Ruhe-Energie (kcal)',
-                intensity_kcal_h_kg: 'Intensität (kcal/h·kg)',
-                max_speed_kmh: 'Max. Geschwindigkeit (km/h)',
-                avg_speed_kmh: 'Ø Geschwindigkeit (km/h)',
-                flights_climbed: 'Etagen gestiegen',
-                elevation_descended_m: 'Abstieg (m)',
-                step_count: 'Schritte', cadence_spm: 'Schrittfrequenz (spm)',
-                swim_stroke_count: 'Schwimmzüge', swim_cadence_spm: 'Schwimmkadenz (spm)',
-                lap_length_m: 'Rundenlänge (m)', swolf: 'SWOLF',
-                temperature_c: 'Temperatur (°C)', humidity_pct: 'Luftfeuchtigkeit (%)',
-                cycling_speed_kmh: 'Rad-Geschwindigkeit (km/h)', cycling_power_w: 'Rad-Leistung (W)',
-            };
-            // Der Pulsverlauf kommt nur aus einer der beiden Exportvarianten;
-            // fehlt er, bleibt es bei der Tabelle.
-            const series = w.hr_series || [], recovery = w.hr_recovery || [];
-            const chartHtml = (series.length + recovery.length) >= 2
-                ? `<div class="h-workout-hr">
-                       <div class="h-workout-hr-lbl">Pulsverlauf</div>
-                       <div style="height:170px"><canvas id="hwhr-${id}"></canvas></div>
-                   </div>` : '';
-            const tableHtml = extras.length ? `
-                <div class="h-workout-extras"><table>${extras.map(x => `
-                    <tr><td>${escHtml(extraLabels[x.metric_key] || x.metric_key)}</td>
-                        <td>${fmt1(x.value)}${x.unit ? ' ' + escHtml(x.unit) : ''}</td></tr>`).join('')}
-                </table></div>` : '';
-            wrap.innerHTML = (chartHtml + tableHtml)
-                || '<div class="h-empty" style="padding:0.75rem">Keine Zusatzdaten.</div>';
-            if (chartHtml) mountWorkoutHrChart(id, series, recovery);
-            wrap.dataset.loaded = '1';
-        } catch (e) {
-            wrap.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
-        }
-    } else {
-        wrap.style.display = '';
-    }
-    btn.textContent = '−'; btn.setAttribute('aria-expanded', 'true');
-}
-
-function closeWorkoutModal() { /* legacy no-op, Modal entfernt in v1.25.1 */ }
-
-// v1.28.0: einzelnes Workout löschen (leichtgewichtig,
-// analog zu deleteSavingsGoal im Sparziel-Tracker)
+// v1.28.0: einzelnes Workout loeschen
 async function deleteWorkout(id) {
-    const w = state.workoutsAll.find(x => x.id === id);
+    const w = (state.workoutsAll || []).find(x => x.id === id);
     const label = w ? wMeta(w.workout_type).de + ' vom ' + fmtDateTime(w.start_at) : 'Workout';
     if (!await askConfirm({ title: `${label} löschen?`,
         text: 'Zusatzdaten wie Kadenz und SWOLF werden mit entfernt.',
         ok: 'Löschen', danger: true }))
-        return;
+        return false;
     try {
         await HEALTH_API.deleteWorkout(id);
         state.workoutsAll = state.workoutsAll.filter(x => x.id !== id);
-        renderWorkouts();
-        showToast('Workout gelöscht ✓');
+        if (state.workoutsInit) renderWorkouts();
+        loadDashWorkouts();
+        showToast('Workout gelöscht');
+        return true;
     } catch (e) {
         showToast('Löschen fehlgeschlagen: ' + e.message, true);
+        return false;
     }
 }
 
-// ---------- Einstellungen / API-Keys ----------
-function initEinstellungen() {
-    state.keysLoaded = true;
-    document.getElementById('hImportUrl').textContent = `${API_BASE}/api/health/import`;
+// ---------- Daten & Verbindung (bis v2.19.0 der Reiter „Einstellungen“) ----------
+function dlgVerbindung() {
+    const url = `${API_BASE}/api/health/import`;
+    const d = dialog('iPhone-Verbindung', `
+        <p class="h-hint">In Auto Health Export unter <strong>Automations → REST API</strong> diese
+            Adresse eintragen und als Header <code>Authorization: Bearer &lt;Schlüssel&gt;</code>
+            setzen.</p>
+        <div class="gh-kopier">
+            <input id="hImportUrl" readonly value="${escHtml(url)}" aria-label="Adresse für den Import">
+            <button type="button" class="v-btn" data-kopier>Kopieren</button>
+        </div>
+        <h4 class="gh-dlg-h">Schlüssel</h4>
+        <div id="hApiKeyList"><span class="skel skel-block"></span></div>
+        <h4 class="gh-dlg-h">Neuer Schlüssel</h4>
+        <div class="gh-reihe">
+            <input id="hNewKeyLabel" placeholder="Bezeichnung, z. B. iPhone" aria-label="Bezeichnung des Schlüssels">
+            <button type="button" class="v-btn v-btn--primary" data-neu>${ikon('plus', 16)} Erzeugen</button>
+        </div>`, { breit: true });
+    beiKlick(d, '[data-kopier]', () => kopieren(document.getElementById('hImportUrl'), 'Adresse kopiert'));
+    beiKlick(d, '[data-neu]', createApiKey);
+    document.getElementById('hNewKeyLabel').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); createApiKey(); }
+    });
     loadApiKeys();
-    loadImportLog();
-    setupDropzone('hDropzoneCsv', 'hImportCsvFiles', 'hDropzoneCsvSub', true);
-    setupDropzone('hDropzoneJson', 'hImportFile', 'hDropzoneJsonSub', false);
-
-    document.querySelectorAll('#hImportModeToggle button').forEach(b => {
-        b.addEventListener('click', () => {
-            document.querySelectorAll('#hImportModeToggle button').forEach(x => x.classList.remove('active'));
-            b.classList.add('active');
-            const csv = b.dataset.mode === 'csv';
-            document.getElementById('hImportCsvBox').style.display = csv ? '' : 'none';
-            document.getElementById('hImportJsonBox').style.display = csv ? 'none' : '';
-        });
-    });
 }
 
-function setupDropzone(dropId, inputId, subId, multiple) {
-    const zone = document.getElementById(dropId);
-    const input = document.getElementById(inputId);
-    const sub = document.getElementById(subId);
-    zone.addEventListener('click', () => input.click());
-    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag'); });
-    zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
-    zone.addEventListener('drop', (e) => {
-        e.preventDefault(); zone.classList.remove('drag');
-        const files = e.dataTransfer.files;
-        if (!files.length) return;
-        try {
-            const dt = new DataTransfer();
-            [...files].forEach(f => dt.items.add(f));
-            input.files = dt.files;
-        } catch (_e) { /* Safari-Fallback: einfach ignorieren, User muss Klicken */ }
-        updateDropzoneLabel();
-    });
-    input.addEventListener('change', updateDropzoneLabel);
-    function updateDropzoneLabel() {
-        const files = input.files;
-        if (!files || !files.length) {
-            zone.classList.remove('has-files');
-            sub.textContent = multiple ? 'Mehrfachauswahl unterstützt' : 'Eine Datei';
-            return;
-        }
-        zone.classList.add('has-files');
-        sub.textContent = files.length === 1 ? files[0].name : `${files.length} Dateien ausgewählt`;
-    }
+function kopieren(input, text) {
+    input.select();
+    if (navigator.clipboard) navigator.clipboard.writeText(input.value)
+        .then(() => showToast(text)).catch(() => showToast('Markiert — mit Strg+C kopieren'));
 }
 
 async function loadApiKeys() {
     const list = document.getElementById('hApiKeyList');
-    list.className = ''; list.innerHTML = '<span class="skel skel-block"></span>';
+    if (!list) return;
     try {
         const keys = await HEALTH_API.apiKeys();
-        if (!keys.length) { list.className = 'h-empty'; list.innerHTML = 'Noch kein API-Key erzeugt.'; return; }
-        list.className = '';
-        list.innerHTML = keys.map(k => `
-            <div class="h-key-row ${k.revoked_at ? 'h-key-revoked' : ''}">
-                <div>
-                    <div class="h-key-label">${escHtml(k.label || 'Key')} ${k.revoked_at ? '<span style="color:var(--red)">(widerrufen)</span>' : ''}</div>
-                    <div class="h-key-meta">Erstellt: ${fmtDateTime(k.created_at)} · Zuletzt genutzt: ${k.last_used_at ? fmtDateTime(k.last_used_at) : 'nie'}</div>
+        if (!keys.length) { list.innerHTML = '<p class="h-hint">Noch kein Schlüssel. Ohne ihn kann die App nichts senden.</p>'; return; }
+        list.innerHTML = `<div class="gh-zeilen">${keys.map(k => `
+            <div class="gh-zeile${k.revoked_at ? ' ist-aus' : ''}">
+                <div class="gh-zeile-main">
+                    <div class="gh-zeile-titel">${escHtml(k.label || 'Schlüssel')}${k.revoked_at ? '<span class="gh-marke ist-warn">widerrufen</span>' : ''}</div>
+                    <div class="gh-zeile-meta">Erstellt ${fmtDateTime(k.created_at)} · zuletzt genutzt ${k.last_used_at ? fmtDateTime(k.last_used_at) : 'nie'}</div>
                 </div>
-                ${k.revoked_at ? '' : `<button class="danger" onclick="revokeApiKey(${k.id})">Widerrufen</button>`}
-            </div>`).join('');
+                ${k.revoked_at ? '' : `<div class="gh-zeile-aktion"><button type="button" class="v-btn v-btn--sm v-btn--danger" onclick="revokeApiKey(${k.id})">Widerrufen</button></div>`}
+            </div>`).join('')}</div>`;
     } catch (e) {
-        list.className = ''; list.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
+        list.innerHTML = `<div class="empty is-error"><p class="empty-text">Die Schlüssel konnten nicht geladen werden.</p>
+            <button type="button" class="v-btn v-btn--sm" onclick="loadApiKeys()">Erneut versuchen</button></div>`;
     }
 }
 
 async function createApiKey() {
-    const label = document.getElementById('hNewKeyLabel').value.trim() || 'Auto Health Export';
+    const feld = document.getElementById('hNewKeyLabel');
+    const label = (feld && feld.value.trim()) || 'Auto Health Export';
     try {
         const res = await HEALTH_API.createKey(label);
-        document.getElementById('hNewKeyLabel').value = '';
-        document.getElementById('hKeyModalValue').value = res.api_key;
-        document.getElementById('hKeyModal').classList.add('show');
+        if (feld) feld.value = '';
         loadApiKeys();
-    } catch (e) { showToast('Fehler: ' + e.message, true); }
+        datenStand();
+        // Der Schluessel steht nur jetzt da -- danach kennt ihn niemand mehr,
+        // auch der Server nicht (er speichert nur den Hash).
+        const d = dialog('Neuer Schlüssel', `
+            <p class="h-hint">Dieser Schlüssel wird nur <strong>jetzt</strong> angezeigt. Kopiere ihn gleich in Auto Health Export.</p>
+            <div class="gh-kopier">
+                <input id="hKeyModalValue" readonly value="${escHtml(res.api_key)}" aria-label="Neuer Schlüssel">
+                <button type="button" class="v-btn v-btn--primary" data-kopier>Kopieren</button>
+            </div>`);
+        beiKlick(d, '[data-kopier]', () => kopieren(document.getElementById('hKeyModalValue'), 'Schlüssel kopiert'));
+    } catch (e) { showToast('Erzeugen fehlgeschlagen: ' + e.message, true); }
 }
-function closeKeyModal() { document.getElementById('hKeyModal').classList.remove('show'); }
-function copyNewKey() {
-    const input = document.getElementById('hKeyModalValue');
-    input.select();
-    if (navigator.clipboard) navigator.clipboard.writeText(input.value).then(() => showToast('Key kopiert ✓'));
-}
+
 async function revokeApiKey(id) {
-    if (!await askConfirm({ title: 'Key widerrufen?',
-        text: 'Geräte, die diesen Key benutzen, können danach nichts mehr senden.',
+    if (!await askConfirm({ title: 'Schlüssel widerrufen?',
+        text: 'Geräte, die diesen Schlüssel benutzen, können danach nichts mehr senden.',
         ok: 'Widerrufen', danger: true })) return;
     try {
         await HEALTH_API.revokeKey(id);
-        showToast('Key widerrufen');
+        showToast('Schlüssel widerrufen');
         loadApiKeys();
-    } catch (e) { showToast('Fehler: ' + e.message, true); }
+        datenStand();
+    } catch (e) { showToast('Widerrufen fehlgeschlagen: ' + e.message, true); }
 }
 
-
-
 // ---------- Import-Protokoll (v1.40.0) ----------
-// Zeigt die letzten Sync-Aufrufe der iPhone-App inkl. Ingest-Ergebnis und
-// macht den Roh-Payload herunterladbar -- Grundlage fuer den Abgleich
-// "was hat die App geliefert" vs. "was steht in der Datenbank".
+// Die letzten Sync-Aufrufe der iPhone-App mit Ergebnis und Roh-Payload --
+// Grundlage fuer den Abgleich „was hat die App geliefert“ gegen „was steht
+// in der Datenbank“.
 const IMPORT_KIND_LABELS = {
     'multipart':        'Multipart-Datei',
     'multipart-manual': 'Multipart (manuell geparst)',
@@ -1658,36 +1673,47 @@ function importStatsSummary(s) {
     return parts.join(' · ') + (skipped ? ` · ${skipped}× übersprungen` : '');
 }
 
+function dlgImportProtokoll() {
+    const d = dialog('Import-Protokoll', `
+        <p class="h-hint">Jeder Sync der iPhone-App steht hier mit dem, was sie geschickt hat. So
+            lässt sich prüfen, ob ein auffälliger Wert schon so geliefert wurde. Gespeichert werden
+            die letzten 200 Aufrufe.</p>
+        <div id="hImportLog"><span class="skel skel-block"></span></div>
+        <div class="modal-fuss">
+            <button type="button" class="v-btn v-btn--danger" data-leeren>${ikon('muell', 16)} Protokoll leeren</button>
+            <button type="button" class="v-btn" data-neu>${ikon('zurueck', 16)} Neu laden</button>
+        </div>`, { breit: true, voll: true });
+    beiKlick(d, '[data-neu]', loadImportLog);
+    beiKlick(d, '[data-leeren]', clearImportLog);
+    loadImportLog();
+}
+
 async function loadImportLog() {
     const box = document.getElementById('hImportLog');
     if (!box) return;
-    box.className = ''; box.innerHTML = '<span class="skel skel-block"></span>';
     try {
         const rows = await HEALTH_API.imports(50);
         if (!rows.length) {
-            box.className = 'h-empty';
-            box.innerHTML = 'Noch kein Sync über die API eingegangen.';
+            box.innerHTML = '<p class="h-hint">Noch kein Sync über die Schnittstelle eingegangen.</p>';
             return;
         }
-        box.className = '';
-        box.innerHTML = rows.map(r => `
-            <div class="h-imp-row">
-                <div class="h-imp-main">
-                    <div class="h-imp-head">${fmtDateTime(r.created_at)}
-                        <span class="h-imp-kind">${escHtml(IMPORT_KIND_LABELS[r.kind] || r.kind || '?')}</span>
-                        ${r.truncated ? '<span class="h-imp-trunc">gekürzt</span>' : ''}
-                    </div>
-                    <div class="h-imp-meta">${escHtml(r.filename || 'ohne Dateiname')} · ${fmtBytes(r.size_bytes)} · ${escHtml(importStatsSummary(r.stats))}</div>
-                    ${r.preview ? `<div class="h-imp-preview">${escHtml(r.preview)}</div>` : ''}
+        box.innerHTML = `<div class="gh-zeilen">${rows.map(r => `
+            <div class="gh-zeile">
+                <div class="gh-zeile-main">
+                    <div class="gh-zeile-titel">${fmtDateTime(r.created_at)}
+                        <span class="gh-marke">${escHtml(IMPORT_KIND_LABELS[r.kind] || r.kind || '?')}</span>
+                        ${r.truncated ? '<span class="gh-marke ist-warn">gekürzt</span>' : ''}</div>
+                    <div class="gh-zeile-meta">${escHtml(r.filename || 'ohne Dateiname')} · ${fmtBytes(r.size_bytes)} · ${escHtml(importStatsSummary(r.stats))}</div>
+                    ${r.preview ? `<div class="gh-zeile-vorschau">${escHtml(r.preview)}</div>` : ''}
                 </div>
-                <div class="h-imp-actions">
-                    <button onclick="downloadImportPayload(${r.id})" ${r.size_bytes ? '' : 'disabled'}>⬇ Payload</button>
-                    <button class="danger" onclick="deleteImportEntry(${r.id})">✕</button>
+                <div class="gh-zeile-aktion">
+                    <button type="button" class="v-btn v-btn--sm v-btn--icon" onclick="downloadImportPayload(${r.id})" ${r.size_bytes ? '' : 'disabled'} aria-label="Payload herunterladen" title="Payload herunterladen">${ikon('herunter', 16)}</button>
+                    <button type="button" class="v-btn v-btn--sm v-btn--icon v-btn--danger" onclick="deleteImportEntry(${r.id})" aria-label="Eintrag löschen" title="Eintrag löschen">${ikon('muell', 16)}</button>
                 </div>
-            </div>`).join('');
+            </div>`).join('')}</div>`;
     } catch (e) {
-        box.className = '';
-        box.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
+        box.innerHTML = `<div class="empty is-error"><p class="empty-text">Das Protokoll konnte nicht geladen werden.</p>
+            <button type="button" class="v-btn v-btn--sm" onclick="loadImportLog()">Erneut versuchen</button></div>`;
     }
 }
 
@@ -1704,7 +1730,7 @@ async function downloadImportPayload(id) {
         a.href = url; a.download = m ? m[1] : `health-sync_${id}.txt`;
         document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
-        showToast('Payload heruntergeladen ✓');
+        showToast('Payload heruntergeladen');
     } catch (e) {
         showToast('Download fehlgeschlagen: ' + e.message, true);
     }
@@ -1714,148 +1740,212 @@ async function deleteImportEntry(id) {
     try {
         await HEALTH_API.deleteImport(id);
         loadImportLog();
+        datenStand();
     } catch (e) { showToast('Löschen fehlgeschlagen: ' + e.message, true); }
 }
 
 async function clearImportLog() {
-    if (!await askConfirm({ title: 'Import-Protokoll löschen?',
+    if (!await askConfirm({ title: 'Import-Protokoll leeren?',
         text: 'Nur das Protokoll verschwindet — die importierten Gesundheitsdaten bleiben erhalten.',
-        ok: 'Löschen', danger: true })) return;
+        ok: 'Leeren', danger: true })) return;
     try {
         const res = await HEALTH_API.clearImports();
-        showToast(`${res.deleted} Einträge gelöscht ✓`);
+        showToast(`${res.deleted} Einträge gelöscht`);
         loadImportLog();
-    } catch (e) { showToast('Löschen fehlgeschlagen: ' + e.message, true); }
+        datenStand();
+    } catch (e) { showToast('Leeren fehlgeschlagen: ' + e.message, true); }
 }
 
-// v1.28.0: Bulk-Delete
-const DELETE_SCOPE_LABELS = {
-    all: 'ALLE Gesundheitsdaten',
-    metrics: 'Vitalwerte',
-    blood_pressure: 'Blutdruck',
-    blood_glucose: 'Blutzucker',
-    sleep: 'Schlaf-Nächte',
-    workouts: 'Workouts',
-};
-async function bulkDeleteHealth() {
-    const scope = document.getElementById('hDelScope').value;
-    const from  = document.getElementById('hDelFrom').value || null;
-    const to    = document.getElementById('hDelTo').value || null;
-    const resultEl = document.getElementById('hDelResult');
-    const range = (from || to) ? ` (${from||'Anfang'} – ${to||'heute'})` : ' für ALLE Zeit';
-    const label = DELETE_SCOPE_LABELS[scope] || scope;
-    if (!await askConfirm({ title: `${label}${range} löschen?`,
-        text: 'Das lässt sich nicht rückgängig machen. Falls noch nicht geschehen: vorher den CSV-Export nutzen.',
-        ok: 'Endgültig löschen', danger: true }))
-        return;
-    resultEl.innerHTML = '<div class="stat-loading">Lösche …</div>';
-    try {
-        const res = await HEALTH_API.bulkDelete({
-            scope,
-            from_date: from,
-            to_date: to,
-        });
-        const d = res.deleted || {};
-        const parts = Object.keys(d).filter(k => d[k] > 0).map(k =>
-            `${DELETE_SCOPE_LABELS[k] || k}: ${fmt0(d[k])}`);
-        resultEl.innerHTML = `
-            <div class="h-hint" style="margin:0">
-                ✅ <strong>${fmt0(res.total)}</strong> Einträge gelöscht${parts.length ? ' — ' + parts.join(', ') : ''}.
-            </div>`;
-        showToast(res.total > 0 ? `${fmt0(res.total)} Einträge gelöscht ✓` : 'Keine passenden Einträge');
-        // Alles neu laden
-        state.workoutsLoaded = false; state.sleepInit = false; state.vitalInit = false;
-        loadDashboard();
-        // Aktiven Tab neu laden, falls betroffen
-        const activeTab = document.querySelector('.tab-btn.active');
-        if (activeTab) activateTab(activeTab.dataset.tab);
-    } catch (e) {
-        resultEl.innerHTML = `<div class="stat-empty">Fehler: ${escHtml(e.message)}</div>`;
-        showToast('Löschen fehlgeschlagen', true);
+// ---------- Dateien importieren (Backfill) ----------
+function dlgDateiImport() {
+    const d = dialog('Dateien importieren', `
+        <div class="gh-art">
+            <button type="button" class="v-chip is-active" data-art="csv">CSV (empfohlen)</button>
+            <button type="button" class="v-chip" data-art="json">JSON</button>
+        </div>
+        <div id="hImportCsvBox">
+            <p class="h-hint">In Auto Health Export unter <strong>Export → Quick Export</strong> das Format
+                <strong>CSV</strong> wählen und <strong>alle</strong> Dateien des Exports gleichzeitig hier
+                ablegen. Tages-, Schlaf- und Workout-Datei werden am Kopf erkannt, alles andere übersprungen.</p>
+            <div class="dropzone" id="hDropzoneCsv" tabindex="0" role="button" aria-label="CSV-Dateien auswählen">
+                <input type="file" id="hImportCsvFiles" accept=".csv,text/csv" multiple hidden>
+                <div class="dropzone-title">CSV-Dateien hier ablegen oder tippen</div>
+                <div class="dropzone-sub" id="hDropzoneCsvSub">Mehrere auf einmal</div>
+            </div>
+        </div>
+        <div id="hImportJsonBox" hidden>
+            <p class="h-hint">Das JSON-Format enthält mehr Detail (minutengenau), ist dafür deutlich größer.</p>
+            <div class="dropzone" id="hDropzoneJson" tabindex="0" role="button" aria-label="JSON-Datei auswählen">
+                <input type="file" id="hImportFile" accept="application/json,.json" hidden>
+                <div class="dropzone-title">JSON-Datei hier ablegen oder tippen</div>
+                <div class="dropzone-sub" id="hDropzoneJsonSub">Eine Datei</div>
+            </div>
+        </div>
+        <div class="gh-ergebnis" id="hImportErgebnis"></div>
+        <div class="modal-fuss"><button type="button" class="v-btn v-btn--primary" data-los>${ikon('herunter', 16)} Importieren</button></div>`,
+        { breit: true });
+    setupDropzone('hDropzoneCsv', 'hImportCsvFiles', 'hDropzoneCsvSub', true);
+    setupDropzone('hDropzoneJson', 'hImportFile', 'hDropzoneJsonSub', false);
+    let art = 'csv';
+    d.root.querySelectorAll('[data-art]').forEach(b => b.addEventListener('click', () => {
+        art = b.dataset.art;
+        d.root.querySelectorAll('[data-art]').forEach(x => x.classList.toggle('is-active', x === b));
+        document.getElementById('hImportCsvBox').hidden = art !== 'csv';
+        document.getElementById('hImportJsonBox').hidden = art !== 'json';
+    }));
+    beiKlick(d, '[data-los]', () => art === 'csv' ? uploadHealthCsv() : uploadHealthFile());
+}
+
+function setupDropzone(dropId, inputId, subId, multiple) {
+    const zone = document.getElementById(dropId);
+    const input = document.getElementById(inputId);
+    const sub = document.getElementById(subId);
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault(); zone.classList.remove('drag');
+        const files = e.dataTransfer.files;
+        if (!files.length) return;
+        try {
+            const dt = new DataTransfer();
+            [...files].forEach(f => dt.items.add(f));
+            input.files = dt.files;
+        } catch (_e) { /* Safari: dann eben per Tipp auswaehlen */ }
+        updateDropzoneLabel();
+    });
+    input.addEventListener('change', updateDropzoneLabel);
+    function updateDropzoneLabel() {
+        const files = input.files;
+        if (!files || !files.length) {
+            zone.classList.remove('has-files');
+            sub.textContent = multiple ? 'Mehrere auf einmal' : 'Eine Datei';
+            return;
+        }
+        zone.classList.add('has-files');
+        sub.textContent = files.length === 1 ? files[0].name : `${files.length} Dateien ausgewählt`;
     }
+}
+
+function importMeldung(stats, praefix) {
+    const skipped = stats.skipped || [];
+    return `<div class="gh-meldung">${praefix}${fmt0(stats.metrics_imported)} Vitalwerte,
+        ${fmt0(stats.bp_imported)} Blutdruck, ${fmt0(stats.glucose_imported)} Blutzucker,
+        ${fmt0(stats.sleep_imported)} Nächte und ${fmt0(stats.workouts_imported)} Workouts importiert.
+        ${skipped.length ? `${skipped.length} Punkte übersprungen.` : ''}</div>`;
 }
 
 async function uploadHealthCsv() {
     const input = document.getElementById('hImportCsvFiles');
-    const resultEl = document.getElementById('hImportCsvResult');
+    const resultEl = document.getElementById('hImportErgebnis');
     const files = input.files;
-    if (!files || !files.length) { showToast('Bitte zuerst CSV-Dateien auswählen', true); return; }
-    resultEl.innerHTML = `<div class="stat-loading">Importiere ${files.length} Datei(en) …</div>`;
+    if (!files || !files.length) { showToast('Erst CSV-Dateien auswählen', true); return; }
+    resultEl.innerHTML = `<div class="gh-meldung">Importiere ${files.length} ${files.length === 1 ? 'Datei' : 'Dateien'} …</div>`;
     try {
         const stats = await HEALTH_API.importCsv(files);
-        const skipped = stats.skipped || [];
-        resultEl.innerHTML = `
-            <div class="h-hint" style="margin:0">
-                ✅ ${fmt0(stats.files_processed)} Dateien verarbeitet —
-                ${fmt0(stats.metrics_imported)} Vitalwerte, ${fmt0(stats.bp_imported)} Blutdruck,
-                ${fmt0(stats.glucose_imported)} Blutzucker, ${fmt0(stats.sleep_imported)} Nächte,
-                ${fmt0(stats.workouts_imported)} Workouts importiert.
-                ${skipped.length ? `${skipped.length} Punkte übersprungen.` : ''}
-            </div>`;
-        showToast('CSV-Import abgeschlossen ✓');
-        input.value = ''; document.getElementById('hDropzoneCsv').classList.remove('has-files');
-        document.getElementById('hDropzoneCsvSub').textContent = 'Mehrfachauswahl unterstützt';
+        resultEl.innerHTML = importMeldung(stats, `${fmt0(stats.files_processed)} Dateien verarbeitet: `);
+        showToast('Import abgeschlossen');
+        input.value = ''; input.dispatchEvent(new Event('change'));
         loadDashboard();
     } catch (e) {
-        resultEl.innerHTML = `<div class="stat-empty">Import fehlgeschlagen: ${escHtml(e.message)}</div>`;
+        resultEl.innerHTML = `<div class="gh-meldung ist-fehler">Import fehlgeschlagen: ${escHtml(e.message)}</div>`;
         showToast('Import fehlgeschlagen', true);
     }
 }
 
 async function uploadHealthFile() {
     const input = document.getElementById('hImportFile');
-    const resultEl = document.getElementById('hImportFileResult');
+    const resultEl = document.getElementById('hImportErgebnis');
     const file = input.files && input.files[0];
-    if (!file) { showToast('Bitte zuerst eine Datei auswählen', true); return; }
-    resultEl.innerHTML = '<div class="stat-loading">Importiere …</div>';
+    if (!file) { showToast('Erst eine Datei auswählen', true); return; }
+    resultEl.innerHTML = '<div class="gh-meldung">Importiere …</div>';
     try {
         const stats = await HEALTH_API.importFile(file);
-        const skipped = stats.skipped || [];
-        resultEl.innerHTML = `
-            <div class="h-hint" style="margin:0">
-                ✅ Import abgeschlossen — ${fmt0(stats.metrics_imported)} Vitalwerte,
-                ${fmt0(stats.bp_imported)} Blutdruck, ${fmt0(stats.glucose_imported)} Blutzucker,
-                ${fmt0(stats.sleep_imported)} Nächte, ${fmt0(stats.workouts_imported)} Workouts.
-                ${skipped.length ? `${skipped.length} Punkte übersprungen.` : ''}
-            </div>`;
-        showToast('Import abgeschlossen ✓');
-        input.value = ''; document.getElementById('hDropzoneJson').classList.remove('has-files');
-        document.getElementById('hDropzoneJsonSub').textContent = 'Eine Datei';
+        resultEl.innerHTML = importMeldung(stats, '');
+        showToast('Import abgeschlossen');
+        input.value = ''; input.dispatchEvent(new Event('change'));
         loadDashboard();
     } catch (e) {
-        resultEl.innerHTML = `<div class="stat-empty">Import fehlgeschlagen: ${escHtml(e.message)}</div>`;
+        resultEl.innerHTML = `<div class="gh-meldung ist-fehler">Import fehlgeschlagen: ${escHtml(e.message)}</div>`;
         showToast('Import fehlgeschlagen', true);
     }
 }
 
-// ---------- Bootstrap ----------
+// ---------- Daten loeschen (v1.28.0) ----------
+const DELETE_SCOPE_LABELS = {
+    all: 'alle Gesundheitsdaten',
+    metrics: 'Vitalwerte',
+    blood_pressure: 'Blutdruck',
+    blood_glucose: 'Blutzucker',
+    sleep: 'Schlaf-Nächte',
+    workouts: 'Workouts',
+};
+function dlgDatenLoeschen() {
+    const d = dialog('Daten löschen', `
+        <p class="h-hint">Löscht importierte Gesundheitsdaten <strong>endgültig</strong>. Ohne Zeitraum
+            für alle Zeit; wer vorher sichern will, nimmt den Gesamt-Export.</p>
+        <label for="hDelScope">Bereich</label>
+        <select id="hDelScope">
+            <option value="all">Alles</option>
+            <option value="metrics">Vitalwerte (Schritte, Puls, Gewicht, …)</option>
+            <option value="blood_pressure">Blutdruck</option>
+            <option value="blood_glucose">Blutzucker</option>
+            <option value="sleep">Schlaf-Nächte</option>
+            <option value="workouts">Workouts samt Zusatzdaten</option>
+        </select>
+        <div class="gh-felder">
+            <div><label for="hDelFrom">Von</label><input type="date" id="hDelFrom"></div>
+            <div><label for="hDelTo">Bis</label><input type="date" id="hDelTo"></div>
+        </div>
+        <div class="gh-ergebnis" id="hDelResult"></div>
+        <div class="modal-fuss"><button type="button" class="v-btn v-btn--danger" data-los>${ikon('muell', 16)} Endgültig löschen</button></div>`);
+    beiKlick(d, '[data-los]', bulkDeleteHealth);
+}
+async function bulkDeleteHealth() {
+    const scope = document.getElementById('hDelScope').value;
+    const from  = document.getElementById('hDelFrom').value || null;
+    const to    = document.getElementById('hDelTo').value || null;
+    const resultEl = document.getElementById('hDelResult');
+    const range = (from || to) ? ` (${from || 'Anfang'} – ${to || 'heute'})` : ' für alle Zeit';
+    const label = DELETE_SCOPE_LABELS[scope] || scope;
+    if (!await askConfirm({ title: `${label}${range} löschen?`,
+        text: 'Das lässt sich nicht rückgängig machen.',
+        ok: 'Endgültig löschen', danger: true }))
+        return;
+    resultEl.innerHTML = '<div class="gh-meldung">Lösche …</div>';
+    try {
+        const res = await HEALTH_API.bulkDelete({ scope, from_date: from, to_date: to });
+        const dd = res.deleted || {};
+        const parts = Object.keys(dd).filter(k => dd[k] > 0).map(k =>
+            `${DELETE_SCOPE_LABELS[k] || k}: ${fmt0(dd[k])}`);
+        resultEl.innerHTML = `<div class="gh-meldung"><strong>${fmt0(res.total)}</strong> Einträge gelöscht${parts.length ? ' — ' + parts.join(', ') : ''}.</div>`;
+        showToast(res.total > 0 ? `${fmt0(res.total)} Einträge gelöscht` : 'Keine passenden Einträge');
+        // Alles neu laden: jede Ansicht kann betroffen sein.
+        state.workoutsAll = null; state.workoutsInit = false;
+        state.sleepInit = false; state.vitalInit = false;
+        loadDashboard();
+    } catch (e) {
+        resultEl.innerHTML = `<div class="gh-meldung ist-fehler">Löschen fehlgeschlagen: ${escHtml(e.message)}</div>`;
+        showToast('Löschen fehlgeschlagen', true);
+    }
+}
+
+// ---------- Start ----------
 (async function () {
     if (!isLoggedIn()) { window.location.href = '/private/login.html'; return; }
+    document.body.classList.add('ready');
+    document.getElementById('logoutBtn').addEventListener('click',
+        () => { clearToken(); location.href = '/private/login.html'; });
+    document.querySelectorAll('.tabs .tab-btn').forEach(b =>
+        b.addEventListener('click', () => activateTab(b.dataset.tab)));
+    // Ein Serverfehler ist keine Abmeldung (CLAUDE.md): ohne Namen in der
+    // Leiste geht es weiter, und jede Karte meldet ihren eigenen Fehler.
     try {
         const me = await fetchMe(true);
         document.getElementById('userLabel').textContent = '👤 ' + me.username;
-    } catch (e) { window.location.href = '/private/login.html'; return; }
-    document.body.classList.add('ready');
-    document.body.style.visibility = 'visible';
-
-    document.getElementById('logoutBtn').addEventListener('click',
-        () => { clearToken(); location.href = '/private/login.html'; });
-    document.querySelectorAll('.tab-btn').forEach(b =>
-        b.addEventListener('click', () => activateTab(b.dataset.tab)));
-    // Steht ein Reiter in der Adresse, wird er geoeffnet -- samt seiner
-    // Nachladung. Ohne Anhaengsel bleibt es beim ersten.
+    } catch (e) { /* Name bleibt leer */ }
+    // Steht ein Reiter in der Adresse, wird er geoeffnet -- samt Nachladung.
     activateTab((location.hash || '').replace('#', '') || H_TABS[0]);
-
-    // Activity-Chart Toggle
-
-    // Modal-Overlay-Click schließt
-    document.getElementById('hKeyModal').addEventListener('click',
-        (e) => { if (e.target.id === 'hKeyModal') closeKeyModal(); });
-    // ESC schließt Modals
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeKeyModal();
-    });
-
     loadDashboard();
 })();
-

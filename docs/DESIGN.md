@@ -425,6 +425,12 @@ Eine Komponente, zwei Formen (`.v-ring` in `css/style.css`, Muster in
 - **Über dem Ziel** reitet ein zweiter Bogen in `--warn` von vorn über den
   vollen Ring, gedeckelt bei 200 %. Gelb und nicht rot: „mehr“ ist keine
   Bewertung. Wo mehr ein Erfolg ist, dreht `.v-ring--gut` ihn auf `--ok`.
+- **Wo es kein Ziel gibt, ist der eigene Schnitt das Ziel** (v2.20.0,
+  Gesundheit): Schritte, Energie und Schlaf laufen gegen den Durchschnitt
+  der dreißig Tage davor, ohne Messlücken gerechnet. Eine fremde Zahl wie
+  „10.000 Schritte“ wäre ein Ziel, das niemand gesetzt hat; der eigene
+  Schnitt ist eine Zahl aus den Daten, und die Beschriftung nennt ihn
+  („37 % von Ø 8.489“).
 - **`.is-unvollstaendig`** macht die Spur gestrichelt. Ein Wert, zu dem
   Angaben fehlen, darf nicht aussehen wie einer, zu dem alle da sind.
 - **Die runden Kappen werden abgezogen.** Der Bogen wird eine Strichbreite

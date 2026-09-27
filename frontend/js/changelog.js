@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.20.0', date: '2026-09-28', title: 'Gesundheit neu gebaut', notes: [
+        'Oben steht der letzte volle Tag: Schritte, Energie und Schlaf als Ringe gegen deinen 30-Tage-Schnitt.',
+        'Vier Reiter statt fünf: Schlüssel, Protokoll, Import und Löschen stehen unter „Daten & Verbindung“.',
+        'Workouts sind eine Liste; Werte, Pulsverlauf und Löschen öffnen sich im Dialog.',
+        'Messgrößen ohne Werte im Zeitraum stehen in einer Zeile statt als leere Karten.',
+        'Keine Emoji mehr an Kacheln und Knöpfen; Schlafphasen überall in denselben Farben.',
+    ]},
     { v: 'v2.19.0', date: '2026-09-28', title: 'Sparziel neu gebaut', notes: [
         'Drei Reiter statt vier: Heute, Verlauf und Ziele – Log und Trophäen stehen zusammen im Verlauf.',
         'Oben steht das Ziel als Tank mit großer Zahl, daneben der Sparverlauf, der wieder zeichnet.',

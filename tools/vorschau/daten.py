@@ -535,74 +535,130 @@ AUSGABEN_SUMME = {
 # -------------------------------------------------------------- Gesundheit
 # Die Zusammenfassung ist je Metrik ein Objekt mit ``last`` und ``week_sum``
 # -- abgeschrieben aus ``renderHeartOverview`` und ``loadDashboard``.
-def _metrik(qty, summe=None):
-    eintrag = {"last": {"qty": qty, "date": HEUTE.isoformat()}}
-    if summe is not None:
-        eintrag["week_sum"] = summe
-    return eintrag
+# ---------------------------------------------------------------- Gesundheit
+# Seit v2.20.0 in der FORM des echten Servers: ``sample_date``/``recorded_at``
+# an jeder Messreihe, ``sleep_date``/``sleep_start``/``sleep_end`` an jeder
+# Nacht, ``start_at``/``active_energy_kcal``/``distance_m`` an jedem Workout.
+# Die Fassung davor hatte eigene Feldnamen -- die Seite schnitt jede Reihe
+# nach ``sample_date`` zu, fand keins, und jedes Bild zeigte leere Karten.
+# Neunzig Tage, mit Wochenrhythmus und ein paar Luecken, damit Kurven,
+# Mittelwerte und Messluecken so aussehen wie im Betrieb. Und wie im Betrieb
+# endet alles GESTERN: der Upload kommt einmal am Tag und bringt die Tage
+# bis gestern; heute steht noch nichts da.
+_GTAGE = 90
 
+
+def _welle(i, basis, hub, woche=0.0, rauschen=0.0):
+    """Ein gleichmaessiges, aber nicht glattes Signal ohne Zufall."""
+    import math
+    return (basis + hub * math.sin(i / 6.0) + woche * math.sin(i * 2 * math.pi / 7)
+            + rauschen * math.sin(i * 12.9898) * math.cos(i * 4.1414))
+
+
+def _g_reihe(fn, luecken=(), rund=0, einheit=None, mittel=False):
+    raus = []
+    for i in range(_GTAGE):
+        if i in luecken:
+            continue
+        tag = HEUTE - datetime.timedelta(days=_GTAGE - i)
+        wert = round(fn(i), rund) if rund else int(round(fn(i)))
+        zeile = {"sample_date": tag.isoformat(),
+                 "recorded_at": tag.isoformat() + "T00:00:00+02:00",
+                 "qty": wert, "unit": einheit}
+        if mittel:
+            zeile["avg_value"] = wert
+        raus.append(zeile)
+    return raus
+
+
+SCHRITTE_REIHE = _g_reihe(lambda i: _welle(i, 8600, 1400, 1300, 900),
+                          luecken={23, 51}, einheit="count")
+ENERGIE_REIHE = _g_reihe(lambda i: _welle(i, 470, 90, 80, 60),
+                         luecken={23, 51}, einheit="kcal")
+PULS_REIHE = _g_reihe(lambda i: _welle(i, 74, 2, 1.5, 1.5), einheit="bpm", mittel=True)
+RUHEPULS_REIHE = _g_reihe(lambda i: _welle(i, 58.5 - i * 0.02, 1.2, 0.5, 0.8), einheit="bpm", mittel=True)
+HRV_REIHE = _g_reihe(lambda i: _welle(i, 42, 5, 2, 4), einheit="ms", mittel=True)
+GEWICHT_REIHE = _g_reihe(lambda i: 145.2 - i * 0.065 + 0.4 * ((i * 7) % 5) / 5, rund=1,
+                         luecken=set(range(0, _GTAGE, 3)) | {1, 2}, einheit="kg")
+VO2_REIHE = _g_reihe(lambda i: 37.6 + i * 0.009, rund=1,
+                     luecken={i for i in range(_GTAGE) if i % 6}, einheit="ml/kg/min")
+STRECKE_REIHE = _g_reihe(lambda i: _welle(i, 6.1, 1.0, 0.9, 0.7), rund=1,
+                         luecken={23, 51}, einheit="km")
+SAUERSTOFF_REIHE = _g_reihe(lambda i: _welle(i, 96.5, 0.6, 0.3, 0.5), rund=1, einheit="%")
+
+
+def _nacht(i, dauer, bett, start_min):
+    """Eine Nacht: Zubettgehen am Vorabend, Aufstehen am ``sleep_date``."""
+    tag = HEUTE - datetime.timedelta(days=i + 1)
+    start = datetime.datetime.combine(tag - datetime.timedelta(days=1), datetime.time(22, 0)) \
+        + datetime.timedelta(minutes=start_min)
+    ende = start + datetime.timedelta(minutes=bett)
+    return {"id": 500 + i, "sleep_date": tag.isoformat(),
+            "sleep_start": start.isoformat() + "+02:00", "sleep_end": ende.isoformat() + "+02:00",
+            "in_bed_minutes": bett, "asleep_minutes": dauer,
+            "core_minutes": int(dauer * 0.55), "deep_minutes": int(dauer * 0.17),
+            "rem_minutes": int(dauer * 0.23), "awake_minutes": bett - dauer}
+
+
+SCHLAF_NAECHTE = [
+    _nacht(i, int(_welle(i, 430, 25, 20, 15)), int(_welle(i, 470, 20, 18, 10)),
+           int(_welle(i, 70, 25, 20, 18)))
+    for i in range(_GTAGE - 1, -1, -1) if i not in (9, 30)
+]
 
 GESUNDHEIT_SUMME = {
-    "steps": _metrik(8123, 62481),
-    "active_energy": _metrik(512, 3140),
-    "heart_rate": _metrik(74),
-    "resting_hr": _metrik(58),
-    "hrv": _metrik(41),
-    "vo2_max": _metrik(38.4),
-    "weight": _metrik(139.4),
+    "steps": {"last": {"qty": SCHRITTE_REIHE[-1]["qty"], "unit": "count",
+                       "recorded_at": SCHRITTE_REIHE[-1]["recorded_at"]},
+              "week_sum": sum(r["qty"] for r in SCHRITTE_REIHE[-7:])},
+    "active_energy": {"last": {"qty": ENERGIE_REIHE[-1]["qty"], "unit": "kcal",
+                               "recorded_at": ENERGIE_REIHE[-1]["recorded_at"]},
+                      "week_sum": sum(r["qty"] for r in ENERGIE_REIHE[-7:])},
+    "heart_rate": {"last": {"qty": PULS_REIHE[-1]["qty"], "unit": "bpm"}, "week_sum": 0},
+    "resting_hr": {"last": {"qty": RUHEPULS_REIHE[-1]["qty"], "unit": "bpm"}, "week_sum": 0},
+    "hrv": {"last": {"qty": HRV_REIHE[-1]["qty"], "unit": "ms"}, "week_sum": 0},
+    "vo2_max": {"last": {"qty": VO2_REIHE[-1]["qty"], "unit": "ml/kg/min"}, "week_sum": 0},
+    "weight": {"last": {"qty": GEWICHT_REIHE[-1]["qty"], "unit": "kg"}, "week_sum": 0},
     # ``renderSleepBlock`` liest die letzte Nacht aus der Zusammenfassung,
-    # nicht aus /sleep -- ohne diesen Schluessel behauptet die Karte "Noch
-    # keine Daten synchronisiert", obwohl daneben Naechte stehen.
-    "sleep_last": {"date": HEUTE.isoformat(), "asleep_minutes": 444,
-                   "core_minutes": 244, "deep_minutes": 80, "rem_minutes": 98,
-                   "awake_minutes": 22, "bed_start": "23:10", "bed_end": "06:48"},
+    # nicht aus /sleep.
+    "sleep_last": SCHLAF_NAECHTE[-1],
+    "blood_pressure_last": None,
     "workouts_this_week": 3,
 }
 
-
-# Eine Reihe fuer die Sparklines und die Wochenzahlen: 14 Tage, aelteste
-# zuerst -- genau so liest ``sum7``/``avg7`` sie.
-def _reihe(werte):
-    n = len(werte)
-    return [{"date": (HEUTE - datetime.timedelta(days=n - 1 - i)).isoformat(),
-             "qty": w} for i, w in enumerate(werte)]
-
-
-SCHRITTE_REIHE = _reihe([7420, 9110, 6380, 11240, 8025, 9640, 7180,
-                         8820, 10310, 7540, 9180, 8460, 11020, 8123])
-ENERGIE_REIHE = _reihe([380, 520, 310, 640, 420, 560, 350,
-                        470, 610, 390, 540, 480, 620, 512])
-PULS_REIHE = _reihe([72, 75, 71, 78, 74, 76, 73, 74, 77, 72, 75, 73, 76, 74])
-RUHEPULS_REIHE = _reihe([59, 58, 60, 57, 58, 59, 58, 57, 58, 60, 58, 57, 59, 58])
-
-SCHLAF_NAECHTE = [
-    {"date": (HEUTE - datetime.timedelta(days=i)).isoformat(),
-     "total_minutes": m, "core_minutes": int(m * 0.55),
-     "deep_minutes": int(m * 0.18), "rem_minutes": int(m * 0.22),
-     "awake_minutes": int(m * 0.05),
-     "bed_start": "23:10", "bed_end": "06:48"}
-    for i, m in enumerate([444, 412, 468, 396, 450, 430, 462])
-]
-
 BLUTDRUCK = [
-    {"recorded_at": (HEUTE - datetime.timedelta(days=i)).isoformat() + "T07:30:00",
-     "systolic": s_, "diastolic": d_}
-    for i, (s_, d_) in enumerate([(128, 82), (131, 84), (126, 80), (133, 86)])
-]
+    {"id": 700 + i, "recorded_at": (HEUTE - datetime.timedelta(days=i * 4)).isoformat() + "T07:30:00+02:00",
+     "systolic": s_, "diastolic": d_, "unit": "mmHg"}
+    for i, (s_, d_) in enumerate([(128, 82), (131, 84), (126, 80), (133, 86), (129, 83),
+                                  (127, 81), (132, 85), (125, 79)])
+][::-1]
 
 BLUTZUCKER = [
-    {"recorded_at": (HEUTE - datetime.timedelta(days=i)).isoformat() + "T08:00:00",
-     "value": v}
-    for i, v in enumerate([92, 88, 97, 90])
-]
+    {"id": 800 + i, "recorded_at": (HEUTE - datetime.timedelta(days=i * 5)).isoformat() + "T08:00:00+02:00",
+     "value": v, "unit": "mg/dL"}
+    for i, v in enumerate([92, 88, 97, 90, 94, 89])
+][::-1]
+
+
+def _training(id_, art, vor_tagen, uhr, dauer, kcal, meter=None, puls=None, hoch=None):
+    start = datetime.datetime.combine(HEUTE - datetime.timedelta(days=vor_tagen),
+                                      datetime.time(*uhr))
+    return {"id": id_, "workout_type": art, "start_at": start.isoformat() + "+02:00",
+            "end_at": (start + datetime.timedelta(minutes=dauer)).isoformat() + "+02:00",
+            "duration_min": dauer, "active_energy_kcal": kcal,
+            "total_energy_kcal": int(kcal * 1.18), "distance_m": meter,
+            "avg_heart_rate": puls, "max_heart_rate": (puls + 28) if puls else None,
+            "min_heart_rate": (puls - 30) if puls else None, "elevation_m": hoch}
+
 
 WORKOUTS = [
-    {"id": 1, "workout_type": "Schwimmen", "started_at": _tag(1) + "T18:30:00",
-     "duration_min": 45, "active_energy": 420, "distance_km": 1.2, "avg_hr": 131},
-    {"id": 2, "workout_type": "Radfahren", "started_at": _tag(3) + "T09:10:00",
-     "duration_min": 68, "active_energy": 610, "distance_km": 24.6, "avg_hr": 126},
-    {"id": 3, "workout_type": "Krafttraining", "started_at": _tag(4) + "T19:05:00",
-     "duration_min": 52, "active_energy": 330, "distance_km": None, "avg_hr": 112},
+    _training(1, "Outdoor Laufen", 1, (18, 30), 42, 468, 7420, 152, 64),
+    _training(2, "Schwimmbad Schwimmen", 3, (7, 5), 45, 390, 1600, 128),
+    _training(3, "StrengthTraining", 4, (19, 5), 52, 330, None, 112),
+    _training(4, "Cycling", 6, (9, 10), 68, 610, 24600, 126, 210),
+    _training(5, "Outdoor Laufen", 8, (18, 45), 38, 431, 6710, 149, 51),
+    _training(6, "Outdoor Spaziergang", 9, (13, 20), 55, 212, 4820, 98, 22),
+    _training(7, "StrengthTraining", 11, (19, 0), 48, 305, None, 110),
+    _training(8, "Schwimmbad Schwimmen", 13, (7, 0), 40, 352, 1450, 125),
 ]
 
 
@@ -820,14 +876,39 @@ ANTWORTEN = {
     "/api/health/metrics/active_energy": ENERGIE_REIHE,
     "/api/health/metrics/heart_rate": PULS_REIHE,
     "/api/health/metrics/resting_hr": RUHEPULS_REIHE,
+    "/api/health/metrics/hrv": HRV_REIHE,
+    "/api/health/metrics/weight": GEWICHT_REIHE,
+    "/api/health/metrics/vo2_max": VO2_REIHE,
+    "/api/health/metrics/walking_distance": STRECKE_REIHE,
+    "/api/health/metrics/blood_oxygen": SAUERSTOFF_REIHE,
     "/api/health/metrics/*": [],
     "/api/health/sleep": SCHLAF_NAECHTE,
     "/api/health/blood-pressure": BLUTDRUCK,
     "/api/health/blood-glucose": BLUTZUCKER,
     "/api/health/workouts": WORKOUTS,
     "/api/health/metric-order": {"order": []},
-    "/api/health/api-keys": [],
-    "/api/health/imports": [],
+    "/api/health/workouts/*": {
+        "extra_metrics": [{"metric_key": "cadence_spm", "value": 168, "unit": "spm"},
+                          {"metric_key": "step_count", "value": 6980, "unit": None},
+                          {"metric_key": "temperature_c", "value": 14.5, "unit": "°C"}],
+        "hr_series": [{"recorded_at": f"{_tag(1)}T18:{30 + m:02d}:00+02:00",
+                       "avg_bpm": 118 + int(34 * min(1, m / 8)) + (m % 5)} for m in range(0, 29, 2)],
+        "hr_recovery": [{"recorded_at": f"{_tag(1)}T19:{12 + m:02d}:00+02:00",
+                         "avg_bpm": 150 - m * 9} for m in range(0, 6)]},
+    "/api/health/api-keys": [
+        {"id": 1, "label": "iPhone", "created_at": _tag(160) + "T20:14:00+02:00",
+         "last_used_at": _tag(0) + "T07:12:00+02:00", "revoked_at": None},
+        {"id": 2, "label": "Altes iPhone", "created_at": _tag(420) + "T09:00:00+02:00",
+         "last_used_at": _tag(170) + "T06:40:00+02:00", "revoked_at": _tag(160) + "T20:15:00+02:00"}],
+    "/api/health/imports": [
+        {"id": 31, "created_at": _tag(0) + "T07:12:00+02:00", "kind": "json",
+         "filename": "HealthAutoExport-" + _tag(0) + ".json", "size_bytes": 184320,
+         "truncated": False, "preview": '{"data":{"metrics":[{"name":"step_count","units":"count"',
+         "stats": {"metrics_imported": 42, "sleep_imported": 1, "workouts_imported": 0}},
+        {"id": 30, "created_at": _tag(1) + "T19:20:00+02:00", "kind": "json",
+         "filename": "HealthAutoExport-" + _tag(1) + ".json", "size_bytes": 212992,
+         "truncated": False, "preview": '{"data":{"workouts":[{"name":"Outdoor Run"',
+         "stats": {"metrics_imported": 38, "workouts_imported": 1}}],
 
     # ---- Musik ----
     "/api/music/facets": MUSIK_FACETTEN,

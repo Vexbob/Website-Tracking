@@ -1,257 +1,283 @@
-/* Metrik-Palette des Gesundheitsmoduls (v1.59.0).
-   Dreizehn Messgroessen brauchen dreizehn unterscheidbare Toene -- das sind
-   Identitaetsfarben wie die Modultoene, nur modul-intern. Sie stehen hier als
-   Tokens statt als Hex-Werte in health.js, damit sie an EINER Stelle liegen
-   und die Regel "keine Hex-Werte im JS" auch hier gilt. Alle Werte sind auf
-   dunklem Grund gedacht und mit dem uebrigen System auf Helligkeit gebracht. */
-:root {
-    --h-steps:     #7ab8ff;
-    --h-energy:    #ffb04d;
-    --h-resthr:    #fb85c4;
-    --h-hr:        #ff8a99;
-    --h-walkhr:    #34e2cd;
-    --h-hrv:       #b79cff;
-    --h-recovery:  #5eea92;
-    --h-weight:    #4fd6c4;
-    --h-vo2:       #8fa8ff;
-    --h-swim:      #5cc8ff;
-    --h-oxygen:    #45d9f0;
-    --h-distance:  #b6e84a;
-    --h-speed:     #ff9d5c;
-    /* Schlafphasen sind eine Skala, keine Kategorien: ein Farbton, fuenf
-       Helligkeiten -- "Wach" faellt bewusst heraus. */
-    --h-sleep-deep:  #7c74f0;
-    --h-sleep-core:  #969bff;
-    --h-sleep-rem:   #bcc6ff;
-    --h-sleep-rest:  #dbe1ff;
-    --h-sleep-awake: #ffcb45;
-}
-
-/* Gesundheit-Modul (v1.25.0) — nutzt Statistik-Grundraster (.stat-kpi, .stat-card,
-   .split-2, .split-3-2, .chart-wrap, .stat-insights, .stat-mini-toggle) und
-   erweitert um Health-spezifische Elemente. */
+/* health.css — v2.20.0
+ *
+ * Die Seite ist neu gebaut: vier Reiter statt fünf, oben die Bühne mit dem
+ * Tag gegen den eigenen Schnitt, die Einstellungen als Dialoge. Die Palette
+ * der Messgrößen (--h-*) steht seit v2.20.0 in css/style.css bei allen
+ * anderen Tokens; hier steht keine einzige feste Farbe. */
 body{visibility:hidden}body.ready{visibility:visible}
-/* .tabs / .tab-btn ausgelagert in css/style.css (v1.30.0) */
 
-.h-empty{padding:1.5rem;text-align:center;color:var(--text-2);font-size:0.875rem}
-.h-hint{font-size:0.8125rem;color:var(--text-2);line-height:1.6;margin-bottom:0.875rem}
-.h-hint code{background:var(--surface-2);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.75rem}
+.gh { --gh-ton: var(--figure, var(--m-health)); }
+.gh > [id^="tab-"] > .v-abschnitt:first-child,
+.gh .gh-raster > .v-abschnitt { margin-top: 0; }
 
-.stat-kpi{cursor:default}
-.stat-kpi.clickable{cursor:pointer}
-.stat-kpi.clickable:hover{border-color:var(--accent)}
-.stat-kpi.active-tile{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
-.stat-kpi.empty-tile{opacity:0.55}
-.stat-kpi.empty-tile:hover{opacity:0.9}
-.h-kpi-spark{margin-top:0.5rem;height:32px;position:relative}
-.h-kpi-spark canvas{position:absolute;inset:0}
-
-/* Sleep-Zusammenfassung */
-.h-sleep-block{display:flex;flex-direction:column;gap:0.75rem}
-.h-sleep-head{display:flex;align-items:baseline;gap:0.6rem;flex-wrap:wrap}
-.h-sleep-head .h-big{font-size:2rem;font-weight:800;color:var(--text-1);font-variant-numeric:tabular-nums;letter-spacing:-0.02em;line-height:1}
-.h-sleep-head .h-sub{font-size:0.8125rem;color:var(--text-2)}
-.h-sleep-eff{display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.5rem;border-radius:6px;font-size:0.75rem;font-weight:700;background:var(--surface-2);color:var(--text-2)}
-.h-sleep-eff.good{background:rgba(34,197,94,0.14);color:var(--green-dark)}
-.h-sleep-eff.mid{background:rgba(245,158,11,0.14);color:var(--orange-dark)}
-.h-sleep-eff.low{background:var(--red-bg);color:var(--red)}
-:root[data-theme="dark"] .h-sleep-eff.good{background:rgba(34,197,94,0.2)}
-.h-phase-bars{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--surface-2)}
-.h-phase-bars span{height:100%}
-.h-phase-core{background:var(--blue)}
-.h-phase-deep{background:var(--purple)}
-.h-phase-rem{background:var(--teal)}
-.h-phase-awake{background:var(--orange)}
-.h-phase-legend{display:grid;grid-template-columns:repeat(2,1fr);gap:0.4rem 1rem;font-size:0.75rem;color:var(--text-2)}
-.h-phase-legend span{display:inline-flex;align-items:center;gap:0.35rem;font-variant-numeric:tabular-nums}
-.h-phase-legend strong{color:var(--text-1);font-weight:700}
-.h-phase-legend em{color:var(--text-3);font-style:normal;font-size:0.7rem;margin-left:0.15rem;font-variant-numeric:tabular-nums}
-.h-phase-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
-
-
-/* Blutdruck-Karte */
-.h-bp-block{display:flex;flex-direction:column;gap:0.75rem}
-.h-bp-head{display:flex;align-items:baseline;gap:0.75rem;flex-wrap:wrap}
-.h-bp-head .h-big{font-size:2.25rem;font-weight:800;color:var(--text-1);font-variant-numeric:tabular-nums;letter-spacing:-0.02em;line-height:1}
-.h-bp-head .h-sub{font-size:0.8125rem;color:var(--text-2)}
-.h-bp-badge{display:inline-flex;align-items:center;gap:0.3rem;padding:0.25rem 0.6rem;border-radius:999px;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
-.h-bp-badge.optimal{background:rgba(34,197,94,0.14);color:var(--green-dark)}
-.h-bp-badge.normal{background:rgba(59,130,246,0.14);color:var(--blue-dark)}
-.h-bp-badge.elevated{background:rgba(245,158,11,0.14);color:var(--orange-dark)}
-.h-bp-badge.stage1{background:rgba(245,158,11,0.2);color:var(--orange-dark)}
-.h-bp-badge.stage2{background:var(--red-bg);color:var(--red)}
-.h-bp-badge.crisis{background:var(--danger);color:var(--accent-ink)}
-:root[data-theme="dark"] .h-bp-badge.optimal{background:rgba(34,197,94,0.22)}
-:root[data-theme="dark"] .h-bp-badge.normal{background:rgba(59,130,246,0.22)}
-
-/* Herz-Übersicht */
-.h-heart-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem 1.25rem}
-.h-heart-item{display:flex;flex-direction:column;gap:0.2rem}
-.h-heart-lbl{font-size:0.6875rem;color:var(--text-2);text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
-.h-heart-val{font-size:1.35rem;font-weight:800;color:var(--text-1);font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
-.h-heart-sub{font-size:0.75rem;color:var(--text-2)}
-
-/* Workout-Karten (v1.25.1: alle Details direkt sichtbar, statt Klick auf Modal) */
-.h-workout-card{padding:0.875rem 0;border-bottom:1px solid var(--line)}
-.h-workout-card:last-child{border-bottom:none}
-.h-workout-head{display:flex;align-items:center;gap:0.875rem;margin-bottom:0.625rem}
-.h-workout-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;background:linear-gradient(135deg,var(--teal),var(--teal-dark));color:#fff;flex-shrink:0}
-.h-workout-icon.run{background:linear-gradient(135deg,#22c55e,#16a34a)}
-.h-workout-icon.bike{background:linear-gradient(135deg,#f59e0b,#d97706)}
-.h-workout-icon.swim{background:linear-gradient(135deg,#3b82f6,#2563eb)}
-.h-workout-icon.walk{background:linear-gradient(135deg,#14b8a6,#0d9488)}
-.h-workout-icon.strength{background:linear-gradient(135deg,#8b5cf6,#7c3aed)}
-.h-workout-icon.hike{background:linear-gradient(135deg,#a16207,#78350f)}
-.h-workout-main{flex:1;min-width:0}
-.h-workout-title{font-weight:700;font-size:0.9375rem;color:var(--text-1)}
-.h-workout-sub{font-size:0.8125rem;color:var(--text-2);margin-top:0.15rem}
-.h-workout-more,.h-workout-del{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--text-2);font-size:1.125rem;font-weight:700;cursor:pointer;line-height:1;padding:0;margin:0;flex-shrink:0;transition:all .12s}
-.h-workout-more:hover{border-color:var(--accent);color:var(--text-1)}
-.h-workout-del{font-size:0.875rem}
-.h-workout-del:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
-.h-workout-extras-wrap{margin-top:0.625rem;padding-top:0.625rem;border-top:1px dashed var(--line)}
-
-/* Workout-Detail-Modal */
-.h-workout-detail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.75rem;margin-bottom:1rem}
-.h-workout-detail-tile{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:0.75rem}
-.h-workout-detail-lbl{font-size:0.6875rem;color:var(--text-2);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:0.25rem}
-.h-workout-detail-val{font-size:1.125rem;font-weight:800;color:var(--text-1);font-variant-numeric:tabular-nums}
-.h-workout-detail-val small{font-size:0.75rem;color:var(--text-2);font-weight:500;margin-left:0.15rem}
-.h-workout-hr{margin-bottom:0.75rem}
-.h-workout-hr-lbl{font-size:0.75rem;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.25rem}
-.h-workout-extras{font-size:0.8125rem;color:var(--text-2)}
-.h-workout-extras table{width:100%;border-collapse:collapse}
-.h-workout-extras td{padding:0.35rem 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
-.h-workout-extras td:last-child{text-align:right;color:var(--text-1);font-weight:600}
-.h-workout-extras tr:last-child td{border-bottom:none}
-
-/* API-Key-Liste */
-.h-key-row{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.7rem 0;border-bottom:1px solid var(--line)}
-.h-key-row:last-child{border-bottom:none}
-.h-key-label{font-weight:700;font-size:0.875rem;color:var(--text-1)}
-.h-key-meta{font-size:0.75rem;color:var(--text-2);margin-top:0.15rem}
-.h-key-revoked{opacity:0.5}
-.h-key-row button.danger{background:transparent;color:var(--red);border:1px solid var(--red);border-radius:6px;padding:0.35rem 0.75rem;font-size:0.75rem;font-weight:600;width:auto;margin:0;cursor:pointer;transition:background .12s}
-.h-key-row button.danger:hover{background:var(--red-bg)}
-.h-key-value{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:0.8125rem;width:100%;padding:0.5rem 0.65rem;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--text-1)}
-
-.h-form-row{display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.75rem}
-.h-form-row input{margin:0;flex:1;min-width:160px}
-.h-form-row button{width:auto;margin:0}
-
-/* Drag & Drop-Zone */
-/* .h-dropzone steht seit v1.67.0 als .dropzone in css/style.css und wird
-   dort mitbedient -- eine zweite Fassung waere eine zweite Variante
-   derselben Komponente. */
-
-/* .toast ausgelagert in css/style.css (v1.30.0) */
-
-/* Bugfix: das globale .modal-overlay setzt display:flex fest — statische Modals
-   müssen daher initial display:none haben, sonst blockieren sie unsichtbar. */
-#hKeyModal{display:none}
-#hKeyModal.show{display:flex}
-
-/* Responsive */
-@media (max-width:900px){
-    .h-workout-stats{gap:0.75rem}
+/* ---------- Bühne ---------- */
+.gh-buehne { --buehne-ton: var(--gh-ton); display: flex; flex-direction: column; gap: var(--space-3); }
+.gh-b-kopf { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.gh-b-stand { font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gh-b-inhalt { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: center; }
+@media (min-width: 900px) {
+    .gh-buehne { padding: var(--space-6); }
+    .gh-b-inhalt { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: var(--space-6); }
 }
-@media (max-width:600px){
-    .h-workout-stats{flex-direction:column;gap:0.15rem;align-items:flex-end;font-size:0.75rem}
-    .h-workout-stats strong{font-size:0.875rem}
-    .h-phase-legend{font-size:0.7rem}
-    .h-sleep-head .h-big,.h-bp-head .h-big{font-size:1.5rem}
-    .h-workout-icon{width:36px;height:36px;font-size:1rem}
+.gh-b-haupt { display: flex; justify-content: center; }
+.gh-b-ring { --ring-size: 300px; --ring-w: 8px; --ring-tone: var(--h-steps); }
+@media (min-width: 900px) { .gh-b-ring { --ring-size: 340px; } }
+@media (max-width: 360px) { .gh-b-ring { --ring-size: 260px; } }
+.gh-b-ring .v-ring-txt { inset: 30% 0 0 0; justify-content: flex-end; gap: 0.375rem; padding: 0 12% 0.125rem; }
+.gh-held-skel { display: inline-block; width: 4.5ch; height: 0.85em; border-radius: 10px; }
+.gh-b-unter { font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.gh-b-neben { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.gh-b-ringe { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.gh-b-klein {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
+    padding: 0.875rem 0.5rem 0.75rem;
+    border-radius: var(--radius); border: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    min-width: 0;
 }
+.gh-ring-klein { --ring-size: 92px; --ring-w: 11px; margin-bottom: 0.375rem; }
+#hRingEnergie { --ring-tone: var(--h-energy); }
+#hRingSchlaf { --ring-tone: var(--h-sleep-core); }
+.gh-ring-klein .v-ring-val { font-size: 1.1875rem; letter-spacing: -0.03em; }
+.gh-ring-klein .v-ring-unit { font-size: 0.625rem; margin-top: 1px; }
+.gh-b-klein-lbl { font-size: 0.8125rem; font-weight: 700; color: var(--text-1); }
+.gh-b-klein-sub { font-size: 0.6875rem; color: var(--text-3); font-variant-numeric: tabular-nums; min-height: 1em; }
 
+.gh-b-fakten {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px; margin: 0; background: var(--line);
+    border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+}
+.gh-b-fakten > div { background: color-mix(in srgb, var(--surface-2) 72%, transparent); padding: 0.625rem 0.75rem; min-width: 0; }
+.gh-b-fakten dt {
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gh-b-fakten dd {
+    margin: 2px 0 0; font-size: 0.9375rem; font-weight: 700; color: var(--text-1);
+    font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gh-b-fakten dd small { font-size: 0.6875rem; font-weight: 600; color: var(--text-3); margin-left: 2px; }
+.gh-b-fakten .gh-gut { color: var(--ok); }
+.gh-b-fakten .gh-acht { color: var(--warn); }
 
-/* ---------- Import-Protokoll (v1.40.0) ---------- */
-.h-imp-row{display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem;padding:0.7rem 0;border-bottom:1px solid var(--line)}
-.h-imp-row:last-child{border-bottom:none}
-.h-imp-main{min-width:0;flex:1}
-.h-imp-head{font-weight:700;font-size:0.875rem;color:var(--text-1);display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap}
-.h-imp-kind{font-weight:600;font-size:0.7rem;color:var(--text-2);background:var(--surface-2);border-radius:5px;padding:0.1rem 0.4rem}
-.h-imp-trunc{font-weight:600;font-size:0.7rem;color:var(--red);border:1px solid var(--red);border-radius:5px;padding:0.05rem 0.35rem}
-.h-imp-meta{font-size:0.75rem;color:var(--text-2);margin-top:0.2rem}
-.h-imp-preview{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:0.7rem;color:var(--text-2);background:var(--surface-2);border-radius:6px;padding:0.35rem 0.5rem;margin-top:0.35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.h-imp-actions{display:flex;gap:0.4rem;flex-shrink:0}
-.h-imp-actions button{width:auto;margin:0;padding:0.35rem 0.7rem;font-size:0.75rem;font-weight:600;border-radius:6px;cursor:pointer;background:var(--surface-2);color:var(--text-1);border:1px solid var(--line)}
-.h-imp-actions button:disabled{opacity:0.4;cursor:default}
-.h-imp-actions button.danger{background:transparent;color:var(--red);border-color:var(--red)}
-.h-imp-actions button.danger:hover{background:var(--red-bg)}
-button.danger-outline{background:transparent;color:var(--red);border:1px solid var(--red)}
-button.danger-outline:hover{background:var(--red-bg)}
+/* ---------- Raster unter der Bühne ---------- */
+.gh-raster { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--space-5); margin-top: var(--space-6); }
+.gh-raster > .v-abschnitt + .v-abschnitt { margin-top: var(--space-6); }
+@media (min-width: 900px) {
+    .gh-raster { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+    .gh-raster > .v-abschnitt + .v-abschnitt { margin-top: 0; }
+}
+.gh-raster--oben { margin-top: var(--space-4); gap: var(--space-4); }
+.gh-raster--oben > .v-card + .v-card { margin-top: 0; }
+@media (max-width: 899px) { .gh-raster--oben > .v-card + .v-card { margin-top: var(--space-4); } }
 
-/* v1.43.1: Trenner zwischen Sportart- und Zeitraum-Chips in der Filterleiste. */
+/* Letzte Nacht */
+.h-sleep-block { display: flex; flex-direction: column; gap: 0.875rem; }
+.h-sleep-head { display: flex; align-items: baseline; gap: 0.625rem; flex-wrap: wrap; }
+.h-sleep-head .h-big { font-size: 1.75rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; letter-spacing: -0.03em; line-height: 1; }
+.h-sleep-head .h-sub { font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.h-sleep-eff { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: var(--surface-2); color: var(--text-2); }
+.h-sleep-eff.good { background: var(--ok-soft); color: var(--ok); }
+.h-sleep-eff.mid { background: var(--warn-soft); color: var(--warn); }
+.h-sleep-eff.low { background: var(--danger-soft); color: var(--danger); }
+.h-phase-bars { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-2); gap: 2px; }
+.h-phase-bars span { height: 100%; }
+.h-phase-bars span:first-child { border-radius: 999px 0 0 999px; }
+.h-phase-bars span:last-child { border-radius: 0 999px 999px 0; }
+.h-phase-core { background: var(--h-sleep-core); }
+.h-phase-deep { background: var(--h-sleep-deep); }
+.h-phase-rem { background: var(--h-sleep-rem); }
+.h-phase-awake { background: var(--h-sleep-awake); }
+.h-phase-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.375rem 1rem; font-size: 0.75rem; color: var(--text-2); }
+.h-phase-legend span { display: inline-flex; align-items: center; gap: 0.375rem; font-variant-numeric: tabular-nums; }
+.h-phase-legend strong { color: var(--text-1); font-weight: 700; }
+.h-phase-legend em { color: var(--text-3); font-style: normal; font-size: 0.6875rem; margin-left: 0.125rem; }
+.h-phase-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; background: var(--ton); }
 
-/* v1.45.0: Vitalwerte — jede Metrik bekommt ihr eigenes (kleines) Diagramm,
-   statt einer Kachelreihe, aus der man den einen grossen Chart durchklickt. */
-.h-metric-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1rem}
-@media(min-width:1300px){.h-metric-grid{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:760px){.h-metric-grid{grid-template-columns:1fr}}
-.h-metric-card{margin-bottom:0;padding:0.875rem 1rem;display:flex;flex-direction:column}
-.h-metric-card.is-empty{opacity:0.65}
-.chart-wrap.mini{height:150px}
-.h-metric-head{display:flex;align-items:baseline;justify-content:space-between;gap:0.5rem}
-.h-metric-name{display:flex;align-items:center;gap:0.375rem;font-size:0.875rem;font-weight:700;
-    color:var(--text-1);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.h-metric-ico{font-size:1rem;flex-shrink:0}
-.h-metric-big{font-size:1.125rem;font-weight:800;color:var(--text-1);font-variant-numeric:tabular-nums;
-    white-space:nowrap;flex-shrink:0}
-.h-metric-big small{font-size:0.6875rem;font-weight:600;color:var(--text-2);margin-left:2px}
-.h-metric-stats{font-size:0.6875rem;color:var(--text-2);margin:0.1875rem 0 0.5rem;
-    font-variant-numeric:tabular-nums;min-height:0.9rem}
-/* Overlay statt Ersatz-Element: das Canvas bleibt liegen, damit ein spaeterer
-   Zeitraum mit Daten ohne Neuaufbau hineinanimieren kann. */
-.h-metric-empty{position:absolute;inset:0;display:grid;place-items:center;font-size:0.8125rem;
-    color:var(--text-4);border:1px dashed var(--line);border-radius:10px;
-    background:var(--surface-1)}
-/* v1.46.0: Beim Zeitraum-Wechsel bleiben die Diagramme stehen und werden nur
-   kurz gedimmt — vorher wurde das Raster durch "Lade …" ersetzt. */
-.h-metric-grid.is-loading{opacity:0.55;pointer-events:none;transition:opacity .15s ease}
-.h-metric-grid{transition:opacity .25s ease}
+/* Herz */
+.h-heart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.25rem; }
+.h-heart-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.h-heart-lbl { font-size: 0.6875rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+.h-heart-val { font-size: 1.375rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.h-heart-val small { font-size: 0.75rem; font-weight: 600; color: var(--text-3); margin-left: 2px; letter-spacing: 0; }
+.h-heart-sub { font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.h-heart-sub.gut { color: var(--ok); }
+.h-heart-sub.acht { color: var(--warn); }
 
-/* v1.45.1: "Wann" und "Wie viel" liegen in einer Karte untereinander — beide
-   zeigen dieselben Naechte in derselben Reihenfolge, nur mit unterschiedlicher
-   y-Achse (Uhrzeit vs. Dauer). */
-.h-sleep-plot + .h-sleep-plot{margin-top:1.5rem;padding-top:1.25rem;border-top:1px dashed var(--line)}
-.h-sleep-plot-lbl{font-size:0.8125rem;font-weight:700;color:var(--text-1);margin-bottom:0.25rem}
+/* Aktivität: zwei Kurven nebeneinander, am Handy übereinander */
+.gh-aktiv { display: grid; gap: var(--space-5); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .gh-aktiv { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.gh-kurve { position: relative; height: 170px; }
+@media (max-width: 720px) { .gh-kurve { height: 150px; } }
+.h-chart-title { font-size: 1.125rem; font-weight: 750; letter-spacing: -0.02em; margin-bottom: 0.375rem; font-variant-numeric: tabular-nums; }
+.h-chart-title span { color: var(--ton); }
+.h-chart-title small { font-size: 0.75rem; font-weight: 500; color: var(--text-3); letter-spacing: 0; }
 
-/* v1.46.1: Vitalwerte-Karten sind per Drag & Drop sortierbar — gleiche Optik
-   und Bedienung wie die Achievements/Wochenziele im Sparziel-Modul. */
-.drag-handle{cursor:grab;color:var(--text-4);padding:2px 4px;user-select:none;
-    touch-action:none;font-size:0.875rem;line-height:1;font-weight:900;flex-shrink:0}
-.drag-handle:hover{color:var(--text-2)}
-.drag-handle:active{cursor:grabbing}
-.h-metric-card.sortable-ghost{opacity:0.35}
-.h-metric-card.sortable-chosen{box-shadow:var(--shadow-float)}
+/* Auffällig: was die Woche von der vorigen unterscheidet */
+.gh-auffaellig { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-4); }
+.gh-auffaellig:empty { display: none; }
+.gh-hinweis {
+    display: flex; align-items: flex-start; gap: 0.625rem;
+    padding: 0.625rem 0.75rem; border-radius: var(--radius);
+    background: color-mix(in srgb, var(--ton) 10%, var(--surface-1));
+    border: 1px solid color-mix(in srgb, var(--ton) 28%, var(--line));
+    font-size: 0.8125rem; color: var(--text-2); line-height: 1.45;
+}
+.gh-hinweis::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--ton); }
+.gh-hinweis strong { color: var(--text-1); }
 
-/* v1.46.2: Typische Zubettgeh-/Aufstehzeit samt Streuung, direkt unter dem
-   Schlaffenster — dieselben Naechte, nur als Zahl statt als Balken. */
-.h-sleep-rhythm{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-    gap:0.75rem;margin-top:1rem}
-.h-sleep-rhythm:empty{display:none}
-.h-rhythm-item{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
-    padding:0.625rem 0.75rem}
-.h-rhythm-lbl{font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;
-    color:var(--text-3);font-weight:600}
-.h-rhythm-val{font-size:1.25rem;font-weight:800;color:var(--text-1);font-variant-numeric:tabular-nums;
-    margin-top:2px;line-height:1.2}
-.h-rhythm-val small{font-size:0.75rem;font-weight:600;color:var(--text-2);margin-left:4px}
-.h-rhythm-sub{font-size:0.6875rem;color:var(--text-2);margin-top:2px}
+/* ---------- Leiste über einem Reiter ----------
+   Kein Kasten mehr um den Zeitraum-Knopf: eine Zeile mit dem, was man sieht,
+   und dem Knopf daneben. */
+.gh-leiste { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); flex-wrap: wrap; }
+.gh-leiste-text { font-size: 0.8125rem; color: var(--text-3); min-width: 0; }
+.gh-leiste--chips { align-items: flex-start; flex-wrap: nowrap; }
+.gh-chips { display: flex; gap: 0.375rem; overflow-x: auto; scrollbar-width: none; min-width: 0; padding-bottom: 2px;
+    /* Die weiche Kante sagt, dass hinter dem Rand noch Sportarten liegen. */
+    -webkit-mask-image: linear-gradient(90deg, var(--bg) calc(100% - 28px), transparent);
+            mask-image: linear-gradient(90deg, var(--bg) calc(100% - 28px), transparent); }
+.gh-chips::-webkit-scrollbar { display: none; }
+.gh-chips .v-chip { flex: none; }
+.gh-leiste--chips > div:last-child { flex: none; }
 
-/* v2.11.2: Ein Vermerk unter einer Kurve, deren letzter Abruf nicht durchkam.
-   Die Kurve bleibt stehen -- sie war richtig -- traegt aber sichtbar, dass
-   sie nicht frisch ist. Bei Messwerten ist eine stille alte Kurve die
-   schlimmste Sorte Fehler. */
-.h-kurve-alt { margin: 0.5rem 0 0; font-size: 0.8125rem; color: var(--warn);
-    line-height: 1.4; }
+/* ---------- Kennzahlen (Schlaf, Workouts) ---------- */
+.gh-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+@media (max-width: 900px) { .gh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.gh-kpis:empty { display: none; }
+.gh-kpi {
+    padding: 0.875rem 1rem; min-width: 0;
+    border-radius: var(--radius-lg); border: 1px solid var(--line);
+    background: var(--flaeche); box-shadow: var(--kante-licht);
+}
+.gh-kpi-lbl { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gh-kpi-val { margin-top: 0.25rem; font-size: 1.625rem; font-weight: 750; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.gh-kpi-val small { font-size: 0.8125rem; font-weight: 600; color: var(--text-3); margin-left: 2px; letter-spacing: 0; }
+.gh-kpi-sub { margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.gh-kpi .gh-leer { color: var(--text-3); }
+.gh-notiz { margin: var(--space-2) 0 var(--space-4); font-size: 0.8125rem; color: var(--text-3); line-height: 1.5; }
+.gh-notiz:empty { display: none; margin: 0 0 var(--space-4); }
 
-/* v2.11.5: Zwei Aktivitaetskurven nebeneinander statt einer hinter einem
-   Umschalter. Am Handy stapeln sie -- zwei 160-px-Diagramme untereinander
-   sind lesbar, zwei halbe nebeneinander nicht. */
-.h-dash-charts { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
-@media (min-width: 760px) { .h-dash-charts { grid-template-columns: 1fr 1fr; } }
-.h-chart-title { font-size: 1.125rem; font-weight: 700; letter-spacing: -0.02em;
-    margin-bottom: 0.375rem; font-variant-numeric: tabular-nums; }
-.h-chart-title small { font-size: 0.75rem; font-weight: 500; color: var(--text-3);
-    letter-spacing: 0; }
+/* ---------- Karten mit Diagramm ---------- */
+.gh-karte-titel { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.75rem; font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; }
+.gh-punkt { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--ton); }
+
+/* Vitalwerte: jede Messgröße ihr eigenes kleines Diagramm (v1.45.0) */
+.h-metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+@media (min-width: 1300px) { .h-metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .h-metric-grid { grid-template-columns: minmax(0, 1fr); } }
+.h-metric-card {
+    position: relative; display: flex; flex-direction: column;
+    padding: 0.875rem 1rem 0.75rem 1.75rem;
+    border-radius: var(--radius-lg); border: 1px solid var(--line);
+    background: var(--flaeche); box-shadow: var(--kante-licht);
+}
+/* Eine Messgröße ohne Werte im Zeitraum steht nicht als leere Karte da; sie
+   ist in der Zeile darunter genannt (#hMetricOhne). */
+.h-metric-card.is-empty { display: none; }
+.chart-wrap.mini { height: 140px; position: relative; }
+.h-metric-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.h-metric-name { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 700; color: var(--text-1); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-metric-big { font-size: 1.25rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; white-space: nowrap; flex-shrink: 0; }
+.h-metric-big small { font-size: 0.6875rem; font-weight: 600; color: var(--text-3); margin-left: 2px; letter-spacing: 0; }
+.h-metric-stats { font-size: 0.6875rem; color: var(--text-3); margin: 0.1875rem 0 0.5rem; font-variant-numeric: tabular-nums; min-height: 0.9rem; }
+.h-metric-empty { position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.8125rem; color: var(--text-3); border: 1px dashed var(--line); border-radius: 10px; background: var(--surface-1); }
+.h-metric-grid { transition: opacity var(--dur-2) var(--ease); }
+.h-metric-grid.is-loading { opacity: 0.55; pointer-events: none; }
+.gh-ohne { margin: var(--space-3) 0 0; font-size: 0.8125rem; color: var(--text-3); line-height: 1.5; }
+
+.drag-handle {
+    position: absolute; left: 2px; top: 0.75rem;
+    width: 24px; height: 28px; display: grid; place-items: center;
+    color: var(--text-4); cursor: grab; touch-action: none;
+}
+.drag-handle:hover { color: var(--text-2); }
+.drag-handle:active { cursor: grabbing; }
+.h-metric-card.sortable-ghost { opacity: 0.35; }
+.h-metric-card.sortable-chosen { box-shadow: var(--shadow-float); }
+
+/* Schlaf: typische Zeiten unter dem Diagramm (v1.46.2) */
+.h-sleep-rhythm { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
+.h-sleep-rhythm:empty { display: none; }
+.h-rhythm-item { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.625rem 0.75rem; }
+.h-rhythm-lbl { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); font-weight: 600; }
+.h-rhythm-val { font-size: 1.25rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; margin-top: 2px; line-height: 1.2; }
+.h-rhythm-sub { font-size: 0.6875rem; color: var(--text-3); margin-top: 2px; }
+
+/* v2.11.2: Vermerk unter einer Kurve, deren letzter Abruf nicht durchkam. */
+.h-kurve-alt { margin: 0.5rem 0 0; font-size: 0.8125rem; color: var(--warn); line-height: 1.4; }
+
+/* ---------- Workouts ---------- */
+.gh-sport { font-size: 1rem; }
+.gh-wo .rec-mark { width: 2.25rem; height: 2.25rem; font-size: 1.0625rem; }
+.gh-wo .rec-val small { font-size: 0.6875rem; color: var(--text-3); font-weight: 600; margin-left: 2px; }
+
+/* Workout-Dialog */
+.h-workout-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-4); }
+.h-workout-detail-tile { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.625rem 0.75rem; }
+.h-workout-detail-lbl { font-size: 0.6875rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 2px; }
+.h-workout-detail-val { font-size: 1.125rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.h-workout-detail-val small { font-size: 0.75rem; color: var(--text-3); font-weight: 600; margin-left: 2px; }
+.h-workout-hr { margin-bottom: var(--space-3); }
+.h-workout-hr-lbl { font-size: 0.6875rem; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.375rem; }
+.h-workout-extras table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; color: var(--text-2); }
+.h-workout-extras td { padding: 0.4375rem 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.h-workout-extras td:last-child { text-align: right; color: var(--text-1); font-weight: 600; }
+.h-workout-extras tr:last-child td { border-bottom: none; }
+
+/* ---------- Dialoge: Verbindung, Protokoll, Import, Löschen ---------- */
+.modal-body :where(input:not([type="checkbox"]), select, textarea) { background: var(--surface-2); }
+.gh-dlg-h { margin: 1.25rem 0 0.625rem; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); }
+.gh-dlg-h:first-child { margin-top: 0; }
+.h-hint { font-size: 0.8125rem; color: var(--text-2); line-height: 1.55; margin: 0 0 0.875rem; }
+.h-hint code, .gh-code { font: 0.75rem ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--surface-2); border-radius: 6px; padding: 0.125rem 0.375rem; color: var(--text-1); overflow-wrap: anywhere; }
+.gh-kopier { display: flex; gap: 0.5rem; align-items: stretch; margin-bottom: 0.875rem; }
+.gh-kopier input { margin: 0; flex: 1; min-width: 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.gh-reihe { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: stretch; }
+.gh-reihe input { margin: 0; flex: 1; min-width: 160px; }
+.gh-zeilen { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.gh-zeile { display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.75rem; background: var(--surface-2); min-height: 48px; }
+.gh-zeile.ist-aus { opacity: 0.55; }
+.gh-zeile-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gh-zeile-titel { font-size: 0.875rem; font-weight: 650; color: var(--text-1); display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
+.gh-zeile-meta { font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.gh-zeile-vorschau { font: 0.6875rem ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gh-zeile-aktion { display: flex; gap: 0.375rem; flex: none; }
+.gh-marke { font-size: 0.6875rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); }
+.gh-marke.ist-warn { background: var(--danger-soft); color: var(--danger); }
+.gh-ergebnis { margin-top: var(--space-3); }
+.gh-ergebnis:empty { display: none; }
+.gh-meldung { padding: 0.625rem 0.75rem; border-radius: var(--radius); font-size: 0.8125rem; line-height: 1.5; background: var(--ok-soft); color: var(--text-1); border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent); }
+.gh-meldung.ist-fehler { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.gh-art { display: flex; gap: 0.375rem; margin-bottom: 0.875rem; }
+.gh-felder { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 0.75rem; }
+.gh-felder > div { min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+
+/* ---------- Laden ---------- */
+.gh-skel-zeile { display: block; height: 52px; border-radius: var(--radius); margin-bottom: var(--space-2); }
+.gh-skel-karte { display: block; height: 232px; border-radius: var(--radius-lg); }
+.gh-skel-kpi { display: block; height: 84px; border-radius: var(--radius-lg); }
+
+/* ---------- Toast (wie im Sparziel: dunkle Pille über der Tab-Leiste) ---------- */
+.toast {
+    position: fixed; left: 50%; bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    transform: translate(-50%, 8px);
+    display: flex; align-items: center; gap: 0.75rem;
+    max-width: min(92vw, 440px); padding: 0.625rem 1rem;
+    background: var(--surface-3); color: var(--text-1);
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    box-shadow: var(--shadow-float); font-size: 0.875rem;
+    z-index: 2100; opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast.err { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+@media (max-width: 720px) { .toast { bottom: calc(76px + env(safe-area-inset-bottom)); } }
+
+/* ---------- Berührungsziele (DESIGN 4) ---------- */
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .gh .v-abschnitt-kopf .v-btn, .gh-zeile-aktion .v-btn, .gh-reihe .v-btn, .gh-kopier .v-btn { min-height: 44px; }
+    .gh-zeile-aktion .v-btn--icon { width: 44px; }
+    .gh-chips .v-chip { min-height: 40px; }
+}

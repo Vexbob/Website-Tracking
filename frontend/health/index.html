@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0a0c10">
-<meta name="description" content="Gesundheits-Dashboard: Vitalwerte, Schlaf, Workouts.">
+<meta name="description" content="Gesundheits-Dashboard: heute, Vitalwerte, Schlaf und Workouts.">
 <title>Gesundheit — Vexbob</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -16,6 +16,9 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/reiter.js"></script>
+<script src="/js/ring.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
 <script src="/js/sw-update.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="/js/charts.js"></script>
@@ -30,238 +33,206 @@
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main class="wide">
+<main class="wide gh">
+    <!-- v2.20.0: vier Reiter statt fünf. Die Einstellungen (Schlüssel,
+         Protokoll, Import, Löschen) braucht man selten; sie stehen als Zeilen
+         unten im Überblick und öffnen je einen Dialog (DESIGN 6d). -->
     <div class="tabs">
-        <!-- Ohne Emoji: sie sind hier Zeichen an einem Bedienelement, nicht
-             Schmuck, und sie kosteten am Handy die Breite, an der der fuenfte
-             Reiter aus dem Bild fiel. -->
-        <button id="hTabDashboard" class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button id="hTabUeberblick" class="tab-btn active" data-tab="ueberblick">Überblick</button>
         <button id="hTabVital" class="tab-btn" data-tab="vitalwerte">Vitalwerte</button>
         <button id="hTabSchlaf" class="tab-btn" data-tab="schlaf">Schlaf</button>
         <button id="hTabWorkouts" class="tab-btn" data-tab="workouts">Workouts</button>
-        <button id="hTabEinst" class="tab-btn" data-tab="einstellungen">Einstellungen</button>
     </div>
 
-    <!-- ---------- Dashboard ---------- -->
-    <div id="tab-dashboard">
-        <!-- Laden heisst Skeleton, nicht „Lade …“ als Fliesstext. -->
-        <div class="stat-kpi-grid" id="hDashKpis">
-            <div class="stat-kpi"><span class="skel skel-block"></span></div>
-            <div class="stat-kpi"><span class="skel skel-block"></span></div>
-            <div class="stat-kpi"><span class="skel skel-block"></span></div>
-            <div class="stat-kpi"><span class="skel skel-block"></span></div>
+    <!-- ---------- Überblick ---------- -->
+    <div id="tab-ueberblick">
+        <!-- Die Bühne: der letzte VOLLE Tag gegen den eigenen Durchschnitt.
+             Die Daten kommen per täglichem Upload, der jüngste Tag ist
+             gestern -- ein „Heute“ wäre ein angebrochener Tag oder gar keiner.
+             Ein Ring sagt „wie viel von einem Ziel“ (DESIGN 7a); hier ist das
+             Ziel der eigene Schnitt der dreißig Tage davor. -->
+        <section class="v-buehne gh-buehne" id="hBuehne">
+            <div class="gh-b-kopf">
+                <span class="v-buehne-marke" id="hTagMarke">Letzter voller Tag</span>
+                <span class="gh-b-stand" id="hStand"></span>
+            </div>
+            <div class="gh-b-inhalt">
+                <div class="gh-b-haupt">
+                    <div class="v-ring v-ring--halb v-ring--gut gh-b-ring" id="hRingSchritte">
+                        <svg viewBox="0 0 100 100" aria-hidden="true">
+                            <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                            <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                            <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                        </svg>
+                        <div class="v-ring-txt">
+                            <strong class="v-held" id="hSchritte"><span class="skel gh-held-skel"></span></strong>
+                            <span class="gh-b-unter" id="hSchritteSub">Schritte</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="gh-b-neben">
+                    <div class="gh-b-ringe">
+                        <div class="gh-b-klein">
+                            <div class="v-ring v-ring--gut gh-ring-klein" id="hRingEnergie">
+                                <svg viewBox="0 0 100 100" aria-hidden="true">
+                                    <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                                    <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                                    <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                                </svg>
+                                <div class="v-ring-txt"><strong class="v-ring-val" id="hEnergie">–</strong><span class="v-ring-unit">kcal</span></div>
+                            </div>
+                            <span class="gh-b-klein-lbl">Aktive Energie</span>
+                            <span class="gh-b-klein-sub" id="hEnergieSub"></span>
+                        </div>
+                        <div class="gh-b-klein">
+                            <div class="v-ring v-ring--gut gh-ring-klein" id="hRingSchlaf">
+                                <svg viewBox="0 0 100 100" aria-hidden="true">
+                                    <circle class="v-ring-track" cx="50" cy="50" r="42"/>
+                                    <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
+                                    <circle class="v-ring-over" cx="50" cy="50" r="42"/>
+                                </svg>
+                                <div class="v-ring-txt"><strong class="v-ring-val" id="hSchlaf">–</strong><span class="v-ring-unit">Std.</span></div>
+                            </div>
+                            <span class="gh-b-klein-lbl">Schlaf</span>
+                            <span class="gh-b-klein-sub" id="hSchlafSub"></span>
+                        </div>
+                    </div>
+                    <dl class="gh-b-fakten" id="hFakten">
+                        <div><dt>Ruhepuls</dt><dd id="hFRuhe">–</dd></div>
+                        <div><dt>HRV</dt><dd id="hFHrv">–</dd></div>
+                        <div><dt>Workouts</dt><dd id="hFWork">–</dd></div>
+                    </dl>
+                </div>
+            </div>
+        </section>
+        <!-- Was diese Woche von der vorigen unterscheidet; bleibt leer, wenn
+             nichts auffällt. -->
+        <div class="gh-auffaellig" id="hDashInsights"></div>
+
+        <div class="gh-raster">
+            <section class="v-abschnitt">
+                <header class="v-abschnitt-kopf">
+                    <h2>Schlaf</h2>
+                    <span class="v-abschnitt-sub" id="hNachtSub"></span>
+                </header>
+                <div class="v-card" id="hDashSleep"><span class="skel skel-block"></span></div>
+            </section>
+            <section class="v-abschnitt">
+                <header class="v-abschnitt-kopf">
+                    <h2>Herz</h2>
+                    <span class="v-abschnitt-sub">7 Tage</span>
+                </header>
+                <div class="v-card" id="hDashHeart"><span class="skel skel-block"></span></div>
+            </section>
         </div>
 
-        <!-- Zeigen statt umschalten (v1.93.0): Schritte und Kalorien standen
-             hinter einem Umschalter, obwohl sie dieselben vierzehn Tage
-             beschreiben und man sie vergleichen will. Jetzt zwei Kurven
-             nebeneinander, jede in ihrer Farbe. Das Etikett „· 14 Tage“ stand
-             fest im HTML und behauptete den Zeitraum, statt ihn zu nennen --
-             es kommt jetzt aus derselben Zahl, aus der die Kurven kommen. -->
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>Aktivität <span class="stat-range-lbl" id="hDashActivityLbl"></span></h3>
-            </div>
-            <div class="h-dash-charts">
+        <!-- Zeigen statt umschalten (v1.93.0): Schritte und Energie als zwei
+             Kurven nebeneinander, jede in ihrer Farbe. -->
+        <section class="v-abschnitt">
+            <header class="v-abschnitt-kopf">
+                <h2>Aktivität</h2>
+                <span class="v-abschnitt-sub" id="hDashActivityLbl"></span>
+            </header>
+            <div class="v-card gh-aktiv">
                 <div><div class="h-chart-title" id="hDashStepsTitle"></div>
-                    <div class="chart-wrap"><canvas id="hDashActivity"></canvas></div></div>
+                    <div class="gh-kurve"><canvas id="hDashActivity"></canvas></div></div>
                 <div><div class="h-chart-title" id="hDashEnergyTitle"></div>
-                    <div class="chart-wrap"><canvas id="hDashEnergy"></canvas></div></div>
+                    <div class="gh-kurve"><canvas id="hDashEnergy"></canvas></div></div>
             </div>
-        </div>
+        </section>
 
-        <div class="split-3-2">
-            <div class="stat-card">
-                <h3>Letzte Nacht</h3>
-                <div id="hDashSleep"><span class="skel skel-block"></span></div>
-            </div>
-            <div class="stat-card">
-                <h3>Herz-Übersicht <span class="stat-range-lbl" id="hDashHeartLbl"></span></h3>
-                <div id="hDashHeart"><span class="skel skel-block"></span></div>
-            </div>
+        <div class="gh-raster">
+            <section class="v-abschnitt">
+                <header class="v-abschnitt-kopf">
+                    <h2>Letzte Workouts</h2>
+                    <button type="button" class="v-btn v-btn--ghost v-btn--sm" onclick="activateTab('workouts')">Alle<span data-ikon="pfeil" data-ikon-gross="16"></span></button>
+                </header>
+                <div id="hDashWorkouts"><span class="skel gh-skel-zeile"></span><span class="skel gh-skel-zeile"></span></div>
+            </section>
+            <section class="v-abschnitt">
+                <header class="v-abschnitt-kopf"><h2>Daten &amp; Verbindung</h2></header>
+                <div class="rec-list" id="hDatenListe">
+                    <button type="button" class="rec-row" onclick="dlgVerbindung()">
+                        <span class="rec-mark" style="--tone:var(--info)"><span data-ikon="tauschen" data-ikon-gross="16"></span></span>
+                        <span class="rec-main"><span class="rec-title">iPhone-Verbindung</span><span class="rec-meta" id="hDatenVerbindung">Schlüssel für Auto Health Export</span></span>
+                        <span class="rec-go"><span data-ikon="pfeil" data-ikon-gross="16"></span></span>
+                    </button>
+                    <button type="button" class="rec-row" onclick="dlgImportProtokoll()">
+                        <span class="rec-mark" style="--tone:var(--text-2)"><span data-ikon="uhr" data-ikon-gross="16"></span></span>
+                        <span class="rec-main"><span class="rec-title">Import-Protokoll</span><span class="rec-meta" id="hDatenProtokoll">Was die App zuletzt geschickt hat</span></span>
+                        <span class="rec-go"><span data-ikon="pfeil" data-ikon-gross="16"></span></span>
+                    </button>
+                    <button type="button" class="rec-row" onclick="dlgDateiImport()">
+                        <span class="rec-mark" style="--tone:var(--ok)"><span data-ikon="herunter" data-ikon-gross="16"></span></span>
+                        <span class="rec-main"><span class="rec-title">Dateien importieren</span><span class="rec-meta">CSV oder JSON aus Auto Health Export</span></span>
+                        <span class="rec-go"><span data-ikon="pfeil" data-ikon-gross="16"></span></span>
+                    </button>
+                    <button type="button" class="rec-row" onclick="dlgDatenLoeschen()">
+                        <span class="rec-mark" style="--tone:var(--danger)"><span data-ikon="muell" data-ikon-gross="16"></span></span>
+                        <span class="rec-main"><span class="rec-title">Daten löschen</span><span class="rec-meta">Nach Bereich und Zeitraum</span></span>
+                        <span class="rec-go"><span data-ikon="pfeil" data-ikon-gross="16"></span></span>
+                    </button>
+                </div>
+            </section>
         </div>
-
-        <div class="stat-insights" id="hDashInsights"></div>
     </div>
 
     <!-- ---------- Vitalwerte ---------- -->
-    <div id="tab-vitalwerte" style="display:none">
-        <div class="stat-filterbar">
-            <span class="stat-filter-title">Zeitraum</span>
-            <div class="stat-filter-slot" id="hVitalRange"></div>
+    <div id="tab-vitalwerte" hidden>
+        <div class="gh-leiste">
+            <span class="gh-leiste-text" id="hVitalInfo">Jede Messgröße mit ihrem Verlauf</span>
+            <div id="hVitalRange"></div>
         </div>
-
-        <div class="h-metric-grid" id="hMetricCharts"></div>
-
-        <div class="split-2">
-            <div class="stat-card">
-                <h3>🩺 Blutdruck</h3>
+        <div class="h-metric-grid" id="hMetricCharts"><span class="skel gh-skel-karte"></span><span class="skel gh-skel-karte"></span><span class="skel gh-skel-karte"></span><span class="skel gh-skel-karte"></span></div>
+        <p class="gh-ohne" id="hMetricOhne" hidden></p>
+        <div class="gh-raster gh-raster--oben" id="hBpBox" hidden>
+            <section class="v-card gh-karte">
+                <h3 class="gh-karte-titel"><span class="gh-punkt" style="--ton:var(--danger)"></span>Blutdruck</h3>
                 <div class="chart-wrap"><canvas id="hChartBp"></canvas></div>
-            </div>
-            <div class="stat-card">
-                <h3>🩸 Blutzucker</h3>
+            </section>
+            <section class="v-card gh-karte">
+                <h3 class="gh-karte-titel"><span class="gh-punkt" style="--ton:var(--warn)"></span>Blutzucker</h3>
                 <div class="chart-wrap"><canvas id="hChartGlucose"></canvas></div>
-            </div>
+            </section>
         </div>
     </div>
 
-
     <!-- ---------- Schlaf ---------- -->
-    <div id="tab-schlaf" style="display:none">
-        <div class="stat-filterbar">
-            <span class="stat-filter-title">Zeitraum</span>
-            <div class="stat-filter-slot" id="hSleepRange"></div>
+    <div id="tab-schlaf" hidden>
+        <div class="gh-leiste">
+            <span class="gh-leiste-text" id="hSleepInfo">Nächte im Zeitraum</span>
+            <div id="hSleepRange"></div>
         </div>
-        <div class="stat-kpi-grid" id="hSleepKpis"></div>
-        <div class="stat-range-lbl" id="hSleepNote" style="margin:-0.25rem 0 0.75rem"></div>
-        <div class="stat-card">
-            <h3>😴 Schlaf je Nacht</h3>
+        <div class="gh-kpis" id="hSleepKpis"><span class="skel gh-skel-kpi"></span><span class="skel gh-skel-kpi"></span><span class="skel gh-skel-kpi"></span><span class="skel gh-skel-kpi"></span></div>
+        <p class="gh-notiz" id="hSleepNote"></p>
+        <section class="v-card gh-karte">
+            <h3 class="gh-karte-titel">Schlaf je Nacht</h3>
             <div class="chart-wrap tall"><canvas id="hChartSleepTimes"></canvas></div>
             <div class="h-sleep-rhythm" id="hSleepRhythm"></div>
-        </div>
+        </section>
     </div>
 
     <!-- ---------- Workouts ---------- -->
-    <div id="tab-workouts" style="display:none">
-        <div class="stat-filterbar">
-            <div class="stat-preset-chips" id="hWorkoutTypeChips">
-                <button class="stat-chip active" data-type="">Alle</button>
+    <div id="tab-workouts" hidden>
+        <div class="gh-leiste gh-leiste--chips">
+            <div class="gh-chips" id="hWorkoutTypeChips">
+                <button type="button" class="v-chip is-active" data-type="">Alle</button>
             </div>
-            <div class="stat-filter-slot" id="hWorkoutRange"></div>
+            <div id="hWorkoutRange"></div>
         </div>
-        <div class="stat-kpi-grid" id="hWorkoutKpis"></div>
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>🏋️ Workouts</h3>
-                <div class="stat-range-lbl" id="hWorkoutRangeLbl"></div>
-            </div>
-            <div id="hWorkoutList"><span class="skel skel-block"></span></div>
-        </div>
-    </div>
-
-
-    <!-- ---------- Einstellungen ---------- -->
-    <div id="tab-einstellungen" style="display:none">
-        <div class="stat-card">
-            <h3>🔑 API-Keys für Auto Health Export</h3>
-            <p class="h-hint">Erzeuge einen Key und trage ihn in der iPhone-App unter
-                <strong>Automations → REST API</strong> als Header
-                <code>Authorization: Bearer &lt;Key&gt;</code> ein. Ziel-URL:
-                <code id="hImportUrl">–</code></p>
-            <div id="hApiKeyList"><span class="skel skel-line long"></span></div>
-            <div class="h-form-row">
-                <input id="hNewKeyLabel" placeholder="Bezeichnung (z.B. iPhone)">
-                <button class="primary" onclick="createApiKey()">+ Key erzeugen</button>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <h3>📥 Import-Protokoll</h3>
-            <p class="h-hint">Jeder automatische Sync der iPhone-App wird hier mit seinem
-                <strong>Roh-Payload</strong> mitgeschrieben — genau die Bytes, die die App
-                geschickt hat. Damit lässt sich prüfen, ob ein auffälliger Wert (z.B. zu wenig
-                Schritte) schon so geliefert oder erst beim Import falsch verarbeitet wurde.
-                Gespeichert werden die letzten 200 Aufrufe.</p>
-            <div class="h-form-row" style="margin-top:0">
-                <button onclick="loadImportLog()">🔄 Aktualisieren</button>
-                <button class="danger-outline" onclick="clearImportLog()">🗑️ Protokoll leeren</button>
-            </div>
-            <div id="hImportLog" style="margin-top:0.5rem"><span class="skel skel-block"></span></div>
-        </div>
-
-        <div class="stat-card">
-            <h3>📁 Manueller Import (Backfill)</h3>
-            <div class="stat-mini-toggle" id="hImportModeToggle" style="margin-bottom:0.875rem">
-                <button class="active" data-mode="csv">📊 CSV (empfohlen)</button>
-                <button data-mode="json">📄 JSON</button>
-            </div>
-
-            <div id="hImportCsvBox">
-                <p class="h-hint">In Auto Health Export unter <strong>Export → Quick Export</strong>
-                    Format <strong>CSV</strong> wählen. Danach <strong>alle</strong> CSV-Dateien
-                    aus dem Export-Ordner hier gleichzeitig hochladen — Tages-CSV, Schlafanalyse-CSV
-                    und Workouts-CSV werden am Header automatisch erkannt, alle anderen Dateien
-                    werden ignoriert.</p>
-                <div class="h-dropzone" id="hDropzoneCsv">
-                    <input type="file" id="hImportCsvFiles" accept=".csv,text/csv" multiple hidden>
-                    <div class="h-dropzone-icon">📊</div>
-                    <div class="h-dropzone-title">CSV-Dateien hier ablegen oder klicken</div>
-                    <div class="h-dropzone-sub" id="hDropzoneCsvSub">Mehrfachauswahl unterstützt</div>
-                </div>
-                <div class="h-form-row" style="margin-top:0.75rem">
-                    <button class="primary" onclick="uploadHealthCsv()">⬆ CSV importieren</button>
-                </div>
-                <div id="hImportCsvResult" style="margin-top:0.75rem"></div>
-            </div>
-
-            <div id="hImportJsonBox" style="display:none">
-                <p class="h-hint">Alternative: Export-Format <strong>JSON</strong>. Enthält mehr
-                    Detail (minutengenau), ist dafür aber deutlich größer.</p>
-                <div class="h-dropzone" id="hDropzoneJson">
-                    <input type="file" id="hImportFile" accept="application/json,.json" hidden>
-                    <div class="h-dropzone-icon">📄</div>
-                    <div class="h-dropzone-title">JSON-Datei hier ablegen oder klicken</div>
-                    <div class="h-dropzone-sub" id="hDropzoneJsonSub">Eine Datei</div>
-                </div>
-                <div class="h-form-row" style="margin-top:0.75rem">
-                    <button class="primary" onclick="uploadHealthFile()">⬆ Importieren</button>
-                </div>
-                <div id="hImportFileResult" style="margin-top:0.75rem"></div>
-            </div>
-        </div>
-
-        <div class="stat-card" style="border-color:var(--red)">
-            <h3>🗑️ Datensätze löschen</h3>
-            <p class="h-hint">Löscht importierte Gesundheitsdaten aus der Datenbank —
-                <strong>endgültig</strong>, nicht wiederherstellbar (nutze vorher den
-                CSV-Export!). Standardmäßig für alle Zeit; optionaler Zeitraum grenzt
-                die Löschung ein.</p>
-            <div class="h-form-row" style="align-items:flex-end">
-                <div style="flex:1;min-width:180px">
-                    <label style="display:block;font-size:0.75rem;color:var(--text-2);font-weight:600;margin-bottom:0.25rem">Bereich</label>
-                    <select id="hDelScope" style="margin:0;width:100%">
-                        <option value="all">Alles (alle Kategorien)</option>
-                        <option value="metrics">Vitalwerte (Schritte, Puls, Gewicht, …)</option>
-                        <option value="blood_pressure">Blutdruck</option>
-                        <option value="blood_glucose">Blutzucker</option>
-                        <option value="sleep">Schlaf-Nächte</option>
-                        <option value="workouts">Workouts + Zusatzmetriken</option>
-                    </select>
-                </div>
-                <div style="min-width:130px">
-                    <label style="display:block;font-size:0.75rem;color:var(--text-2);font-weight:600;margin-bottom:0.25rem">Von (optional)</label>
-                    <input type="date" id="hDelFrom" style="margin:0;width:100%">
-                </div>
-                <div style="min-width:130px">
-                    <label style="display:block;font-size:0.75rem;color:var(--text-2);font-weight:600;margin-bottom:0.25rem">Bis (optional)</label>
-                    <input type="date" id="hDelTo" style="margin:0;width:100%">
-                </div>
-            </div>
-            <div class="h-form-row">
-                <button class="primary" onclick="bulkDeleteHealth()"
-                        style="background:var(--red);border-color:var(--red)">🗑️ Löschen</button>
-            </div>
-            <div id="hDelResult" style="margin-top:0.75rem"></div>
-        </div>
-
+        <div class="gh-kpis" id="hWorkoutKpis"><span class="skel gh-skel-kpi"></span><span class="skel gh-skel-kpi"></span><span class="skel gh-skel-kpi"></span><span class="skel gh-skel-kpi"></span></div>
+        <section class="v-abschnitt">
+            <header class="v-abschnitt-kopf">
+                <h2>Workouts</h2>
+                <span class="v-abschnitt-sub" id="hWorkoutRangeLbl"></span>
+            </header>
+            <div id="hWorkoutList"><span class="skel gh-skel-zeile"></span><span class="skel gh-skel-zeile"></span><span class="skel gh-skel-zeile"></span></div>
+        </section>
     </div>
 </main>
 <div class="version-tag"></div>
-<div id="toast" class="toast"></div>
-
-<!-- Neuer-Key-Modal -->
-<div class="modal-overlay" id="hKeyModal">
-    <div class="modal-box">
-        <div class="modal-head"><h3>🔑 Neuer API-Key</h3><button class="modal-close" onclick="closeKeyModal()">✕</button></div>
-        <div class="modal-body">
-            <p class="h-hint">Dieser Key wird nur <strong>jetzt</strong> angezeigt. Kopiere ihn sofort in Auto Health Export.</p>
-            <input id="hKeyModalValue" readonly class="h-key-value">
-            <button onclick="copyNewKey()" class="primary" style="width:auto;margin-top:0.5rem">📋 Kopieren</button>
-        </div>
-    </div>
-</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="/health/health.js"></script>
 </body>
 </html>
-
