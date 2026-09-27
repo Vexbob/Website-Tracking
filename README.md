@@ -48,7 +48,7 @@ Tests: `cd backend && pytest -q` (braucht zusätzlich `httpx`).
 
 ## Ausliefern
 
-Es gibt keine Pipeline — **ein Push ist kein Deploy.** Das Frontend liegt als statische Dateien auf dem Webserver, das Backend läuft als Docker-Image (`backend/Dockerfile`). Nach dem Push: auf dem Server `git pull`, bei Backend-Änderungen zusätzlich neu bauen bzw. neu starten.
+**Ein Push auf `main` ist ein Deploy:** Railway baut und startet danach automatisch neu. Was gepusht wird, ist kurz darauf live — deshalb vorher die Tests gegen die gepinnten Versionen laufen lassen. Neue Migrationen laufen beim Start sofort auf der echten Datenbank.
 
 ## Lebensmittel-Katalog (optional)
 

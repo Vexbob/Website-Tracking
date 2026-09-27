@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.17.0', date: '2026-09-27', title: 'CS2 und Ausgaben am Handy ruhiger', notes: [
+        'CS2: jede Position ist am Handy zwei kompakte Zeilen statt drei großer — etwa halb so hoch.',
+        'CS2: Preis- und Anzahlfelder stehen in jeder Zeile an derselben Stelle, lange Namen enden mit „…“.',
+        'Ausgaben: die vier Kacheln (Kamera, Galerie, Einfügen, Manuell) rutschen beim Laden nicht mehr nach unten.',
+    ]},
     { v: 'v2.16.0', date: '2026-09-27', title: 'Einträge für heute gehen wieder, Gerichte in einem Blatt', notes: [
         'Nährwerte und Essenstagebuch: jeder Eintrag für heute scheiterte mit einem Serverfehler — behoben.',
         'Ein Gericht entsteht auf einer Seite: Name oben, Mengen tippbar, Einheit direkt in der Zeile.',

@@ -7,8 +7,9 @@ let stores=[], categories=[];
 let zeitraum = null;
 
 async function loadInit() {
+    // Leiste und Platzhalter stehen schon -- gezeichnet von zwei Zeilen im
+    // HTML direkt an ihrer Stelle (siehe index.html).
     const me = await ensureLoggedIn(); if (!me) return;
-    renderSubnav();
     try {
         [stores, categories] = await Promise.all([AUSGABEN_API.stores(), AUSGABEN_API.categories()]);
     } catch(e) { showToast('Laden fehlgeschlagen: ' + e.message, 'error'); return; }
@@ -36,39 +37,8 @@ function populateFilters() {
  * Zahl, wegen der man diese Seite aufmacht; alles andere ist Einordnung. */
 async function loadKpis() {
     const box = document.getElementById('kpiGrid');
-    box.innerHTML = `<div class="kpi-hero"><div class="kpi-hero-main">
-        <div class="lbl">Dieser Monat</div>
-        <span class="skel" style="display:block;width:9rem;height:2.5rem"></span>
-    </div></div>`;
     try {
-        const s = await AUSGABEN_API.statsSummary();
-        const prev = Number(s.prev_month) || 0;
-        const now = Number(s.this_month) || 0;
-        let delta = '';
-        if (prev > 0) {
-            const pct = Math.round((now / prev - 1) * 100);
-            const cls = Math.abs(pct) < 5 ? 'flat' : (pct > 0 ? 'up' : 'down');
-            const sign = pct > 0 ? '+' : '';
-            delta = `<span class="kpi-delta ${cls}">${sign}${pct} %</span>`;
-        }
-        const minis = [
-            { lbl: 'Heute',       val: fmtEur(s.today) },
-            { lbl: 'Diese Woche', val: fmtEur(s.this_week) },
-            { lbl: 'Vormonat',    val: fmtEur(s.prev_month) },
-            { lbl: 'Dieses Jahr', val: fmtEur(s.this_year) },
-            { lbl: `Gesamt · ${s.count} Bons`, val: fmtEur(s.total) },
-        ];
-        box.innerHTML = `
-            <div class="kpi-hero">
-                <div class="kpi-hero-main">
-                    <div class="lbl">Dieser Monat</div>
-                    <div class="val">${fmtEur(s.this_month)}</div>
-                    <div class="sub">${delta} ${prev > 0 ? `gegenüber ${fmtEur(prev)} im Vormonat` : 'kein Vormonat zum Vergleich'}</div>
-                </div>
-            </div>
-            <div class="kpi-mini-row">
-                ${minis.map(m => `<div class="kpi-mini"><div class="lbl">${m.lbl}</div><div class="val">${m.val}</div></div>`).join('')}
-            </div>`;
+        zeichneKpis(await AUSGABEN_API.statsSummary());
     } catch(e) {
         box.innerHTML = `<div class="empty is-error"><span class="empty-mark">⚠️</span>
             <p class="empty-text">Kennzahlen konnten nicht geladen werden.</p></div>`;

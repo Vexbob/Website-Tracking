@@ -314,3 +314,50 @@ function renderSubnav() {
         `<a href="${l.href}"${l.key === active ? ' class="primary"' : ''}>${l.label}</a>`
     ).join('');
 }
+
+/* ---------- Kennzahlenblock der Uebersicht ----------
+ * Er steht hier und nicht in dashboard.js, weil diese Datei im <head> geladen
+ * wird: index.html ruft ihn direkt hinter #kpiGrid auf, bevor der Browser das
+ * erste Mal zeichnet. Aus dashboard.js am Seitenende kam der Platzhalter bei
+ * langsamem Netz zu spaet -- die Seite war dann schon einmal ohne ihn zu
+ * sehen, und die Kacheln darunter sprangen. */
+/* Der Block in genau einer Gestalt -- geladen oder als Platzhalter. Der
+ * Platzhalter ist dieselbe Struktur mit unsichtbarem Text an Stelle der
+ * Zahlen (`.kpi-leer`): so ist er auf den Pixel so hoch wie das Ergebnis,
+ * und nichts darunter bewegt sich, wenn die Zahlen kommen. */
+function zeichneKpis(s) {
+    const box = document.getElementById('kpiGrid');
+    if (!box) return;
+    const wert = (v) => s ? fmtEur(v) : '<span class="skel kpi-leer">0.000,00 €</span>';
+    let delta = '', sub = '<span class="skel kpi-leer">gegenüber 000,00 € im Vormonat</span>';
+    if (s) {
+        const prev = Number(s.prev_month) || 0;
+        const now = Number(s.this_month) || 0;
+        if (prev > 0) {
+            const pct = Math.round((now / prev - 1) * 100);
+            const cls = Math.abs(pct) < 5 ? 'flat' : (pct > 0 ? 'up' : 'down');
+            const sign = pct > 0 ? '+' : '';
+            delta = `<span class="kpi-delta ${cls}">${sign}${pct} %</span>`;
+        }
+        sub = prev > 0 ? `gegenüber ${fmtEur(prev)} im Vormonat` : 'kein Vormonat zum Vergleich';
+    }
+    const minis = [
+        { lbl: 'Heute',       val: s && s.today },
+        { lbl: 'Diese Woche', val: s && s.this_week },
+        { lbl: 'Vormonat',    val: s && s.prev_month },
+        { lbl: 'Dieses Jahr', val: s && s.this_year },
+        { lbl: s ? `Gesamt · ${s.count} Bons` : 'Gesamt', val: s && s.total },
+    ];
+    box.innerHTML = `
+        <div class="kpi-hero">
+            <div class="kpi-hero-main">
+                <div class="lbl">Dieser Monat</div>
+                <div class="val">${wert(s && s.this_month)}</div>
+                <div class="sub">${delta} ${sub}</div>
+            </div>
+        </div>
+        <div class="kpi-mini-row">
+            ${minis.map(m => `<div class="kpi-mini"><div class="lbl">${m.lbl}</div><div class="val">${wert(m.val)}</div></div>`).join('')}
+        </div>`;
+}
+

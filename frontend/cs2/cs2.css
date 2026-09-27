@@ -267,16 +267,22 @@
     .cs-suche { flex-basis: 100%; }
     .cs-nur-schmal { display: flex; gap: 0.5rem; align-items: center; }
 
-    /* ---------- Die Tabelle stapelt sich ----------
-       Waagerecht scrollen ist auf dem Telefon keine Loesung, sondern die
-       Regel, gegen die DESIGN ausdruecklich steht: wer schieben muss, um das
-       Ergebnis zu sehen, liest die Liste nicht. Sechs Spalten passen nicht
-       nebeneinander -- also stehen sie uebereinander, mit ihrer Beschriftung
-       davor. Eine Spalte wegzulassen waere die schlechtere Loesung: das
-       waere eine Angabe, die es nur auf dem grossen Bildschirm gibt.
+    /* ---------- Die Tabelle wird eine Zweizeilen-Liste ----------
+       Waagerecht scrollen ist auf dem Telefon keine Loesung: wer schieben
+       muss, um das Ergebnis zu sehen, liest die Liste nicht. Bis v2.16.0
+       stapelte sich deshalb jede Zeile -- Name, dann zwei beschriftete
+       Felder ueber die volle Breite, dann eine dritte Zeile mit Zeichen,
+       Alter und Stift. Das waren rund 160 px je Position, bei hundert
+       Positionen ein endloser Daumen, und die Felder waren je Zeile
+       verschieden breit, weil sich das Raster an den Zahlen ausrichtete.
 
-       Sortiert wird dann ueber das Auswahlfeld oben, nicht ueber die
-       Kopfzeile -- die gibt es hier nicht mehr. */
+       Jetzt zwei Zeilen in FESTEN Spalten, gleich fuer jede Position:
+         oben   Zeichen · Name mit Plaketten ............ Gesamt
+         unten           Preis €  × Anzahl  Alter        Stift
+       Weggelassen wird nichts; die Beschriftungen „Je Stück“/„Anzahl“
+       ersetzen das €-Zeichen und das ×, die an den Feldern stehen.
+       Sortiert wird ueber das Auswahlfeld oben -- eine Kopfzeile gibt es
+       hier nicht. */
     .cs-tabelle-huelle { overflow-x: visible; margin: 0; padding: 0; }
     .cs-tabelle { min-width: 0; }
     .cs-tabelle thead { display: none; }
@@ -286,47 +292,67 @@
     }
     .cs-tabelle tr {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+        grid-template-columns: 1.25rem 6.75rem 4.75rem minmax(0, 1fr) auto;
         grid-template-areas:
-            "name  name   name"
-            "preis menge  gesamt"
-            "typ   alter  tun";
-        gap: 0.35rem 0.75rem;
+            "typ name  name  name  gesamt"
+            ".   preis menge alter tun";
+        gap: 0.3rem 0.5rem;
         align-items: center;
-        padding: 0.75rem 0;
+        padding: 0.625rem 0;
         border-bottom: 1px solid var(--line);
     }
     .cs-tabelle tr:last-child { border-bottom: 0; }
+    .cs-tabelle tr:hover td { background: none; }
     .cs-tabelle td { padding: 0; border: 0; }
-    .cs-sp-name   { grid-area: name; }
+    /* ``td.`` davor, weil ``.cs-tabelle td { display: block }`` oben sonst
+       gewinnt -- und ohne Flex kommt die Ellipse am Namen nie zum Zug. */
+    .cs-tabelle td.cs-sp-typ { grid-area: typ; display: flex; align-items: center; }
+    .cs-tabelle td.cs-sp-name {
+        grid-area: name;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        min-width: 0;
+        max-width: none;
+        overflow: hidden;
+    }
+    .cs-sp-name .cs-tag { flex: none; }
+    .cs-name { max-width: none; min-width: 0; flex: 0 1 auto; }
+    .cs-gesamt    { grid-area: gesamt; font-weight: 700; color: var(--text-1); white-space: nowrap; }
     .cs-sp-preis  { grid-area: preis; }
     .cs-sp-menge  { grid-area: menge; }
-    .cs-gesamt    { grid-area: gesamt; font-weight: 700; color: var(--text-1); }
-    .cs-sp-typ    { grid-area: typ; }
-    .cs-alter     { grid-area: alter; }
-    .cs-sp-tun    { grid-area: tun; width: auto; }
-    .cs-alter { font-size: 0.75rem; color: var(--text-3); }
-    .cs-sp-typ { display: flex; align-items: center; }
+    .cs-alter     { grid-area: alter; font-size: 0.75rem; color: var(--text-3);
+                    min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .cs-sp-tun    { grid-area: tun; width: auto; text-align: right; }
 
-    /* Ohne Kopfzeile sagt nichts mehr, ob eine Zahl Stueckpreis oder Summe
-       ist. Die Beschriftung kommt aus data-label und steht nur hier. */
-    .cs-sp-preis::before, .cs-sp-menge::before, .cs-gesamt::before {
-        content: attr(data-label);
-        display: block;
-        font-size: 0.625rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+    .cs-sp-preis .cs-feld-huelle, .cs-sp-menge .cs-feld-huelle { justify-content: flex-start; width: 100%; }
+    /* Das × sagt „Stueck“, ohne eine Beschriftung ueber das Feld zu setzen. */
+    .cs-sp-menge .cs-feld-huelle::before {
+        content: "×";
         color: var(--text-4);
+        font-size: 0.8125rem;
+        margin-right: 0.15rem;
     }
-    .cs-sp-preis .cs-feld-huelle, .cs-sp-menge .cs-feld-huelle { justify-content: flex-start; }
-    .cs-name { max-width: 100%; }
 
     /* Auf dem Telefon ist der Rahmen immer da: ohne Ueberfahren gibt es
-       keinen Hinweis, dass die Zahl ein Feld ist. */
-    .cs-feld { border-color: var(--line); min-height: 44px; width: 100%; }
+       keinen Hinweis, dass die Zahl ein Feld ist. 44 px Hoehe (DESIGN 4),
+       die Breite fuellt die feste Spalte -- damit steht jedes Feld unter
+       dem der Zeile darueber. */
+    .cs-feld { border-color: var(--line); min-height: 44px; width: 100%; min-width: 0; }
     .cs-stift { width: 2.75rem; height: 2.75rem; }
     .cs-richtung { min-height: 44px; }
+
+    /* Die Sortierung bekommt eine eigene Zeile und fuellt sie -- vorher hing
+       sie rechts eingerueckt unter den Filtern. */
+    .cs-nur-schmal { flex-basis: 100%; }
+    .cs-nur-schmal .v-select { flex: 1; min-width: 0; margin: 0; }
+}
+
+/* Am Telefon steht der Modulname schon in der Leiste oben -- ein zweites Mal
+   als Ueberschrift kostet siebzig Pixel der ersten Ansicht (wie in den
+   Naehrwerten). */
+@media (max-width: 720px) {
+    .page-head { display: none; }
 }
 
 /* ---------- Übernahme aus einer Datei ---------- */

@@ -132,3 +132,8 @@ body{visibility:hidden}body.ready{visibility:visible}
 }
 .nq-drag-overlay.show{opacity:1}
 
+
+/* v2.17.0: Platzhalter im Kennzahlenblock. Der Text darin ist unsichtbar,
+   traegt aber Schrift und Zeilenhoehe des echten Werts -- deshalb ist der
+   Block schon vor den Zahlen genau so hoch wie danach. */
+.kpi-leer{display:inline-block;color:transparent;user-select:none}
