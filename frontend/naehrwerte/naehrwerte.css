@@ -237,7 +237,9 @@
     background: var(--surface);
     border-top: 1px solid var(--line);
 }
-.ern-dlg-fuss .ern-note { margin: 0; flex: 1 1 140px; min-width: 0; }
+/* Die Notiz nimmt, was die Knoepfe uebrig lassen, und bricht in sich um --
+   mit fester Grundbreite schob sie „Fertig“ bei 390 px in eine eigene Zeile. */
+.ern-dlg-fuss .ern-note { margin: 0; flex: 1 1 0; min-width: 0; }
 .ern-dlg-fuss .v-btn { width: auto; margin: 0; flex: none; }
 
 /* Der Fuss steht unten am Kasten, nicht unter der Liste. Auf dem Handy ist
@@ -261,6 +263,7 @@
 .modal-box--voll .ern-dlg-fuss,
 .modal-box--voll .nw-g-fuss { margin-top: auto; }
 .ern-dlg-fuss .v-btn { margin-left: auto; }
+.ern-dlg-fuss .v-btn + .v-btn { margin-left: 0; }
 
 .ern-w {
     display: flex;
@@ -411,21 +414,57 @@
 .v-select--sm { padding: 0.4rem 1.5rem 0.4rem 0.6rem; font-size: var(--nw-eingabe); }
 
 /* ---------- Gericht anlegen ----------
-   Zwei Schritte in einem Blatt. Das Suchfeld klebt OBEN und sucht ueber
-   Bestand und Katalog zugleich -- damit faellt der Reiterwechsel weg, der
-   den alten Ablauf auf dem Handy unbrauchbar gemacht hat. Unten laeuft die
-   Summe mit: man sieht das Rezept entstehen, und das ist der Teil, der
-   Freude macht. */
-.nw-g-name { font-size: var(--nw-eingabe); font-weight: 600; }
-.nw-g-foto {
+   Ein Blatt (v2.16.0): oben Foto-Kachel und Name, darunter die Zutaten in
+   derselben Zeile wie im Eintragen-Dialog (`.ern-w` + `.ern-menge`), dann
+   das Suchfeld ueber Bestand und Katalog. Unten laeuft die Summe mit: man
+   sieht das Rezept entstehen, und das ist der Teil, der Freude macht. */
+.nw-g-kopf {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 0.75rem;
-    flex-wrap: wrap;
-    margin-top: var(--space-3);
 }
-.nw-g-foto .v-bild { width: 140px; }
-.nw-g-foto .ern-tasten { margin: 0; }
+.nw-g-namefeld { flex: 1; min-width: 0; margin: 0; }
+.nw-g-name { font-weight: 600; }
+.nw-g-foto {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+.nw-g-foto-knopf {
+    display: block;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+.nw-g-foto-knopf .v-bild-leer { color: var(--text-3); }
+.nw-g-foto-knopf:hover .v-bild-leer { color: var(--text-1); border-color: var(--line-strong); }
+.nw-g-foto-knopf:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.nw-g-foto-weg {
+    width: auto;
+    margin: 0;
+    padding: 0.125rem 0.25rem;
+    background: none;
+    border: 0;
+    color: var(--text-3);
+    font-size: 0.75rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+.nw-g-foto-weg:hover { color: var(--text-1); }
+.nw-g-abschnitt {
+    margin: var(--space-4) 0 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
 
 .nw-g-suche {
     position: sticky;
@@ -438,41 +477,10 @@
     box-shadow: 0 6px 12px -8px rgba(0,0,0,0.5);
 }
 
-.nw-g-zutat {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0;
-    border-bottom: 1px solid var(--line);
-}
-.nw-g-zutat:last-child { border-bottom: 0; }
-.nw-g-zutat-name {
-    flex: 1;
-    min-width: 0;
-    font-size: 0.9375rem;
-    font-weight: 600;
-    color: var(--text-1);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.nw-g-einheit {
-    flex: none;
-    width: auto;
-    min-width: 34px;
-    height: 34px;
-    margin: 0;
-    padding: 0 0.5rem;
-    background: transparent;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    color: var(--text-3);
-    font-size: 0.8125rem;
-    font-family: inherit;
-    cursor: pointer;
-}
-.nw-g-einheit:hover { opacity: 1; color: var(--text-1); border-color: var(--line-strong); }
-.nw-g-einheit:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Eine Zutat ist eine `.ern-w`-Zeile; die Mengenzeile traegt statt der
+   Zusage den Entfernen-Knopf. */
+.nw-g-zutat .ern-menge { grid-template-columns: 4.5rem minmax(0, 1fr) auto; }
+.nw-g-zutat .ern-menge-fest { padding-left: 0.25rem; }
 
 .nw-g-treffer {
     display: flex;
@@ -538,6 +546,14 @@
 .nw-g-summe strong { color: var(--text-1); }
 .nw-g-gramm { margin-left: 0.4rem; color: var(--text-4); }
 .nw-g-fuss .v-btn { width: auto; margin: 0; flex: none; }
+/* Die Zusage steht rechts -- dort, wo der Daumen sie in jedem anderen Dialog
+   dieses Moduls auch findet. Am Handy hat die Summe eine eigene Zeile:
+   neben zwei Knoepfen brach sie sonst mitten in „Eiweiß“ um, und die Zusage
+   rutschte allein nach links unten. */
+.nw-g-fuss .v-btn--primary { margin-left: auto; }
+@media (max-width: 720px) {
+    .nw-g-summe { flex-basis: 100%; }
+}
 
 /* ---------- Ziele ---------- */
 .ern-ziele {
@@ -733,7 +749,6 @@
    44-px-Papierkorb neben einer 15-px-Zeile ein Klotz. */
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
     .nw-stepper button { width: 40px; height: 40px; }
-    .nw-g-einheit { min-width: 44px; height: 44px; }
     .rec-row .v-btn--icon { width: 44px; height: 44px; }
 }
 

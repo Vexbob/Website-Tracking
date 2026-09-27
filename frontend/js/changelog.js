@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.16.0', date: '2026-09-27', title: 'Einträge für heute gehen wieder, Gerichte in einem Blatt', notes: [
+        'Nährwerte und Essenstagebuch: jeder Eintrag für heute scheiterte mit einem Serverfehler — behoben.',
+        'Ein Gericht entsteht auf einer Seite: Name oben, Mengen tippbar, Einheit direkt in der Zeile.',
+        'Im Eintragen-Fenster legt „Neues Gericht“ eines an, ohne das Fenster zu verlassen.',
+        'Wochenziele: ab x von y Check-ins gibt es zum Wochenende einstellbar einen Teil der Belohnung.',
+    ]},
     { v: 'v2.15.0', date: '2026-09-23', title: 'CS2: die Zeile sagt auf einen Blick, was sie ist', notes: [
         'Die Art des Gegenstands steht als Zeichen statt als Wort — zwölf davon, von der Kiste bis zur Stickerkapsel.',
         'Abnutzung und StatTrak tragen größere Plaketten: zwischen FN und BS liegt beim Preis der Faktor drei.',

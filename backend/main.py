@@ -1275,6 +1275,104 @@ async def del_achievement_log(request: Request, log_id: int, db=Depends(get_db),
 # ---------- Progress Goals ----------
 # ``_streak`` lebt in ``helpers.py`` (ausgelagert v1.15.1)
 
+# v2.16.0: Die Teilbelohnung. Wer das Ziel knapp verfehlt, bekommt am Ende der
+# Periode einen Teil der Belohnung -- einstellbar als „ab x Check-ins, p %“.
+# Sie haengt als eigene Buchung an derselben Quelle, unter ``<periode>-teil``.
+# Die Hauptbelohnung steht unter ``<periode>`` und wird von Rueckgaengig und
+# Loeschen ueber genau diesen Schluessel entfernt -- ein eigener Schluessel
+# haelt beide auseinander.
+#
+# Abgerechnet wird NACH der Periode, nicht waehrenddessen: am Mittwoch bei
+# 4/7 weiss noch niemand, ob es am Sonntag 7/7 werden. Einen Zeitgeber gibt
+# es dafuer nicht -- ``_teil_nachholen`` rechnet beim naechsten Aufruf der
+# Liste ab, was seit dem letzten Mal zu Ende gegangen ist.
+def _teil_pk(pk: str) -> str:
+    return f"{pk}-teil"
+
+
+def _teil_regel(pg):
+    """(ab wie vielen Check-ins, Betrag, gilt ab Periode) -- oder None.
+
+    Sie gilt nur VOR dem Ziel: eine Schwelle auf oder hinter der Ziel-Anzahl
+    waere eine zweite Hauptbelohnung.
+    """
+    n = int(pg["partial_count"] or 0)
+    prozent = float(pg["partial_percent"] or 0)
+    ziel = int(pg["target_count"])
+    betrag = round(float(pg["reward_amount"] or 0) * prozent / 100, 2)
+    if n <= 0 or n >= ziel or betrag <= 0 or not pg["partial_since"]:
+        return None
+    rhythm = pg["rhythm_type"] or "weekly"
+    return n, betrag, period_key(rhythm, pg["partial_since"])
+
+
+def _teil_pruefen(anzahl: int, prozent: float, ziel: int):
+    if anzahl < 0 or prozent < 0 or prozent > 100:
+        raise HTTPException(400, "Teilbelohnung: Anzahl >= 0, Anteil von 0 bis 100 %")
+    if anzahl > 0 and anzahl >= ziel:
+        raise HTTPException(
+            400, "Die Teilbelohnung muss vor dem Ziel liegen "
+                 f"(weniger als {ziel} Check-ins)")
+
+
+async def _teil_abrechnen(db, user_id: int, pg, pk: str, cnt: int) -> None:
+    """Bringt die Teilbelohnung EINER Periode in Ordnung.
+
+    Steht ihr eine zu (Periode vorbei, Schwelle erreicht, Ziel verfehlt), wird
+    sie gebucht; sonst wird eine vorhandene entfernt -- etwa wenn ein
+    nachgetragener Check-in die Woche doch noch voll gemacht hat und die
+    ganze Belohnung an ihre Stelle tritt.
+    """
+    regel = _teil_regel(pg)
+    rhythm = pg["rhythm_type"] or "weekly"
+    vorbei = pk != period_key(rhythm, date.today())
+    zusteht = (regel is not None and vorbei and pk >= regel[2]
+               and regel[0] <= cnt < int(pg["target_count"]))
+    tpk = _teil_pk(pk)
+    if not zusteht:
+        await db.execute(
+            "DELETE FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
+            user_id, pg["id"], tpk)
+        return
+    schon = await db.fetchval(
+        "SELECT COUNT(*) FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
+        user_id, pg["id"], tpk)
+    if schon:
+        return
+    _, betrag, _ = regel
+    prozent = float(pg["partial_percent"])
+    sg_id = await _reward_goal_for(db, user_id, pg["reward_goal_id"], betrag)
+    await db.execute(
+        "INSERT INTO savings_transactions "
+        "(user_id,amount,source_type,source_id,description,period_key,savings_goal_id) "
+        "VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        user_id, betrag, "progress", pg["id"],
+        f"Teilbelohnung {fmt_de_num(prozent)} % · {cnt}/{int(pg['target_count'])}: "
+        f"{pg['title']} ({pk})", tpk, sg_id)
+
+
+async def _teil_nachholen(db, user_id: int, pg) -> None:
+    """Rechnet jede abgelaufene Periode ab, der eine Teilbelohnung zusteht
+    und die noch keine hat -- auch wenn die Seite wochenlang zu war."""
+    regel = _teil_regel(pg)
+    if regel is None:
+        return
+    n, _, ab = regel
+    rhythm = pg["rhythm_type"] or "weekly"
+    col = "month_key" if rhythm == "monthly" else "week_key"
+    jetzt = period_key(rhythm, date.today())
+    offen = await db.fetch(
+        f"SELECT l.{col} AS pk, COUNT(*) AS c FROM progress_logs l "
+        f" WHERE l.progress_goal_id=$1 AND l.user_id=$2 AND l.{col} >= $3 AND l.{col} <> $4 "
+        f"   AND NOT EXISTS (SELECT 1 FROM savings_transactions st "
+        f"                    WHERE st.user_id=$2 AND st.source_type='progress' "
+        f"                      AND st.source_id=$1 AND st.period_key = l.{col} || '-teil') "
+        f" GROUP BY l.{col} HAVING COUNT(*) >= $5 AND COUNT(*) < $6",
+        pg["id"], user_id, ab, jetzt, n, int(pg["target_count"]))
+    for r in offen:
+        await _teil_abrechnen(db, user_id, pg, r["pk"], int(r["c"]))
+
+
 @app.get("/api/progress-goals")
 async def list_pg(db=Depends(get_db), user=Depends(get_current_user)):
     goals = await db.fetch(
@@ -1282,6 +1380,7 @@ async def list_pg(db=Depends(get_db), user=Depends(get_current_user)):
         user["id"])
     out = []
     for g in goals:
+        await _teil_nachholen(db, user["id"], g)
         rhythm = g["rhythm_type"] or "weekly"
         pk = period_key(rhythm, date.today())
         col = "month_key" if rhythm == "monthly" else "week_key"
@@ -1305,6 +1404,7 @@ async def create_pg(request: Request, b: PGCreate, db=Depends(get_db), user=Depe
         raise HTTPException(400, "target_count muss > 0 sein")
     if b.streak_bonus_threshold < 0 or b.streak_bonus_amount < 0:
         raise HTTPException(400, "Streak-Bonus-Werte müssen >= 0 sein")
+    _teil_pruefen(b.partial_count, b.partial_percent, b.target_count)
     rgid = None
     if b.reward_goal_id is not None:
         ok = await db.fetchval(
@@ -1314,17 +1414,25 @@ async def create_pg(request: Request, b: PGCreate, db=Depends(get_db), user=Depe
             raise HTTPException(400, "reward_goal_id gehört nicht zum User")
         rgid = b.reward_goal_id
     return ser(await db.fetchrow(
-        "INSERT INTO progress_goals (user_id,title,reward_amount,rhythm_type,target_count,streak_bonus_amount,streak_bonus_threshold,reward_goal_id) "
-        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
+        "INSERT INTO progress_goals (user_id,title,reward_amount,rhythm_type,target_count,streak_bonus_amount,streak_bonus_threshold,reward_goal_id,partial_count,partial_percent,partial_since) "
+        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *",
         user["id"], b.title, b.reward_amount, b.rhythm_type, b.target_count,
-        b.streak_bonus_amount, b.streak_bonus_threshold, rgid))
+        b.streak_bonus_amount, b.streak_bonus_threshold, rgid,
+        b.partial_count, b.partial_percent,
+        date.today() if b.partial_count > 0 and b.partial_percent > 0 else None))
 
 @app.put("/api/progress-goals/{gid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def upd_pg(request: Request, gid: int, b: PGUpd, db=Depends(get_db), user=Depends(get_current_user)):
-    owned = await db.fetchval("SELECT 1 FROM progress_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+    owned = await db.fetchrow("SELECT * FROM progress_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
     if not owned:
         raise HTTPException(404, "Not found")
+    # Geprueft wird, was NACH dem Speichern gilt: wer Ziel-Anzahl und
+    # Teilbelohnung zugleich aendert, darf nicht am alten Ziel scheitern.
+    teil_n = b.partial_count if b.partial_count is not None else int(owned["partial_count"] or 0)
+    teil_p = b.partial_percent if b.partial_percent is not None else float(owned["partial_percent"] or 0)
+    _teil_pruefen(teil_n, teil_p,
+                  b.target_count if b.target_count is not None else int(owned["target_count"]))
     if b.title is not None:
         await db.execute("UPDATE progress_goals SET title=$1 WHERE id=$2", b.title, gid)
     if b.reward_amount is not None:
@@ -1345,6 +1453,18 @@ async def upd_pg(request: Request, gid: int, b: PGUpd, db=Depends(get_db), user=
         if b.streak_bonus_threshold < 0:
             raise HTTPException(400, "streak_bonus_threshold muss >= 0 sein")
         await db.execute("UPDATE progress_goals SET streak_bonus_threshold=$1 WHERE id=$2", b.streak_bonus_threshold, gid)
+    if b.partial_count is not None or b.partial_percent is not None:
+        # Die Regel gilt ab dem Tag, an dem sie eingeschaltet wird -- sonst
+        # zahlte das Einschalten jede alte Woche nach, die die Schwelle
+        # erreicht hatte. Wer nur Schwelle oder Anteil nachstellt, verschiebt
+        # den Beginn nicht.
+        war_an = (bool(owned["partial_since"]) and int(owned["partial_count"] or 0) > 0
+                  and float(owned["partial_percent"] or 0) > 0)
+        ist_an = teil_n > 0 and teil_p > 0
+        seit = (owned["partial_since"] if war_an else date.today()) if ist_an else None
+        await db.execute(
+            "UPDATE progress_goals SET partial_count=$1, partial_percent=$2, partial_since=$3 WHERE id=$4",
+            teil_n, teil_p, seit, gid)
     # v1.18.2: reward_goal_id via null-Setz-Semantik behandeln
     if "reward_goal_id" in b.model_fields_set:
         if b.reward_goal_id is None:
@@ -1460,6 +1580,9 @@ async def checkin(request: Request, gid: int, body: Optional[CheckinBody] = None
                         user["id"], bonus_amount, "progress", gid,
                         f"Streak-Bonus {streak}×: {pg['title']}", bonus_pk, bonus_sg_id)
                     bonus_paid = True
+    # Ein nachgetragener Check-in kann eine vergangene Woche ueber die
+    # Schwelle heben -- oder ueber das Ziel, dann weicht die Teilbelohnung.
+    await _teil_abrechnen(db, user["id"], pg, pk, cnt)
     return {"current_count": cnt, "target_count": tgt, "fulfilled": fulfilled,
             "period_key": pk, "paid_out": paid, "streak_bonus_paid": bonus_paid, "streak": streak}
 
@@ -1562,6 +1685,7 @@ async def del_progress_log(request: Request, log_id: int, db=Depends(get_db), us
             "DELETE FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
             user["id"], pg["id"], pk)
         payout_removed = r != "DELETE 0"
+    await _teil_abrechnen(db, user["id"], pg, pk, cnt)
     return {"status": "deleted", "period_still_fulfilled": cnt >= tgt, "payout_removed": payout_removed}
 
 @app.get("/api/progress-goals/{gid}/history")
@@ -1600,9 +1724,13 @@ async def pg_history(gid: int, limit: int = 12, db=Depends(get_db), user=Depends
         paid = int(await db.fetchval(
             "SELECT COUNT(*) FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
             user["id"], gid, pk))
+        teil = await db.fetchval(
+            "SELECT amount FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
+            user["id"], gid, _teil_pk(pk))
         periods.append({"period_key": pk, "start": start.isoformat(), "end": end.isoformat(),
             "current_count": cnt, "target_count": target, "fulfilled": cnt >= target,
             "paid_out": paid > 0, "is_current": pk == period_key(rhythm, today),
+            "partial_paid": float(teil) if teil is not None else None,
             "log_dates": [l["log_date"].isoformat() for l in logs]})
         cur = prev_period(rhythm, cur)
     return periods
@@ -1851,7 +1979,8 @@ async def _aktivitaets_ereignisse(db, user_id: int) -> list:
     sb_rows = await db.fetch(
         """SELECT st.id, st.amount, st.description, st.created_at, st.source_id, st.period_key, st.note, pg.title
            FROM savings_transactions st LEFT JOIN progress_goals pg ON pg.id = st.source_id
-           WHERE st.user_id=$1 AND st.source_type='progress' AND st.period_key LIKE '%%-streak-%%'
+           WHERE st.user_id=$1 AND st.source_type='progress'
+             AND (st.period_key LIKE '%%-streak-%%' OR st.period_key LIKE '%%-teil')
            ORDER BY st.created_at DESC""",
         user_id)
     for r in sb_rows:

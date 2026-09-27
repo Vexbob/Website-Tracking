@@ -221,7 +221,7 @@ async def eintragen(request: Request, daten: EintragEingabe,
         "VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
         user["id"], tag, name, stufe, mahlzeit,
         (daten.note or "").strip() or None,
-        f"{zeit[0]:02d}:{zeit[1]:02d}" if zeit else None, geraten)
+        mz.uhrzeit_fuer_spalte(zeit), geraten)
     return await _tag(db, user["id"], tag)
 
 

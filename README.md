@@ -1,292 +1,61 @@
 # Vexbob
 
-**Persönliche Web-App mit Sparziel-Tracker, Ausgaben, Notizen, Gesundheit, Ernährung, Musik, Schach & Blog — selfhosted, PWA-fähig, Multi-User mit Admin-Bereich.**
+Persönliche Web-App — Sparziele, Ausgaben, Notizen, Gesundheit, Ernährung, Musik, Schach, CS2 und ein öffentlicher Blog. Selbst gehostet, PWA, mehrere Konten mit Admin-Bereich.
 
----
+## Module
 
-## ✨ Module
-
-### 💰 Sparziel-Tracker
-Führt Buch über echtes Gespartes statt über gute Vorsätze: jedes Ziel hat einen eigenen Kontostand, und jede Bewegung darauf bleibt als Transaktion nachvollziehbar.
-
-- **Mehrere parallele Sparziele** — jedes Ziel mit eigenem Zielbetrag, Kontostand und Verlauf. Höchstens eines ist aktiv und nimmt neue Einzahlungen auf, die übrigen laufen unangetastet weiter — so lassen sich mehrere Anschaffungen nebeneinander planen, ohne die Beträge im Kopf trennen zu müssen. Kein aktives Ziel zu haben ist ausdrücklich erlaubt: dann sammelt der Puffer.
-- **Achievements** — selbst definierte Meilensteine, die an eine Kennzahl gekoppelt sind (Startwert, Schrittweite, Richtung steigend oder fallend). Jeder erreichte Schritt schüttet eine Belohnung aufs Sparziel aus und macht damit Fortschritt in einem anderen Lebensbereich finanziell sichtbar.
-- **Meilensteine aus anderen Modulen** — eine Kachel kann ihren Stand statt von Hand aus einem anderen Tracker holen: Gewicht oder ein anderer Vitalwert aus der Gesundheit (letzter Messwert oder Mittel über 3 bis 30 Tage), die Wertung eines Schachkontos, dazu Trainings, Partien, Ausgaben, Hörzeit und getrackte Tage. Die Quelle liest dabei nur — erreicht der Wert einen Meilenstein, zeigt die Kachel das mit dem fälligen Betrag an, und gebucht wird erst auf Bestätigung. Eine Schwelle zahlt nur einmal: wer wieder zunimmt und dieselbe Marke erneut unterschreitet, bekommt kein zweites Geld.
-- **Wochen- & Monatsziele** — wiederkehrende Vorhaben mit Check-in pro Periode, Streak-Bonus für ununterbrochene Serien und Historie. Ein versehentlicher Check-in lässt sich per Check-out zurücknehmen.
-- **Wunschliste & Ideen-Sammlung** — zwei Vorstufen-Listen für alles, was noch kein aktives Sparziel verdient: konkrete Anschaffungen mit Preis (per Klick in ein Sparziel übernehmbar) und lose Ideen, optional als Meilenstein- oder Wochenziel-Idee markiert. Hält die Zielliste sauber, ohne dass Einfälle verloren gehen.
-- **„Allgemein“-Konto als Puffer** — läuft ein Sparziel voll oder ist gerade keines aktiv, landen Belohnungen automatisch hier statt verloren zu gehen. Von dort lassen sie sich gezielt auf ein Ziel übertragen.
-- **Aktivitäts-Log & 365-Tage-Heatmap** — jede Einzahlung, jeder Check-in, jeder Meilenstein und jede Wertänderung an einem Achievement (auch die, die noch keinen Meilenstein auslöst) mit Datum und optionaler Notiz; die Heatmap zeigt auf einen Blick, wie durchgehend das letzte Jahr bespielt war.
-- **Trophäenwand** — ein abgeschlossenes Sparziel wandert mit Zielbetrag, Endstand und Laufzeit als Trophäe in eine eigene Ansicht und verlässt dabei die Zielliste. Es bleibt kein leergeräumtes Ziel und kein Platzhalter zurück; bis ein neues Ziel aktiv ist, spart der Puffer weiter.
-- **Export & Backup** — Transaktionen als CSV inkl. Kontostand je Sparziel und einer Kennzeichnung des Puffers, dazu ein vollständiges JSON-Backup mit Restore. Tägliche Snapshots laufen automatisch mit und sind pro Nutzer isoliert.
-
-### 📝 Notizen
-Schnelle Notiz-Ablage im Apple-Notes-Stil (Master-Detail): links die Liste, rechts der Editor, ohne Speichern-Knopf.
-
-- **WYSIWYG-Editor** — `contenteditable` mit HTML als Speicherformat, dazu Markdown-Shortcuts beim Tippen. Formatieren, ohne die Hände von der Tastatur zu nehmen.
-- **Task-Checkboxen** — abhakbare Punkte direkt im Fließtext, damit eine Notiz auch als kleine To-do-Liste taugt.
-- **Farblabels, Pin & Archiv** — Farben zum groben Sortieren, Pin für Dauerbrenner ganz oben, Archiv für Erledigtes, das man nicht löschen will.
-- **Auto-Save & Live-Suche** — Änderungen werden im Hintergrund gespeichert, die Suche filtert die Liste während des Tippens über alle Notizen.
-
-### 💶 Ausgaben-Tracker
-Erfasst Einkäufe bis auf die einzelne Position und beantwortet damit die Frage, wofür das Geld tatsächlich draufgeht.
-
-- **Kassenbon-Scan (OCR)** — Foto des Bons an Google Cloud Vision, das Ergebnis ist vor dem Speichern vollständig editierbar. Erspart das Abtippen, ohne blind zu übernehmen, was die Erkennung liefert.
-- **Optionaler KI-Parser** — Gemini zerlegt den OCR-Text in saubere Positionen inkl. Markenzuordnung, wenn eine Marke auf dem Bon steht, und entscheidet auch den Beleg-Typ; passt keiner der fünf eingebauten (Kassenbon, Online-Bestellung, Restaurant, Abo, Sonstiges), vergibt er einen eigenen wie "Arztrechnung", der danach überall zur Auswahl steht. Fehlt der API-Key oder scheitert der Aufruf, greift transparent der Regex-Parser.
-- **Positionen ohne Einheiten-Kram** — eine Position ist Name, Preis und Kategorie; die Menge ist eine reine Stückzahl und steht nur da, wenn ein Artikel mehrfach gekauft wurde. Gewicht und Packungsgröße bleiben im Bon-Text stehen, die Zahlungsart wird gar nicht erst erfasst.
-- **Schnelleingabe** — Bon ohne Positionen, nur Laden, Datum und Summe. Für den Fall, dass der Beleg nicht mehr da ist oder sich der Aufwand nicht lohnt.
-- **Läden & Kategorien mit Auto-Regeln** — Regeln ordnen wiederkehrende Artikel automatisch einer Kategorie zu, damit die Auswertung nicht an unsortierten Positionen scheitert.
-- **Produkte** — eigene Seite für die Produktliste. Die Marken-Seite () existiert weiterhin, steht aber seit v1.54.0 nicht mehr in der Navigation: auf Kassenbons steht selten eine Marke, entsprechend leer war sie.
-- **Produkte** — was wurde wie oft gekauft, was hat es zusammen gekostet und in welchen Läden. Ein Produkt ist eine Zeile, unabhängig vom Laden; Schreibvarianten desselben Artikels ("Gouda", "Gouda jung") schlägt die Seite zum Zusammenführen vor — vor dem Zusammenführen lassen sich der Name ändern und einzelne Schreibweisen abwählen. Einen normierten Preisvergleich (€/kg, günstigster Laden) gibt es bewusst nicht mehr — er hat €/Stück- und €/kg-Werte vermischt, sobald die Mengeneinheit auf dem Bon fehlte.
-- **Statistikseite** — Zeitraumfilter, KPI-Kacheln, Trend-Chart, Auswertung nach Kategorie und Laden, Läden-Vergleich.
-- **Duplikat-Erkennung** — eigener Tab mit Vorschlägen für doppelt erfasste Bons; jeder Vorschlag lässt sich zusammenführen oder dauerhaft ausblenden, ohne Bons zu löschen.
-- **Wiederkehrende Ausgaben** — Bons als wiederkehrend markieren, damit Fixkosten in der Auswertung als solche erkennbar bleiben.
-- **Export** — Ausgaben als CSV oder JSON, wahlweise gefiltert.
-
-### 🏋️ Gesundheit
-Sync-Ziel für die iPhone-App **Auto Health Export** — die App schiebt die Apple-Health-Daten hierher, die Auswertung passiert in Vexbob.
-
-- **Eigener API-Key pro Nutzer** — getrennt vom Login, jederzeit widerrufbar. Der Klartext ist nur bei der Erzeugung sichtbar, gespeichert wird ein Hash; ein abhandengekommener Sync-Key gibt damit keinen Zugang zum Account.
-- **Idempotenter Import** (`POST /api/health/import`) — nimmt JSON, CSV und Multipart in allen Varianten entgegen, die die App je nach Version schickt. Wiederholte Syncs desselben Zeitraums aktualisieren bestehende Werte, statt Dubletten anzulegen.
-- **Import-Protokoll** — jeder Sync wird mit seinem Roh-Payload gespeichert und ist herunterladbar. Damit lässt sich bei einem auffälligen Wert unterscheiden, ob die App ihn schon so geliefert oder Vexbob ihn falsch verarbeitet hat.
-- **Optionaler AI-Fallback** — unbekannte Metriknamen aus neuen App-Versionen werden per Gemini einem bekannten Typ zugeordnet, statt still im Import verloren zu gehen.
-- **Manueller Nachimport** — CSV-Mehrfachauswahl oder JSON-Datei per Drag & Drop, für einen einmaligen Backfill vergangener Monate ohne eingerichtete Automation. Tages-CSV, Schlafanalyse-CSV und Workouts-CSV werden am Header auseinandergehalten, alle übrigen Dateien des Export-Ordners ignoriert — der ganze Ordner darf also auf einmal rein.
-- **Dashboard** — Kacheln für heute und die letzten 7 Tage, Aktivitätsverlauf (Schritte oder Kalorien), letzte Nacht, Blutdruck und Herz-Übersicht.
-- **Einheitliche Zeiträume** — 7 Tage, 30 Tage, 90 Tage, 1 Jahr und Gesamt, in jedem Tab dieselben Chips.
-- **Vitalwerte-Verlauf** — per Drag & Drop anordenbar (Reihenfolge liegt am Konto, nicht am Gerät); jede Metrik (Schritte, Energie, Puls, Ruhepuls, HRV, Gewicht, VO2max, Blutsauerstoff, Geh-/Laufstrecke, Gehgeschwindigkeit, Schwimmdistanz, …) mit eigenem Diagramm nebeneinander, jeweils mit gleitender Ø-Linie und Kennzahl des Zeitraums. Messlücken (Werte unter 20 % des Medians, etwa durch den angebrochenen heutigen Tag oder eine nicht getragene Uhr) fließen nicht in Ø, Min und Max ein und werden unter dem Diagramm ausgewiesen.
-- **Schlaf** — ein Diagramm auf einer Uhrzeit-Achse: je Nacht ein Balken vom Zubettgehen bis zum Aufstehen, darin die Phasen mit ihrer echten Dauer (nichts auf eine Grundlinie normiert). Regelmäßigkeit und Zusammensetzung stehen damit im selben Bild. Die Achse zeigt immer genau 24 Stunden; eine Nacht, die darüber hinausreicht, endet mit einem grünen Strich an der Unterkante. Darunter die typische Zubettgeh- und Aufstehzeit mit ihrer Streuung in Stunden. Nächte ohne Zeitstempel bleiben aus dem Diagramm draußen, zählen aber in die Ø-Werte — die Notiz über dem Diagramm nennt beide Arten von Lücken. Die Position einer Phase im Balken ist eine feste Reihenfolge, keine Messung — die Quelle liefert je Nacht nur Summen, kein Hypnogramm. Nächte unter einer Stunde Schlaf gelten als Messlücke und bleiben aus Kacheln und Diagrammen draußen.
-- **Workouts** — Historie mit Typ-Filter und Detailansicht inkl. sportartspezifischer Zusatzmetriken und Pulsverlauf je Minute. Auto Health Export liefert dasselbe Training je nach Einstellung in zwei Ausprägungen mit je eigener ID: die eine bringt Puls, Minutenreihe und Bahnlänge, die andere Schwimmzüge, Kadenz, Schritte und Höhenmeter. Zugeordnet wird deshalb über Startzeit und Typ statt über die ID — beide Exporte füllen dasselbe Workout und ergänzen jeweils die Lücken des anderen. Distanz und Tempo werden dabei auf eine Einheit gebracht; dieselbe Bahn kommt je nach Variante als 1,825 km oder als 1825 m an.
-- **Gezieltes Löschen** — wahlweise nach Kategorie und Zeitraum, damit ein fehlerhafter Import korrigierbar bleibt, ohne alles wegzuwerfen. Herausholen lässt sich alles über den Gesamt-Export.
-
-### 🍽️ Essenstagebuch
-Hinschreiben, was es gab — mehr nicht. Null Einrichtung, ein Tipp je Eintrag.
-
-- **Eine Seite, eine Aufgabe** — Datum, Mahlzeiten, fertig. Kein Diagramm, keine Einstellungen, kein Bestand. Wer Mengen und Nährwerte will, ist im Nährwerte-Modul; die beiden schreiben in getrennte Tabellen, und im Tagebuch gibt es **keine Spalte, in die eine Menge passt**.
-- **Schnellwahl** — die sechs häufigsten Namen als Knopf. Ein Tipp trägt ein, als *normal*, in die Mahlzeit, die zur Uhrzeit passt. Was du tippst, steht ab dem zweiten Mal selbst dort.
-- **Zwei Stufen, mehr nicht** — *normal* oder *übermäßig*. Eine falsch geratene Stufe schaltet ein Tipp auf die Zeile um; für Name, Mahlzeit und Notiz öffnet ein Tipp auf den Namen den Eintrag.
-- **Mahlzeit nach Uhrzeit, aber nie heimlich** — die Ortszeit kommt vom Browser, entschieden wird im Server, und im Eintragen-Fenster steht *jetzt* am vorgeschlagenen Chip. An vergangenen Tagen wird gar nicht erst geraten.
-
-### 📊 Nährwerte
-Der ausführliche Teil: Mengen, Kalorien, Makros und eigene Tagesziele.
-
-- **Halbkreis und Ringe** — ein großer Ring für die Kalorien, drei kleine für Eiweiß, Kohlenhydrate und Fett. Über dem Ziel legt sich ein zweiter Bogen in Gelb darüber: *mehr* ist eine Auskunft, kein Urteil.
-- **Mengen statt Stufen** — ein Lebensmittel in Gramm oder einer eigenen Größe („2 × Scheibe“), ein Gericht in Portionen (0,5 / 1 / 1,5). Umgerechnet wird beim Speichern, nie beim Anzeigen — sonst ändert eine korrigierte Scheibengröße einen vergangenen Tag.
-- **Eine Lücke ist keine Null** — fehlt einer Zutat eine Angabe, ist die Tagessumme *unvollständig* und nicht niedriger. Der Ring zeigt das als gestrichelte Spur, die Zahl bekommt ein „mind.“.
-- **Eigene Tagesziele, freiwillig und einzeln** — wer nur auf Eiweiß achtet, muss keine fünf Zahlen erfinden. Wo keines steht, gilt der allgemeine Richtwert, und die Seite sagt, dass er es ist.
-- **Strichcode, Katalog, eigener Bestand** — gesucht wird in dieser Reihenfolge: eigener Bestand, eigener Open-Food-Facts-Abzug, dann der Dienst live. Woher eine Zahl kam, steht auf dem Bildschirm.
-- **Gerichte mit Foto** — ein Rezept anlegen ist auf dem Handy ein Blatt über das ganze Bild: Name, Foto, dann die Zutaten. Das Suchfeld klebt oben und sucht über Bestand **und** Katalog; unten läuft die Summe mit.
-- **Die Brücke** — schaltest du die Nährwerte ein, schlägt das Modul vor, was du im Tagebuch oft notiert hast. Es liest dabei nur: ein Tagebuch-Eintrag wird nicht nachträglich zu einer Menge.
-
-### 🎯 CS2-Bestand
-Führt Buch über die eigenen CS2-Gegenstände und darüber, was sie heute wert wären — ein Bestand, kein Handelsbuch.
-
-- **Kein Kaufpreis, kein Gewinn — mit Absicht.** Eine Position ist eine über Jahre gewachsene Menge, zu verschiedenen Zeiten bei verschiedenen Anbietern gekauft. Ein Einstandspreis je Position wäre keine nachgetragene Angabe, sondern eine erfundene, die danach wie eine gemessene aussieht. Wer Gewinn rechnen will, braucht ein anderes Datenmodell, keine Spalte mehr an diesem.
-- **Preise kommen von Hand, und deshalb zählt ihr Alter.** Jede Position trägt ihren Preisstand; ab 30 Tagen steht ein gelber Punkt neben dem Namen, ab 60 ein roter. Geändert wird in der Zeile selbst, und Enter springt zur nächsten — ein Preis wird dabei *bestätigt*, auch wenn er gleich bleibt. Eine eigene Pflegeseite gab es bis v2.13.0; seit die Arbeit dort stattfindet, wo die Zahl steht, braucht es sie nicht mehr.
-- **Die Liste ist eine Tabelle**, sortierbar nach Name, Stückpreis, Gesamtwert, Anzahl, Typ und Preisstand — sortiert wird im Server, nicht im Browser über das gerade Geladene. Ein Klick auf den Namen kopiert den vollständigen Marktnamen samt Abnutzung und StatTrak; das ist der Weg zum Preis, den man gleich darauf einträgt. Auf dem Telefon stapelt sich die Zeile, statt waagerecht zu scrollen.
-- **Was eine Kategorie zulässt, steht an der Kategorie.** Abnutzung und StatTrak gibt es nur bei Skins. Eine Angabe, die die Kategorie nicht kennt, wird geräumt statt abgelehnt.
-- **Die Art des Gegenstands ist ein Zeichen, kein Wort.** Zwölf Kategorien ergeben zwölf verschieden lange Wörter in einer Spalte, die dadurch die breiteste wird — und „Sticker Capsule“ sagt beim Überfliegen nicht mehr als seine Form. Der Name steht im `title` und im `aria-label`. Abnutzung und StatTrak tragen daneben Plaketten mit Gewicht: FN und BS sind der Unterschied zwischen zwei Preisen um den Faktor drei, und eine Angabe, nach der man suchen muss, hat man beim Überfliegen nicht gelesen.
-- **Aufteilung und Verlauf** — nach Kategorie, dazu ein Tages-Stand, den man festhalten kann. Die Kopfzahlen rechnet der Server über denselben Filter wie die Liste, nicht der Browser über das Geladene. Eine Lagerzuordnung gab es bis v2.13.0; sie beantwortete keine Frage, die dieses Modul stellt, und kostete an jeder Stelle etwas.
-- **Übernahme aus einer Datei** — der Reiter „Verwaltung“ nimmt einen Bestand vom Rechner entgegen, samt dem Verlauf aus der Vorgängerfassung. Erst die Vorschau, dann das Übernehmen; gelöscht wird dabei nie.
-
-### 📰 Blog
-Das einzige nach außen sichtbare Modul: `/blog/` ist ohne Anmeldung lesbar, geschrieben wird im Admin-Bereich.
-
-- **Öffentliche Leseansicht** — Artikelliste, Tag-Filter, Lesezeit-Schätzung und View-Counter.
-- **Admin-Editor** — dieselbe WYSIWYG-Logik wie bei den Notizen, Bilder per Drag & Drop oder Paste, Sichtbarkeit je Artikel steuerbar.
-- **XSS-Schutz** — der gespeicherte HTML-Inhalt läuft vor der Ausgabe durch einen Whitelist-Sanitizer, weil die Seite öffentlich erreichbar ist.
-
-### ⬇️ Gesamt-Export
-Eine Dashboard-Kachel exportiert alle Module gemeinsam (`GET /api/export/all`), abschnittsweise gegliedert mit erklärenden Kommentarzeilen — gedacht als Archiv und als Futter für externe Auswertungen. Dabei sind: Sparziel, Ausgaben, Gesundheit, Musik, Ernährung (Tagebuch und Nährwerte getrennt), Schach und Notizen. Die Sektionsliste steht in `backend/services/full_export.py` (`EXPORT_SECTIONS`); ein Test hält fest, dass jede Sektion dort auch wirklich gebaut wird.
-
-- **Voreinstellung je Modul** — die auf `/einstellungen/` hinterlegte Zusammenfassungsstufe und die Verdichtungsgrenze gelten, sobald der Dialog aufmacht; Zeitraum, Module, Spalten und Verdichtung bleiben darin direkt einstellbar. Ein Modul lässt sich dort auch ganz abschalten — gespeichert wird, was **aus** ist, damit ein künftiges Modul von selbst im Export landet.
-- **Zwei Formen** — eine Datei mit allen Tabellen untereinander (zum Lesen und zur Auswertung) oder ein ZIP mit einer CSV je Tabelle plus LIESMICH (für Excel und Numbers). Beide kommen aus denselben Zeilen.
-- **Zeitraumfilter** — Presets (30 Tage, 3 bzw. 12 Monate, laufendes Jahr) oder freie Von-Bis-Auswahl.
-- **Wochen-/Monats-Aggregation** — fasst Ausgaben und Vitalwerte zu Perioden zusammen. Ausgaben behalten dabei eine Zeile je Einkauf (Datum, Laden, Typ, Anzahl Positionen, Summe, Kategorien-Split); nur die Einzelpositionen entfallen, damit ein Jahresexport lesbar bleibt.
-- **gzip** — die Antwort wird komprimiert, wenn der Browser es anbietet; bei einem Jahresexport spart das rund 85 % Übertragung.
-
-### 👤 User- & Admin-System
-- **JWT-Login** mit bcrypt-gehashten Passwörtern.
-- **Invite-Tokens** — der Admin legt Nutzer an, ohne ein Passwort zu vergeben; der Eingeladene setzt es selbst über den Aktivierungslink. Token sind neu erzeugbar, falls einer verfällt.
-- **Passwort-Reset** durch den Admin, für den Fall, dass der Aktivierungsweg nicht mehr funktioniert.
-- **Rate-Limiting & Ownership-Checks** — Login und alle Schreib-Endpoints sind gedrosselt, jede Abfrage ist an den eingeloggten Nutzer gebunden; Daten anderer Nutzer sind auch bei geratenen IDs nicht erreichbar.
-
-### 🧭 UX
-- **Globaler Modul-Switcher** in der Navbar für den Sprung zwischen den Modulen.
-- **Anpassbare Tab-Leiste** — auf dem Handy liegt unten eine feste Leiste; welche zwei bis sechs Module dort stehen und in welcher Reihenfolge, stellt jeder Nutzer selbst ein (Modul-Switcher → „Tab-Leiste anpassen“). Die Auswahl hängt am Konto, nicht am Gerät.
-- **Dark-Mode** mit Umschalter, den auch die Diagramme mitmachen.
-- **PWA** — installierbar, Service Worker mit Update-Hinweis, sobald eine neue Version ausgeliefert wurde.
-- **Drag-&-Drop-Sortierung** für Ziele, Achievements und Listen.
-- **Undo-Toasts** — Löschvorgänge lassen sich für ein paar Sekunden zurücknehmen, statt sie vorher wegzuklicken.
-- **Versions-Zeitstrahl** — Klick auf die Versionsnummer öffnet den Changelog der letzten Releases.
-
----
-
-## 🧱 Tech-Stack
-
-| Schicht | Technologie |
+| Modul | Worum es geht |
 | --- | --- |
-| **Backend** | Python 3.11 · FastAPI · asyncpg · SlowAPI (Rate-Limiting) · passlib (bcrypt) |
-| **Datenbank** | PostgreSQL, Migrationssystem mit Checksum-Schutz in `backend/migrations/sql/` |
-| **Frontend** | Vanilla JS · Chart.js · Sortable.js · PWA (Service Worker + Manifest) |
-| **Deployment** | Docker (`backend/Dockerfile`), CORS über ENV konfigurierbar |
+| **Sparziel** | Sparziele mit eigenem Kontostand, Achievements (auch aus anderen Modulen gespeist), Wochen-/Monatsziele mit Streak-Bonus und Teilbelohnung, Puffer-Konto, Log, Trophäen |
+| **Ausgaben** | Kassenbons per OCR (Google Vision, optional Gemini-Parser), Positionen, Läden, Kategorien, Statistik, Dubletten, Import aus dem Bank-CSV |
+| **Notizen** | Master-Detail-Editor mit Auto-Save, Checkboxen, Farben, Pin und Archiv |
+| **Gesundheit** | Ziel für die iPhone-App *Auto Health Export*: Vitalwerte, Schlaf, Workouts |
+| **Essenstagebuch** (`/essen/`) | Nur notieren, was es gab — Name und Stufe, keine Mengen |
+| **Nährwerte** (`/naehrwerte/`) | Mengen, kcal und Makros, Tagesziele, Gerichte, Strichcode, eigener Open-Food-Facts-Katalog |
+| **Musik** | Hörregister aus dem Spotify-Datenexport |
+| **Schach** | Partien und Wertung von Lichess/Chess.com |
+| **CS2** | Bestand an Spielgegenständen und sein Zeitwert |
+| **Blog** | Öffentlich unter `/blog/`, geschrieben im Admin-Bereich |
 
-Keine Frontend-Frameworks, keine Build-Pipeline — reine HTML/CSS/JS-Files, direkt ausliefern.
+Dazu: Gesamt-Export aller Module (CSV oder ZIP, mit Zeitraum und Verdichtung), JSON-Backup, anpassbare Tab-Leiste, Versions-Zeitstrahl.
 
----
+## Technik
 
-## 🚀 Quickstart
+- **Backend:** Python 3.11, FastAPI, asyncpg, PostgreSQL. Versionen sind in `backend/requirements.txt` gepinnt — getestet wird gegen genau diese.
+- **Frontend:** reines HTML/CSS/JS ohne Build-Schritt, Chart.js, Service Worker. Nur dunkles Design.
+- **Migrationen:** `backend/migrations/sql/`, nummeriert, beim Start angewendet, per Checksumme gegen nachträgliches Ändern geschützt.
 
-### Voraussetzungen
-- Python **3.11+**
-- PostgreSQL **13+**
-- Ein Webserver, der `frontend/` als Static-Files ausliefert (nginx, Caddy, `python -m http.server`, …)
-
-### 1. Backend einrichten
-```bash
-git clone <repo-url> vexbob
-cd vexbob/backend
-
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 2. Umgebungsvariablen
-```bash
-export DATABASE_URL="postgresql://user:pass@localhost:5432/vexbob"
-export SECRET_KEY="wähle-einen-langen-zufälligen-string"
-export CORS_ORIGINS="http://localhost:5500,http://127.0.0.1:5500"
-
-# Optional: Kassenbon-OCR (Ausgaben-Modul)
-export OCR_PROVIDER="google"
-export GOOGLE_APPLICATION_CREDENTIALS_JSON='{"type":"service_account", ...}'
-
-# Optional: KI-Parser für Ausgaben & Gesundheit (Google AI Studio)
-export GEMINI_API_KEY="..."
-```
-
-### 3. Backend starten
-```bash
-uvicorn main:app --reload --port 8000
-```
-Schema & Migrationen werden beim ersten Start automatisch angewendet.
-
-**Admin-Account anlegen:** entweder direkt per SQL einen User mit `is_admin=TRUE` anlegen, oder einmalig `ADMIN_BOOTSTRAP_USERNAME` + `ADMIN_BOOTSTRAP_PASSWORD` setzen — ist die `users`-Tabelle noch leer, legt das Backend beim Startup automatisch einen Admin an (danach die beiden ENVs wieder entfernen).
-
-### 4. Frontend ausliefern
-```bash
-cd ../frontend
-python3 -m http.server 5500
-```
-Anschließend `http://localhost:5500` öffnen. `frontend/js/config.js` zeigt standardmäßig auf `http://localhost:8000` — für Produktivbetrieb dort die Backend-URL anpassen.
-
-### 5. Optional: eigener Lebensmittel-Katalog (Ernährungs-Modul)
-
-Ohne diesen Schritt funktioniert das Modul vollständig — es fragt dann bei jeder Suche live bei Open Food Facts nach. Das ist ein ehrenamtlich betriebener Dienst, der unter Last mit `503` antwortet; ein eigener Abzug macht die Suche schnell und unabhängig davon.
-
-Der fertige Katalog liegt als **`backend/data/off-katalog-dach.csv.gz`** im Repo (rund 10 MB). Er ist ein Auszug aus der Datenbank von Open Food Facts und steht wie das Original unter der ODbL — Herkunft und Lizenz stehen in `backend/data/HERKUNFT.md`. Personenbezogene Daten sind keine darin, nur Produktangaben.
-
-**Der einfache Weg:** im Modul **Nährwerte** unter *Lebensmittel* → aufklappbarer Abschnitt **Katalog einspielen** die Datei ablegen. Sichtbar ist die Karte nur für Admins; der Katalog gehört keinem Konto. Vor dem Ersetzen steht da, was ersetzt wird.
-
-Ohne Browser geht es weiterhin über das Skript — die Datei ist nach `git pull` und einem Image-Neubau auch im Container:
-
-```bash
-docker exec -it <container> python scripts/off_katalog.py \n    data/off-katalog-dach.csv.gz --einspielen
-```
-
-Ohne Docker, dort wo `DATABASE_URL` gesetzt ist:
-
-```bash
-python backend/scripts/off_katalog.py backend/data/off-katalog-dach.csv.gz --einspielen
-```
-
-**Auf Railway** geht es vom eigenen Rechner aus — die Datenbank ist über den TCP-Proxy erreichbar. Im Dashboard beim Postgres-Dienst unter *Variables* die **`DATABASE_PUBLIC_URL`** kopieren (nicht `DATABASE_URL`: die zeigt auf `postgres.railway.internal` und gilt nur innerhalb von Railway), dann den Befehl starten und die Adresse einfügen, wenn er danach fragt:
-
-```powershell
-python backend\scripts\off_katalog.py backend\data\off-katalog-dach.csv.gz --einspielen
-```
-
-Wer die Daten nicht über die öffentliche Leitung schicken will, nimmt stattdessen `railway ssh` und ruft das Skript im Container auf — dort liegt die Datei nach dem Deploy ohnehin, und `DATABASE_URL` ist gesetzt.
-
-Eingespielt wird immer **ersetzend** — ein neuer Abzug ist ein neuer Stand, zwei Stände nebeneinander wären nicht zu trennen. Läuft in einer Transaktion: schlägt es fehl, steht der alte Katalog unverändert da.
-
-**Neu bauen**, wenn der Katalog altern soll (der Abzug erscheint täglich, ein paar Mal im Jahr reicht):
-
-```bash
-curl -O https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz
-python backend/scripts/off_katalog.py en.openfoodfacts.org.products.csv.gz \n    -z backend/data/off-katalog-dach.csv.gz
-```
-
-Gelesen wird strömend — die ~12 GB Text landen nie auf der Platte, gepackt wie ungepackt. `--nur-zaehlen` sagt vorher, was übrig bliebe, ohne etwas zu schreiben; `--laender` stellt ein, welche Märkte behalten werden (Voreinstellung: Deutschland, Österreich, Schweiz). Wie alt der Katalog ist, steht im Modul auf der Scanner-Karte.
-
----
-
-## 🐳 Docker
+## Lokal starten
 
 ```bash
 cd backend
-docker build -t vexbob-backend .
-docker run -d --name vexbob \
-    -e DATABASE_URL="postgresql://..." \
-    -e SECRET_KEY="..." \
-    -e CORS_ORIGINS="https://deine-domain.tld" \
-    -p 8000:8000 vexbob-backend
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export DATABASE_URL="postgresql://user:pass@localhost:5432/vexbob"   # Postgres mit SSL
+export SECRET_KEY="langer-zufaelliger-string"
+export CORS_ORIGINS="http://localhost:5500"
+export ADMIN_BOOTSTRAP_USERNAME=admin ADMIN_BOOTSTRAP_PASSWORD=...  # nur beim ersten Start
+uvicorn main:app --reload --port 8000
+
+cd ../frontend && python3 -m http.server 5500
 ```
 
-Das Frontend kann parallel z.B. hinter nginx/Caddy als Static-Site ausgeliefert werden.
+Die Backend-Adresse steht **zweimal** im Frontend: `frontend/js/config.js` und `frontend/js/api.js` (`API_BASE`). Für lokales Arbeiten beide auf `http://localhost:8000` stellen.
 
----
+Optional: `GEMINI_API_KEY` (KI-Parser), `OCR_PROVIDER=google` + `GOOGLE_APPLICATION_CREDENTIALS_JSON` (Bon-OCR), `SENTRY_DSN`.
 
-## 🩺 Betrieb
+Tests: `cd backend && pytest -q` (braucht zusätzlich `httpx`).
 
-- **Migrationen**: SQL-Dateien in `backend/migrations/sql/`, aufsteigend nummeriert, jede mit SHA256-Checksum abgesichert — nachträgliches Editieren einer deployten Migration wirft beim Start einen harten Fehler. `MIGRATIONS_DRY_RUN=1` für einen Read-only-Preview.
-- **Health-Checks**: `GET /api/health` (Liveness), `GET /api/readiness` (prüft DB-Verbindung, für Deploy-Checks).
-- **Request-Tracing**: jede Response trägt einen `X-Request-ID`-Header, der sich durch alle Log-Zeilen zieht.
-- **Sentry (optional)**: `SENTRY_DSN` setzen und `sentry-sdk[fastapi]` installieren, dann werden unbehandelte Exceptions automatisch gemeldet.
+## Ausliefern
 
----
+Es gibt keine Pipeline — **ein Push ist kein Deploy.** Das Frontend liegt als statische Dateien auf dem Webserver, das Backend läuft als Docker-Image (`backend/Dockerfile`). Nach dem Push: auf dem Server `git pull`, bei Backend-Änderungen zusätzlich neu bauen bzw. neu starten.
 
-## 🔐 Sicherheit
+## Lebensmittel-Katalog (optional)
 
-- Passwörter mit **bcrypt** gehasht, JWT-Auth mit konfigurierbarem Secret
-- Rate-Limiting auf Login und Schreib-Endpoints
-- Admin-Endpoints separat abgesichert, Ownership-Checks auf allen User-Daten
-- Snapshots/Backups sind pro User isoliert
+`backend/data/off-katalog-dach.csv.gz` ist ein Auszug aus Open Food Facts (ODbL, siehe `backend/data/HERKUNFT.md`). Eingespielt wird er als Admin unter *Nährwerte → Lebensmittel → Katalog einspielen* oder per `python backend/scripts/off_katalog.py <datei> --einspielen`. Ohne Katalog fragt die Suche live bei Open Food Facts.
 
----
+## Wo was steht
 
-## 📁 Projekt-Struktur
-
-```
-├── backend/
-│   ├── main.py                  # FastAPI-App & Sparziel-Endpoints
-│   ├── schemas.py               # Pydantic-Models
-│   ├── helpers.py                # Utility-Funktionen
-│   ├── deps.py                  # Rate-Limiter, geteilte Utilities
-│   ├── auth.py                  # JWT + bcrypt
-│   ├── database.py              # asyncpg-Pool, Init, Migrationen
-│   ├── routers/                 # Ausgelagerte Endpoint-Gruppen (blog, brands, expenses, export, health, notes)
-│   ├── services/                # OCR, KI-Parser, Backup, Ausgaben-/Health-Logik
-│   ├── migrations/sql/          # Nummerierte SQL-Migrationen
-│   └── tests/
-├── docs/
-│   └── BLOG_KONZEPT.md
-└── frontend/
-    ├── index.html               # Dashboard-Landing
-    ├── sparziel/                # Sparziel-Tracker
-    ├── ausgaben/                # Ausgaben-Tracker
-    ├── notizen/                 # Notizen
-    ├── health/                  # Gesundheit
-    ├── blog/                    # Blog
-    ├── admin/                   # Admin-Panel
-    ├── private/                 # Login-Seite
-    ├── css/style.css            # Themes (light/dark)
-    ├── js/                      # config, api, version
-    ├── manifest.webmanifest     # PWA-Manifest
-    └── sw.js                    # Service Worker
-```
-
----
-
-## 📝 Lizenz
-
-Persönliches Projekt — bei Interesse an einer Verwendung bitte im Repo Kontakt aufnehmen.
+- `docs/DESIGN.md` und `frontend/design.html` — Designsprache und Bausteine, verbindlich.
+- `frontend/js/changelog.js` — Versionsverlauf; `frontend/js/version.js` — aktuelle Version.
+- `tools/vorschau/` — rendert Seiten mit gefälschtem Backend als PNG.

@@ -196,7 +196,7 @@ def test_heute_wird_geraten_und_als_vermutung_markiert():
     _, args = db.geschrieben[0]
     assert "fruehstueck" in args
     assert args[-1] is True, "meal_auto muss die Vermutung kenntlich machen"
-    assert "08:12" in args
+    assert time(8, 12) in args
 
 
 def test_an_einem_vergangenen_tag_wird_nicht_geraten():
@@ -211,7 +211,7 @@ def test_an_einem_vergangenen_tag_wird_nicht_geraten():
     _, args = db.geschrieben[0]
     assert None in args, "ohne Zuordnung statt geraten"
     assert args[-1] is False
-    assert "19:30" not in args, (
+    assert time(19, 30) not in args and "19:30" not in args, (
         "Die Browser-Uhr sagt, wie spaet es JETZT ist. An einem vergangenen "
         "Tag ist das die Tippzeit und keine Essenszeit -- sie darf nicht als "
         "Uhrzeit an der Zeile stehen.")
@@ -225,7 +225,7 @@ def test_heute_behaelt_die_uhrzeit():
         daten=tb.EintragEingabe(label="Pasta", level="normal", at="19:30"),
         db=db, user=NUTZER))
     _, args = db.geschrieben[0]
-    assert "19:30" in args
+    assert time(19, 30) in args
 
 
 def test_der_ort_schlaegt_die_uhr():

@@ -12,6 +12,7 @@ Der Tag wird nach Mahlzeiten gelesen und nicht nach Uhrzeit: „Mittag“ ist di
 Auskunft, die man geben kann, „12:47“ waere eine, die man erfinden muesste.
 Die Uhrzeit taucht hier nur als *Vermutung* auf, wohin ein Eintrag gehoert.
 """
+from datetime import time
 
 MAHLZEITEN = ("fruehstueck", "mittag", "abend", "snack")
 MAHLZEIT_LABEL = {
@@ -84,6 +85,20 @@ def uhrzeit_sauber(wert):
     if not (0 <= stunde <= 23 and 0 <= minute <= 59):
         return None
     return stunde, minute
+
+
+def uhrzeit_fuer_spalte(zeit):
+    """(stunde, minute) -> ``datetime.time`` fuer die TIME-Spalte, sonst None.
+
+    Bis v2.15.0 ging hier die Zeichenkette „08:12“ an die Datenbank. asyncpg
+    nimmt fuer eine TIME-Spalte aber nur ein ``time``-Objekt und warf -- jeder
+    Eintrag fuer HEUTE endete in beiden Modulen mit einem Serverfehler, nur
+    nachgetragene Tage (ohne Uhrzeit) kamen durch. Die Tests sahen es nicht,
+    weil ihre Attrappe Typen nicht prueft.
+    """
+    if not zeit:
+        return None
+    return time(zeit[0], zeit[1])
 
 
 def liste_raus() -> list:

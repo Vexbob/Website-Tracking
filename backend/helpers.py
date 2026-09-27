@@ -270,12 +270,16 @@ async def _sparziel_protocol_lines(db, user_id: int) -> list[str]:
         st = r["source_type"]
         pk = r["period_key"] or ""
         is_streak_bonus = st == "progress" and "-streak-" in pk
-        if st == "progress" and not is_streak_bonus:
+        # v2.16.0: die Teilbelohnung eines Wochenziels -- eigener Typ,
+        # damit sie in der Datei nicht als Streak-Bonus mitgezaehlt wird.
+        is_teil = st == "progress" and pk.endswith("-teil")
+        if st == "progress" and not (is_streak_bonus or is_teil):
             continue
         if st == "achievement":
             continue
         d = r["created_at"].isoformat() if r["created_at"] else ""
-        row_type = "streak_bonus" if is_streak_bonus else st
+        row_type = ("streak_bonus" if is_streak_bonus
+                    else "teilbelohnung" if is_teil else st)
         desc = r["description"] or ""
         title = "Anfangsbestand" if st == "initial" else (desc[:40] or st)
         log_body.append(f'{d};{row_type};{_export_csv_field(title)};{_export_csv_field(desc)};{pk};{float(r["amount"]):.2f};{_export_csv_field(r["note"] or "")}')
@@ -355,15 +359,16 @@ async def _build_export_metadata(db, user_id: int) -> list[str]:
 
     # Wochen-/Monatsziele
     out.append("# SEKTION: Wochen-/Monatsziele")
-    out.append("id;title;rhythm_type;target_count;reward_amount;streak_bonus_amount;streak_bonus_threshold")
+    out.append("id;title;rhythm_type;target_count;reward_amount;streak_bonus_amount;streak_bonus_threshold;partial_count;partial_percent")
     for r in await db.fetch(
         "SELECT id, title, rhythm_type, target_count, reward_amount, "
-        "streak_bonus_amount, streak_bonus_threshold "
+        "streak_bonus_amount, streak_bonus_threshold, partial_count, partial_percent "
         "FROM progress_goals WHERE user_id=$1 ORDER BY sort_order NULLS LAST, id", user_id):
         out.append(
             f'{r["id"]};{_export_csv_field(r["title"] or "")};{r["rhythm_type"] or "weekly"};'
             f'{int(r["target_count"] or 0)};{_export_amt(r["reward_amount"])};'
-            f'{_export_amt(r["streak_bonus_amount"])};{int(r["streak_bonus_threshold"] or 0)}'
+            f'{_export_amt(r["streak_bonus_amount"])};{int(r["streak_bonus_threshold"] or 0)};'
+            f'{int(r["partial_count"] or 0)};{_export_amt(r["partial_percent"])}'
         )
     out.append("")
 

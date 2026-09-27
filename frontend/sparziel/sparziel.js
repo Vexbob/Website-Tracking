@@ -864,7 +864,20 @@ function renderProgressGoals(){
         const c=Number(g.current_count||0),t=Number(g.target_count||1)||1,d=c>=t,p=pct(c,t);
         const rhythmLabel=g.rhythm_type==='monthly'?'Monatlich':'Wöchentlich';
         const periodLabel=g.rhythm_type==='monthly'?'diesen Monat':'diese Woche';
-        const dots=Array.from({length:t},(_,i)=>`<div class="pg-dot${i<c?' filled':''}"></div>`).join('');
+        // v2.16.0: Teilbelohnung -- ab teilN Check-ins gibt es zum Periodenende
+        // teilP % der Belohnung, falls das Ziel selbst nicht erreicht wird.
+        const teilN=Number(g.partial_count||0),teilP=Number(g.partial_percent||0);
+        const teilAn=teilN>0&&teilP>0&&teilN<t&&Number(g.reward_amount||0)>0;
+        const teilBetrag=Number(g.reward_amount||0)*teilP/100;
+        const dots=Array.from({length:t},(_,i)=>{
+            const schwelle=teilAn&&i===teilN-1;
+            return `<div class="pg-dot${i<c?' filled':''}${schwelle?' teil':''}"${schwelle?` title="Ab hier ${fmtNum(teilP)} % der Belohnung"`:''}></div>`;
+        }).join('');
+        const periodeEnde=g.rhythm_type==='monthly'?'zum Monatsende':'zum Wochenende';
+        const teilRow=teilAn&&!d?`<div class="pg-streak-row pg-teil-row${c>=teilN?' erreicht':''}">
+                <span class="lbl">${c>=teilN?`${c}/${t} — Teilbelohnung sicher`:`Teilbelohnung ab ${teilN}/${t}`}</span>
+                <span class="bonus">+${fmtEur(teilBetrag)} ${periodeEnde}</span>
+            </div>`:'';
         const streak=Number(g.streak||0);
         const bonusAmt=Number(g.streak_bonus_amount||0);
         const bonusN=Number(g.streak_bonus_threshold||0);
@@ -883,6 +896,7 @@ function renderProgressGoals(){
             <div class="pg-value"><strong>${c}</strong> / ${t} ${periodLabel} <span class="muted" style="font-size:0.75rem">· ${rhythmLabel}</span></div>
             <div class="pg-dots">${dots}</div>
             <div class="pg-bar"><div class="pg-bar-fill ${d?'g':'b'}" style="width:${p}%"></div></div>
+            ${teilRow}
             ${streakRow}
             <div class="pg-actions"><button class="pg-btn-ci" onclick="checkinProgress(${g.id})">${d?'✓ Nochmal':'Check-in'}</button><button class="pg-btn-undo" onclick="checkoutProgress(${g.id})">Rückgängig</button><button class="pg-btn-more" onclick="togglePgExpand(${g.id})">⋮</button></div>
             <div class="pg-expand" id="pgExpand_${g.id}">
@@ -898,6 +912,10 @@ function renderProgressGoals(){
                 <div class="grid2">
                     <div><label>Streak-Bonus alle N (0=aus)</label><input id="pge_streakN_${g.id}" type="number" min="0" value="${bonusN||''}"></div>
                     <div><label>Streak-Bonus €</label><input id="pge_streakAmt_${g.id}" type="number" step="0.01" value="${bonusAmt||''}"></div>
+                </div>
+                <div class="grid2">
+                    <div><label>Teilbelohnung ab (0=aus)</label><input id="pge_teilN_${g.id}" type="number" min="0" value="${teilN||''}" placeholder="z.B. ${Math.max(1,t-2)}"></div>
+                    <div><label>Davon ausgezahlt (%)</label><input id="pge_teilP_${g.id}" type="number" min="0" max="100" step="1" value="${teilP||''}" placeholder="50"></div>
                 </div>
                 <div class="pg-expand-actions">
                     <button class="save" onclick="savePgEdit(${g.id})">Speichern</button>
@@ -938,7 +956,8 @@ async function loadPgHistory(id, limit){
             }
             const countCls=r.fulfilled?'done':(r.current_count>0?'partial':'');
             const canBackdate=!r.is_current;
-            const paid=r.paid_out?'<span class="pg-hist-paid" title="Belohnung wurde ausgezahlt">💰 €</span>':'';
+            const paid=r.paid_out?'<span class="pg-hist-paid" title="Belohnung wurde ausgezahlt">💰 €</span>'
+                :(r.partial_paid!=null?`<span class="pg-hist-paid" title="Teilbelohnung wurde ausgezahlt">+${fmtEur(r.partial_paid)}</span>`:'');
             const statusChip=r.fulfilled
                 ? '<span class="pg-hist-chip ok" title="Ziel erfüllt">✓</span>'
                 : (r.is_current ? '<span class="pg-hist-chip cur" title="Läuft noch">⏳</span>'
@@ -983,13 +1002,15 @@ async function savePgEdit(id){
         target_count:parseInt(document.getElementById('pge_target_'+id).value,10),
         rhythm_type:document.getElementById('pge_rhythm_'+id).value,
         streak_bonus_threshold:parseInt(document.getElementById('pge_streakN_'+id).value,10)||0,
-        streak_bonus_amount:parseFloat(document.getElementById('pge_streakAmt_'+id).value)||0
+        streak_bonus_amount:parseFloat(document.getElementById('pge_streakAmt_'+id).value)||0,
+        partial_count:parseInt(document.getElementById('pge_teilN_'+id).value,10)||0,
+        partial_percent:parseFloat(document.getElementById('pge_teilP_'+id).value)||0
     };
     // v1.18.2: Reward-Goal-Zuweisung
     const rgEl=document.getElementById('pge_rgid_'+id);
     if(rgEl){ b.reward_goal_id = rgEl.value === '' ? null : parseInt(rgEl.value,10); }
     try{await apiCall('/api/progress-goals/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});haptic('success');showToast('Aktualisiert');await Promise.all([loadProgressGoals(),loadSavingsGoals()]);}
-    catch(e){haptic('error');showToast('Fehler',true);}
+    catch(e){haptic('error');showToast(e.message||'Fehler',true);}
 }
 async function checkinProgress(id){
     try{
@@ -1013,18 +1034,20 @@ async function createProgressGoal(){
     const tg=parseInt(document.getElementById('pgTarget').value,10);
     const sn=parseInt(document.getElementById('pgStreakN').value,10)||0;
     const sa=parseFloat(document.getElementById('pgStreakAmt').value)||0;
+    const tn=parseInt(document.getElementById('pgTeilN').value,10)||0;
+    const tp=parseFloat(document.getElementById('pgTeilP').value)||0;
     if(!t||isNaN(r)||!tg){showToast('Felder ausfüllen',true);haptic('error');return;}
-    const body={title:t,reward_amount:r,rhythm_type:rt,target_count:tg,streak_bonus_amount:sa,streak_bonus_threshold:sn};
+    const body={title:t,reward_amount:r,rhythm_type:rt,target_count:tg,streak_bonus_amount:sa,streak_bonus_threshold:sn,partial_count:tn,partial_percent:tp};
     // v1.18.2: Reward-Goal-Zuweisung
     const rgEl=document.getElementById('pgRewardGoal');
     if(rgEl && rgEl.value){ body.reward_goal_id = parseInt(rgEl.value,10); }
     try{
         await apiCall('/api/progress-goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-        ['pgTitle','pgReward','pgTarget','pgStreakN','pgStreakAmt'].forEach(x=>document.getElementById(x).value='');
+        ['pgTitle','pgReward','pgTarget','pgStreakN','pgStreakAmt','pgTeilN','pgTeilP'].forEach(x=>document.getElementById(x).value='');
         document.getElementById('pgForm').classList.remove('open');
         haptic('success');
         showToast('Wochenziel erstellt');await loadProgressGoals();
-    }catch(e){haptic('error');showToast('Erstellung fehlgeschlagen',true);}
+    }catch(e){haptic('error');showToast(e.message||'Erstellung fehlgeschlagen',true);}
 }
 function deleteProgress(id){
     const g=pgData.find(x=>x.id==id);

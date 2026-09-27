@@ -286,20 +286,25 @@ def test_an_einem_vergangenen_tag_zaehlt_die_browser_uhr_nicht():
                             at="19:30", day=gestern),
         db=db, user=NUTZER))
     _, args = db.geschrieben[0]
-    assert "19:30" not in args
+    assert time(19, 30) not in args and "19:30" not in args
     assert "abend" not in args
     assert args[-1] is False
 
 
 def test_heute_behaelt_die_uhrzeit():
-    """Die Gegenprobe: am selben Tag ist die Uhr genau das, was sie sagt."""
+    """Die Gegenprobe: am selben Tag ist die Uhr genau das, was sie sagt.
+
+    Und zwar als ``time``: bis v2.15.0 stand hier ``"19:30" in args`` und
+    bestaetigte damit genau den Fehler -- asyncpg weist eine Zeichenkette fuer
+    die TIME-Spalte ab, jeder Eintrag fuer heute war ein Serverfehler.
+    """
     db = AttrappeDB()
     asyncio.run(EINTRAGEN(
         request=None,
         daten=fr.LogEingabe(item_id=3, amount=2, unit="Scheibe", at="19:30"),
         db=db, user=NUTZER))
     _, args = db.geschrieben[0]
-    assert "19:30" in args
+    assert time(19, 30) in args
 
 
 def test_eine_gesetzte_mahlzeit_ist_keine_vermutung_mehr():

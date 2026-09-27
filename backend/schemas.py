@@ -88,6 +88,10 @@ class PGCreate(BaseModel):
     streak_bonus_amount: float = 0
     streak_bonus_threshold: int = 0
     reward_goal_id: Optional[int] = None  # v1.18.2
+    # v2.16.0: Teilbelohnung -- ab ``partial_count`` Check-ins gibt es am
+    # Periodenende ``partial_percent`` % der Belohnung (0 = aus)
+    partial_count: int = 0
+    partial_percent: float = 0
 
 
 class PGUpd(BaseModel):
@@ -98,6 +102,8 @@ class PGUpd(BaseModel):
     streak_bonus_amount: Optional[float] = None
     streak_bonus_threshold: Optional[int] = None
     reward_goal_id: Optional[int] = None  # v1.18.2
+    partial_count: Optional[int] = None
+    partial_percent: Optional[float] = None
 
 
 class CheckinBody(BaseModel):

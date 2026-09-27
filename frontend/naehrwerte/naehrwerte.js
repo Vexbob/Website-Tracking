@@ -555,6 +555,7 @@ function eintragDialog(mahlzeit) {
         <div id="nwDlgKat"></div>
         <div class="ern-dlg-fuss">
             <span class="ern-note" id="nwDlgZuletzt"></span>
+            <button type="button" class="v-btn v-btn--ghost" id="nwDlgGericht">Neues Gericht</button>
             <button type="button" class="v-btn" id="nwDlgFertig">Fertig</button>
         </div>`;
 
@@ -592,6 +593,25 @@ function eintragDialog(mahlzeit) {
     });
     document.getElementById('nwDlgFertig')
         .addEventListener('click', () => state.dialog && state.dialog.close());
+    // Was es als Gericht noch nicht gibt, wird hier angelegt -- ueber diesem
+    // Dialog, nicht statt seiner. Bis v2.15 hiess das: Dialog zu, Reiter
+    // „Gerichte“, anlegen, zurueck zum Tag, Dialog auf, noch einmal suchen.
+    // Das neue Gericht steht danach gefiltert in der Liste, mit Eintragen.
+    document.getElementById('nwDlgGericht').addEventListener('click', () => {
+        gerichtDialog(null, {
+            name: (state.dlg && state.dlg.eingabe || '').trim(),
+            gespeichert: (g) => {
+                if (!state.dlg) return;
+                const suche = document.getElementById('nwDlgSuche');
+                if (suche) suche.value = g.name;
+                state.dlg.eingabe = g.name;
+                state.dlg.katalog = [];
+                zeichneDlgKatalog();
+                zeichneDlgListe();
+                melde('Gericht angelegt — jetzt die Portionen.', 'success');
+            },
+        });
+    });
     if (window.matchMedia('(min-width: 720px)').matches) feld.focus();
 }
 
@@ -1363,25 +1383,33 @@ async function zieleZuruecksetzen() {
  * stand, zwang in einen anderen Reiter, also aus dem Dialog heraus, also von
  * vorn.
  *
- * Jetzt: zwei Schritte in einem Blatt, das auf dem Handy das ganze Bild
- * einnimmt. Das Suchfeld klebt OBEN und sucht in einem Rutsch ueber Bestand
- * UND Katalog -- damit faellt der Reiterwechsel weg, und das ist die groesste
- * einzelne Vereinfachung. Unten laeuft die Summe mit: man sieht das Rezept
- * entstehen.
+ * v2.16.0: ein Blatt statt zwei Schritte. Der Name steht oben und bleibt
+ * stehen, darunter die Zutaten, darunter das Suchfeld ueber Bestand UND
+ * Katalog. Die Menge ist ein Zahlenfeld mit der Einheit daneben -- dieselbe
+ * Zeile wie im Eintragen-Dialog (`.ern-w` / `.ern-menge`). Der Stepper davor
+ * brauchte fuer 60 g Haferflocken vier Tipps, die Einheit ein zweites
+ * Fenster, und der Name des Gerichts verschwand, sobald man bei den Zutaten
+ * war. Unten laeuft die Summe mit: man sieht das Rezept entstehen.
  */
+
+/* Gramm und Naehrwerte EINER Zutat, so wie sie gerade im Entwurf steht. */
+function zutatWerte(z) {
+    const p = state.bestand.find(x => x.id === z.item_id);
+    const e = (z.units || []).find(u => u.key === z.unit);
+    const gramm = Number(z.amount || 0) * (e && e.grams ? Number(e.grams) : 1);
+    const kcal = p && p.kcal != null ? Number(p.kcal) * gramm / 100 : null;
+    const eiweiss = p && p.protein_g != null ? Number(p.protein_g) * gramm / 100 : null;
+    return { gramm, kcal, eiweiss };
+}
 
 function entwurfSumme() {
     let gramm = 0, kcal = 0, eiweiss = 0, luecke = false;
     state.entwurf.items.forEach(z => {
-        const p = state.bestand.find(x => x.id === z.item_id);
-        const e = (z.units || []).find(u => u.key === z.unit);
-        const g = Number(z.amount) * (e && e.grams ? Number(e.grams) : 1);
-        gramm += g;
-        if (!p || p.kcal == null) luecke = true;
-        else {
-            kcal += Number(p.kcal) * g / 100;
-            if (p.protein_g != null) eiweiss += Number(p.protein_g) * g / 100;
-        }
+        const w = zutatWerte(z);
+        gramm += w.gramm;
+        if (w.kcal == null) luecke = true;
+        else kcal += w.kcal;
+        if (w.eiweiss != null) eiweiss += w.eiweiss;
     });
     return { gramm, kcal, eiweiss, luecke };
 }
@@ -1401,90 +1429,80 @@ function zeichneEntwurfFuss() {
         + `<span class="nw-g-gramm">${zahlKurz(s.gramm)} g</span>`;
 }
 
-function gerichtDialog(g) {
+/* ``opts.name`` fuellt den Namen vor, ``opts.gespeichert(gericht)`` meldet
+   das neue Gericht zurueck -- so kann der Eintragen-Dialog eines anlegen,
+   ohne dass man ihn verlaesst. Der Dialog haelt sich deshalb in einer
+   eigenen Variable und nicht in ``state.dialog``: der Eintragen-Dialog
+   darunter bleibt offen und behaelt seinen. */
+function gerichtDialog(g, opts) {
+    const o = opts || {};
     state.entwurf = g
         ? { id: g.id, name: g.name, foto: null, hatFoto: !!g.has_photo,
             items: g.items.map(z => ({ item_id: z.item_id, name: z.name,
                                        amount: z.amount, unit: z.unit, units: z.units })) }
-        : { id: null, name: '', foto: null, hatFoto: false, items: [] };
+        : { id: null, name: o.name || '', foto: null, hatFoto: false, items: [] };
 
     const inhalt = `
-        <div id="nwG1">
-            <label class="ern-feld">
-                <span>Was gab es?</span>
+        <div class="nw-g-kopf">
+            <div id="nwGFoto" class="nw-g-foto"></div>
+            <label class="ern-feld nw-g-namefeld">
+                <span>Name</span>
                 <input type="text" id="nwGName" class="nw-g-name" autocomplete="off"
                        placeholder="z. B. Wraps" value="${esc(state.entwurf.name)}">
             </label>
-            <div class="nw-g-foto" id="nwGFoto"></div>
-            <p class="ern-note">Das Foto steht am Anfang, weil das Telefon genau dann in
-                der Hand ist, wenn das Essen noch auf dem Teller liegt.</p>
         </div>
-
-        <div id="nwG2" hidden>
-            <div id="nwGZutaten"></div>
+        <div id="nwGZutaten"></div>
+        <div>
             <label class="ern-suche nw-g-suche">
                 <span class="ern-suche-ico" aria-hidden="true">${ICON.lupe}</span>
                 <input type="search" id="nwGSuche" autocomplete="off"
                        aria-label="Zutat suchen"
-                       placeholder="Zutat suchen — Bestand und Katalog">
+                       placeholder="Zutat hinzufügen">
             </label>
             <div id="nwGTreffer"></div>
         </div>
 
         <div class="nw-g-fuss">
             <span class="nw-g-summe" id="nwGSumme"></span>
-            ${g ? `<button type="button" class="v-btn v-btn--danger"
+            ${g ? `<button type="button" class="v-btn v-btn--ghost"
                            id="nwGWeg">Entfernen</button>` : ''}
-            <button type="button" class="v-btn" id="nwGZurueck" hidden>Zurück</button>
-            <button type="button" class="v-btn v-btn--primary" id="nwGWeiter">Weiter</button>
+            <button type="button" class="v-btn v-btn--primary" id="nwGSpeichern">${
+                g ? 'Speichern' : 'Gericht speichern'}</button>
         </div>`;
 
-    state.dialog = openModal(state.entwurf.id ? 'Gericht ändern' : 'Neues Gericht', inhalt, {
+    const dlg = openModal(g ? 'Gericht ändern' : 'Neues Gericht', inhalt, {
         breit: true, voll: true,
-        beimSchliessen: () => { state.dialog = null; },
     });
+    state.entwurf.dialog = dlg;
+    state.entwurf.gespeichert = o.gespeichert || null;
 
     zeichneEntwurfFoto();
     zeichneEntwurf();
     zeichneEntwurfFuss();
+    zutatTreffer('', []);
 
-    const weiter = document.getElementById('nwGWeiter');
-    const zurueck = document.getElementById('nwGZurueck');
-    const schritt = (nr) => {
-        document.getElementById('nwG1').hidden = nr !== 1;
-        document.getElementById('nwG2').hidden = nr !== 2;
-        zurueck.hidden = nr === 1;
-        weiter.textContent = nr === 1 ? 'Weiter'
-            : (state.entwurf.id ? 'Änderung speichern' : 'Gericht speichern');
-        weiter.dataset.schritt = String(nr);
-        document.getElementById('nwGSumme').hidden = nr === 1;
-    };
-    schritt(state.entwurf.items.length ? 2 : 1);
-
-    weiter.addEventListener('click', () => {
-        if (weiter.dataset.schritt === '1') {
-            const name = document.getElementById('nwGName').value.trim();
-            if (!name) { melde('Das Gericht braucht einen Namen.', 'error'); return; }
-            state.entwurf.name = name;
-            schritt(2);
-            if (window.matchMedia('(min-width: 720px)').matches) {
-                document.getElementById('nwGSuche').focus();
-            }
-            return;
-        }
-        gerichtSpeichern(weiter);
+    const name = document.getElementById('nwGName');
+    const suche = document.getElementById('nwGSuche');
+    name.addEventListener('input', () => { state.entwurf.name = name.value; });
+    // Enter im Namen fuehrt zur ersten Zutat -- das ist der naechste Schritt,
+    // nicht das Speichern eines Gerichts ohne Zutaten.
+    name.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        suche.focus();
     });
-    zurueck.addEventListener('click', () => schritt(1));
+    document.getElementById('nwGSpeichern').addEventListener('click',
+        (e) => gerichtSpeichern(e.currentTarget));
     // Entfernen steht hier und nicht mehr als Papierkorb in der Liste --
     // siehe itemDialog.
     const gWeg = document.getElementById('nwGWeg');
     if (gWeg) gWeg.addEventListener('click', async () => {
-        if (state.dialog) state.dialog.close();
+        dlg.close();
         await gerichtLoeschen(g.id);
     });
 
     let takt = null;
-    document.getElementById('nwGSuche').addEventListener('input', (e) => {
+    suche.addEventListener('input', (e) => {
         clearTimeout(takt);
         const wert = e.target.value;
         // Der Bestand ist sofort da, der Katalog braucht eine Anfrage --
@@ -1492,30 +1510,39 @@ function gerichtDialog(g) {
         zutatTreffer(wert, null);
         takt = setTimeout(() => zutatKatalog(wert), 320);
     });
+    // Enter nimmt den obersten Treffer: wer „hafer“ tippt und Enter drueckt,
+    // meint die Haferflocken, die direkt darunter stehen.
+    suche.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const erster = document.querySelector('#nwGTreffer .nw-g-treffer');
+        if (erster) erster.click();
+    });
+
+    if (window.matchMedia('(min-width: 720px)').matches) {
+        (state.entwurf.name ? suche : name).focus();
+    }
 }
 
-/* Das Foto: ein Knopf, ein Bild, ein Weg es wieder loszuwerden. Aufgenommen
-   wird mit ``capture`` -- auf dem Handy oeffnet das direkt die Kamera. */
+/* Das Foto: eine Kachel neben dem Namen. Ohne Bild ist sie der Knopf zur
+   Kamera, mit Bild zeigt sie es -- und ein Tipp darauf nimmt ein anderes
+   auf. Aufgenommen wird mit ``capture``: auf dem Handy oeffnet das direkt
+   die Kamera. */
 function zeichneEntwurfFoto() {
     const ziel = document.getElementById('nwGFoto');
     if (!ziel) return;
     const e = state.entwurf;
     const url = e.foto ? URL.createObjectURL(e.foto) : null;
+    const hat = !!(url || (e.hatFoto && e.id));
 
-    ziel.innerHTML = (url
-        ? `<img class="v-bild" id="nwGBild" src="${url}" alt="Foto des Gerichts">`
-        : (e.hatFoto && e.id
-            ? `<img class="v-bild" id="nwGBild" alt="Foto des Gerichts">`
-            : `<div class="v-bild-leer" aria-hidden="true">🍽️</div>`))
-        + `<div class="ern-tasten">
-               <button type="button" class="v-btn v-btn--sm" id="nwGFotoWahl">
-                   ${ICON.kamera} ${url || e.hatFoto ? 'Anderes Foto' : 'Foto'}</button>
-               ${url || e.hatFoto
-                   ? '<button type="button" class="v-btn v-btn--sm" id="nwGFotoWeg">Ohne Foto</button>'
-                   : ''}
-               <input type="file" id="nwGFotoDatei" accept="image/*"
-                      capture="environment" hidden>
-           </div>`;
+    ziel.innerHTML = `<button type="button" class="nw-g-foto-knopf" id="nwGFotoWahl"
+            aria-label="${hat ? 'Anderes Foto' : 'Foto aufnehmen'}"
+            title="${hat ? 'Anderes Foto' : 'Foto aufnehmen'}">${
+            hat ? `<img class="v-bild v-bild--klein" id="nwGBild"${
+                      url ? ` src="${url}"` : ''} alt="Foto des Gerichts">`
+                : `<span class="v-bild-leer">${ICON.kamera}</span>`}</button>
+        ${hat ? '<button type="button" class="nw-g-foto-weg" id="nwGFotoWeg">Ohne Foto</button>' : ''}
+        <input type="file" id="nwGFotoDatei" accept="image/*" capture="environment" hidden>`;
 
     if (!url && e.hatFoto && e.id) {
         // Das gespeicherte Foto braucht den Anmelde-Kopf -- ein nacktes
@@ -1549,48 +1576,80 @@ function zeichneEntwurfFoto() {
     });
 }
 
+/* Was eine Zutat in dieser Menge beitraegt -- die Zeile unter ihrem Namen. */
+function zutatSub(z) {
+    const w = zutatWerte(z);
+    const teile = [w.kcal == null ? 'ohne kcal-Angabe' : zahlKurz(w.kcal) + ' kcal'];
+    if (!BASIS.includes(z.unit)) teile.push(zahlKurz(w.gramm) + ' g');
+    return teile.join(' · ');
+}
+
 /* Die Zutaten stehen UEBER dem Suchfeld: was man gerade hinzugefuegt hat,
-   soll man sehen, ohne zu scrollen. Die Menge ist ein Stepper -- eine Zahl
-   zu tippen kostet auf dem Handy eine Tastatur. */
+   soll man sehen, ohne zu scrollen. Jede Zeile ist dieselbe wie im
+   Eintragen-Dialog: Name oben, darunter Menge, Einheit und ein Knopf.
+
+   Beim Tippen wird NICHT neu gezeichnet -- nur die Zeile darunter und die
+   Summe. Ein neues ``innerHTML`` naehme dem Feld den Fokus, und die
+   Tastatur ginge nach jeder Ziffer zu. */
 function zeichneEntwurf() {
     const e = state.entwurf;
     const ziel = document.getElementById('nwGZutaten');
     if (!ziel) return;
-    ziel.innerHTML = !e.items.length
-        ? '<p class="ern-note">Noch keine Zutat — such unten danach. Was nicht in deinem '
-          + 'Bestand steht, wird beim Antippen aufgenommen.</p>'
-        : e.items.map((z, i) => {
-            const eh = (z.units || []).find(u => u.key === z.unit);
-            const basis = BASIS.includes(z.unit);
-            return `<div class="nw-g-zutat">
-                <span class="nw-g-zutat-name">${esc(z.name)}</span>
-                <div class="nw-stepper">
-                    <button type="button" data-zschritt="${i}" data-um="-1"
-                            aria-label="Weniger">−</button>
-                    <output data-zmenge="${i}">${mengeKurz(z.amount)} ${esc(
-                        eh ? eh.label : z.unit)}</output>
-                    <button type="button" data-zschritt="${i}" data-um="1"
-                            aria-label="Mehr">＋</button>
-                </div>
-                <button type="button" class="nw-g-einheit" data-zeinheit="${i}"
-                        title="Einheit wechseln">${basis ? esc(z.unit) : '⇄'}</button>
-                <button type="button" class="v-btn v-btn--icon" data-zutat-weg="${i}"
-                        aria-label="Zutat entfernen" title="Entfernen">✕</button>
-            </div>`;
-        }).join('');
+    if (!e.items.length) { ziel.innerHTML = ''; return; }
+    ziel.innerHTML = '<p class="nw-g-abschnitt">Zutaten</p>' + e.items.map((z, i) => {
+        const einheiten = z.units && z.units.length
+            ? z.units : [{ key: z.unit, label: z.unit }];
+        const wahl = einheiten.length > 1
+            ? `<select class="v-select v-select--sm" data-zeinheit="${i}"
+                       aria-label="Einheit für ${esc(z.name)}">
+                   ${einheiten.map(u => `<option value="${esc(u.key)}"${
+                       u.key === z.unit ? ' selected' : ''}>${esc(u.label)}</option>`).join('')}
+               </select>`
+            : `<span class="ern-menge-fest">${esc(einheiten[0].label)}</span>`;
+        return `<div class="ern-w nw-g-zutat">
+            <div class="ern-w-text">
+                <span class="ern-w-name">${esc(z.name)}</span>
+                <span class="ern-w-sub" data-zsub="${i}">${esc(zutatSub(z))}</span>
+            </div>
+            <div class="ern-menge">
+                <input type="number" min="0" step="any" inputmode="decimal"
+                       value="${esc(mengeKurz(z.amount).replace(',', '.'))}"
+                       data-zmenge="${i}" aria-label="Menge für ${esc(z.name)}">
+                ${wahl}
+                <button type="button" class="v-btn v-btn--icon v-btn--ghost"
+                        data-zutat-weg="${i}" aria-label="${esc(z.name)} entfernen"
+                        title="Entfernen">✕</button>
+            </div>
+        </div>`;
+    }).join('');
 
-    ziel.querySelectorAll('[data-zschritt]').forEach(b => b.addEventListener('click', () => {
-        const i = Number(b.dataset.zschritt);
-        const z = state.entwurf.items[i];
-        // Bei g/ml in Zehnerschritten, bei benannten Groessen in ganzen
-        // Einheiten: "105 g" tippt niemand, "1 Scheibe mehr" schon.
-        const um = Number(b.dataset.um) * (BASIS.includes(z.unit) ? 10 : 1);
-        z.amount = Math.max(BASIS.includes(z.unit) ? 10 : 1, Number(z.amount) + um);
-        zeichneEntwurf();
+    const nachziehen = (i) => {
+        const sub = ziel.querySelector(`[data-zsub="${i}"]`);
+        if (sub) sub.textContent = zutatSub(state.entwurf.items[i]);
         zeichneEntwurfFuss();
+    };
+    ziel.querySelectorAll('[data-zmenge]').forEach(f => f.addEventListener('input', () => {
+        const i = Number(f.dataset.zmenge);
+        const menge = Number(String(f.value).replace(',', '.'));
+        state.entwurf.items[i].amount = menge > 0 ? menge : 0;
+        nachziehen(i);
     }));
-    ziel.querySelectorAll('[data-zeinheit]').forEach(b => b.addEventListener('click', () => {
-        einheitBlatt(Number(b.dataset.zeinheit));
+    // Enter in der Menge: fertig mit dieser Zutat, weiter zur naechsten.
+    ziel.querySelectorAll('[data-zmenge]').forEach(f => f.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        const suche = document.getElementById('nwGSuche');
+        if (suche) suche.focus();
+    }));
+    ziel.querySelectorAll('[data-zeinheit]').forEach(w => w.addEventListener('change', () => {
+        const i = Number(w.dataset.zeinheit);
+        const z = state.entwurf.items[i];
+        // Die Zahl passt sich der Einheit an: 100 g, aber 1 Scheibe.
+        z.unit = w.value;
+        z.amount = BASIS.includes(w.value) ? 100 : 1;
+        const feld = ziel.querySelector(`[data-zmenge="${i}"]`);
+        if (feld) feld.value = z.amount;
+        nachziehen(i);
     }));
     ziel.querySelectorAll('[data-zutat-weg]').forEach(b => b.addEventListener('click', () => {
         state.entwurf.items.splice(Number(b.dataset.zutatWeg), 1);
@@ -1599,46 +1658,32 @@ function zeichneEntwurf() {
     }));
 }
 
-/* Die Einheit als Blatt statt als Auswahlrad: angeboten wird nur, was am
-   Lebensmittel hinterlegt ist -- ein Feld mit "Packung", das dann 100 g
-   rechnet, waere geraten. */
-function einheitBlatt(index) {
-    const z = state.entwurf.items[index];
-    if (!z) return;
-    const liste = z.units || [];
-    const dlg = openModal('Einheit für ' + esc(z.name),
-        `<div class="ern-dlg-mahlzeiten">${liste.map(u =>
-            `<button type="button" class="v-chip${u.key === z.unit ? ' is-active' : ''}"
-                data-einheit="${esc(u.key)}">${esc(u.label)}${
-                BASIS.includes(u.key) ? '' : ` <span class="nw-g-gramm">${u.grams} g</span>`
-            }</button>`).join('')}</div>`);
-    dlg.el.querySelectorAll('[data-einheit]').forEach(b => b.addEventListener('click', () => {
-        const neu = b.dataset.einheit;
-        // Die Zahl passt sich der Einheit an: 100 g, aber 1 Scheibe.
-        z.amount = BASIS.includes(neu) ? 100 : 1;
-        z.unit = neu;
-        dlg.close();
-        zeichneEntwurf();
-        zeichneEntwurfFuss();
-    }));
-}
-
 function zutatHinzufuegen(p) {
-    const einheiten = p.units
-        || [{ key: p.base_unit || 'g', label: p.base_unit || 'g', grams: 1 }];
+    // Frisch aus dem Katalog aufgenommen, kennt die Antwort noch keine
+    // Einheiten -- der Bestand, der danach neu geladen wurde, schon.
+    const aktuell = state.bestand.find(x => x.id === p.id) || p;
+    const einheiten = aktuell.units
+        || [{ key: aktuell.base_unit || 'g', label: aktuell.base_unit || 'g', grams: 1 }];
     const eigene = einheiten.find(u => !BASIS.includes(u.key));
     state.entwurf.items.push({
-        item_id: p.id, name: p.name,
+        item_id: aktuell.id, name: aktuell.name,
         amount: eigene ? 1 : 100,
-        unit: eigene ? eigene.key : (p.base_unit || 'g'),
+        unit: eigene ? eigene.key : (aktuell.base_unit || 'g'),
         units: einheiten,
     });
     const feld = document.getElementById('nwGSuche');
     if (feld) feld.value = '';
-    const treffer = document.getElementById('nwGTreffer');
-    if (treffer) treffer.innerHTML = '';
+    zutatTreffer('', []);
     zeichneEntwurf();
     zeichneEntwurfFuss();
+    // Die Menge ist der naechste Handgriff. Am Rechner steht der Cursor
+    // gleich darin, mit markierter Zahl; am Handy nicht -- dort ginge
+    // unaufgefordert die Tastatur auf.
+    if (window.matchMedia('(min-width: 720px)').matches) {
+        const felder = document.querySelectorAll('#nwGZutaten [data-zmenge]');
+        const letztes = felder[felder.length - 1];
+        if (letztes) { letztes.focus(); letztes.select(); }
+    }
 }
 
 /* Erst der eigene Bestand, dann der Katalog. Ein Katalog-Treffer wird beim
@@ -1744,6 +1789,8 @@ async function gerichtSpeichern(knopf) {
     const name = (state.entwurf.name || '').trim();
     if (!name) { melde('Das Gericht braucht einen Namen.', 'error'); return; }
     if (!state.entwurf.items.length) { melde('Mindestens eine Zutat.', 'error'); return; }
+    const leer = state.entwurf.items.find(z => !(Number(z.amount) > 0));
+    if (leer) { melde(`Wie viel ${leer.name}?`, 'error'); return; }
     knopf.classList.add('is-loading');
     try {
         const res = await API.gericht({
@@ -1763,9 +1810,12 @@ async function gerichtSpeichern(knopf) {
                       + (err.message || ''), 'error');
             }
         }
-        if (state.dialog) state.dialog.close();
+        const zurueck = state.entwurf.gespeichert;
+        if (state.entwurf.dialog) state.entwurf.dialog.close();
         zeichneGerichte();
-        melde('Gericht gespeichert.', 'success');
+        const neu = state.gerichte.find(x => x.id === res.dish_id);
+        if (zurueck && neu) zurueck(neu);
+        else melde('Gericht gespeichert.', 'success');
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
     } finally {

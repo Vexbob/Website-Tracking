@@ -2027,6 +2027,8 @@ def _sparziel_protocol_aggregated(proto_lines: list[str], aggregate: str) -> lis
         elif row_type == "streak_bonus":
             b["streaks"] += 1
             b["reward_sum"] += amount
+        elif row_type == "teilbelohnung":        # v2.16.0, Wochenziel knapp verfehlt
+            b["reward_sum"] += amount
         elif row_type == "transfer":
             b["transfers"] += 1
             b["transfer_sum"] += amount
