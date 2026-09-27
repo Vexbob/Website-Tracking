@@ -39,7 +39,9 @@ haben:
 import os
 import pathlib
 import re
+import shutil
 import subprocess
+import tempfile
 import sys
 import time
 import urllib.error
@@ -70,7 +72,12 @@ SEITEN = ["/", "/essen/", "/naehrwerte/", "/naehrwerte/#gerichte",
           # Ohne Griff endet die Vorschau davor.
           "/essen/?griff=klick:#esAdd;tippe:#esDlgSuche=Pi",
           "/naehrwerte/?griff=klick:#nwAdd;tippe:#nwDlgSuche=Milch",
-          "/naehrwerte/?griff=klick:[data-zu-zielen]"]
+          "/naehrwerte/?griff=klick:[data-zu-zielen]",
+          # Seit v2.18.0 mit Daten (aufnahmen.json): CS2, die Ausgaben-
+          # Unterseiten und der oeffentliche Blog.
+          "/cs2/", "/ausgaben/bon.html?id=3", "/ausgaben/laeden.html",
+          "/ausgaben/marken.html", "/ausgaben/neu.html",
+          "/ausgaben/duplikate.html", "/ausgaben/import.html"]
 
 # Handy und Rechner. 390 ist ein iPhone, 1280 ein uebliches Fenster.
 BREITEN = {390: 1400, 1280: 1200}
@@ -83,11 +90,32 @@ EDGE_ORTE = [
 ]
 
 
+# Unter Linux (und macOS mit Homebrew) liegt der Browser im PATH statt an
+# einem festen Ort. Bis v2.17.0 kannte die Vorschau nur die Windows-Pfade und
+# brach auf jedem anderen Rechner mit „Kein Chromium gefunden“ ab.
+CHROMIUM_NAMEN = ["google-chrome", "google-chrome-stable", "chromium",
+                  "chromium-browser", "microsoft-edge", "msedge"]
+
+
 def browser() -> str:
     for ort in EDGE_ORTE:
         if os.path.exists(ort):
             return ort
+    for name in CHROMIUM_NAMEN:
+        ort = shutil.which(name)
+        if ort:
+            return ort
     raise SystemExit("Kein Chromium gefunden (Edge oder Chrome).")
+
+
+def firefox() -> str:
+    ort = shutil.which("firefox") or next(
+        (o for o in (r"C:\Program Files\Mozilla Firefox\firefox.exe",
+                     r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe")
+         if os.path.exists(o)), None)
+    if not ort:
+        raise SystemExit("Kein Firefox gefunden.")
+    return ort
 
 
 def server_starten():
@@ -134,8 +162,11 @@ def name_fuer(seite: str, breite: int) -> str:
     return "%s-%d.png" % (teil[:80], breite)
 
 
-def schiessen(exe: str, seite: str, breite: int, hoehe: int) -> pathlib.Path:
+def schiessen(exe: str, seite: str, breite: int, hoehe: int,
+              mit_firefox: bool = False) -> pathlib.Path:
     ziel = BILDER / name_fuer(seite, breite)
+    if mit_firefox:
+        ziel = ziel.with_name(ziel.stem + "-firefox.png")
     # "#" und "&" muessen kodiert bleiben: das eine behielte sonst der
     # BROWSER als eigenen Anker und der Server saehe alles dahinter nie
     # (README), das andere risse die Rahmen-Adresse auseinander. Die Zeichen
@@ -143,6 +174,18 @@ def schiessen(exe: str, seite: str, breite: int, hoehe: int) -> pathlib.Path:
     # Aufruf lesbar.
     url = ("http://127.0.0.1:%d/rahmen?url=%s&w=%d&h=%d"
            % (PORT, urllib.parse.quote(seite, safe="/?=:;,"), breite, hoehe))
+    if mit_firefox:
+        # Ein eigenes, leeres Profil je Aufruf: mit dem normalen bricht der
+        # Start ab, solange ein Firefox-Fenster offen ist. Die Griffe laufen
+        # als Seitenskript im Rahmen und brauchen deshalb keinen Treiber.
+        with tempfile.TemporaryDirectory() as profil:
+            subprocess.run(
+                [exe, "--headless", "--no-remote", "--profile", profil,
+                 "--window-size=%d,%d" % (breite + 320, hoehe + 60),
+                 "--screenshot", str(ziel), url],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                check=False, timeout=90)
+        return ziel
     subprocess.run(
         [exe, "--headless=new", "--disable-gpu", "--hide-scrollbars",
          "--virtual-time-budget=9000",
@@ -154,6 +197,12 @@ def schiessen(exe: str, seite: str, breite: int, hoehe: int) -> pathlib.Path:
 
 
 def main():
+    # ``--firefox``: dasselbe Bild aus Firefox. Das ist der Browser, in dem
+    # die Seiten wirklich angesehen werden -- ein Fehler, den nur er zeigt,
+    # war fuer eine reine Chromium-Vorschau unsichtbar (v2.16: der Ring war
+    # in Firefox immer voll).
+    mit_firefox = "--firefox" in sys.argv
+    sys.argv = [a for a in sys.argv if a != "--firefox"]
     seiten = ([seite_saeubern(sys.argv[1])] if len(sys.argv) > 1
               else SEITEN)
     # Dritte Zahl: die Hoehe. Fuer eine lange Seite ist ein hohes Fenster
@@ -166,12 +215,12 @@ def main():
                if len(sys.argv) > 2 else BREITEN)
 
     BILDER.mkdir(exist_ok=True)
-    exe = browser()
+    exe = firefox() if mit_firefox else browser()
     prozess = server_starten()
     try:
         for seite in seiten:
             for breite, hoehe in breiten.items():
-                ziel = schiessen(exe, seite, breite, hoehe)
+                ziel = schiessen(exe, seite, breite, hoehe, mit_firefox)
                 zustand = ("%d KB" % (ziel.stat().st_size // 1024)
                            if ziel.exists() else "FEHLGESCHLAGEN")
                 print("%-34s %-6s %s" % (seite, breite, zustand))

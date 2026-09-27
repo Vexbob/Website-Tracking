@@ -13,6 +13,7 @@ eines Tages, der Bestand und die Gerichte. Ihre Schluessel sind aus
 die Seite in der Vorschau leer, und genau das soll sie dann auch.
 """
 import datetime
+import json
 import pathlib
 import sys
 
@@ -791,3 +792,14 @@ ANTWORTEN = {
     "/api/export/preview": EXPORT_PREVIEW,
     "/api/export/fit": EXPORT_FIT,
 }
+
+# Seit v2.18.0: echte Antworten fuer die Seiten, die bis dahin gar keine
+# Vorschau-Daten hatten -- CS2, Schach, der oeffentliche Blog und die
+# Ausgaben-Unterseiten (Statistik, Bon, Marken, Import). Mitgeschnitten aus
+# einem lokalen Backend mit Testdaten, damit die FORM genau stimmt; von Hand
+# nachgebaut waere sie beim ersten Feld daneben, das die Seite liest.
+# Nur ergaenzend: was oben von Hand steht, hat Vorrang.
+_AUFNAHMEN = json.loads((pathlib.Path(__file__).resolve().parent
+                         / "aufnahmen.json").read_text(encoding="utf-8"))
+for _pfad, _antwort in _AUFNAHMEN.items():
+    ANTWORTEN.setdefault(_pfad, _antwort)
