@@ -143,6 +143,11 @@
        Kartenueberschrift -- die Seite hat dann keinen Blickfang, nur einen
        Anfang. */
     --fs-display: 2.25rem;
+    /* Die Heldenzahl (v2.19.0): die EINE Zahl eines Moduls, um die sich die
+       Bühne dreht -- der Sparstand, die Ausgaben des Monats. Eine Stufe über
+       --fs-display, und am Handy mit der Breite gedeckelt, damit ein
+       vierstelliger Betrag in die Mulde eines Halbrings passt. */
+    --fs-held: clamp(2.5rem, 11.5vw, 3.25rem);
 
     /* --- Flaeche mit Lichteinfall (v2.18.0) ---
        Eine Karte ist nicht mehr einfarbig: oben liegt ein Hauch Weiss, der
@@ -2675,7 +2680,7 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
    Transformation wieder dem Element (Hover, Druck), ein ``forwards`` hielte
    sie fest. Bei reduzierter Bewegung entfaellt alles (Block oben). */
 @keyframes vAuftritt { from { opacity: 0; transform: translateY(8px); } }
-:is(main, main > [id^="tab-"], main > section) > :is(.v-card, .stat-card, .card, .kpi-block, .stat-kpi-grid, .tile-grid, .stat-filterbar, .split-2, .split-3-2, .nq-section) {
+:is(main, main > [id^="tab-"], main > section) > :is(.v-card, .stat-card, .card, .kpi-block, .stat-kpi-grid, .tile-grid, .stat-filterbar, .split-2, .split-3-2, .nq-section, .v-buehne, .v-abschnitt) {
     animation: vAuftritt var(--dur-3) var(--ease) backwards;
 }
 :is(main, main > [id^="tab-"], main > section) > :nth-child(2) { animation-delay: 40ms; }
@@ -2686,3 +2691,101 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 /* ---------- Druck ----------
    Eine Zeile, die etwas oeffnet, gibt beim Tippen nach -- wie ein Knopf. */
 .rec-row:active, .tile:active { transform: scale(0.99); }
+
+/* ==========================================================================
+   v2.19.0 — Bühne, Heldenzahl, Abschnitt, Dialogfuß
+   --------------------------------------------------------------------------
+   Die Bausteine der Modul-Neugestaltung, zuerst gebraucht vom Sparziel.
+   Regeln: docs/DESIGN.md 2 (Heldenzahl) und 3 (Bühne), Muster in design.html.
+   ========================================================================== */
+
+/* ---------- Bühne ----------
+   Der Kopf eines Moduls darf seinen Ton als Licht tragen: ein weicher Schein
+   von oben, eine getönte Kante. Keine Fläche in Modulfarbe -- der Schein
+   liegt bei 20 % und läuft vor der Mitte aus, und der Text darauf bleibt
+   bei über 14:1. Je Seite höchstens eine Bühne; sie trägt die Heldenzahl.
+   Der Ton kommt über --buehne-ton, Standard ist der Modulton der Seite. */
+.v-buehne {
+    --buehne-ton: var(--figure, var(--accent));
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    padding: var(--space-5);
+    border-radius: var(--radius-xl);
+    border: 1px solid color-mix(in srgb, var(--buehne-ton) 24%, var(--line));
+    background:
+        radial-gradient(120% 85% at 50% -12%, color-mix(in srgb, var(--buehne-ton) 20%, transparent) 0%, transparent 62%),
+        radial-gradient(60% 50% at 100% 100%, color-mix(in srgb, var(--buehne-ton) 7%, transparent) 0%, transparent 70%),
+        var(--flaeche);
+    box-shadow: var(--kante-licht), 0 18px 48px -28px color-mix(in srgb, var(--buehne-ton) 45%, transparent);
+}
+@media (max-width: 720px) {
+    .v-buehne { padding: var(--space-4); border-radius: var(--radius-lg); }
+}
+.v-buehne-marke {
+    display: block;
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--buehne-ton) 70%, var(--text-1));
+}
+
+/* ---------- Heldenzahl ----------
+   Ganze Euro groß, Cent und Einheit klein daneben: die Zahl, die man liest,
+   ist die vordere. ``.v-held-rest`` darf fehlen (Punkte, Schritte). */
+.v-held {
+    display: inline-flex; align-items: baseline;
+    font-size: var(--fs-held); font-weight: 750; line-height: 1;
+    letter-spacing: -0.035em; color: var(--text-1);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.v-held-rest {
+    font-size: 0.42em; font-weight: 650; letter-spacing: -0.01em;
+    color: var(--text-2); margin-left: 0.08em;
+}
+
+/* ---------- Abschnitt ----------
+   Eine Überschrift über einer Gruppe auf der Seite, mit einer Handlung am
+   Rand („Neu“). Kein Kasten: die Karten darunter sind die Flächen. */
+.v-abschnitt { margin-top: var(--space-6); }
+.v-abschnitt-kopf {
+    display: flex; align-items: center; gap: var(--space-3);
+    margin: 0 0 var(--space-3);
+}
+.v-abschnitt-kopf h2 {
+    margin: 0; font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.02em;
+}
+.v-abschnitt-sub {
+    color: var(--text-3); font-size: 0.8125rem; font-variant-numeric: tabular-nums;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.v-abschnitt-kopf > .v-btn { margin-left: auto; }
+
+/* ---------- Zahlenfelder und Rollbalken ----------
+   Firefox malt an jedes Zahlenfeld zwei Pfeile, die am Handy niemand trifft
+   und die am Rechner die letzte Ziffer verdecken; Chrome zeigt sie beim
+   Überfahren. Getippt wird die Zahl. Und Firefox' Rollbalken waren im
+   dunklen Bild ein heller Strich am Rand jedes Dialogs. */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+html { scrollbar-color: var(--line-strong) transparent; }
+.modal-body { scrollbar-width: thin; }
+
+/* ---------- Dialogfuß ----------
+   Die Handlungen eines Dialogs stehen unten und bleiben dort, wenn der
+   Inhalt scrollt. Die Hauptsache rechts, Löschen links außen -- so weit weg
+   von „Speichern“, wie der Kasten es zulässt. */
+.modal-fuss {
+    position: sticky; bottom: -1rem; z-index: 1;
+    display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+    margin: var(--space-4) -1rem -1rem; padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    background: var(--surface-1);
+    border-top: 1px solid var(--line);
+}
+.modal-fuss .v-btn { flex: none; }
+.modal-fuss > :first-child:not(.v-btn--danger) { margin-left: auto; }
+.modal-fuss .v-btn--danger { margin-right: auto; }
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .modal-fuss .v-btn { min-height: 44px; }
+}
+

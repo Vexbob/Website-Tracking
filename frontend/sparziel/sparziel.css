@@ -1,558 +1,577 @@
 body{visibility:hidden}body.ready{visibility:visible}
-/* .tabs / .tab-btn ausgelagert in css/style.css (v1.30.0) */
-.hero{background:var(--surface-1);border:1px solid var(--line);border-radius:16px;padding:1.5rem;margin-bottom:1.5rem;}
-.hero-top{display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap}
-/* Der Ring selbst steht in css/style.css (.v-ring). Hier bleibt nur die
-   Groesse -- das Einzige, was an diesem Ring sparziel-eigen ist. */
-.hero-radial{--ring-size:140px}
-.hero-info{flex:1;min-width:200px}
-.hero-name{font-size:1.375rem;font-weight:700;display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem}
-.hero-name button{background:transparent;border:none;color:var(--text-3);font-size:0.95rem;cursor:pointer;padding:2px 4px;width:auto;margin:0}
-.hero-name button:hover{color:var(--text-1)}
-/* v1.73.0: Die drei Zahlen standen als 15px-Kleingedrucktes neben dem Ring.
-   Sie sind die Hauptaussage der Seite und lesen sich jetzt als Kacheln --
-   dieselbe Anmutung wie die Kennzahlen im Reiter "Ideen & Ziele". */
-.hero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:0.625rem}
-.hero-stat{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);
-    padding:0.625rem 0.75rem;min-width:0}
-.hero-stat .lbl{color:var(--text-4);font-size:0.625rem;text-transform:uppercase;
-    letter-spacing:0.09em;font-weight:700;display:block;margin-bottom:3px}
-.hero-stat strong{font-size:1.125rem;font-weight:700;color:var(--text-1);
-    letter-spacing:-0.02em;font-variant-numeric:tabular-nums;display:block;
-    /* NICHT abschneiden: ein halber Betrag ist schlimmer als ein enger.
-       Bei wenig Platz darf die Zahl umbrechen statt zu verschwinden. */
-    overflow-wrap:anywhere}
-/* --green-dark ist eine Fuellfarbe fuer weisse Schrift, kein Textton auf
-   dunklem Grund (3,1:1). Der Sparstand nimmt den Modulton. */
-/* Der gesparte Betrag folgt der Theme-Einstellung "Zahlen und Diagramme";
-   ohne Einstellung bleibt es der Modulton. */
-.hero-stat strong.pos{color:var(--figure, var(--m-sparziel))}
-.hero-edit{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:0.875rem;margin-top:0.875rem;display:none}
-.hero-edit.open{display:block}
-.hero-edit-row{display:flex;flex-wrap:wrap;gap:0.625rem;align-items:flex-end}
-.hero-edit label{font-size:0.75rem;color:var(--text-2);display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px}
-.hero-edit input{padding:0.4375rem 0.625rem;margin:0}
-.hero-edit .save{padding:0.5rem 1rem;font-size:0.875rem;background:var(--green);color:var(--accent-ink);font-weight:600;width:auto;margin:0}
-.hero-chart-head{margin-top:1.25rem;font-size:0.6875rem;font-weight:700;
-    letter-spacing:0.09em;text-transform:uppercase;color:var(--text-4)}
-.hero-chart{position:relative;height:140px;margin-top:0.5rem}
-.sh{display:flex;align-items:baseline;justify-content:space-between;margin:1.5rem 0 0.75rem;gap:0.5rem;flex-wrap:wrap}
-.sh h2{margin:0;font-size:1.125rem;font-weight:600;display:flex;align-items:center;
-    gap:0.5rem;flex-wrap:wrap}
-.sh .period-lbl{font-size:0.8125rem;color:var(--text-2);font-weight:500;margin-left:0.5rem}
-.sh-add{padding:0.375rem 0.875rem;font-size:0.8125rem;background:var(--text-1);color:var(--surface-1);font-weight:600;width:auto;margin:0;border-radius:6px}
+/* sparziel.css — v2.19.0
+ *
+ * Die Seite ist neu gebaut: drei Reiter statt vier, oben die Bühne mit dem
+ * Ziel als Tank, darunter die Wochenziele als Kacheln, die man mit einem
+ * Tipp abhakt. Alles Geteilte (Bühne, Heldenzahl, Abschnitt, Ring, Liste,
+ * Dialog) kommt aus css/style.css; hier steht nur, was diese Seite dazu
+ * braucht. Keine festen Farben: jede Farbe ist ein Token. */
 
-.ach-grid{display:grid;grid-template-columns:1fr;gap:0.75rem}
-.drag-handle{cursor:grab;color:var(--text-4);padding:2px 4px;user-select:none;touch-action:none;font-size:0.875rem;line-height:1;font-weight:900;flex-shrink:0}
-.drag-handle:hover{color:var(--text-2)}
-.drag-handle:active{cursor:grabbing}
-.sortable-ghost{opacity:0.3}
-.sortable-chosen{box-shadow:0 8px 24px rgba(0,0,0,0.15)!important;z-index:10}
-.sortable-drag{cursor:grabbing;transform:rotate(1deg);opacity:0.95}
-.ach-head .ach-title{flex:1;min-width:0}
-.pg-head .pg-title{flex:1;min-width:0}
-@media(min-width:560px){.ach-grid{grid-template-columns:1fr 1fr}}
-@media(min-width:900px){.ach-grid{grid-template-columns:1fr 1fr 1fr}}
-@media(min-width:1150px){.ach-grid{grid-template-columns:repeat(4,1fr)}}
-.ach-card{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:0.875rem;position:relative;transition:box-shadow .2s,border-color .2s,opacity .3s;display:flex;flex-direction:column}
-.ach-card:hover{border-color:var(--line-strong)}
-.ach-card.done{border-color:var(--green);background:var(--green-bg)}
-:root[data-theme="dark"] .ach-card.done{background:rgba(34,197,94,0.08)}
-.ach-card.pulsing{animation:pulse-milestone .7s ease-out}
-.ach-card.pending-delete{opacity:0.35}
-@keyframes pulse-milestone{
-    0%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)}
-    50%{box-shadow:0 0 0 12px rgba(34,197,94,0)}
-    100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}
+.sz { --sz-ton: var(--figure, var(--m-sparziel)); }
+.sz > [id^="tab-"] > .v-abschnitt:first-child { margin-top: 0; }
+
+/* ---------- Bühne ---------- */
+.sz-buehne {
+    --buehne-ton: var(--sz-ton);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
 }
-.ach-head{display:flex;align-items:flex-start;gap:0.5rem;margin-bottom:0.375rem}
-.ach-title{font-weight:600;font-size:0.9375rem;line-height:1.25;color:var(--text-1)}
-.ach-reward-pill{background:var(--green-bg);color:var(--green-dark);font-size:0.6875rem;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0}
-:root[data-theme="dark"] .ach-reward-pill{background:rgba(34,197,94,0.15);color:#4ade80}
-.ach-value{font-size:1.375rem;font-weight:700;color:var(--text-1);font-variant-numeric:tabular-nums;margin:0.375rem 0 0.125rem;line-height:1.1}
-.ach-value small{font-size:0.75rem;color:var(--text-3);font-weight:500;margin-left:4px}
-.ach-value .target{color:var(--text-3);font-weight:500;font-size:1rem}
-.ach-next{font-size:0.6875rem;color:var(--text-3);margin-bottom:0.5rem}
-/* Kacheln, die ihren Stand aus einem anderen Modul holen (v2.9.0).
-   Die Quellenzeile steht unter der Zahl und sagt, WOHER sie kommt -- eine
-   Zahl ohne Herkunft ist auf einer Kachel, die Geld auszahlt, zu wenig. */
-.ach-quelle{font-size:0.6875rem;color:var(--text-3);margin:0 0 0.25rem;line-height:1.35}
-.ach-quelle.leer{color:var(--text-4)}
-/* Das Band erscheint nur, wenn wirklich etwas faellig ist. Eine Auszeichnung,
-   die immer da steht, sagt nichts -- deshalb keine Dauer-Plakette. */
-/* Untereinander statt nebeneinander: eine Kachel ist im Raster rund 280 px
-   breit, und eine Zeile aus Text und Knopf bricht darin beides um. Der Knopf
-   ueber die volle Breite ist zugleich das groessere Ziel fuer den Finger. */
-.ach-treffer{display:flex;flex-direction:column;gap:0.4375rem;margin-bottom:0.625rem;
-    padding:0.5rem 0.625rem;border-radius:var(--radius-sm);
-    background:var(--ok-soft);border:1px solid var(--ok)}
-.ach-treffer-text{display:flex;flex-direction:column;gap:1px;min-width:0}
-.ach-treffer-text strong{font-size:0.75rem;color:var(--text-1);font-weight:700}
-.ach-treffer-text span{font-size:0.6875rem;color:var(--text-2);font-variant-numeric:tabular-nums}
-.ach-treffer button{width:100%;margin:0;padding:0.5rem 0.75rem;
-    font-size:0.75rem;font-weight:700;font-family:inherit;cursor:pointer;
-    border:none;border-radius:6px;background:var(--ok);color:var(--accent-ink)}
-.ach-treffer button:hover{filter:brightness(1.06)}
-/* Eine Kachel mit lebender Quelle hat keine Hand-Eingabe -- dann bleibt in
-   der Aktionszeile nur das Punkte-Menue, und das gehoert an den Rand. */
-.ach-actions.nur-mehr{grid-template-columns:auto;justify-content:end}
-.ach-quelle-felder{margin-bottom:0.25rem}
-.ach-quelle-hinweis{font-size:0.6875rem;color:var(--text-3);line-height:1.4;margin:0 0 0.375rem}
-.ach-quelle-hinweis.warn{color:var(--warn)}
-.ach-bar{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:0.625rem}
-.ach-bar-fill{height:100%;border-radius:3px;transition:width .35s ease}
-/* Eine Zeile: [+X …] [⋮].
-   Das Feld „Wert“ samt „Setzen“ stand bis v2.11.3 darunter und war damit
-   dauerhaft auf JEDER Kachel zu sehen -- fuer einen Handgriff, den man
-   selten braucht: der haeufige Fall ist +X, und wer eine Messung eintraegt,
-   tut das ein paar Mal im Monat. Jetzt liegt die Zeile hinter den drei
-   Punkten, zusammen mit dem Rest, den man selten anfasst. Die Kachel wird
-   dadurch eine Zeile kuerzer, und die grosse Zahl steht naeher am Balken. */
-.ach-actions{display:grid;grid-template-columns:1fr auto;gap:5px;margin-top:auto;align-items:stretch}
-.ach-actions button{padding:0.4375rem 0.5rem;font-size:0.75rem;border-radius:6px;border:none;cursor:pointer;font-weight:600;font-family:inherit;width:auto;margin:0;box-sizing:border-box}
-/* Zeile 1: [+X …] [⋮] */
-.ach-btn-plus{grid-row:1;grid-column:1;background:var(--grad-accent);color:var(--accent-ink);
-    border:1px solid transparent;box-shadow:var(--glow-accent);
-    position:relative;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;min-width:0}
-.ach-btn-plus:hover{filter:brightness(1.06)}
-.ach-btn-plus::after{content:'⏱';position:absolute;bottom:2px;right:4px;font-size:0.5rem;opacity:0.6}
-.ach-btn-more{grid-row:1;grid-column:2;background:transparent;color:var(--text-3);padding:0.4375rem 0.5rem;white-space:nowrap}
-.ach-btn-more:hover{color:var(--text-1);background:var(--surface-2)}
-/* Das Wertfeld liegt jetzt in der Klappe (.ach-set-row). */
-.ach-set-row .ach-inline-input{
-    min-width:0;padding:0.4375rem 0.5rem;
-    border:1.5px solid var(--green);background:var(--surface-1);
-    color:var(--text-1);border-radius:6px;font-family:inherit;
-    -moz-appearance:textfield;
-    transition:border-color .15s,box-shadow .15s;
-    box-shadow:none;
-}
-.ach-set-row .ach-inline-input:focus{outline:none;border-color:var(--green-dark);box-shadow:0 0 0 2px rgba(34,197,94,0.25)}
-.ach-inline-input::-webkit-outer-spin-button,
-.ach-inline-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-.ach-btn-set{background:var(--text-1);color:var(--surface-1);padding:0.4375rem 0.625rem;white-space:nowrap}
-.ach-badge{position:absolute;top:8px;right:8px;background:var(--green);color:var(--accent-ink);font-size:0.625rem;padding:3px 8px;border-radius:10px;font-weight:600;letter-spacing:0.3px}
-.ach-expand{margin-top:0.625rem;padding-top:0.625rem;border-top:1px solid var(--line);display:none}
-.ach-expand.open{display:block}
-.ach-set-row{display:flex;gap:5px;margin-bottom:0.5rem}
-.ach-set-row input{flex:1;padding:0.4375rem 0.5rem;margin:0}
-.ach-set-row button{padding:0.4375rem 0.75rem;font-size:0.75rem;background:var(--text-1);color:var(--surface-1);border:none;border-radius:6px;width:auto;margin:0;white-space:nowrap;font-weight:600}
-.ach-expand-actions{display:flex;gap:5px;flex-wrap:wrap}
-.ach-expand-actions button{padding:0.375rem 0.625rem;font-size:0.6875rem;border:1px solid var(--line);background:var(--surface-2);color:var(--text-2);border-radius:6px;width:auto;margin:0;font-weight:600;cursor:pointer}
-.ach-expand-actions button.danger{color:var(--red);border-color:transparent;background:var(--red-bg)}
-.ach-edit-form{margin-top:0.5rem;padding-top:0.5rem;border-top:1px dashed var(--line);display:none}
-.ach-edit-form.open{display:block}
-.ach-edit-form .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
-.ach-edit-form label{font-size:0.6875rem;color:var(--text-2);margin-bottom:2px;font-weight:500}
-.ach-edit-form input,.ach-edit-form select{padding:0.375rem 0.5rem;margin-bottom:0.375rem}
-.ach-edit-form .save-btns{display:flex;gap:5px;margin-top:0.5rem}
-.ach-edit-form .save-btns button{padding:0.4375rem 0.75rem;font-size:0.75rem;font-weight:600;border:none;border-radius:6px;cursor:pointer;width:auto;margin:0}
-.ach-edit-form .save{background:var(--green);color:var(--accent-ink);flex:1}
-.ach-edit-form .cancel{background:var(--surface-2);color:var(--text-2);border:1px solid var(--line)}
-.pg-list{display:grid;grid-template-columns:1fr;gap:0.625rem}
-@media(min-width:760px){.pg-list{grid-template-columns:1fr 1fr}}
-.pg-card{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:0.875rem;transition:opacity .3s}
-.pg-card.done{border-color:var(--green)}
-.pg-card.pending-delete{opacity:0.35}
-.pg-head{display:flex;align-items:flex-start;gap:0.5rem;margin-bottom:0.375rem}
-.pg-title{font-weight:600;font-size:0.9375rem;color:var(--text-1)}
-.pg-meta-right{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
-.pg-reward-pill{background:var(--green-bg);color:var(--green-dark);font-size:0.6875rem;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap}
-:root[data-theme="dark"] .pg-reward-pill{background:rgba(34,197,94,0.15);color:#4ade80}
-.pg-streak{background:var(--orange);color:var(--accent-ink);font-size:0.6875rem;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap}
-.pg-value{font-size:1rem;color:var(--text-1);margin:0.375rem 0}
-.pg-value strong{font-weight:700;font-size:1.25rem;font-variant-numeric:tabular-nums}
-.pg-dots{display:flex;gap:4px;flex-wrap:wrap;margin:0.375rem 0 0.5rem}
-.pg-dot{width:12px;height:12px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line)}
-.pg-dot.filled{background:var(--green);border-color:var(--green)}
-/* v2.16.0: die Schwelle der Teilbelohnung -- ein Ring um den Punkt, ab dem
-   zum Periodenende ein Teil der Belohnung sicher ist. */
-.pg-dot.teil{box-shadow:0 0 0 2px var(--surface-1),0 0 0 3px var(--warn)}
-.pg-teil-row .lbl{color:var(--text-3)}
-.pg-teil-row.erreicht .lbl{color:var(--text-1)}
-.pg-bar{height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:0.625rem}
-.pg-bar-fill{height:100%;border-radius:3px;transition:width .35s ease}
-.pg-bar-fill.g{background:linear-gradient(90deg,color-mix(in srgb,var(--figure, var(--m-sparziel)) 60%,transparent),var(--figure, var(--m-sparziel)))}
-/* Beide Zustaende tragen den Modulton -- der Balken zeigt Fortschritt, nicht
-   Zustand. Ob erreicht oder nicht, sagen Kartenrahmen und Knopf darunter.
-   Das Blau davor war die Identitaetsfarbe der Notizen und hatte hier ohnehin
-   nichts zu suchen. */
-.pg-bar-fill.b{background:linear-gradient(90deg,color-mix(in srgb,var(--figure, var(--m-sparziel)) 35%,transparent),color-mix(in srgb,var(--figure, var(--m-sparziel)) 75%,transparent))}
-.pg-streak-row{display:flex;align-items:center;gap:0.5rem;padding:0.5rem;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;margin-bottom:0.5rem;font-size:0.75rem}
-.pg-streak-row .lbl{color:var(--text-2);font-weight:500}
-.pg-streak-row .gold-dots{display:flex;gap:3px;flex-wrap:wrap}
-.pg-gold-dot{width:10px;height:10px;border-radius:50%;background:var(--surface-1);border:1px solid var(--line-strong)}
-.pg-gold-dot.filled{background:var(--warn);border-color:var(--warn);box-shadow:0 0 4px var(--warn-soft)}
-.pg-streak-row .bonus{margin-left:auto;color:var(--gold-dark);font-weight:700;font-size:0.75rem}
-:root[data-theme="dark"] .pg-streak-row .bonus{color:#fde047}
-.pg-actions{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
-.pg-actions button{padding:0.4375rem 0.75rem;font-size:0.75rem;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;width:auto;margin:0}
-.pg-btn-ci{background:var(--grad-accent);color:var(--accent-ink);flex:1;min-width:100px;
-    border:1px solid transparent;box-shadow:var(--glow-accent)}
-.pg-btn-ci:hover{filter:brightness(1.06)}
-/* Ist das Ziel erreicht, ist der Knopf nur noch ein Angebot ("nochmal") --
-   dann getoent statt Vollflaeche, damit die erledigte Karte ruhig wird. */
-.pg-card.done .pg-btn-ci{background:var(--ok-soft);color:var(--ok);
-    border-color:color-mix(in srgb,var(--ok) 40%,transparent);box-shadow:none}
-.pg-card.done .pg-btn-ci:hover{background:color-mix(in srgb,var(--ok) 22%,transparent)}
-.pg-btn-undo{background:var(--surface-2);color:var(--text-2);border:1px solid var(--line)}
-.pg-btn-more{background:transparent;color:var(--text-3);padding:0.4375rem 0.5rem}
-.pg-btn-more:hover{color:var(--text-1);background:var(--surface-2)}
-.pg-expand{margin-top:0.625rem;padding-top:0.625rem;border-top:1px solid var(--line);display:none}
-.pg-expand.open{display:block}
-.pg-expand label{font-size:0.6875rem;color:var(--text-2);font-weight:500;margin-bottom:2px}
-.pg-expand input,.pg-expand select{padding:0.375rem 0.5rem;margin-bottom:0.375rem}
-.pg-expand .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
-.pg-expand-actions{display:flex;gap:5px;margin-top:0.5rem;flex-wrap:wrap}
-.pg-expand-actions button{padding:0.4375rem 0.75rem;font-size:0.75rem;border:none;border-radius:6px;cursor:pointer;font-weight:600;width:auto;margin:0}
-.pg-expand-actions .save{background:var(--green);color:var(--accent-ink)}
-.pg-expand-actions .cancel{background:var(--surface-2);color:var(--text-2);border:1px solid var(--line)}
-.pg-expand-actions .danger{background:var(--red-bg);color:var(--red);border:1px solid transparent}
-.pg-history{margin-top:0.75rem;padding-top:0.625rem;border-top:1px dashed var(--line)}
-.pg-history h4{font-size:0.75rem;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5rem}
-.pg-hist-row{display:flex;align-items:center;gap:0.5rem;padding:0.4375rem 0;border-bottom:1px solid var(--line);font-size:0.75rem}
-.pg-hist-row:last-child{border-bottom:none}
-.pg-hist-row.current{background:var(--surface-2);padding-left:0.5rem;padding-right:0.5rem;margin:0 -0.5rem;border-radius:6px;border-bottom:none}
-.pg-hist-period{flex:1;color:var(--text-1);font-weight:500}
-.pg-hist-count{font-variant-numeric:tabular-nums;color:var(--text-2);white-space:nowrap}
-.pg-hist-count.done{color:var(--green-dark);font-weight:600}
-.pg-hist-add{padding:0.25rem 0.5rem;font-size:0.6875rem;background:var(--blue);color:var(--accent-ink);border:none;border-radius:5px;cursor:pointer;font-weight:600;width:auto;margin:0}
-.pg-hist-add:hover{background:var(--blue-dark)}
-.pg-hist-paid{color:var(--green-dark);font-size:0.6875rem;font-weight:600}
-.pg-hist-row{align-items:flex-start}
-.pg-hist-main{flex:1;display:flex;flex-direction:column;gap:0.15rem;min-width:0}
-.pg-hist-top{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap}
-.pg-hist-chip{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:0.6875rem;font-weight:700;flex-shrink:0}
-.pg-hist-chip.ok{background:var(--green);color:var(--accent-ink)}
-.pg-hist-chip.mid{background:#fef3c7;color:#92400e}
-:root[data-theme="dark"] .pg-hist-chip.mid{background:rgba(234,179,8,0.2);color:#fde047}
-.pg-hist-chip.miss{background:var(--red-bg);color:var(--red)}
-.pg-hist-chip.cur{background:var(--surface-2);color:var(--text-2);border:1px dashed var(--line)}
-.pg-hist-count.partial{color:#b45309}
-:root[data-theme="dark"] .pg-hist-count.partial{color:#fbbf24}
-.pg-hist-dates{font-size:0.6875rem;color:var(--text-3);margin-left:1.75rem;line-height:1.3}
-.pg-hist-more{padding:0.5rem 0 0.25rem;text-align:center}
-.pg-hist-more button{padding:0.375rem 0.875rem;font-size:0.75rem;background:var(--surface-2);color:var(--text-2);border:1px solid var(--line);border-radius:6px;font-weight:600;cursor:pointer;width:auto;margin:0}
-.pg-hist-more button:hover{background:var(--surface-1);color:var(--text-1)}
-/* Das Formular liegt seit v1.72.0 in einem Fenster (siehe toggleForm in
-   sparziel.js). In der Seite bleibt es unsichtbar -- die eigene Flaeche und
-   der Rahmen entfallen dort, das Fenster bringt beides mit. */
-.iform{display:none}
-.iform.open{display:block}
-.sz-form-box{max-width:560px;width:min(560px,calc(100vw - 2rem))}
-.sz-form-box .iform{padding:0}
-.if-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.625rem}
-@media(min-width:640px){.if-grid{grid-template-columns:repeat(3,1fr)}}
-.iform label{font-size:0.75rem;color:var(--text-2);font-weight:500;margin-bottom:3px}
-.iform input,.iform select{padding:0.4375rem 0.625rem;margin-bottom:0}
-.iform .if-btn{padding:0.5rem 1rem;font-size:0.8125rem;background:var(--grad-accent);
-    color:var(--accent-ink);font-weight:650;width:auto;margin:0.75rem 0 0;border-radius:9px;
-    border:1px solid transparent;box-shadow:var(--glow-accent)}
-.iform .if-btn:hover{filter:brightness(1.06)}
-.iform .if-btn:active{transform:scale(0.97)}
-/* "Ziel abschliessen" trug seine Farben als Hex im style-Attribut. Es ist
-   ein seltener, feierlicher Schritt -- getoente Warnfarbe mit ihrer eigenen
-   Schrift, keine Vollflaeche. */
-.sz-finish{width:auto;margin:0;padding:0.4375rem 0.875rem;font-size:0.8125rem;
-    font-weight:700;border-radius:9px;background:var(--warn-soft);color:var(--warn);
-    border:1px solid color-mix(in srgb,var(--warn) 40%,transparent)}
-.sz-finish:hover{background:color-mix(in srgb,var(--warn) 22%,transparent);opacity:1}
-
-.presets{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:0.75rem}
-.preset-btn{padding:0.5rem;font-size:0.75rem;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface-1);cursor:pointer;text-align:center;font-weight:500;color:var(--text-1);width:auto;margin:0}
-.preset-btn:hover{border-color:var(--accent)}
-.preset-btn.sel{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
-.log-controls{display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;align-items:center}
-.log-chips{display:flex;gap:5px;flex-wrap:wrap}
-.log-chip{padding:0.375rem 0.75rem;font-size:0.75rem;border:1px solid var(--line);background:var(--surface-1);border-radius:16px;cursor:pointer;font-weight:600;color:var(--text-2);width:auto;margin:0}
-.log-chip.active{background:var(--text-1);color:var(--surface-1);border-color:var(--text-1)}
-.log-search{flex:1;min-width:150px;padding:0.4375rem 0.625rem;margin:0}
-.log-view-toggle{display:flex;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.log-view-toggle button{padding:0.375rem 0.75rem;font-size:0.75rem;background:var(--surface-1);color:var(--text-2);border:none;font-weight:600;width:auto;margin:0;border-radius:0;cursor:pointer}
-.log-view-toggle button.active{background:var(--text-1);color:var(--surface-1)}
-.log-btn{padding:0.4375rem 0.75rem;font-size:0.75rem;background:var(--surface-2);color:var(--text-1);border:1px solid var(--line);border-radius:6px;font-weight:600;width:auto;margin:0;cursor:pointer}
-.log-sum{background:var(--surface-1);border:1px solid var(--line);border-radius:10px;padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.875rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap}
-.log-sum-hint{display:block;font-weight:400;opacity:0.75;font-size:0.75rem;margin-top:0.125rem}
-.log-sum strong{font-size:1rem;color:var(--green-dark)}
-.log-week{background:var(--surface-1);border:1px solid var(--line);border-radius:10px;padding:0.75rem;margin-bottom:0.625rem}
-.log-week-hdr{display:flex;justify-content:space-between;align-items:baseline;font-size:0.8125rem;font-weight:700;color:var(--text-1);margin-bottom:0.5rem;cursor:pointer;gap:0.5rem;flex-wrap:wrap}
-.log-week-hdr .week-label{color:var(--text-1)}
-.log-week-hdr .week-summary{font-weight:500;color:var(--text-2);font-size:0.75rem}
-.log-week-hdr .week-total{color:var(--green-dark);font-weight:700}
-.log-week-content{display:none;margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid var(--line)}
-.log-week-content.open{display:block}
-.log-day{margin-bottom:0.5rem}
-.log-day:last-child{margin-bottom:0}
-.log-day-hdr{font-size:0.6875rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-bottom:0.375rem;display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem}
-.log-day-hdr .day-sum{color:var(--green-dark);font-weight:700;font-size:0.75rem}
-.log-row{display:flex;flex-wrap:wrap;align-items:center;gap:0.625rem;padding:0.4375rem 0;font-size:0.8125rem;border-bottom:1px solid var(--line)}
-.log-row:last-child{border-bottom:none}
-.log-row.pending-delete{opacity:0.35}
-.log-row.has-note{background:linear-gradient(90deg,rgba(59,130,246,0.05),transparent 30%)}
-:root[data-theme="dark"] .log-row.has-note{background:linear-gradient(90deg,rgba(59,130,246,0.1),transparent 30%)}
-.log-tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.6875rem;font-weight:600;white-space:nowrap;min-width:88px;text-align:center}
-.log-tag.initial{background:var(--surface-2);color:var(--text-2)}
-.log-tag.milestone{background:var(--green-bg);color:var(--green-dark)}
-:root[data-theme="dark"] .log-tag.milestone{background:rgba(34,197,94,0.15);color:#4ade80}
-.log-tag.checkin{background:var(--blue-bg);color:var(--blue-dark)}
-:root[data-theme="dark"] .log-tag.checkin{background:rgba(59,130,246,0.15);color:#60a5fa}
-.log-tag.checkin.fulfilled{background:var(--green-bg);color:var(--green-dark)}
-:root[data-theme="dark"] .log-tag.checkin.fulfilled{background:rgba(34,197,94,0.15);color:#4ade80}
-.log-tag.streak_bonus{background:var(--warn-soft);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);font-weight:700}
-.log-tag.progress{background:rgba(148,163,184,0.18);color:#475569}
-:root[data-theme="dark"] .log-tag.progress{background:rgba(148,163,184,0.18);color:#cbd5e1}
-.log-tag.transfer{background:rgba(139,92,246,0.15);color:#7c3aed}
-:root[data-theme="dark"] .log-tag.transfer{background:rgba(139,92,246,0.22);color:#c4b5fd}
-.log-title{font-weight:600;color:var(--text-1);word-break:break-word;min-width:0}
-.log-desc{color:var(--text-2);font-size:0.75rem;word-break:break-word;white-space:nowrap}
-.log-note-inline{flex:1 1 12rem;min-width:0;text-align:center;color:var(--blue-dark);font-style:italic;font-size:0.8125rem;padding:0 0.5rem;overflow-wrap:anywhere;cursor:pointer}
-:root[data-theme="dark"] .log-note-inline{color:#93c5fd}
-.log-note-inline::before{content:'„'}
-.log-note-inline::after{content:'"'}
-.log-amt{font-weight:700;color:var(--green-dark);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:64px;text-align:right;margin-left:auto}
-.log-amt.zero{color:var(--text-4);font-weight:500}
-.log-amt.gold{color:var(--gold-dark)}
-.log-amt.delta{color:var(--text-2);font-weight:600}
-:root[data-theme="dark"] .log-amt.gold{color:#fde047}
-.log-del{background:transparent;border:none;color:var(--text-4);cursor:pointer;font-size:0.875rem;padding:0 4px;width:auto;margin:0}
-.log-del:hover{color:var(--red)}
-.log-del.disabled{visibility:hidden}
-.log-note-btn{background:transparent;border:none;cursor:pointer;padding:0 4px;width:auto;margin:0;font-size:0.875rem;color:var(--text-4);line-height:1}
-.log-note-btn:hover{color:var(--blue-dark)}
-.log-note-btn.has-note{color:var(--blue-dark)}
-:root[data-theme="dark"] .log-note-btn.has-note{color:#60a5fa}
-.log-empty{text-align:center;padding:2rem;color:var(--text-3);font-style:italic;background:var(--surface-1);border-radius:10px}
-.li{display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0.75rem;background:var(--surface-2);border-radius:6px;margin-bottom:4px;font-size:0.8125rem;color:var(--text-1);transition:opacity .3s}
-.li.pending-delete{opacity:0.35}
-.li-del{background:transparent;border:none;color:var(--text-4);cursor:pointer;font-size:0.875rem;padding:0 4px;width:auto;margin:0}
-.li-del:hover{color:var(--red)}
-.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text-1);color:var(--surface-1);padding:0.625rem 1.25rem;border-radius:8px;box-shadow:var(--shadow-float);z-index:1000;opacity:0;transition:opacity .2s;font-size:0.875rem;max-width:90vw;text-align:center;pointer-events:none;display:flex;align-items:center;gap:0.75rem}
-.toast.show{opacity:1;pointer-events:auto}
-.toast.err{background:var(--red);color:var(--accent-ink)}
-.toast .undo-btn{background:rgba(255,255,255,0.15);color:inherit;border:1px solid rgba(255,255,255,0.3);padding:0.25rem 0.625rem;font-size:0.75rem;border-radius:5px;cursor:pointer;font-weight:600;font-family:inherit;width:auto;margin:0}
-.toast .undo-btn:hover{background:rgba(255,255,255,0.25)}
-
-/* --- Modal (allgemein) --- */
-.vex-modal{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:200;padding:1rem}
-.vex-modal.open{display:flex}
-.vex-modal-card{background:var(--surface-1);border-radius:12px;padding:1.5rem;max-width:480px;width:100%;box-shadow:var(--shadow-float);max-height:90vh;overflow-y:auto}
-.vex-modal-card h3{margin-bottom:0.5rem;font-size:1.125rem}
-.vex-modal-sub{font-size:0.8125rem;color:var(--text-2);margin-bottom:1rem}
-.vex-modal-card label{font-size:0.75rem;color:var(--text-2);font-weight:500;margin-bottom:3px;display:block}
-.vex-modal-card input,.vex-modal-card select{padding:0.5rem 0.625rem;margin-bottom:0.75rem}
-.vex-modal-actions{display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;margin-top:0.5rem}
-.vex-modal-actions button{width:auto;padding:0.5rem 1rem;font-size:0.875rem;margin:0;border-radius:8px;font-weight:600}
-.vex-modal-actions .cancel{background:var(--surface-2);color:var(--text-1);border:1px solid var(--line)}
-.vex-modal-actions .primary{background:var(--green);color:var(--accent-ink);border:none}
-
-/* --- Heatmap --- */
-
-/* --- Konfetti-Canvas --- */
-#confettiCanvas{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:5000;display:none}
-#confettiCanvas.show{display:block}
-
-/* --- Trophäen --- */
-.trophy-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.75rem;margin-bottom:1.25rem}
-.trophy-stat{background:var(--warn-soft);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:12px;padding:0.875rem;font-weight:700;text-align:center;}
-.trophy-stat .lbl{font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;opacity:0.85}
-.trophy-stat .val{font-size:1.5rem;font-weight:800;margin-top:2px}
-.trophy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem}
-.trophy-card{background:var(--surface-1);border:1px solid var(--line);border-radius:14px;padding:1.125rem;position:relative;text-align:center;transition:transform .15s,box-shadow .2s}
-.trophy-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-float)}
-.trophy-icon{font-size:3rem;margin-bottom:0.5rem;line-height:1;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.15))}
-.trophy-card.gold{background:linear-gradient(160deg,var(--surface-1) 60%,var(--warn-soft));border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
-.trophy-card.silver{background:linear-gradient(160deg,var(--surface-1) 60%,rgba(255,255,255,0.06));border-color:var(--line-strong)}
-.trophy-card.bronze{background:linear-gradient(160deg,var(--surface-1) 60%,rgba(255,138,153,0.10));border-color:color-mix(in srgb,var(--danger) 45%,transparent)}
-.trophy-card.blue{background:linear-gradient(160deg,var(--surface-1) 60%,rgba(59,130,246,0.12));border-color:var(--blue)}
-.trophy-card.green{background:linear-gradient(160deg,var(--surface-1) 60%,rgba(34,197,94,0.12));border-color:var(--green)}
-.trophy-card.purple{background:linear-gradient(160deg,var(--surface-1) 60%,rgba(139,92,246,0.12));border-color:var(--purple)}
-.trophy-name{font-weight:700;font-size:1rem;color:var(--text-1);margin-bottom:0.25rem}
-.trophy-amount{font-size:1.375rem;font-weight:800;color:var(--green-dark);font-variant-numeric:tabular-nums;margin-bottom:0.375rem}
-:root[data-theme="dark"] .trophy-amount{color:#4ade80}
-.trophy-meta{font-size:0.75rem;color:var(--text-2);margin-bottom:0.5rem}
-.trophy-note{font-size:0.8125rem;color:var(--text-1);font-style:italic;padding:0.5rem;background:var(--surface-2);border-radius:6px;margin-top:0.5rem}
-.trophy-del{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--text-4);cursor:pointer;font-size:1.125rem;padding:2px 6px;width:auto;margin:0}
-.trophy-del:hover{color:var(--red)}
-.trophy-empty{grid-column:1/-1;text-align:center;padding:3rem 1rem;color:var(--text-3);background:var(--surface-1);border-radius:12px;border:1px dashed var(--line)}
-
-/* ================= Hero: kein aktives Sparziel (v1.43.0) ================= */
-/* Nach dem Abschliessen eines Ziels gibt es bewusst KEIN Platzhalter-Ziel
-   mehr. Der Hero zeigt dann den Puffer, in den alles einlaeuft. */
-.hero-empty{display:none;align-items:center;gap:1.125rem;flex-wrap:wrap}
-.hero.no-goal .hero-empty{display:flex}
-.hero.no-goal .hero-top,.hero.no-goal .hero-edit{display:none}
-.he-ico{width:76px;height:76px;border-radius:20px;display:grid;place-items:center;font-size:2.25rem;flex-shrink:0;
-    background:linear-gradient(135deg,rgba(139,92,246,0.18),rgba(59,130,246,0.10));border:1px solid rgba(139,92,246,0.3)}
-.he-body{flex:1;min-width:220px}
-.he-title{font-size:1.25rem;font-weight:700;color:var(--text-1)}
-.he-sub{font-size:0.8125rem;color:var(--text-2);line-height:1.5;margin-top:0.25rem;max-width:58ch}
-.he-amt{margin-top:0.625rem}
-.he-amt span{display:block;font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);font-weight:600}
-.he-amt em{font-style:normal;font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--purple-dark)}
-:root[data-theme="dark"] .he-amt em{color:#c4b5fd}
-.he-btn{width:auto;margin:0;padding:0.625rem 1.125rem;font-size:0.875rem;font-weight:700;border-radius:10px;
-    background:var(--green);color:var(--accent-ink);border:none;cursor:pointer;flex-shrink:0}
-.he-btn:hover{background:var(--green-dark)}
-
-/* ================= Tab "Ideen & Ziele" (v1.43.0) ================= */
-.sh-head{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
-.sh-sub{margin:0;font-size:0.8125rem;color:var(--text-2);line-height:1.45;max-width:64ch}
-.sh-count{display:inline-block;font-size:0.6875rem;font-weight:700;color:var(--text-2);background:var(--surface-2);
-    border:1px solid var(--line);border-radius:20px;padding:1px 8px;margin-left:0.25rem;vertical-align:2px}
-
-.ideen-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.625rem;margin-top:1.25rem}
-.is-tile{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;padding:0.75rem 0.875rem;}
-.is-tile .lbl{font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);font-weight:600}
-.is-tile .val{font-size:1.25rem;font-weight:700;color:var(--text-1);margin-top:2px;font-variant-numeric:tabular-nums;
-    line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.is-tile .val.pos{color:var(--green-dark)}
-:root[data-theme="dark"] .is-tile .val.pos{color:#4ade80}
-
-/* Puffer-Karte */
-.buffer-card{position:relative;overflow:hidden;display:flex;flex-wrap:wrap;align-items:center;gap:1rem;
-    background:linear-gradient(135deg,rgba(139,92,246,0.13),rgba(59,130,246,0.06));
-    border:1px solid rgba(139,92,246,0.35);border-radius:14px;padding:1rem 1.125rem;margin-bottom:0.875rem;
+@media (min-width: 900px) {
+    .sz-buehne {
+        grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+        gap: var(--space-6);
+        padding: var(--space-6);
     }
-.buffer-card::after{content:"";position:absolute;right:-40px;top:-50px;width:170px;height:170px;border-radius:50%;
-    background:radial-gradient(circle,rgba(139,92,246,0.18),transparent 70%);pointer-events:none}
-.buffer-ico{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-size:1.5rem;flex-shrink:0;
-    background:rgba(139,92,246,0.16)}
-.buffer-main{flex:1;min-width:190px}
-.buffer-lbl{font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;color:var(--purple-dark)}
-:root[data-theme="dark"] .buffer-lbl{color:#c4b5fd}
-.buffer-amt{font-size:1.75rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--text-1)}
-.buffer-hint{font-size:0.75rem;color:var(--text-2);line-height:1.45;margin-top:0.25rem;max-width:52ch}
-.buffer-btn{position:relative;z-index:1;width:auto;margin:0;padding:0.5rem 0.875rem;font-size:0.8125rem;font-weight:700;
-    border:none;border-radius:9px;background:var(--purple);color:var(--accent-ink);cursor:pointer;flex-shrink:0}
-.buffer-btn:hover:not(:disabled){background:var(--purple-dark)}
-.buffer-btn:disabled{opacity:0.45;cursor:not-allowed}
+}
+.sz-b-haupt { display: flex; flex-direction: column; min-width: 0; }
+.sz-b-kopf { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.sz-b-titel { min-width: 0; }
+.sz-b-name {
+    margin: 0.25rem 0 0;
+    font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+.sz-b-bearb { flex: none; margin: -0.375rem -0.375rem 0 0; color: var(--text-3); }
+.sz-b-bearb:hover { color: var(--text-1); }
 
-/* Sparziel-Karten */
-.sg-grid{display:grid;grid-template-columns:1fr;gap:0.75rem}
-@media(min-width:640px){.sg-grid{grid-template-columns:1fr 1fr}}
-@media(min-width:1000px){.sg-grid{grid-template-columns:repeat(3,1fr)}}
-.sg-card{position:relative;display:flex;flex-direction:column;background:var(--surface-1);border:1px solid var(--line);
-    border-radius:14px;padding:1rem;transition:box-shadow .2s,border-color .2s,opacity .3s}
-.sg-card:hover{border-color:var(--line-strong)}
-.sg-card.pending-delete{opacity:0.35}
-.sg-card.is-active{border-color:var(--green)}
-.sg-card.is-active::before{content:"";position:absolute;left:-1px;top:16px;bottom:16px;width:3px;border-radius:0 3px 3px 0;
-    background:linear-gradient(180deg,color-mix(in srgb,var(--m-sparziel) 65%,transparent),var(--m-sparziel))}
-.sg-card.is-full{border-color:var(--warn)}
-.sg-top{display:flex;align-items:flex-start;gap:0.5rem;margin-bottom:0.5rem}
-.sg-name{flex:1;min-width:0;font-weight:700;font-size:1rem;line-height:1.25;color:var(--text-1);overflow-wrap:anywhere}
-.sg-pill{flex-shrink:0;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;
-    padding:3px 8px;border-radius:20px;white-space:nowrap}
-.sg-pill.on{background:var(--green-bg);color:var(--green-dark)}
-:root[data-theme="dark"] .sg-pill.on{background:rgba(34,197,94,0.15);color:#4ade80}
-.sg-pill.off{background:var(--surface-2);color:var(--text-3);border:1px solid var(--line)}
-.sg-pill.full{background:var(--warn-soft);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent)}
-.sg-amt{font-size:1.5rem;font-weight:800;line-height:1.1;color:var(--text-1);font-variant-numeric:tabular-nums}
-.sg-amt small{font-size:0.8125rem;font-weight:600;color:var(--text-3);margin-left:3px}
-.sg-bar{height:8px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden;margin:0.625rem 0 0.375rem}
-.sg-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,color-mix(in srgb,var(--figure, var(--m-sparziel)) 60%,transparent),var(--figure, var(--m-sparziel)));transition:width .4s ease}
-.sg-card.is-full .sg-bar i{background:linear-gradient(90deg,color-mix(in srgb,var(--warn) 70%,transparent),var(--warn))}
-.sg-meta{display:flex;justify-content:space-between;gap:0.5rem;font-size:0.75rem;color:var(--text-2);font-variant-numeric:tabular-nums}
-.sg-actions{display:flex;gap:0.375rem;flex-wrap:wrap;margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--line)}
-.sg-btn{flex:1;min-width:0;width:auto;margin:0;padding:0.4375rem 0.5rem;font-size:0.75rem;font-weight:600;
-    border-radius:7px;border:1px solid var(--line);background:var(--surface-2);color:var(--text-1);cursor:pointer}
-.sg-btn:hover{border-color:var(--line-strong)}
-.sg-btn.go{background:var(--green);border-color:var(--green);color:var(--accent-ink)}
-.sg-btn.go:hover{background:var(--green-dark);border-color:var(--green-dark)}
-.sg-btn.trophy{background:var(--warn-soft);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);font-weight:700}
-.sg-btn.icon{flex:0 0 auto;padding:0.4375rem 0.625rem;color:var(--text-4)}
-.sg-btn.icon:hover{color:var(--red);border-color:var(--red)}
+/* Der Tank: der geteilte Halbring, größer und schlanker als am Ernährungsbild,
+   damit die Heldenzahl in der Mulde Platz hat. */
+.sz-b-ring {
+    --ring-size: 300px; --ring-w: 8px;
+    --ring-tone: var(--sz-ton);
+    margin: var(--space-4) auto 0;
+}
+@media (min-width: 900px) { .sz-b-ring { --ring-size: 340px; } }
+@media (max-width: 360px) { .sz-b-ring { --ring-size: 260px; } }
+.sz-b-ring .v-ring-txt {
+    inset: 30% 0 0 0;
+    justify-content: flex-end;
+    gap: 0.375rem;
+    padding: 0 12% 0.125rem;
+}
+.sz-held-skel { display: inline-block; width: 5ch; height: 0.85em; border-radius: 10px; }
+.sz-b-von {
+    font-size: 0.8125rem; color: var(--text-3);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.sz-buehne.ist-voll .sz-b-von { color: var(--ok); font-weight: 600; }
 
-/* Leerzustaende */
-.sg-empty{grid-column:1/-1;text-align:center;padding:2.25rem 1rem;border:1px dashed var(--line);border-radius:14px;
-    background:var(--surface-1)}
-.sg-empty .big{font-size:2rem;line-height:1}
-.sg-empty h4{margin:0.5rem 0 0.25rem;font-size:1rem;font-weight:700;color:var(--text-1)}
-.sg-empty p{margin:0 auto;font-size:0.8125rem;color:var(--text-2);line-height:1.5;max-width:46ch}
-.empty-line{grid-column:1/-1;width:100%;box-sizing:border-box;padding:1.125rem;text-align:center;font-size:0.8125rem;
-    color:var(--text-3);border:1px dashed var(--line);border-radius:12px;background:var(--surface-1)}
+.sz-b-fakten {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 1px; margin: var(--space-4) 0 0;
+    background: var(--line);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden;
+}
+.sz-b-fakten > div {
+    background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+    padding: 0.625rem 0.75rem; min-width: 0;
+}
+.sz-b-fakten dt {
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--text-3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sz-b-fakten dd {
+    margin: 2px 0 0;
+    font-size: 0.9375rem; font-weight: 700; color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sz-b-fakten dd.ist-plus { color: var(--ok); }
+.sz-b-aktion { margin-top: var(--space-4); display: flex; }
+.sz-b-aktion .v-btn { flex: 1; min-height: 44px; }
 
-/* Wunschliste */
-.wish-grid{display:grid;grid-template-columns:1fr;gap:0.5rem}
-@media(min-width:640px){.wish-grid{grid-template-columns:1fr 1fr}}
-@media(min-width:1000px){.wish-grid{grid-template-columns:repeat(3,1fr)}}
-.wish{display:flex;align-items:center;gap:0.75rem;background:var(--surface-1);border:1px solid var(--line);
-    border-radius:12px;padding:0.625rem 0.75rem;transition:opacity .3s,border-color .2s,box-shadow .2s}
-.wish:hover{border-color:var(--line-strong);}
-.wish.pending-delete{opacity:0.35}
-.wish-ico{width:34px;height:34px;border-radius:9px;background:var(--blue-bg);display:grid;place-items:center;
-    font-size:1rem;flex-shrink:0}
-:root[data-theme="dark"] .wish-ico{background:rgba(59,130,246,0.18)}
-.wish-body{flex:1;min-width:0}
-.wish-name{font-weight:600;font-size:0.875rem;line-height:1.25;color:var(--text-1);overflow-wrap:anywhere}
-.wish-price{font-size:0.75rem;color:var(--text-2);font-variant-numeric:tabular-nums;margin-top:1px}
-.wish-act{display:flex;gap:0.25rem;flex-shrink:0}
-.wish-act button{width:auto;margin:0;padding:0.3125rem 0.5rem;font-size:0.75rem;border-radius:7px;
-    border:1px solid var(--line);background:var(--surface-2);color:var(--text-2);cursor:pointer}
-.wish-act button:hover{color:var(--text-1);border-color:var(--line-strong)}
-.wish-act .del:hover{color:var(--red);border-color:var(--red)}
-
-/* Ideen-Sammlung — gleiche Zeilenform wie die Wunschliste, damit der Tab
-   nicht zwischen Karten und Chip-Wolke springt. Getaggt wird nur die Sorte
-   (Meilenstein / Wochenziel), sonst gar nicht. */
-.wish-ico.idea{background:rgba(139,92,246,0.12)}
-:root[data-theme="dark"] .wish-ico.idea{background:rgba(139,92,246,0.2)}
-.idea-kind{flex-shrink:0;font-size:0.6875rem;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}
-.idea-kind.milestone{color:var(--green-dark);background:var(--green-bg)}
-:root[data-theme="dark"] .idea-kind.milestone{color:#4ade80;background:rgba(34,197,94,0.15)}
-.idea-kind.progress{color:var(--blue-dark);background:var(--blue-bg)}
-:root[data-theme="dark"] .idea-kind.progress{color:#93c5fd;background:rgba(59,130,246,0.18)}
-
-@media(max-width:500px){
-    main{padding:0 0.75rem}
-    .hero-top{gap:1rem}
-    .hero-radial{--ring-size:110px}
-    .hero-radial .v-ring-val{font-size:1.375rem}
-    /* Auf dem Handy behielt der Ring seinen Platz links, und die drei
-       Kacheln quetschten sich in die 213px daneben. Als Raster liegt der
-       Ring neben dem Namen, die Betraege bekommen die volle Breite --
-       `display:contents` loest dafuer die Zwischenebene .hero-info auf,
-       damit ihre Kinder direkt im Raster stehen. */
-    .hero{padding:1.125rem}
-    .hero-top{display:grid;grid-template-columns:auto 1fr;
-        align-items:center;gap:0.75rem 1rem}
-    .hero-info{display:contents}
-    .hero-radial{--ring-size:104px}
-    .hero-radial .v-ring-val{font-size:1.375rem}
-    /* Der Zielname darf umbrechen, aber nicht gekuerzt werden: "Reise ..."
-       beantwortet die Frage, welches Ziel das ist, nicht mehr. */
-    .hero-name{grid-column:2;margin:0;font-size:1.1875rem;min-width:0;
-        align-items:flex-start;line-height:1.25}
-    .hero-name span{overflow-wrap:anywhere}
-    .hero-stats{grid-column:1 / -1;grid-template-columns:1fr;gap:0.375rem}
-    .hero-stat{display:flex;align-items:baseline;justify-content:space-between;
-        gap:0.75rem;padding:0.5rem 0.75rem}
-    .hero-stat .lbl{margin:0;flex:none}
-    .hero-stat strong{font-size:1rem;text-align:right;overflow:visible}
-    /* Der Zeitraum hinter "Wochenziele" bricht auf schmalen Schirmen um --
-       dann darf er nicht mit einem einsamen Mittepunkt beginnen. */
-    .sh .period-lbl{margin-left:0;flex-basis:100%}
-    .ach-edit-form .grid2{grid-template-columns:1fr}
-    .if-grid{grid-template-columns:1fr}
-    .sg-grid,.wish-grid{grid-template-columns:1fr}
-    .he-btn,.buffer-btn{width:100%}
-    .hero-empty{gap:0.875rem}
-    /* v1.36.0: Tab-Overrides entfernt — .tabs/.tab-btn wird vollstaendig aus style.css bezogen */
-    .log-desc{display:none}
-    /* v1.41.1: Tag und Betrag duerfen schmaler werden, damit fuer den Titel
-       neben der eigenen Notizzeile (siehe unten) genug Platz bleibt. */
-    .log-tag{min-width:72px;padding:2px 6px}
-    .log-amt{min-width:0}
+.sz-b-kurve { display: flex; flex-direction: column; min-width: 0; }
+.sz-b-kurve-kopf {
+    display: flex; justify-content: space-between; gap: var(--space-3);
+    margin-bottom: 0.375rem;
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-3);
+}
+.sz-b-kurve-kopf span:last-child { text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.sz-b-kurve-flaeche { position: relative; height: 128px; }
+@media (min-width: 900px) { .sz-b-kurve-flaeche { flex: 1; min-height: 260px; } }
+.sz-b-kurve-leer {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 0.8125rem; color: var(--text-3); text-align: center;
+    border: 1px dashed var(--line-strong); border-radius: var(--radius);
 }
 
-/* v1.41.1: Notiz auf eigener, voller Zeile, solange die Log-Zeile schmal ist.
-   Vorher war die Notiz das einzige schrumpfbare Element der Zeile: neben Tag,
-   Titel, Betrag und den beiden Buttons blieb auf dem Handy eine Spalte von
-   wenigen Pixeln uebrig, der Text brach auf ein Zeichen pro Zeile um und ein
-   einziger Log-Eintrag wurde meterhoch. ``order`` schiebt sie hinter die
-   Buttons, ``flex-basis:100%`` zwingt sie in eine eigene Zeile — Betrag und
-   Buttons bleiben dadurch oben in der ersten Zeile stehen. */
-@media(max-width:700px){
-    .log-row{gap:0.25rem 0.5rem}
-    .log-note-inline{order:2;flex:1 1 100%;width:100%;text-align:left;padding:0;margin:1px 0 2px;line-height:1.45}
+/* Die Bühne nimmt eine Gutschrift sichtbar auf: kurz ein Schein am Rand. */
+.sz-buehne.ist-gefuellt { animation: szGefuellt 900ms var(--ease); }
+@keyframes szGefuellt {
+    0%   { box-shadow: var(--kante-licht), 0 0 0 0 color-mix(in srgb, var(--buehne-ton) 0%, transparent); }
+    30%  { box-shadow: var(--kante-licht), 0 0 0 5px color-mix(in srgb, var(--buehne-ton) 30%, transparent); }
+    100% { box-shadow: var(--kante-licht), 0 0 0 0 color-mix(in srgb, var(--buehne-ton) 0%, transparent); }
+}
+/* Der Betrag, der von der Kachel in den Tank fliegt. */
+.sz-flug {
+    position: fixed; left: 0; top: 0; z-index: 3000;
+    padding: 0.375rem 0.75rem; border-radius: 999px;
+    background: var(--ok); color: var(--accent-ink);
+    font-size: 0.9375rem; font-weight: 750; font-variant-numeric: tabular-nums;
+    box-shadow: 0 10px 28px -8px color-mix(in srgb, var(--ok) 70%, transparent);
+    pointer-events: none; white-space: nowrap;
+}
+
+/* ---------- Heute: zwei Spalten am Rechner ---------- */
+.sz-heute-raster { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--space-5); }
+@media (min-width: 1000px) {
+    .sz-heute-raster { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+}
+
+/* Gemeinsam für Kacheln, die man ziehen kann */
+.drag-handle {
+    position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 44px; display: grid; place-items: center;
+    color: var(--text-4); cursor: grab; touch-action: none; z-index: 1;
+}
+.drag-handle:hover { color: var(--text-2); }
+.drag-handle:active { cursor: grabbing; }
+.sortable-ghost { opacity: 0.35; }
+.sortable-chosen { box-shadow: var(--shadow-float); }
+.pending-delete { opacity: 0.35; pointer-events: none; transition: opacity var(--dur-2) var(--ease); }
+
+.sz-betrag { color: var(--ok); font-weight: 700; font-variant-numeric: tabular-nums; }
+.sz-serie { display: inline-flex; align-items: center; gap: 3px; color: var(--warn); font-weight: 600; }
+
+/* ---------- Wochenziel-Kachel ----------
+   Die ganze Kachel ist der Knopf für den häufigen Fall: einchecken. Der
+   seltene (ändern, Verlauf, zurücknehmen) steht klein oben rechts. */
+.sz-gw-liste { display: flex; flex-direction: column; gap: var(--space-3); }
+.sz-gw {
+    position: relative;
+    border-radius: var(--radius-lg);
+    background: var(--flaeche);
+    border: 1px solid var(--line);
+    box-shadow: var(--kante-licht);
+    transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
+}
+.sz-gw.ist-fertig {
+    border-color: color-mix(in srgb, var(--ok) 34%, var(--line));
+    background: color-mix(in srgb, var(--ok) 5%, var(--surface-1));
+}
+.sz-gw-knopf {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center; gap: 0.875rem;
+    width: 100%; margin: 0;
+    padding: 0.875rem 0.875rem 0.875rem 1.875rem;
+    background: transparent; border: 0; border-radius: inherit;
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+    transition: background var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+}
+.sz-gw-knopf:hover { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+.sz-gw-knopf:active { transform: scale(0.99); }
+.sz-gw-knopf:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sz-gw-ring { --ring-size: 54px; --ring-w: 10px; --ring-tone: var(--sz-ton); }
+.sz-gw.ist-fertig .sz-gw-ring { --ring-tone: var(--ok); }
+.sz-gw-zahl { font-size: 0.9375rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; line-height: 1; }
+.sz-gw-zahl small { font-size: 0.6875rem; font-weight: 600; color: var(--text-3); }
+.sz-gw-text { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; padding-right: 1.75rem; }
+.sz-gw-titel {
+    font-size: 0.9375rem; font-weight: 700; color: var(--text-1); letter-spacing: -0.01em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sz-gw-meta {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.125rem 0.375rem;
+    font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums;
+}
+.sz-gw-meta .sep { color: var(--text-4); }
+.sz-gw-teil.ist-sicher { color: var(--ok); font-weight: 600; }
+.sz-gw-plus {
+    align-self: end;
+    display: grid; place-items: center;
+    width: 44px; height: 44px; border-radius: 50%;
+    color: var(--sz-ton);
+    background: color-mix(in srgb, var(--sz-ton) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--sz-ton) 36%, transparent);
+    transition: background var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+}
+.sz-gw-knopf:hover .sz-gw-plus { background: color-mix(in srgb, var(--sz-ton) 24%, transparent); }
+.sz-gw.ist-fertig .sz-gw-plus {
+    color: var(--ok); background: var(--ok-soft);
+    border-color: color-mix(in srgb, var(--ok) 36%, transparent);
+}
+.sz-gw.ist-getippt .sz-gw-plus { animation: szTipp 380ms var(--ease); }
+@keyframes szTipp { 40% { transform: scale(0.86); } 100% { transform: none; } }
+.sz-gw-mehr { position: absolute; top: 0.375rem; right: 0.375rem; color: var(--text-3); }
+.sz-gw-mehr:hover { color: var(--text-1); }
+
+/* Der Wochenstreifen: sieben Tage, gefüllt, wo eingecheckt wurde. */
+.sz-streifen {
+    display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px; margin-top: 0.375rem; max-width: 270px;
+}
+.sz-tag { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.sz-tag-n { font-size: 0.625rem; font-weight: 600; color: var(--text-3); line-height: 1; }
+.sz-tag-punkt {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: grid; place-items: center;
+    border: 1.5px solid var(--line-strong);
+    font-size: 0.625rem; font-weight: 800; color: var(--accent-ink);
+    font-variant-numeric: tabular-nums;
+}
+.sz-tag.ist-voll .sz-tag-punkt { background: var(--sz-ton); border-color: transparent; }
+.sz-gw.ist-fertig .sz-tag.ist-voll .sz-tag-punkt { background: var(--ok); }
+.sz-tag.ist-heute .sz-tag-n { color: var(--text-1); }
+.sz-tag.ist-heute .sz-tag-punkt {
+    box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3.5px color-mix(in srgb, var(--sz-ton) 65%, transparent);
+}
+.sz-tag.ist-spaeter .sz-tag-punkt { border-style: dashed; opacity: 0.55; }
+.sz-tag.ist-neu .sz-tag-punkt { animation: szPunkt 420ms var(--ease); }
+@keyframes szPunkt { 0% { transform: scale(0.4); } 60% { transform: scale(1.12); } 100% { transform: none; } }
+/* Monatsziele: die Zahl der Check-ins als Punkte, die Schwelle der
+   Teilbelohnung gestrichelt umrandet. */
+.sz-punkte { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 0.375rem; }
+.sz-punkt { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
+.sz-punkt.ist-voll { background: var(--sz-ton); border-color: transparent; }
+.sz-punkt.ist-schwelle { outline: 1.5px dashed var(--warn); outline-offset: 2px; }
+
+/* ---------- Achievement-Karte ---------- */
+.sz-ms-liste { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+@media (min-width: 640px) and (max-width: 999px) {
+    .sz-ms-liste { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.sz-ms {
+    --ms-ton: var(--sz-ton);
+    position: relative;
+    display: flex; flex-direction: column; gap: 0.375rem;
+    padding: 0.875rem 0.875rem 0.875rem 1.875rem;
+    border-radius: var(--radius-lg);
+    background: var(--flaeche);
+    border: 1px solid var(--line);
+    box-shadow: var(--kante-licht);
+}
+.sz-ms.ist-getippt { animation: szKarte 420ms var(--ease); }
+@keyframes szKarte { 40% { transform: scale(0.985); } 100% { transform: none; } }
+.sz-ms-kopf { display: flex; align-items: center; gap: 0.5rem; padding-right: 2.25rem; }
+.sz-ms-titel {
+    flex: 1; min-width: 0;
+    font-size: 0.9375rem; font-weight: 700; letter-spacing: -0.01em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sz-ms-kopf .sz-betrag { font-size: 0.8125rem; }
+.sz-ms-mehr { position: absolute; top: 0.375rem; right: 0.375rem; color: var(--text-3); }
+.sz-ms-mehr:hover { color: var(--text-1); }
+.sz-ms-wert { display: flex; align-items: baseline; gap: 0.375rem; flex-wrap: wrap; }
+.sz-ms-wert strong {
+    font-size: 1.75rem; font-weight: 750; letter-spacing: -0.03em; line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+}
+.sz-ms-einheit { font-size: 0.875rem; font-weight: 600; color: var(--text-2); }
+.sz-ms-ziel { font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.sz-ms-quelle {
+    display: flex; align-items: center; gap: 0.375rem;
+    font-size: 0.75rem; color: var(--text-3); min-width: 0;
+}
+.sz-ms-quelle::before {
+    content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ms-ton);
+}
+.sz-ms-quelle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sz-ms-quelle.ist-leer::before { background: var(--line-strong); }
+.sz-ms-balken { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 0.125rem; }
+.sz-ms-balken i {
+    display: block; height: 100%; border-radius: inherit;
+    background: var(--grad-progress);
+    transition: width 600ms var(--ease);
+}
+.sz-ms-fuss { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.sz-ms-naechster { font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.sz-ms-plus { color: var(--sz-ton); border-color: color-mix(in srgb, var(--sz-ton) 36%, transparent);
+    background: color-mix(in srgb, var(--sz-ton) 12%, transparent); }
+.sz-ms-plus:hover { background: color-mix(in srgb, var(--sz-ton) 22%, transparent); }
+.sz-ms-erreicht {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.75rem; font-weight: 700; color: var(--ok);
+}
+/* Ein fälliger Meilenstein aus einer Quelle: die einzige Stelle, an der Geld
+   fließt -- die Quelle liest nur, gebucht wird hier. */
+.sz-ms-treffer {
+    display: flex; align-items: center; gap: 0.75rem;
+    margin-top: 0.25rem; padding: 0.625rem 0.75rem;
+    border-radius: var(--radius);
+    background: var(--ok-soft);
+    border: 1px solid color-mix(in srgb, var(--ok) 34%, transparent);
+}
+.sz-ms-treffer-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sz-ms-treffer-text strong { color: var(--ok); font-size: 0.875rem; }
+.sz-ms-treffer-text span { font-size: 0.75rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.sz-ms-treffer .v-btn {
+    color: var(--ok); background: color-mix(in srgb, var(--ok) 18%, transparent);
+    border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+.sz-ms-treffer .v-btn:hover { background: color-mix(in srgb, var(--ok) 28%, transparent); }
+
+/* ---------- Verlauf ---------- */
+.sz-trophaeen {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(172px, 210px);
+    gap: var(--space-3); overflow-x: auto; scroll-snap-type: x proximity;
+    padding-bottom: 2px; scrollbar-width: none;
+}
+.sz-trophaeen::-webkit-scrollbar { display: none; }
+.sz-trophaeen.ist-leer { display: block; }
+.sz-trophae {
+    --t-ton: var(--warn);
+    scroll-snap-align: start;
+    display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+    width: 100%; margin: 0; padding: 1rem 0.875rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid color-mix(in srgb, var(--t-ton) 30%, var(--line));
+    background:
+        radial-gradient(90% 55% at 50% 0%, color-mix(in srgb, var(--t-ton) 16%, transparent), transparent 75%),
+        var(--flaeche);
+    box-shadow: var(--kante-licht);
+    color: inherit; font: inherit; text-align: center; cursor: pointer;
+    transition: transform var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.sz-trophae:hover { border-color: color-mix(in srgb, var(--t-ton) 50%, var(--line)); }
+.sz-trophae:active { transform: scale(0.98); }
+.sz-trophae:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sz-trophae.gold { --t-ton: var(--warn); }
+.sz-trophae.silver { --t-ton: var(--text-2); }
+.sz-trophae.bronze { --t-ton: var(--m-schach); }
+.sz-trophae.blue { --t-ton: var(--info); }
+.sz-trophae.green { --t-ton: var(--ok); }
+.sz-trophae.purple { --t-ton: var(--m-admin); }
+.sz-trophae-icon { font-size: 2rem; line-height: 1.1; }
+.sz-trophae-name {
+    max-width: 100%; margin-top: 0.25rem;
+    font-weight: 700; font-size: 0.875rem; color: var(--text-1);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sz-trophae-betrag { color: var(--t-ton); font-weight: 750; font-size: 1.125rem; font-variant-numeric: tabular-nums; }
+.sz-trophae-meta { font-size: 0.6875rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+.sz-chronik-leiste { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-3); }
+.sz-suche { position: relative; flex: 1; min-width: 0; margin: 0; }
+.sz-suche [data-ikon] {
+    position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%);
+    display: flex; color: var(--text-3); pointer-events: none;
+}
+.sz-suche input {
+    margin: 0; min-height: 44px; padding-left: 2.375rem;
+    background: var(--surface-2); border-color: var(--line); border-radius: 10px;
+}
+.sz-chronik-leiste .filter-toggle-btn { min-height: 44px; border-radius: 10px; padding: 0 0.875rem; }
+.sz-filter { gap: 0.5rem; }
+.sz-filter-wahl { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.sz-filter-wahl + .fp-label { margin-top: 0.375rem; }
+
+.sz-woche-gruppe + .sz-woche-gruppe { margin-top: var(--space-2); }
+.sz-woche-kopf {
+    display: flex; align-items: center; gap: 0.75rem;
+    width: 100%; margin: 0; min-height: 48px; padding: 0.625rem 0.875rem;
+    background: var(--flaeche); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--kante-licht);
+    color: var(--text-1); font: inherit; text-align: left; cursor: pointer;
+    transition: background var(--dur-1) var(--ease);
+}
+.sz-woche-kopf:hover { background: var(--surface-2); }
+.sz-woche-kopf:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sz-woche-kopf[aria-expanded="true"] { border-radius: var(--radius) var(--radius) 0 0; }
+.sz-woche-lbl { font-size: 0.875rem; font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sz-woche-n { font-size: 0.75rem; color: var(--text-3); white-space: nowrap; }
+.sz-woche-summe { margin-left: auto; color: var(--ok); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sz-woche-pfeil { display: flex; color: var(--text-3); transition: transform var(--dur-2) var(--ease); }
+.sz-woche-kopf[aria-expanded="true"] .sz-woche-pfeil { transform: rotate(90deg); }
+.sz-woche-inhalt {
+    padding: 0.25rem 0.75rem 0.75rem;
+    border: 1px solid var(--line); border-top: 0;
+    border-radius: 0 0 var(--radius) var(--radius);
+    background: var(--surface-1);
+}
+.sz-tag-kopf {
+    display: flex; justify-content: space-between; gap: 0.75rem;
+    margin: 0.75rem 0.125rem 0.375rem;
+    font-size: 0.75rem; font-weight: 600; color: var(--text-3);
+}
+.sz-tag-kopf span:last-child { color: var(--ok); font-variant-numeric: tabular-nums; }
+.sz-log .rec-val.ist-bonus { color: var(--warn); }
+.sz-log .rec-val.ist-plus { color: var(--ok); }
+.sz-log .rec-val.ist-null { color: var(--text-4); }
+.sz-log .rec-val.ist-delta { color: var(--text-2); }
+.sz-log-notiz { color: var(--text-2); font-style: italic; }
+.sz-log .rec-mark { font-weight: 700; }
+.sz-sicherung { margin-top: var(--space-4); color: var(--text-3); }
+
+/* ---------- Ziele ---------- */
+.sz-summe { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.sz-summe > div {
+    padding: 0.75rem 0.875rem; min-width: 0;
+    border-radius: var(--radius-lg); border: 1px solid var(--line);
+    background: var(--flaeche); box-shadow: var(--kante-licht);
+}
+.sz-summe span {
+    display: block; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sz-summe strong {
+    display: block; margin-top: 2px;
+    font-size: 1.0625rem; font-weight: 750; letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sz-summe strong.ist-plus { color: var(--ok); }
+
+.sz-ziele { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-3); }
+.sz-ziel {
+    display: flex; flex-direction: column; gap: 0.5rem;
+    padding: 1rem;
+    border-radius: var(--radius-lg); border: 1px solid var(--line);
+    background: var(--flaeche); box-shadow: var(--kante-licht);
+}
+.sz-ziel.ist-aktiv { border-color: color-mix(in srgb, var(--sz-ton) 40%, var(--line)); }
+.sz-ziel-kopf { display: flex; align-items: center; gap: 0.5rem; }
+.sz-ziel-name {
+    flex: 1; min-width: 0;
+    font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sz-pille {
+    flex: none; padding: 2px 8px; border-radius: 999px;
+    font-size: 0.6875rem; font-weight: 700;
+    background: var(--surface-2); color: var(--text-3);
+}
+.sz-pille.ist-aktiv { background: color-mix(in srgb, var(--sz-ton) 18%, transparent); color: var(--sz-ton); }
+.sz-pille.ist-voll { background: var(--ok-soft); color: var(--ok); }
+.sz-ziel-betrag {
+    font-size: 1.375rem; font-weight: 750; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+.sz-ziel-betrag small { font-size: 0.8125rem; font-weight: 600; color: var(--text-3); letter-spacing: 0; }
+.sz-balken { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.sz-balken i { display: block; height: 100%; border-radius: inherit; background: var(--grad-progress); }
+.sz-ziel-meta { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.sz-ziel-aktionen { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.25rem; }
+
+.sz-puffer {
+    display: flex; align-items: center; gap: 0.875rem;
+    margin-top: var(--space-3); padding: 0.875rem 1rem;
+    border-radius: var(--radius-lg); border: 1px dashed var(--line-strong);
+    background: var(--surface-1);
+}
+.sz-puffer-ikon {
+    flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
+    color: var(--warn); background: var(--warn-soft);
+}
+.sz-puffer-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sz-puffer-lbl { font-size: 0.75rem; color: var(--text-3); font-weight: 600; }
+.sz-puffer-text strong { font-size: 1.125rem; font-variant-numeric: tabular-nums; }
+.sz-puffer-hint { font-size: 0.75rem; color: var(--text-3); }
+@media (max-width: 520px) {
+    .sz-puffer { flex-wrap: wrap; }
+    .sz-puffer .v-btn { width: 100%; min-height: 44px; }
+}
+
+.sz-art {
+    flex: none; padding: 2px 8px; border-radius: 999px; font-size: 0.6875rem; font-weight: 700;
+    background: var(--surface-3); color: var(--text-2);
+}
+
+/* ---------- Dialoge ---------- */
+.modal-body :where(input:not([type="checkbox"]), select, textarea) { background: var(--surface-2); }
+.sz-felder { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 0.75rem; }
+.sz-felder > div { min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.sz-felder label { font-size: 0.8125rem; }
+.sz-dlg-h {
+    margin: 1.25rem 0 0.625rem;
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-3);
+}
+.sz-dlg-h:first-child { margin-top: 0; }
+.sz-dlg-hinweis { margin: 0 0 0.875rem; font-size: 0.8125rem; line-height: 1.5; color: var(--text-2); }
+.sz-dlg-stand {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    padding: 0.75rem 0.875rem; margin-bottom: 0.25rem;
+    border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--line);
+}
+.sz-dlg-stand strong { display: block; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.sz-dlg-stand span { font-size: 0.75rem; color: var(--text-3); }
+.sz-reihe { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.sz-setzen { display: flex; gap: 0.5rem; align-items: stretch; }
+.sz-setzen input { margin: 0; flex: 1; min-width: 0; }
+.sz-check {
+    display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem 0 0.25rem;
+    font-size: 0.875rem; color: var(--text-2); font-weight: 500;
+}
+.sz-check input { margin: 0; width: 18px; height: 18px; accent-color: var(--accent); }
+.sz-details { display: grid; grid-template-columns: auto 1fr; gap: 0.375rem 1rem; margin: 0 0 0.5rem; font-size: 0.875rem; }
+.sz-details dt { color: var(--text-3); }
+.sz-details dd { margin: 0; color: var(--text-1); font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+
+/* Vergangene Perioden im Wochenziel-Dialog */
+.sz-hist { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.sz-hist-zeile { display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.75rem; min-height: 44px; background: var(--surface-2); }
+.sz-hist-zeile.ist-jetzt { background: color-mix(in srgb, var(--sz-ton) 8%, var(--surface-2)); }
+.sz-hist-mark {
+    flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+    color: var(--text-3); background: var(--surface-3);
+}
+.sz-hist-mark.ist-ok { color: var(--ok); background: var(--ok-soft); }
+.sz-hist-mark.ist-teil { color: var(--warn); background: var(--warn-soft); }
+.sz-hist-mark.ist-jetzt { color: var(--info); background: var(--info-soft); }
+.sz-hist-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sz-hist-lbl { font-size: 0.8125rem; font-weight: 600; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sz-hist-sub { font-size: 0.6875rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.sz-hist-zahl { font-size: 0.8125rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.sz-hist-zahl.ist-ok { color: var(--ok); }
+.sz-hist-mehr { margin-top: 0.5rem; }
+
+/* ---------- Leere Zustände, Fehler und Laden ---------- */
+.sz .empty { margin: 0; }
+/* Die Platzhalter haben ungefähr die Höhe dessen, was kommt -- sonst rutscht
+   beim Wechsel des Reiters alles darunter, sobald die Antwort da ist. */
+.sz-skel-kachel { height: 104px; border-radius: var(--radius-lg); }
+.sz-skel-karte { height: 150px; border-radius: var(--radius-lg); }
+.sz-skel-trophae { height: 148px; border-radius: var(--radius-lg); }
+.sz-skel-zeile { height: 48px; border-radius: var(--radius); margin-bottom: var(--space-2); }
+.sz-skel-summe { height: 62px; border-radius: var(--radius-lg); }
+.sz-skel-ziel { height: 196px; border-radius: var(--radius-lg); }
+
+/* ---------- Toast ----------
+   Schwebt als dunkle Pille über der Tab-Leiste; eine weiße Fläche war im
+   dunklen Bild das Lauteste auf der Seite. */
+.toast {
+    position: fixed; left: 50%; bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    transform: translate(-50%, 8px);
+    display: flex; align-items: center; gap: 0.75rem;
+    max-width: min(92vw, 440px); padding: 0.625rem 0.75rem 0.625rem 1rem;
+    background: var(--surface-3); color: var(--text-1);
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    box-shadow: var(--shadow-float);
+    font-size: 0.875rem; text-align: left;
+    z-index: 2100; opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast.err { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.toast .undo-btn {
+    flex: none; width: auto; margin: 0; min-height: 34px; padding: 0 0.75rem;
+    background: transparent; color: var(--accent); border: 0; border-radius: 999px;
+    font: inherit; font-weight: 700; cursor: pointer;
+}
+.toast .undo-btn:hover { background: var(--accent-soft); }
+@media (max-width: 720px) {
+    .toast { bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
+
+#confettiCanvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5000; display: none; }
+#confettiCanvas.show { display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+    .sz-flug { display: none; }
+    .sz-buehne.ist-gefuellt, .sz-gw.ist-getippt .sz-gw-plus, .sz-tag.ist-neu .sz-tag-punkt, .sz-ms.ist-getippt { animation: none; }
+}
+
+/* ---------- Berührungsziele (DESIGN 4) ---------- */
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .sz-b-bearb, .sz-gw-mehr, .sz-ms-mehr { width: 44px; height: 44px; }
+    .sz .v-abschnitt-kopf .v-btn { min-height: 44px; }
+    .sz-ms-plus, .sz-ziel-aktionen .v-btn, .sz-ms-treffer .v-btn { min-height: 44px; }
+    .sz-filter .v-chip { min-height: 40px; }
+    .sz-ziel-aktionen .v-btn--icon { width: 44px; }
+    .sz-hist-zeile .v-btn, .sz-dlg-stand .v-btn, .sz-reihe .v-btn, .sz-setzen .v-btn { min-height: 44px; min-width: 44px; }
 }

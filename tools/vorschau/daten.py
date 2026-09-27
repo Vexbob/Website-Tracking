@@ -319,11 +319,97 @@ AUTO_STATUS = [
      "offene_meilensteine": 0, "gutschrift": 0.0, "abweichung": 24.0},
 ]
 
+# Seit v2.19.0 mit den Tagen der laufenden Woche (``current_dates``), aus
+# denen die Kachel ihren Wochenstreifen zeichnet -- und mit drei Zuständen:
+# unterwegs, knapp vor der Teilbelohnung, und ein Monatsziel, das voll ist.
+_MONTAG = HEUTE - datetime.timedelta(days=HEUTE.weekday())
+_BISHER = [_MONTAG + datetime.timedelta(days=i) for i in range(HEUTE.weekday() + 1)]
+
+
+def _wochentage(*versatz):
+    """Tage dieser Woche bis heute; Versatz 0 ist Montag."""
+    return [str(_MONTAG + datetime.timedelta(days=v)) for v in versatz
+            if _MONTAG + datetime.timedelta(days=v) <= HEUTE]
+
+
 PROGRESS_GOALS = [
     {"id": 1, "title": "Dreimal Sport", "reward_amount": 5, "rhythm_type": "weekly",
-     "target_count": 3, "current_count": 2, "streak": 4, "streak_bonus_amount": 10,
-     "streak_bonus_threshold": 4, "period_key": "2026-KW38", "sort_order": 1,
-     "reward_goal_id": None, "is_completed": False},
+     "target_count": 3, "streak": 4, "streak_bonus_amount": 10,
+     "streak_bonus_threshold": 4, "sort_order": 1, "partial_count": 0,
+     "partial_percent": 0, "reward_goal_id": None, "is_completed": False,
+     "current_dates": _wochentage(0, 2)},
+    {"id": 2, "title": "Lesen vor dem Schlafen", "reward_amount": 8, "rhythm_type": "weekly",
+     "target_count": 5, "streak": 0, "streak_bonus_amount": 0,
+     "streak_bonus_threshold": 0, "sort_order": 2, "partial_count": 3,
+     "partial_percent": 50, "reward_goal_id": None, "is_completed": False,
+     "current_dates": _wochentage(0, 0, 1)},
+    {"id": 3, "title": "Kein Lieferdienst", "reward_amount": 15, "rhythm_type": "monthly",
+     "target_count": 4, "streak": 2, "streak_bonus_amount": 0,
+     "streak_bonus_threshold": 0, "sort_order": 3, "partial_count": 0,
+     "partial_percent": 0, "reward_goal_id": None, "is_completed": False,
+     "current_dates": [str(HEUTE.replace(day=1))] * 4},
+]
+for _g in PROGRESS_GOALS:
+    _g["current_count"] = len(_g["current_dates"])
+
+
+def _pg_verlauf():
+    """Vergangene Wochen fuer den Dialog eines Wochenziels."""
+    raus = []
+    for n, (anzahl, voll) in enumerate([(2, False), (3, True), (3, True), (1, False), (3, True)]):
+        start = _MONTAG - datetime.timedelta(days=7 * n)
+        jahr, woche, _ = start.isocalendar()
+        raus.append({
+            "period_key": f"{jahr}-W{woche:02d}", "start": str(start),
+            "end": str(start + datetime.timedelta(days=6)),
+            "current_count": anzahl, "target_count": 3, "fulfilled": voll,
+            "is_current": n == 0, "paid_out": voll and n > 0,
+            "partial_paid": None,
+            "log_dates": [str(start + datetime.timedelta(days=2 * i)) for i in range(anzahl)
+                          if start + datetime.timedelta(days=2 * i) <= HEUTE]})
+    return raus
+
+
+def _sparkurve():
+    """Vier Monate Sparstand, Tag fuer Tag, endend bei SPARZIEL["total_saved"]."""
+    tage = 120
+    zugang = {}
+    for i in range(tage):
+        if i == 0:
+            zugang[i] = 600.0
+        elif i % 9 == 0:
+            zugang[i] = 45.0
+        elif i % 4 == 0:
+            zugang[i] = 15.0
+        elif i % 7 == 3:
+            zugang[i] = 8.0
+    # Der Anfangsbestand nimmt, was bis zum Stand fehlt -- so endet die Kurve
+    # genau bei der Zahl auf der Bühne.
+    zugang[0] = round(SPARZIEL["total_saved"] - sum(v for k, v in zugang.items() if k), 2)
+    punkte, stand = [], 0.0
+    for i in range(tage):
+        stand = round(stand + zugang.get(i, 0.0), 2)
+        punkte.append({"date": str(HEUTE - datetime.timedelta(days=tage - 1 - i)),
+                       "cumulative": stand, "added": zugang.get(i, 0.0)})
+    return {"goal": SPARZIEL["goal"], "step": "tag", "points": punkte}
+
+
+TROPHAEEN = [
+    {"id": 1, "name": "Kamera gekauft", "icon": "🏆", "color": "gold",
+     "final_amount": 850.0, "target_amount": 850.0,
+     "completed_at": "2026-05-14T18:20:00", "duration_days": 142, "note": "Endlich!"},
+    {"id": 2, "name": "Konzertreise", "icon": "🎉", "color": "purple",
+     "final_amount": 420.0, "target_amount": 400.0,
+     "completed_at": "2026-02-02T10:00:00", "duration_days": 61, "note": None},
+]
+WUENSCHE = [
+    {"id": 1, "name": "Kopfhörer mit Geräuschunterdrückung", "estimated_price": 249.0},
+    {"id": 2, "name": "Kletterschuhe", "estimated_price": None},
+]
+IDEEN = [
+    {"id": 1, "title": "Sprachkurs Spanisch", "category": "milestone"},
+    {"id": 2, "title": "Jeden Morgen zehn Minuten dehnen", "category": "progress"},
+    {"id": 3, "title": "Wochenende in Wien", "category": None},
 ]
 
 
@@ -782,12 +868,15 @@ ANTWORTEN = {
     "/api/achievements/auto-status": AUTO_STATUS,
     "/api/achievements/auto-sources": _quellen_katalog(),
     "/api/progress-goals": PROGRESS_GOALS,
-    "/api/potential-goals": [],
-    "/api/future-ideas": [],
-    "/api/trophies": [],
+    "/api/progress-goals/*/history": _pg_verlauf(),
+    "/api/progress-goals/*/checkin": {"current_count": 3, "target_count": 3, "fulfilled": True,
+                                      "paid_out": True, "streak_bonus_paid": False, "streak": 5},
+    "/api/potential-goals": WUENSCHE,
+    "/api/future-ideas": IDEEN,
+    "/api/trophies": TROPHAEEN,
     "/api/activity-log": LOG_EREIGNISSE,
     "/api/activity-log/summary": LOG_SUMMEN,
-    "/api/stats/savings-progress": {"points": []},
+    "/api/stats/savings-progress": _sparkurve(),
 
     "/api/export/preview": EXPORT_PREVIEW,
     "/api/export/fit": EXPORT_FIT,

@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.19.0', date: '2026-09-28', title: 'Sparziel neu gebaut', notes: [
+        'Drei Reiter statt vier: Heute, Verlauf und Ziele – Log und Trophäen stehen zusammen im Verlauf.',
+        'Oben steht das Ziel als Tank mit großer Zahl, daneben der Sparverlauf, der wieder zeichnet.',
+        'Ein Wochenziel ist eine Kachel mit Wochenstreifen: ein Tipp checkt ein, „Rückgängig“ nimmt es zurück.',
+        'Wird Geld gutgeschrieben, fliegt der Betrag sichtbar ins Ziel.',
+        'Alle Fenster sind neue Dialoge, am Handy als Blatt von unten; auf Knöpfen stehen Zeichen statt Emoji.',
+    ]},
     { v: 'v2.18.0', date: '2026-09-27', title: 'Auffrischung: Reiter, Blätter, Karten', notes: [
         'Reiter stehen auch am Handy in einer Zeile, eine Markierung gleitet zum aktiven.',
         'Dialoge kommen am Handy als Blatt von unten; nach unten ziehen schließt sie.',

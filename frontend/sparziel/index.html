@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0a0c10">
-<meta name="description" content="Sparziel-Tracker mit Achievements, Wochenzielen und Trophaeen.">
+<meta name="description" content="Sparziel-Tracker mit Wochenzielen, Achievements und Trophäen.">
 <title>Sparziel-Tracker — Vexbob</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -15,9 +15,11 @@
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/reiter.js"></script>
 <script src="/js/ring.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
 <script src="/js/sw-update.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    <script src="/js/charts.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="/js/charts.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
 <link rel="stylesheet" href="/sparziel/sparziel.css">
 </head>
@@ -29,306 +31,155 @@
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main class="wide">
+<main class="wide sz">
+    <!-- v2.19.0: drei Reiter statt vier. „Heute“ ist, weswegen man die Seite
+         öffnet: das Ziel und das, was man diese Woche abhakt. Log und
+         Trophäen sind beide ein Rückblick und stehen jetzt zusammen. -->
     <div class="tabs">
-        <button id="tabDashboard" class="tab-btn active" data-tab="dashboard">Dashboard</button>
-        <button id="tabLog" class="tab-btn" data-tab="log">Log</button>
-        <button id="tabTrophies" class="tab-btn" data-tab="trophies">Trophäen</button>
-        <button id="tabIdeen" class="tab-btn" data-tab="ideen">Ideen &amp; Ziele</button>
+        <button id="tabHeute" class="tab-btn active" data-tab="heute">Heute</button>
+        <button id="tabVerlauf" class="tab-btn" data-tab="verlauf">Verlauf</button>
+        <button id="tabZiele" class="tab-btn" data-tab="ziele">Ziele</button>
     </div>
 
-    <div id="tab-dashboard">
-        <div class="hero" id="heroBox">
-            <div class="hero-empty">
-                <div class="he-ico">🪙</div>
-                <div class="he-body">
-                    <div class="he-title">Kein aktives Sparziel</div>
-                    <div class="he-sub">Alles, was du dir gerade verdienst, wandert in den <strong>Puffer</strong>. Von dort kannst du es jederzeit auf ein Sparziel übertragen, sobald du eines aktivierst.</div>
-                    <div class="he-amt"><span>Im Puffer</span><em id="heBufferAmt">–</em></div>
+    <div id="tab-heute">
+        <!-- Die Bühne: das aktive Ziel als Tank (Halbring, DESIGN 7a) mit der
+             Heldenzahl in der Mulde. Ohne aktives Ziel zeigt sie den Puffer. -->
+        <section class="v-buehne sz-buehne" id="heroBox">
+            <div class="sz-b-haupt">
+                <div class="sz-b-kopf">
+                    <div class="sz-b-titel">
+                        <span class="v-buehne-marke" id="szMarke">Sparziel</span>
+                        <h1 class="sz-b-name" id="goalName"><span class="skel skel-line" style="width:9rem"></span></h1>
+                    </div>
+                    <button type="button" class="v-btn v-btn--ghost v-btn--icon sz-b-bearb" id="szBearbeiten"
+                            onclick="dlgSparzielBearbeiten()" aria-label="Sparziel bearbeiten"><span data-ikon="stift"></span></button>
                 </div>
-                <button class="he-btn" onclick="startNewGoal()">+ Sparziel anlegen</button>
-            </div>
-            <div class="hero-top">
-                <!-- Der geteilte Ring aus css/style.css (v1.98.0). Vorher stand
-                     hier eine eigene Fassung; zwei Fortschrittsringe nebeneinander
-                     waeren genau die zweite Variante, die das Designsystem
-                     ausschliesst. --gut: mehr gespart als geplant ist ein Erfolg
-                     und traegt deshalb --ok statt --warn. -->
-                <div class="v-ring v-ring--gut hero-radial" id="sgRing"
-                     style="--ring-tone:var(--figure, var(--m-sparziel))">
+                <div class="v-ring v-ring--halb v-ring--gut sz-b-ring" id="sgRing">
                     <svg viewBox="0 0 100 100" aria-hidden="true">
                         <circle class="v-ring-track" cx="50" cy="50" r="42"/>
                         <circle class="v-ring-fill" cx="50" cy="50" r="42"/>
                         <circle class="v-ring-over" cx="50" cy="50" r="42"/>
                     </svg>
                     <div class="v-ring-txt">
-                        <strong class="v-ring-val" id="radialPct">0 %</strong>
-                        <span class="v-ring-lbl">gespart</span>
+                        <strong class="v-held" id="stTotal"><span class="skel sz-held-skel"></span></strong>
+                        <span class="sz-b-von" id="stTarget">&nbsp;</span>
                     </div>
                 </div>
-                <div class="hero-info">
-                    <div class="hero-name"><span id="goalName">Sparziel</span><button onclick="toggleHeroEdit()">✎</button></div>
-                    <div class="hero-stats">
-                        <div class="hero-stat"><span class="lbl">Gespart</span><strong class="pos" id="stTotal">–</strong></div>
-                        <div class="hero-stat"><span class="lbl">Ziel</span><strong id="stTarget">–</strong></div>
-                        <div class="hero-stat"><span class="lbl">Fehlend</span><strong id="stMissing">–</strong></div>
+                <dl class="sz-b-fakten" id="szFakten">
+                    <div><dt>Noch</dt><dd id="stMissing">–</dd></div>
+                    <div><dt>Diese Woche</dt><dd id="stWoche">–</dd></div>
+                    <div><dt>Im Puffer</dt><dd id="stPuffer">–</dd></div>
+                </dl>
+                <div class="sz-b-aktion" id="szAktion" hidden></div>
+            </div>
+            <div class="sz-b-kurve">
+                <div class="sz-b-kurve-kopf"><span>Sparverlauf</span><span id="szKurveSub"></span></div>
+                <div class="sz-b-kurve-flaeche"><canvas id="chartSavings" aria-label="Verlauf des Sparstands"></canvas></div>
+            </div>
+        </section>
+
+        <div class="sz-heute-raster">
+            <section class="v-abschnitt">
+                <header class="v-abschnitt-kopf">
+                    <h2>Wochenziele</h2>
+                    <span class="v-abschnitt-sub" id="pgPeriodLbl"></span>
+                    <button type="button" class="v-btn v-btn--ghost v-btn--sm" onclick="dlgNeuesWochenziel()"><span data-ikon="plus" data-ikon-gross="16"></span>Neu</button>
+                </header>
+                <div id="pgList" class="sz-gw-liste"><span class="skel sz-skel-kachel"></span><span class="skel sz-skel-kachel"></span></div>
+            </section>
+
+            <section class="v-abschnitt">
+                <header class="v-abschnitt-kopf">
+                    <h2>Achievements</h2>
+                    <button type="button" class="v-btn v-btn--ghost v-btn--sm" onclick="dlgNeuesAchievement()"><span data-ikon="plus" data-ikon-gross="16"></span>Neu</button>
+                </header>
+                <div id="achGrid" class="sz-ms-liste"><span class="skel sz-skel-karte"></span><span class="skel sz-skel-karte"></span></div>
+            </section>
+        </div>
+    </div>
+
+    <div id="tab-verlauf" hidden>
+        <section class="v-abschnitt" id="szTrophaeen">
+            <header class="v-abschnitt-kopf">
+                <h2>Trophäen</h2>
+                <span class="v-abschnitt-sub" id="trophyStats"></span>
+            </header>
+            <div id="trophyGrid" class="sz-trophaeen"><span class="skel sz-skel-trophae"></span><span class="skel sz-skel-trophae"></span></div>
+        </section>
+
+        <section class="v-abschnitt">
+            <header class="v-abschnitt-kopf">
+                <h2>Chronik</h2>
+                <span class="v-abschnitt-sub" id="logSum"></span>
+            </header>
+            <div class="sz-chronik-leiste">
+                <label class="sz-suche">
+                    <span data-ikon="lupe" data-ikon-gross="17"></span>
+                    <input id="logSearch" type="search" placeholder="Suchen" aria-label="Chronik durchsuchen" autocomplete="off">
+                </label>
+                <div class="filter-popover-wrap">
+                    <button type="button" class="filter-toggle-btn" id="logFilterBtn" aria-expanded="false" aria-haspopup="true">
+                        <span data-ikon="filter" data-ikon-gross="16"></span><span id="logFilterLbl">Alle</span>
+                    </button>
+                    <div class="filter-popover sz-filter" id="logFilterPop" hidden>
+                        <p class="fp-label">Art</p>
+                        <div class="sz-filter-wahl" id="logFilterArten">
+                            <button type="button" class="v-chip is-active" data-filter="all">Alle</button>
+                            <button type="button" class="v-chip" data-filter="checkin">Check-ins</button>
+                            <button type="button" class="v-chip" data-filter="milestone">Meilensteine</button>
+                            <button type="button" class="v-chip" data-filter="progress">Fortschritt</button>
+                            <button type="button" class="v-chip" data-filter="streak_bonus">Boni</button>
+                            <button type="button" class="v-chip" data-filter="transfer">Überträge</button>
+                            <button type="button" class="v-chip" data-filter="initial">Start</button>
+                        </div>
+                        <p class="fp-label">Gruppiert</p>
+                        <div class="sz-filter-wahl" id="logFilterSicht">
+                            <button type="button" class="v-chip is-active" data-view="weekly">Nach Woche</button>
+                            <button type="button" class="v-chip" data-view="all">Nach Tag</button>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="hero-edit" id="heroEdit">
-                <div class="hero-edit-row">
-                    <label>Name<input id="sgName"></label>
-                    <label>Zielbetrag (€)<input id="sgTarget" type="number" step="0.01"></label>
-                    <button class="save" onclick="saveSparziel()">Speichern</button>
-                </div>
-                <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--line);text-align:right">
-                    <button class="sz-finish" onclick="openCompleteModal()">🏆 Ziel abschließen</button>
-                </div>
-            </div>
-            <div class="hero-chart-head">Verlauf des Sparstands</div>
-            <div class="hero-chart"><canvas id="chartSavings"></canvas></div>
-        </div>
-
-        <div class="sh">
-            <div class="sh-head">
-                <h2>Wochenziele <span class="sh-count" id="pgCount">0</span><span class="period-lbl" id="pgPeriodLbl"></span></h2>
-            </div>
-            <button class="sh-add" onclick="toggleForm('pgForm')">+ Neu</button>
-        </div>
-        <div id="pgForm" class="iform">
-            <div class="if-grid">
-                <div><label>Titel</label><input id="pgTitle" placeholder="z.B. Meditieren"></div>
-                <div><label>Belohnung (€)</label><input id="pgReward" type="number" step="0.01" placeholder="2"></div>
-                <div><label>Rhythmus</label><select id="pgRhythm"><option value="weekly">Wöchentlich</option><option value="monthly">Monatlich</option></select></div>
-                <div><label>Ziel-Anzahl</label><input id="pgTarget" type="number" placeholder="7"></div>
-                <div><label>Streak-Bonus alle N (0=aus)</label><input id="pgStreakN" type="number" min="0" placeholder="4"></div>
-                <div><label>Streak-Bonus €</label><input id="pgStreakAmt" type="number" step="0.01" placeholder="10"></div>
-                <div><label>Teilbelohnung ab (0=aus)</label><input id="pgTeilN" type="number" min="0" placeholder="5"></div>
-                <div><label>Davon ausgezahlt (%)</label><input id="pgTeilP" type="number" min="0" max="100" step="1" placeholder="50"></div>
-                <div><label>Belohnung geht an</label><select id="pgRewardGoal" title="Wenn leer: Auto-Routing"><option value="">Automatisch</option></select></div>
-            </div>
-            <button class="if-btn" onclick="createProgressGoal()">Erstellen</button>
-        </div>
-        <div id="pgList" class="pg-list"></div>
-
-        <div class="sh">
-            <div class="sh-head">
-                <h2>Achievements <span class="sh-count" id="achCount">0</span></h2>
-            </div>
-            <button class="sh-add" onclick="toggleForm('achForm')">+ Neu</button>
-        </div>
-        <div id="achForm" class="iform">
-            <label style="display:block;margin-bottom:6px">Preset</label>
-            <div class="presets">
-                <button class="preset-btn" data-preset="meilenstein">Meilenstein (+1)</button>
-                <button class="preset-btn" data-preset="wert">Wert / Messung</button>
-                <button class="preset-btn" data-preset="abnehmend">Abnehmend</button>
-            </div>
-            <div class="if-grid">
-                <div><label>Titel</label><input id="achTitle" placeholder="z.B. Schwimmen"></div>
-                <div><label>Belohnung (€)</label><input id="achReward" type="number" step="0.01" placeholder="5"></div>
-                <div><label>Einheit</label><input id="achUnit" placeholder="m / km / Buch"></div>
-                <div><label>Startwert</label><input id="achStart" type="number" step="0.01" placeholder="0"></div>
-                <div><label>Meilenstein alle</label><input id="achIncr" type="number" step="0.01" placeholder="5" title="Auszahlung nach jeder x-ten Einheit (z.B. alle 5 kg)"></div>
-                <div><label>Klick-Schritt</label><input id="achStep" type="number" step="0.01" placeholder="1" title="Wert, den der grüne +Button hinzufügt (leer = wie Meilenstein-Schwelle)"></div>
-                <div><label>Zielwert (optional)</label><input id="achTarget" type="number" step="0.01" placeholder="leer=offen"></div>
-                <div><label>Richtung</label><select id="achDir"><option value="increase">Steigend</option><option value="decrease">Fallend</option></select></div>
-                <div><label>Belohnung geht an</label><select id="achRewardGoal" title="Wenn leer: Auto-Routing (aktives Ziel oder Puffer)"><option value="">Automatisch</option></select></div>
-            </div>
-            <button class="if-btn" onclick="createAchievement()">Erstellen</button>
-        </div>
-        <div id="achGrid" class="ach-grid"></div>
+            <div id="logBody"><span class="skel sz-skel-zeile"></span><span class="skel sz-skel-zeile"></span><span class="skel sz-skel-zeile"></span></div>
+            <button type="button" class="v-btn v-btn--ghost v-btn--sm sz-sicherung" onclick="downloadBackup()">
+                <span data-ikon="herunter" data-ikon-gross="16"></span>Sicherung herunterladen
+            </button>
+        </section>
     </div>
 
-    <div id="tab-log" style="display:none">
-        <div class="sh"><h2>Aktivitäts-Log</h2></div>
-        <div class="log-controls">
-            <div class="log-chips">
-                <button class="log-chip active" data-filter="all">Alle</button>
-                <button class="log-chip" data-filter="checkin">Check-ins</button>
-                <button class="log-chip" data-filter="milestone">Meilensteine</button>
-                <button class="log-chip" data-filter="progress">Fortschritt</button>
-                <button class="log-chip" data-filter="streak_bonus">Boni</button>
-                <button class="log-chip" data-filter="initial">Start</button>
-            </div>
-            <input class="log-search" id="logSearch" placeholder="Suche…">
-            <div class="log-view-toggle">
-                <button data-view="weekly" class="active">Wochenübersicht</button>
-                <button data-view="all">Alle</button>
-            </div>
-            <button class="log-btn" onclick="downloadBackup()">Backup</button>
-        </div>
-        <div class="log-sum" id="logSum" style="display:none"></div>
-        <div id="logBody"></div>
-    </div>
+    <div id="tab-ziele" hidden>
+        <div class="sz-summe" id="ideenSummary"><span class="skel sz-skel-summe"></span><span class="skel sz-skel-summe"></span><span class="skel sz-skel-summe"></span></div>
 
-    <div id="tab-trophies" style="display:none">
-        <div class="sh">
-            <h2>🏆 Trophäen-Wand</h2>
-            <button class="sh-add" onclick="openCompleteModal()">Ziel abschließen</button>
-        </div>
-        <div id="trophyStats" class="trophy-stats"></div>
-        <div id="trophyGrid" class="trophy-grid"></div>
-    </div>
+        <section class="v-abschnitt">
+            <header class="v-abschnitt-kopf">
+                <h2>Sparziele</h2>
+                <span class="v-abschnitt-sub">Eines wird bespart, die anderen ruhen mit ihrem Stand.</span>
+                <button type="button" class="v-btn v-btn--ghost v-btn--sm" onclick="startNewGoal()"><span data-ikon="plus" data-ikon-gross="16"></span>Neu</button>
+            </header>
+            <div id="sgList" class="sz-ziele"><span class="skel sz-skel-ziel"></span><span class="skel sz-skel-ziel"></span></div>
+            <div id="bufferBox"></div>
+        </section>
 
-    <div id="tab-ideen" style="display:none">
-        <div class="ideen-summary" id="ideenSummary"></div>
+        <section class="v-abschnitt">
+            <header class="v-abschnitt-kopf">
+                <h2>Wunschliste</h2>
+                <button type="button" class="v-btn v-btn--ghost v-btn--sm" onclick="dlgNeuerWunsch()"><span data-ikon="plus" data-ikon-gross="16"></span>Neu</button>
+            </header>
+            <div id="potList"><span class="skel sz-skel-zeile"></span><span class="skel sz-skel-zeile"></span></div>
+        </section>
 
-        <div class="sh">
-            <div class="sh-head">
-                <h2>Meine Sparziele <span class="sh-count" id="sgCount">0</span></h2>
-                <p class="sh-sub">Höchstens ein Ziel ist aktiv und wird bespart, alle anderen pausieren mit ihrem Kontostand. Ist keines aktiv, sammelt der Puffer.</p>
-            </div>
-            <button class="sh-add" onclick="toggleForm('sgForm')">+ Neues Sparziel</button>
-        </div>
-        <div id="sgForm" class="iform">
-            <div class="if-grid">
-                <div><label>Name</label><input id="sgNewName" placeholder="z.B. Neues Fahrrad"></div>
-                <div><label>Zielbetrag (€)</label><input id="sgNewTarget" type="number" step="0.01" placeholder="500"></div>
-            </div>
-            <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem;font-size:0.8125rem;color:var(--text-2)">
-                <input type="checkbox" id="sgNewActivate" checked style="width:auto;margin:0">
-                Sofort aktivieren (bisheriges Ziel wird pausiert &amp; Kontostand gespeichert)
-            </label>
-            <button class="if-btn" onclick="createSavingsGoal()">Erstellen</button>
-        </div>
-        <div id="bufferBox"></div>
-        <div id="sgList" class="sg-grid"></div>
-
-        <div class="sh">
-            <div class="sh-head">
-                <h2>Wunschliste <span class="sh-count" id="potCount">0</span></h2>
-                <p class="sh-sub">Konkrete Anschaffungen mit Preis — ein Klick macht daraus ein Sparziel.</p>
-            </div>
-            <button class="sh-add" onclick="toggleForm('potForm')">+ Wunsch</button>
-        </div>
-        <div id="potForm" class="iform">
-            <div class="if-grid">
-                <div><label>Name</label><input id="potName" placeholder="z.B. Fahrrad"></div>
-                <div><label>Preis (optional)</label><input id="potPrice" type="number" step="0.01"></div>
-            </div>
-            <button class="if-btn" onclick="createPotential()">Hinzufügen</button>
-        </div>
-        <div id="potList" class="wish-grid"></div>
-
-        <div class="sh">
-            <div class="sh-head">
-                <h2>Ideen-Sammlung <span class="sh-count" id="ideaCount">0</span></h2>
-                <p class="sh-sub">Alles ohne Preisschild: Vorhaben, Kurse, Reisen — optional als Meilenstein- oder Wochenziel-Idee markiert.</p>
-            </div>
-            <button class="sh-add" onclick="toggleForm('ideaForm')">+ Idee</button>
-        </div>
-        <div id="ideaForm" class="iform">
-            <div class="if-grid">
-                <div><label>Titel</label><input id="ideaTitle" placeholder="z.B. Sprachkurs"></div>
-                <div><label>Sorte (optional)</label><select id="ideaKind">
-                    <option value="">— ohne —</option>
-                    <option value="milestone">Meilenstein</option>
-                    <option value="progress">Wochenziel</option>
-                </select></div>
-            </div>
-            <button class="if-btn" onclick="createIdea()">Hinzufügen</button>
-        </div>
-        <div id="ideaList" class="wish-grid"></div>
+        <section class="v-abschnitt">
+            <header class="v-abschnitt-kopf">
+                <h2>Ideen</h2>
+                <button type="button" class="v-btn v-btn--ghost v-btn--sm" onclick="dlgNeueIdee()"><span data-ikon="plus" data-ikon-gross="16"></span>Neu</button>
+            </header>
+            <div id="ideaList"><span class="skel sz-skel-zeile"></span><span class="skel sz-skel-zeile"></span></div>
+        </section>
     </div>
 </main>
 
-<!-- Milestone Backdate Modal -->
-<div class="vex-modal" id="milestoneModal">
-    <div class="vex-modal-card">
-        <h3 id="msModalTitle">Meilenstein hinzufügen</h3>
-        <p class="vex-modal-sub" id="msModalSub">–</p>
-        <label>Datum</label>
-        <input type="date" id="msDate">
-        <label>Wert (optional — leer = +1 Klick-Schritt)</label>
-        <input type="number" step="0.01" id="msValue" placeholder="Wert nach Zuwachs">
-        <label>Notiz (optional)</label>
-        <input type="text" id="msNote" placeholder="z.B. Nach dem Sport gewogen">
-        <div class="vex-modal-actions">
-            <button class="cancel" onclick="closeMilestoneModal()">Abbrechen</button>
-            <button class="primary" onclick="submitMilestone()">Hinzufügen</button>
-        </div>
-    </div>
-</div>
-
-<!-- Note Edit Modal (für Log-Einträge) -->
-<div class="vex-modal" id="noteModal">
-    <div class="vex-modal-card">
-        <h3>📝 Notiz</h3>
-        <p class="vex-modal-sub" id="noteModalSub">–</p>
-        <label>Notiz</label>
-        <textarea id="noteText" rows="4" style="width:100%;box-sizing:border-box;padding:0.5rem;font-family:inherit;font-size:var(--eingabe-schrift);resize:vertical" placeholder="Freie Notiz…"></textarea>
-        <div class="vex-modal-actions">
-            <button class="cancel" onclick="closeNoteModal()">Abbrechen</button>
-            <button class="primary" onclick="submitNote()">Speichern</button>
-        </div>
-    </div>
-</div>
-
-
-<!-- Transfer aus Puffer Modal (v1.26.0) -->
-<div class="vex-modal" id="transferModal">
-    <div class="vex-modal-card">
-        <h3>🔄 Vom Puffer übertragen</h3>
-        <p class="vex-modal-sub" id="tfModalSub">–</p>
-        <label>Ziel-Sparziel</label>
-        <select id="tfGoal"></select>
-        <label>Betrag (€)</label>
-        <input type="number" step="0.01" min="0.01" id="tfAmount" placeholder="z.B. 25.00">
-        <div class="vex-modal-quick" id="tfQuickBtns" style="display:flex;gap:0.375rem;flex-wrap:wrap;margin-top:0.375rem"></div>
-        <label>Notiz (optional)</label>
-        <input type="text" id="tfNote" placeholder="z.B. Für neues Sparziel angespart">
-        <div class="vex-modal-actions">
-            <button class="cancel" onclick="closeTransferModal()">Abbrechen</button>
-            <button class="primary" onclick="submitTransfer()">Übertragen</button>
-        </div>
-    </div>
-</div>
-
-<!-- Complete Savings Goal Modal -->
-<div class="vex-modal" id="completeModal">
-    <div class="vex-modal-card">
-        <h3>🏆 Sparziel abschließen</h3>
-        <p class="vex-modal-sub">Das Sparziel wandert in die Trophäen-Wand und verschwindet aus „Meine Sparziele“. Danach ist kein Ziel aktiv — bis du ein neues anlegst oder aktivierst, landet jede Belohnung im Puffer.</p>
-        <label>Trophäen-Name</label>
-        <input id="cmName" placeholder="z.B. KTC H27E6 gekauft">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-            <div>
-                <label>Icon</label>
-                <select id="cmIcon">
-                    <option value="🏆">🏆 Pokal</option>
-                    <option value="🥇">🥇 Gold</option>
-                    <option value="💎">💎 Diamant</option>
-                    <option value="🎯">🎯 Ziel</option>
-                    <option value="⭐">⭐ Stern</option>
-                    <option value="🚀">🚀 Rakete</option>
-                    <option value="🎉">🎉 Party</option>
-                    <option value="💰">💰 Money</option>
-                </select>
-            </div>
-            <div>
-                <label>Farbe</label>
-                <select id="cmColor">
-                    <option value="gold">Gold</option>
-                    <option value="silver">Silber</option>
-                    <option value="bronze">Bronze</option>
-                    <option value="blue">Blau</option>
-                    <option value="green">Grün</option>
-                    <option value="purple">Lila</option>
-                </select>
-            </div>
-        </div>
-        <label>Notiz (optional)</label>
-        <input id="cmNote" placeholder="z.B. Endlich!">
-        <div class="vex-modal-actions">
-            <button class="cancel" onclick="closeCompleteModal()">Abbrechen</button>
-            <button class="primary" onclick="submitComplete()">Abschließen &amp; archivieren</button>
-        </div>
-    </div>
-</div>
-
 <div class="version-tag"></div>
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 <canvas id="confettiCanvas" aria-hidden="true"></canvas>
 
 <script src="/sparziel/sparziel.js"></script>

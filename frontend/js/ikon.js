@@ -30,6 +30,28 @@
               + '<circle cx="12" cy="13" r="3.4"/>',
         stift:  '<path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M14.5 6.5l3 3"/>',
         ziel:   '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.6"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>',
+        // v2.19.0 (Sparziel): die Zeichen, die dort als Emoji auf Knoepfen
+        // standen -- ✎, ⋮, 🔄, 🏆, 🔥 -- plus das, was die neuen Kacheln brauchen.
+        plus:   '<path d="M12 5v14M5 12h14"/>',
+        haken:  '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+        mehr:   '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
+        zurueck: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+        flamme: '<path d="M12 21a6.5 6.5 0 0 0 6.5-6.5c0-3.4-2.3-5.6-3.6-8.5-.5 1.9-1.5 3.1-2.6 3.6C12.4 6.8 11 4.4 8.7 3c.3 2.6-.8 4.4-2 6.2A8 8 0 0 0 5.5 14.5 6.5 6.5 0 0 0 12 21Z"/>'
+              + '<path d="M12 21a2.8 2.8 0 0 1-2.8-2.8c0-1.6 1.4-2.6 2.8-4.2 1.4 1.6 2.8 2.6 2.8 4.2A2.8 2.8 0 0 1 12 21Z"/>',
+        pokal:  '<path d="M8 4h8v5.5a4 4 0 0 1-8 0Z"/><path d="M8 6H5.5v1a3.5 3.5 0 0 0 3 3.4M16 6h2.5v1a3.5 3.5 0 0 1-3 3.4"/>'
+              + '<path d="M12 13.5V17M8.5 20.5h7M9.5 17h5v3.5h-5Z"/>',
+        tauschen: '<path d="M4 8.5h14.5L15 5"/><path d="M20 15.5H5.5L9 19"/>',
+        kalender: '<rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
+        uhr:    '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+        griff:  '<circle cx="9" cy="6.5" r="1"/><circle cx="15" cy="6.5" r="1"/><circle cx="9" cy="12" r="1"/>'
+              + '<circle cx="15" cy="12" r="1"/><circle cx="9" cy="17.5" r="1"/><circle cx="15" cy="17.5" r="1"/>',
+        muenze: '<circle cx="12" cy="12" r="8"/><path d="M15 9.2a3.5 3.5 0 1 0 0 5.6M7.6 11h5.2M7.6 13.1h5.2"/>',
+        einkauf: '<path d="M3.5 4.5h2.2l2.1 10.2a1.5 1.5 0 0 0 1.5 1.2h7.9a1.5 1.5 0 0 0 1.4-1.1l1.6-6.3H6.6"/>'
+              + '<circle cx="10" cy="19.5" r="1.1"/><circle cx="17" cy="19.5" r="1.1"/>',
+        idee:   '<path d="M9 17.5h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.1 1 1.9v.2h5v-.2c0-.8.4-1.4 1-1.9A6 6 0 0 0 12 3Z"/>',
+        pfeil:  '<path d="M9.5 6l6 6-6 6"/>',
+        filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
+        herunter: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/>',
     };
 
     /* Das Zeichen als SVG-Text. `groesse` ist die Kantenlänge in Pixeln; 18

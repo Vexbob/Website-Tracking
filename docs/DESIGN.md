@@ -77,6 +77,11 @@ Vier Rollen, mehr braucht es nicht. Gemessene Kontraste gelten gegen
   steht höchstens einmal je Seite und trägt immer eine Zahl, nie ein Wort.
   Große Zahlen laufen enger (`-0.03em`); die Ziffern stehen sonst zu weit
   auseinander.
+- Darüber steht nur noch die **Heldenzahl** (v2.19.0, `.v-held`,
+  `--fs-held`, 52 px, am Handy mit der Breite gedeckelt): die eine Zahl, um
+  die sich ein ganzes Modul dreht, auf der Bühne (Abschnitt 3). Ganze Euro
+  groß, Cent und Zeichen klein daneben (`.v-held-rest`); gelesen wird die
+  vordere Zahl, die hintere ist Genauigkeit.
 - Systemschrift, keine Webfonts. Auf Apple-Geräten ist das SF Pro, und genau so
   soll es aussehen.
 
@@ -104,6 +109,12 @@ Farbe ist Information, nicht Dekoration.
   Ton auch als Text auf dunklem Grund lesbar bleibt (6,4:1). Auch hier gilt die
   Grenze: Icon-Kachel, erste Diagrammreihe, ein Punkt neben „Quelle: Spotify“ —
   keine grüne Fläche.
+- **Die Bühne** (v2.19.0, `.v-buehne`) ist die eine Ausnahme davon: Der Kopf
+  eines Moduls darf seinen Ton als Licht tragen, ein weicher Schein von oben
+  (20 %, läuft vor der Mitte aus) und eine getönte Kante. Das ist keine
+  Fläche in Modulfarbe, und sie steht höchstens einmal je Seite, dort, wo die
+  Heldenzahl steht. Der Grund: Ein Modul soll man am ersten Blick erkennen,
+  nicht erst an der Überschrift. Der Text auf der Bühne bleibt über 14:1.
 - **Statusfarben** `--ok` `--warn` `--danger` `--info` sind helle Töne für
   **Text und Marken auf dunklem Grund**. Sie tragen **niemals weiße Schrift**
   (weiß auf `--ok` wäre 1,7:1). Wo eine Statusfläche nötig ist: getönter
@@ -115,7 +126,9 @@ Farbe ist Information, nicht Dekoration.
 
 **Verläufe und Leuchten** gibt es genau an vier Stellen: Modul-Icon-Kacheln,
 die primäre Aktion, Fortschrittsbalken und Diagrammfüllungen. Alle vier tragen
-keinen Text. Hinter Zahlen liegt nie ein Verlauf. Das Leuchten bleibt klein
+keinen Text. Hinter Zahlen liegt nie ein Verlauf — außer dem Schein der Bühne,
+der so schwach ist, dass er den Kontrast der Heldenzahl nicht messbar
+ändert. Das Leuchten bleibt klein
 (`--gl-…`: 6 px Versatz, 20 px Weite, 22 %): Es hebt einen Knopf ab, statt
 einen Hof um ihn zu legen.
 
@@ -296,6 +309,13 @@ Ein Modul behält seine Funktion `openModal` und leitet in einer Zeile dorthin
 — so bleiben die Aufrufstellen unberührt. Optionen: `breit`/`wide`, `voll`,
 `beimSchliessen`/`onClose`.
 
+**Die Handlungen stehen im Dialogfuß** (v2.19.0, `.modal-fuss`): Er bleibt
+unten, wenn der Inhalt scrollt, die Hauptsache steht rechts, Löschen links
+außen — so weit weg von „Speichern“, wie der Kasten es zulässt. Enter im
+Formular löst die Hauptsache aus. Zahlenfelder tragen keine Pfeile: Firefox
+malte sie an jedes Feld, am Handy trifft sie niemand, und am Rechner
+verdeckten sie die letzte Ziffer.
+
 **Am Handy ist der Dialog ein Blatt** (v2.18.0): Unter 720 px kommt jeder
 Dialog, der nicht `voll` ist, von unten, oben gerundet, mit Griff. Am Kopf
 nach unten ziehen schließt ihn; im Körper wird gescrollt, nicht gezogen, sonst
@@ -321,7 +341,7 @@ gegessen), begann unter dem Bildschirmrand.
   Bedienelement gemeint ist, stimmt meist das Bedienelement nicht. Bleibt ein
   Satz nötig, steht er direkt daneben — nicht als Karte am Seitenende.
 
-## 6e. Seitenkopf und Reiter
+## 6e. Seitenkopf, Reiter und Abschnitt
 
 **Am Handy gibt es keinen Seitenkopf.** Der Modulname steht in der Leiste; ein
 zweites Mal als Überschrift darunter kostete siebzig Pixel der ersten Ansicht.
@@ -335,6 +355,11 @@ Klasse `active`. Passt die Zeile nicht in die Breite, rollt sie, der Rand
 blendet weich aus, und der aktive Reiter steht in der Mitte. Jede Seite mit
 `.tabs` bindet `js/reiter.js` ein; der Test in `test_navigation.py` wacht
 darüber.
+
+**Ein Abschnitt** (`.v-abschnitt`, v2.19.0) ist eine Überschrift über einer
+Gruppe von Karten, mit der Handlung am Rand („Neu“). Er ist kein Kasten: die
+Karten darunter sind die Flächen, und eine Karte um Karten wäre eine Fläche
+auf einer Fläche derselben Stufe (Abschnitt 1).
 
 ## 7. Diagramme
 
@@ -430,4 +455,6 @@ nicht in einem großen Schnitt, damit jede Etappe lauffähig bleibt.
 Reihenfolge: **Fundament** (v1.55.0) → Startseite und Ausgaben → Gesundheit,
 Sparziel, Notizen, Blog, Login. **Auffrischung** (v2.18.0): Lichteinfall,
 Reiter, Blatt, Auftritt wirken auf allen Seiten; die Module ziehen danach
-einzeln nach.
+einzeln nach. **Neugestaltung** ab v2.19.0: Sparziel, Gesundheit, Ausgaben und
+die Startseite bekommen je ein neues Grundkonzept mit Bühne und Heldenzahl;
+das Sparziel ist das Muster, an dem die anderen sich ausrichten.
