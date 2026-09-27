@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.18.0', date: '2026-09-27', title: 'Auffrischung: Reiter, Blätter, Karten', notes: [
+        'Reiter stehen auch am Handy in einer Zeile, eine Markierung gleitet zum aktiven.',
+        'Dialoge kommen am Handy als Blatt von unten; nach unten ziehen schließt sie.',
+        'Beim Laden springt keine Seite mehr: die Leiste oben hat sofort ihre Höhe.',
+        'Karten mit Lichtkante, ausgewählte Chips getönt statt knallpink, Knöpfe ohne weiße Fläche.',
+        'Ladeplatzhalter sind sichtbar, Karten erscheinen kurz gestaffelt.',
+    ]},
     { v: 'v2.17.0', date: '2026-09-27', title: 'CS2 und Ausgaben am Handy ruhiger', notes: [
         'CS2: jede Position ist am Handy zwei kompakte Zeilen statt drei großer — etwa halb so hoch.',
         'CS2: Preis- und Anzahlfelder stehen in jeder Zeile an derselben Stelle, lange Namen enden mit „…“.',

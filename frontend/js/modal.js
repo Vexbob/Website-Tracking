@@ -121,6 +121,36 @@
 
         overlay.querySelector('.modal-close').addEventListener('click', close);
         overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+        // v2.18.0: Am Handy ist der Dialog ein Blatt von unten (css/style.css).
+        // Am Kopf nach unten ziehen schliesst es -- der Griff dort verspricht
+        // genau das. Nur der Kopf nimmt die Geste an: im Koerper wird
+        // gescrollt, und ein Blatt, das beim Scrollen der Liste mitwandert,
+        // waere schlimmer als keins. ``voll`` ist kein Blatt und bleibt aussen vor.
+        if (!o.voll) {
+            const kopfLeiste = overlay.querySelector('.modal-head');
+            let start = null, weg = 0;
+            kopfLeiste.addEventListener('touchstart', (e) => {
+                if (!window.matchMedia('(max-width: 720px)').matches) return;
+                if (e.target.closest('.modal-close')) return;
+                start = e.touches[0].clientY; weg = 0;
+                box.classList.add('is-gezogen');
+            }, { passive: true });
+            kopfLeiste.addEventListener('touchmove', (e) => {
+                if (start === null) return;
+                weg = Math.max(0, e.touches[0].clientY - start);
+                box.style.transform = 'translateY(' + weg + 'px)';
+            }, { passive: true });
+            const loslassen = () => {
+                if (start === null) return;
+                start = null;
+                box.classList.remove('is-gezogen');
+                box.style.transform = '';
+                if (weg > 90) close();
+            };
+            kopfLeiste.addEventListener('touchend', loslassen);
+            kopfLeiste.addEventListener('touchcancel', loslassen);
+        }
         // In der Erfassungsphase, damit der oberste Dialog die Taste zuerst
         // sieht, wenn zwei uebereinanderliegen.
         document.addEventListener('keydown', onKey, true);

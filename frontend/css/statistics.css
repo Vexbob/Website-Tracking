@@ -8,21 +8,21 @@
  * geladen und kann von beiden Modulen sauber referenziert werden. */
 body{visibility:hidden}body.ready{visibility:visible}
 
-.stat-filterbar{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:0.875rem 1rem;margin-bottom:1.25rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap}
+.stat-filterbar{background:var(--flaeche);box-shadow:var(--kante-licht);border:1px solid var(--line);border-radius:var(--radius-lg);padding:0.875rem 1rem;margin-bottom:1.25rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap}
 .stat-preset-chips{display:flex;gap:5px;flex-wrap:wrap}
 .stat-chip{padding:0.4375rem 0.85rem;font-size:0.8125rem;border:1px solid var(--line);background:var(--surface-2);color:var(--text-3);border-radius:999px;cursor:pointer;font-weight:600;width:auto;margin:0;
     transition:color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease),background var(--dur-1) var(--ease)}
 .stat-chip:hover{color:var(--text-1);border-color:var(--line-strong)}
-.stat-chip.active{background:var(--accent-strong);color:var(--accent-ink);border-color:var(--accent-strong)}
+.stat-chip.active{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
 .stat-filter-title{font-size:0.6875rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-4)}
 .stat-filter-slot{margin-left:auto}
 
 .stat-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.25rem}
 @media(max-width:900px){.stat-kpi-grid{grid-template-columns:repeat(2,1fr)}}
-.stat-kpi{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:1.125rem;position:relative;overflow:hidden;transition:border-color var(--dur-1) var(--ease);min-height:110px}
+.stat-kpi{background:var(--flaeche);box-shadow:var(--kante-licht);border:1px solid var(--line);border-radius:var(--radius-lg);padding:1.125rem;position:relative;overflow:hidden;transition:border-color var(--dur-1) var(--ease);min-height:110px}
 .stat-kpi:hover{border-color:var(--line-strong)}
-.stat-kpi-label{font-size:0.6875rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;margin-bottom:0.25rem}
-.stat-kpi-value{font-size:1.75rem;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.1;letter-spacing:-0.02em}
+.stat-kpi-label{font-size:0.6875rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;margin-bottom:0.25rem}
+.stat-kpi-value{font-size:1.75rem;font-weight:750;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.1;letter-spacing:-0.03em}
 .stat-kpi-sub{font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;display:flex;align-items:center;gap:0.375rem;flex-wrap:wrap}
 .stat-kpi-delta{display:inline-flex;align-items:center;gap:0.15rem;font-weight:700;padding:0.125rem 0.4375rem;border-radius:6px;font-size:0.6875rem}
 .stat-kpi-delta.up{background:var(--danger-soft);color:var(--danger)}
@@ -31,7 +31,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .stat-kpi-icon{position:absolute;top:0.75rem;right:0.75rem;font-size:1.5rem;opacity:0.22}
 .stat-kpi.clickable{cursor:pointer}
 
-.stat-card{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1rem}
+.stat-card{background:var(--flaeche);box-shadow:var(--kante-licht);border:1px solid var(--line);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1rem}
 .stat-card h3{font-size:1rem;margin:0 0 0.875rem;font-weight:700;display:flex;align-items:center;gap:0.5rem;color:var(--text)}
 .stat-card-head{display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.875rem}
 .stat-card-head h3{margin:0}
@@ -39,7 +39,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .stat-mini-toggle{display:flex;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .stat-mini-toggle button{padding:0.375rem 0.75rem;font-size:0.75rem;background:var(--surface-2);color:var(--text-3);border:none;font-weight:600;width:auto;margin:0;border-radius:0;cursor:pointer;transition:color var(--dur-1) var(--ease),background var(--dur-1) var(--ease)}
 .stat-mini-toggle button:hover{color:var(--text-1)}
-.stat-mini-toggle button.active{background:var(--accent-strong);color:var(--accent-ink)}
+.stat-mini-toggle button.active{background:var(--accent-soft);color:var(--accent)}
 .stat-scroll-y{max-height:340px;overflow-y:auto}
 /* Die vier Aufschluesselungen liegen uebereinander in EINER Karte --
    der Umschalter sitzt in deren Kopfzeile. */

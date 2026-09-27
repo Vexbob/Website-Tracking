@@ -241,6 +241,25 @@ def test_wer_einen_geteilten_baustein_benutzt_laedt_ihn_auch():
     assert not fehler, "\n".join(fehler)
 
 
+def test_jede_reiterleiste_bekommt_ihre_markierung():
+    """Eine ``.tabs``-Leiste ohne /js/reiter.js faellt still zurueck.
+
+    Die gleitende Markierung (v2.18.0) haengt an keinem Aufruf im Modul --
+    die Seite nennt nur die Klasse, und ``reiter.js`` findet die Leiste von
+    selbst. Fehlt das Skript, gibt es keinen Fehler, nur die alte Optik und
+    am Handy eine Zeile ohne Hinweis, dass sie rollt. Der Test oben sieht
+    das nicht, weil er nach Namen im JavaScript sucht, nicht nach Klassen im
+    HTML.
+    """
+    front = WURZEL / "frontend"
+    fehlt = sorted(
+        "/" + h.relative_to(front).as_posix()
+        for h in front.rglob("*.html")
+        if re.search(r'class="tabs[" ]', h.read_text(encoding="utf-8"))
+        and "/js/reiter.js" not in h.read_text(encoding="utf-8"))
+    assert not fehlt, "Reiterleiste ohne /js/reiter.js: " + ", ".join(fehlt)
+
+
 def test_wer_auf_window_prueft_findet_den_baustein_auch_dort():
     """``window.VexPrefs ? ... : Standard`` ergab immer den Standard.
 

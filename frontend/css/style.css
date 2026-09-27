@@ -94,15 +94,15 @@
        Beschriftung nicht mehr zusichern.
        ===================================================================== */
     --g-sonnenaufgang: linear-gradient(135deg, #ff8a5c 0%, #ff5c7a 52%, #ff4d9e 100%);
-    --gl-sonnenaufgang: 0 10px 30px rgba(255,92,122,0.30);
+    --gl-sonnenaufgang: 0 6px 20px rgba(255,92,122,0.22);
     --g-nordlicht: linear-gradient(135deg, #34e2cd 0%, #7ab8ff 55%, #b79cff 100%);
-    --gl-nordlicht: 0 10px 30px rgba(122,184,255,0.30);
+    --gl-nordlicht: 0 6px 20px rgba(122,184,255,0.22);
     --g-waldlauf: linear-gradient(135deg, #5eea92 0%, #34e2cd 100%);
-    --gl-waldlauf: 0 10px 30px rgba(94,234,146,0.28);
+    --gl-waldlauf: 0 6px 20px rgba(94,234,146,0.22);
     --g-abendrot: linear-gradient(135deg, #ffcb45 0%, #ff8a5c 55%, #ff5c7a 100%);
-    --gl-abendrot: 0 10px 30px rgba(255,138,92,0.30);
+    --gl-abendrot: 0 6px 20px rgba(255,138,92,0.22);
     --g-amethyst: linear-gradient(135deg, #b79cff 0%, #fb85c4 100%);
-    --gl-amethyst: 0 10px 30px rgba(183,156,255,0.30);
+    --gl-amethyst: 0 6px 20px rgba(183,156,255,0.22);
     /* "Schlicht" ist bewusst kein Verlauf, sondern die flache Akzentflaeche --
        fuer alle, denen Verlaeufe zu viel sind. */
     --g-schlicht: linear-gradient(135deg, #ff4d72 0%, #ff4d72 100%);
@@ -144,8 +144,17 @@
        Anfang. */
     --fs-display: 2.25rem;
 
+    /* --- Flaeche mit Lichteinfall (v2.18.0) ---
+       Eine Karte ist nicht mehr einfarbig: oben liegt ein Hauch Weiss, der
+       nach der Mitte ausklingt, und die Oberkante traegt eine Lichtkante.
+       Das ist kein Farbverlauf im Sinn von DESIGN 3 -- keine Farbe, nur
+       Helligkeit, und hell genug, dass Text darauf gleich lesbar bleibt
+       (Kontrast gegen --surface-1 aendert sich um weniger als 1 %). */
+    --flaeche: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 55%), var(--surface-1);
+    --kante-licht: inset 0 1px 0 rgba(255,255,255,0.05);
+
     /* --- Form --- */
-    --radius-sm: 8px; --radius: 12px; --radius-lg: 16px; --radius-xl: 20px;
+    --radius-sm: 8px; --radius: 12px; --radius-lg: 18px; --radius-xl: 22px;
     --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
     --space-4: 1rem; --space-5: 1.5rem; --space-6: 2rem;
 
@@ -268,6 +277,13 @@ td, .num, .amount, [data-num] { font-variant-numeric: tabular-nums; }
     border-bottom: 1px solid var(--glass-border);
     position: sticky; top: 0; z-index: 50;
     transition: box-shadow .2s, border-color .2s, background .2s;
+    /* v2.18.0: Die Leiste hat ihre Endhoehe, bevor nav-switcher.js sie
+       fuellt (38 px Punkte-Schalter + Polsterung + Haarlinie). Vorher wuchs
+       sie beim Aufbau, und alles darunter rutschte. */
+    min-height: calc(38px + 1.5rem + 1px);
+}
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .navbar { min-height: calc(44px + 1.5rem + 1px); }
 }
 .navbar.scrolled { box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
 /* Fallback fuer Browser ohne backdrop-filter (aeltere Android-WebViews) */
@@ -276,6 +292,7 @@ td, .num, .amount, [data-num] { font-variant-numeric: tabular-nums; }
 }
 .navbar a, .navbar span { text-decoration: none; font-weight: 500; color: var(--text); }
 .nav-title { font-weight: 700; font-size: 1.25rem; letter-spacing: -0.3px; }
+.navbar .nav-title { font-weight: 700; letter-spacing: -0.02em; }
 .nav-right { display: flex; gap: 0.75rem; align-items: center; }
 .nav-btn {
     background: transparent; border: none; color: var(--text-muted);
@@ -288,6 +305,11 @@ td, .num, .amount, [data-num] { font-variant-numeric: tabular-nums; }
        die Leiste wird dadurch hoeher als auf jeder anderen Seite und die
        uebrigen Knoepfe stehen nicht mehr auf einer Linie. */
     white-space: nowrap; flex: none;
+    /* v2.18.0: Ohne das erbt der Knopf den unteren Rand der Form-Base
+       (0.75rem) -- die Leiste war dadurch 12 px hoeher als ihr Inhalt, und
+       sie wuchs noch einmal, sobald nav-switcher.js den Konto-Knopf an die
+       Stelle von „Logout“ setzte: die ganze Seite rutschte. */
+    margin: 0;
 }
 .nav-btn:hover { color: var(--text); background: var(--surface-2); }
 
@@ -490,8 +512,8 @@ h2 { font-size: 1.25rem; font-weight: 600; }
     transition: border-color 0.15s, box-shadow 0.15s;
 }
 input:focus, select:focus, textarea:focus {
-    border-color: var(--blue);
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
     outline: none;
 }
 textarea { min-height: 100px; resize: vertical; }
@@ -500,8 +522,11 @@ textarea { min-height: 100px; resize: vertical; }
 [hidden] { display: none !important; }
 :where(button) {
     display: block; width: 100%; margin-bottom: 0.75rem; padding: 0.65rem 0.85rem;
-    background: var(--text); border: none; cursor: pointer;
-    font-weight: 600; color: var(--surface); border-radius: 10px;
+    /* v2.18.0: neutral statt weiss. Ein weisser Kasten war der lauteste
+       Knopf jeder Seite -- lauter als die Primaeraktion mit Akzent daneben,
+       und das ausgerechnet an „+ Neu“ und „Passwort“. */
+    background: var(--surface-2); border: 1px solid var(--line-strong); cursor: pointer;
+    font-weight: 600; color: var(--text-1); border-radius: 10px;
     font-family: inherit; font-size: 0.95rem;
     transition: opacity 0.15s, transform 0.1s;
 }
@@ -778,16 +803,18 @@ input[type="checkbox"] { display: inline; width: auto; }
 /* Falls .tabs als volle Zeile gewünscht: .tabs.full { display: flex; } */
 .tabs.full { display: flex; width: 100%; }
 .tabs.full .tab-btn { flex: 1; justify-content: center; }
-/* Am Handy UMBRECHEN statt scrollen. Vorher stand hier `display:flex` mit
-   `flex:1` je Reiter -- zusammen mit `white-space:nowrap` schrumpft dabei
-   nichts, die Leiste laeuft ueber, und der letzte Reiter liegt hinter dem
-   rechten Rand. Im Gesundheitsmodul war das "Einstellungen": fuenf Reiter,
-   der fuenfte unsichtbar, und nichts deutete an, dass man wischen kann.
-   Zwei Zeilen kosten 40 Pixel und zeigen alles. */
+/* Am Handy eine Zeile, die rollt, wenn sie nicht passt. Bis v2.17.0 brach
+   sie hier in zwei Zeilen um, weil ein fuenfter Reiter hinter dem rechten
+   Rand lag und nichts andeutete, dass man wischen kann (Gesundheit,
+   "Einstellungen"). Seit v2.18.0 sagt das die weiche Kante am Rand
+   (.tabs--rollt, js/reiter.js), und der aktive Reiter wird in die Mitte
+   geholt -- zwei Zeilen kosteten 40 Pixel und liessen den letzten Reiter
+   allein stehen. */
 @media (max-width: 500px) {
-    .tabs { display: flex; width: 100%; flex-wrap: wrap; overflow-x: visible; }
-    .tab-btn { flex: 1 1 30%; min-width: 0; justify-content: center;
-        padding: 0.6rem 0.5rem; font-size: 0.8125rem; }
+    .tabs { display: flex; width: 100%; flex-wrap: nowrap; overflow-x: auto;
+        scroll-snap-type: x proximity; }
+    .tab-btn { flex: 1 0 auto; min-width: 0; justify-content: center;
+        padding: 0.6rem 0.5rem; font-size: 0.8125rem; scroll-snap-align: center; }
 }
 
 /* ==========================================================================
@@ -1082,8 +1109,8 @@ input[type="checkbox"] { display: inline; width: auto; }
 
 /* ---------- Skeleton-Loading-Utility ---------- */
 @keyframes skelPulse {
-    0%   { background-position: -200px 0; }
-    100% { background-position: calc(200px + 100%) 0; }
+    0%   { background-position: 100% 0; }
+    100% { background-position: 0 0; }
 }
 @media (prefers-reduced-motion: reduce) {
     .skel { animation: none; }
@@ -1711,6 +1738,11 @@ a.rec-row:hover .rec-go, button.rec-row:hover .rec-go { color: var(--text-2); }
    in die Einstellungen und den Logout. */
 .nav-acct { position: relative; }
 .nav-acct-btn { gap: 0.35rem; }
+/* Der Name, den jede Seite in #userLabel schreibt, wandert beim Aufbau IN den
+   Konto-Knopf -- traegt dort aber noch seine eigene Knopf-Polsterung. Doppelt
+   gepolstert war der Knopf 48 px hoch und hob die ganze Leiste um 15 px an,
+   in dem Moment, in dem er erschien (v2.18.0). */
+.nav-acct-btn > .nav-btn { padding: 0; min-height: 0; background: none; }
 .nav-acct-btn[aria-expanded="true"] { color: var(--text-1); background: var(--surface-2); }
 .nav-acct-menu {
     position: absolute; top: calc(100% + 8px); right: 0; z-index: 90;
@@ -1835,9 +1867,11 @@ a.rec-row:hover .rec-go, button.rec-row:hover .rec-go { color: var(--text-2); }
 /* ---------- Skeleton: der einzige erlaubte Ladezustand ---------- */
 .skel {
     display: block;
-    background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
-    background-size: 200px 100%;
-    background-repeat: no-repeat;
+    /* v2.18.0: Der Schimmer laeuft ueber die GANZE Flaeche. Vorher war er
+       eine 200-px-Kachel ohne Wiederholung -- der Grund daneben war
+       durchsichtig, und im Bild standen statt eines Platzhalters nur Striche. */
+    background: linear-gradient(90deg, var(--surface-2) 30%, var(--surface-3) 50%, var(--surface-2) 70%);
+    background-size: 300% 100%;
     border-radius: var(--radius-sm);
     animation: skelPulse 1.4s ease-in-out infinite;
     color: transparent !important;
@@ -2523,3 +2557,132 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
     transform: rotate(45deg);
     pointer-events: none;
 }
+
+/* ==========================================================================
+   v2.18.0 — Auffrischung: Tiefe, Reiter, Blatt, Bewegung
+   --------------------------------------------------------------------------
+   Steht bewusst am Ende: es zieht bestehende Bausteine nach, statt neue zu
+   erfinden. Die Regeln dazu stehen in docs/DESIGN.md 1, 4 und 5.
+   ========================================================================== */
+
+/* ---------- Flaechen: Lichteinfall und Lichtkante ----------
+   Alle ruhenden Karten teilen sich EIN Aussehen. Bis hierher gab es drei
+   (.v-card, .card, .tile) plus die aus statistics.css -- jede mit einer
+   eigenen Mischung aus Rand, Schatten und Radius. */
+.v-card, .kpi-hero, .tile, .card {
+    background: var(--flaeche);
+    box-shadow: var(--kante-licht);
+}
+.kpi-mini-row { box-shadow: var(--kante-licht); }
+.tile:hover { box-shadow: var(--kante-licht), var(--shadow-float); }
+
+/* ---------- Chips: der Akzent als Toenung, nicht als Vollflaeche ----------
+   Ein voll pinker Chip war lauter als die Primaeraktion der Seite. Aktiv
+   heisst jetzt: Akzent als Schrift auf getoentem Grund -- dieselbe Sprache
+   wie die Zeitraum-Auswahl (.rf-opt) und das aktive Modul in der Leiste. */
+.v-chip.is-active {
+    color: var(--accent); background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ---------- Reiter: eine Zeile, gleitende Markierung ----------
+   Bis v2.17.0 brachen vier oder mehr Reiter am Handy in zwei Zeilen um --
+   bei Sparziel, Gesundheit und Naehrwerten stand der letzte allein in einer
+   zweiten Zeile. Jetzt bleibt es eine Zeile. Passt sie nicht, rollt sie, und
+   eine weiche Kante am Rand sagt, dass es weitergeht (der Grund, warum die
+   Zeile frueher umbrach: ein fuenfter Reiter hinter dem Rand, ohne Hinweis).
+
+   Die Markierung (.tabs-ind) setzt js/reiter.js: ein Element, das unter
+   den aktiven Reiter gleitet. Ohne Skript bleibt die Flaeche am Reiter. */
+.tabs { position: relative; isolation: isolate; }
+.tabs-ind {
+    position: absolute; left: 0; top: 0; z-index: -1;
+    border-radius: 8px;
+    background: var(--surface-3);
+    box-shadow: var(--shadow-sm), 0 0 0 1px var(--line-strong), var(--kante-licht);
+    transition: transform var(--dur-3) var(--ease), width var(--dur-3) var(--ease),
+                height var(--dur-3) var(--ease), opacity var(--dur-1) var(--ease);
+    pointer-events: none;
+}
+.tabs--gleitend .tab-btn.active { background: transparent; box-shadow: none; }
+.tabs--rollt {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, var(--bg) 14px, var(--bg) calc(100% - 28px), transparent 100%);
+            mask-image: linear-gradient(90deg, transparent 0, var(--bg) 14px, var(--bg) calc(100% - 28px), transparent 100%);
+}
+
+/* ---------- Dialoge: am Rechner ein Kasten, am Handy ein Blatt ----------
+   Am Rechner erscheint der Kasten mit einem kurzen Anheben, der Grund
+   dahinter wird weich (Milchglas: DESIGN 8, Overlays). Am Handy kommt jeder
+   Dialog, der nicht ``voll`` ist, als Blatt von unten -- dort, wo der Daumen
+   ist --, mit Griff; nach unten wischen schliesst ihn (js/modal.js). */
+.modal-overlay {
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.modal-box {
+    background: var(--surface-1);
+    box-shadow: var(--kante-licht), var(--shadow-float);
+    transform: translateY(8px) scale(0.98);
+    transition: transform var(--dur-3) var(--ease);
+}
+.modal-overlay.show .modal-box { transform: none; }
+/* Der Kasten nimmt beim Oeffnen den Fokus (js/modal.js) -- Firefox malt dafuer
+   einen blauen Rahmen um das ganze Blatt. Der Fokus ist gewollt, der Rahmen
+   nicht: sichtbar wird er erst an den Bedienelementen darin. */
+.modal-box:focus { outline: none; }
+@media (max-width: 720px) {
+    .modal-overlay { align-items: flex-end; padding: 0; }
+    .modal-box:not(.modal-box--voll) {
+        max-width: none;
+        max-height: calc(100dvh - 2.5rem);
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        border-bottom: 0;
+        padding-bottom: env(safe-area-inset-bottom);
+        transform: translateY(100%);
+    }
+    .modal-overlay.show .modal-box:not(.modal-box--voll) { transform: none; }
+    .modal-box.is-gezogen { transition: none; }
+    .modal-box:not(.modal-box--voll) .modal-head { position: relative; padding-top: 1.25rem; touch-action: none; }
+    .modal-box:not(.modal-box--voll) .modal-head::before {
+        content: ""; position: absolute; top: 0.5rem; left: 50%;
+        width: 2.25rem; height: 0.3125rem; border-radius: 999px;
+        background: var(--line-strong); transform: translateX(-50%);
+    }
+}
+
+/* ---------- Tab-Leiste am Handy: eine Pille hinter dem aktiven Zeichen ---------- */
+.mobile-tabbar .mtab { position: relative; isolation: isolate; }
+.mobile-tabbar .mtab::before {
+    content: ""; position: absolute; z-index: -1;
+    top: 3px; left: 50%; width: 3.5rem; height: 1.875rem;
+    border-radius: 999px; background: var(--accent-soft);
+    transform: translateX(-50%) scaleX(0.4); opacity: 0;
+    transition: transform var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease);
+}
+.mobile-tabbar .mtab.active::before { transform: translateX(-50%) scaleX(1); opacity: 1; }
+.mobile-tabbar .mtab.active .mtab-lbl { font-weight: 700; }
+
+/* ---------- Seitenkopf am Handy ----------
+   Der Modulname steht in der Leiste. Ein zweites Mal als Ueberschrift
+   darunter kostete am Handy siebzig Pixel der ersten Ansicht; Naehrwerte,
+   Essen und CS2 hatten das schon einzeln geregelt, jetzt gilt es ueberall. */
+@media (max-width: 720px) {
+    .page-head { display: none; }
+}
+
+/* ---------- Auftritt ----------
+   Karten erscheinen einmal kurz von unten, gestaffelt -- beim Laden und beim
+   Wechsel des Reiters. Nur ``backwards``: nach dem Auftritt gehoert die
+   Transformation wieder dem Element (Hover, Druck), ein ``forwards`` hielte
+   sie fest. Bei reduzierter Bewegung entfaellt alles (Block oben). */
+@keyframes vAuftritt { from { opacity: 0; transform: translateY(8px); } }
+:is(main, main > [id^="tab-"], main > section) > :is(.v-card, .stat-card, .card, .kpi-block, .stat-kpi-grid, .tile-grid, .stat-filterbar, .split-2, .split-3-2, .nq-section) {
+    animation: vAuftritt var(--dur-3) var(--ease) backwards;
+}
+:is(main, main > [id^="tab-"], main > section) > :nth-child(2) { animation-delay: 40ms; }
+:is(main, main > [id^="tab-"], main > section) > :nth-child(3) { animation-delay: 80ms; }
+:is(main, main > [id^="tab-"], main > section) > :nth-child(4) { animation-delay: 120ms; }
+:is(main, main > [id^="tab-"], main > section) > :nth-child(n+5) { animation-delay: 160ms; }
+
+/* ---------- Druck ----------
+   Eine Zeile, die etwas oeffnet, gibt beim Tippen nach -- wie ein Knopf. */
+.rec-row:active, .tile:active { transform: scale(0.99); }

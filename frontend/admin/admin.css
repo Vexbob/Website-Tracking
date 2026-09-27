@@ -2,7 +2,7 @@
 body{visibility:hidden}body.ready{visibility:visible}
 /* Keine eigene Karte mehr: Werte und Form kommen aus .v-card in style.css.
    Hier steht nur, was diese Seite zusaetzlich braucht. */
-.card{background:var(--surface-1);border:1px solid var(--line);
+.card{background:var(--flaeche);box-shadow:var(--kante-licht);border:1px solid var(--line);
     border-radius:var(--radius-lg);padding:var(--space-5);margin-bottom:var(--space-5)}
 .card h3{font-size:1rem;margin:0;font-weight:700}
 .card-head-row{display:flex;align-items:center;justify-content:space-between;

@@ -12,6 +12,8 @@
 <script src="/js/charts.js"></script>
 <script src="/js/range-filter.js"></script>
 <script src="/js/ikon.js"></script>
+<script src="/js/reiter.js"></script>
+<script src="/js/modal.js"></script>
 <style>
 /* Nur Aufbau dieser Musterseite — alles Gestaltete kommt aus style.css. */
 .sg-sec { margin: 0 0 var(--space-6); }
@@ -219,6 +221,11 @@
 
     <section class="sg-sec">
         <h2>Flächen und Zeilen</h2>
+        <p class="sg-note">Jede ruhende Karte (<code>.v-card</code>, <code>.card</code>,
+        <code>.tile</code>, <code>.stat-card</code>) trägt dieselbe Fläche: <code>--flaeche</code>,
+        ein Hauch Weiß von oben, der zur Mitte ausklingt, und <code>--kante-licht</code>
+        als Lichtkante an der Oberseite. Keine Farbe, nur Helligkeit, und Text darauf bleibt
+        gleich lesbar. Karten runden mit 18 px, innere Flächen mit 12 px.</p>
         <div class="v-card">
             <div class="v-card-head">
                 <h3>Letzte Bons</h3>
@@ -579,10 +586,41 @@
     </section>
 
     <section class="sg-sec">
+        <h2>Reiter</h2>
+        <p class="sg-note">Eine Zeile, auch am Handy. Unter den aktiven Reiter gleitet eine
+        Markierung (<code>js/reiter.js</code>); das Modul setzt wie bisher nur die Klasse
+        <code>active</code>. Passt die Zeile nicht in die Breite, rollt sie, und der Rand
+        blendet weich aus, damit man sieht, dass es weitergeht. Jede Seite mit
+        <code>.tabs</code> bindet <code>js/reiter.js</code> ein.</p>
+        <div class="v-card">
+            <div class="tabs" id="sgReiter">
+                <button type="button" class="tab-btn active">Übersicht</button>
+                <button type="button" class="tab-btn">Verlauf</button>
+                <button type="button" class="tab-btn">Gerichte</button>
+                <button type="button" class="tab-btn">Vorrat</button>
+                <button type="button" class="tab-btn">Einstellungen</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="sg-sec">
+        <h2>Dialog</h2>
+        <p class="sg-note">Am Rechner ein Kasten in der Mitte, der Grund dahinter wird weich.
+        Am Handy kommt jeder Dialog, der nicht <code>voll</code> ist, als Blatt von unten,
+        dort, wo der Daumen ist. Der Griff oben verspricht, was er hält: Am Kopf nach
+        unten ziehen schließt das Blatt. Im Körper wird gescrollt, nicht gezogen.</p>
+        <div class="v-card sg-row">
+            <button type="button" class="v-btn" id="sgDialog">Dialog öffnen</button>
+        </div>
+    </section>
+
+    <section class="sg-sec">
         <h2>Bewegung</h2>
         <p class="sg-note">Drei Dauern, eine Kurve: 120 ms für Zustandswechsel, 200 ms für Ein- und
         Ausblenden, 280 ms für Overlays. Kein Federn, kein Nachschwingen. Nichts bewegt sich beim
-        reinen Betrachten.</p>
+        reinen Betrachten. Zwei Bewegungen gelten überall: Karten erscheinen beim Laden und
+        beim Reiterwechsel einmal kurz von unten, gestaffelt um 40 ms; eine Zeile oder Kachel,
+        die etwas öffnet, gibt beim Tippen nach wie ein Knopf.</p>
         <div class="v-card sg-stack">
             <span class="sg-label">--dur-1 120ms · Zustand</span><div class="sg-motion-demo"><i style="width:20%"></i></div>
             <span class="sg-label">--dur-2 200ms · Einblenden</span><div class="sg-motion-demo"><i style="width:55%"></i></div>
@@ -594,6 +632,18 @@
 <div class="version-tag"></div>
 <script>
 document.querySelector('.version-tag').textContent = typeof APP_VERSION !== 'undefined' ? APP_VERSION : '';
+document.getElementById('sgReiter').addEventListener('click', (e) => {
+    const b = e.target.closest('.tab-btn');
+    if (!b) return;
+    e.currentTarget.querySelectorAll('.tab-btn').forEach(t => t.classList.toggle('active', t === b));
+});
+document.getElementById('sgDialog').addEventListener('click', () => {
+    const d = VexModal.open('Mahlzeit eintragen',
+        '<p class="sg-note">So sieht jeder Dialog aus, der mit <code>VexModal.open</code> entsteht.</p>'
+        + '<div class="sg-row"><button type="button" class="v-btn v-btn--primary" data-zu>Übernehmen</button>'
+        + '<button type="button" class="v-btn" data-zu>Abbrechen</button></div>');
+    d.root.querySelectorAll('[data-zu]').forEach(k => k.addEventListener('click', d.close));
+});
 window.addEventListener('load', () => {
     if (window.VexRange) VexRange.mount(document.getElementById('sgRangeDemo'), {});
     // Jedes Zeichen in einem echten Knopf: so sieht man, ob es die Farbe und

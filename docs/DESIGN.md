@@ -43,6 +43,15 @@ Hover-Zustände und Trennlinien, die tragen müssen.
   Haarlinie, nicht statt ihrer.
 - Kein reines Schwarz und kein reines Weiß im Interface.
 
+**Lichteinfall** (v2.18.0). Eine ruhende Karte ist nicht einfarbig: Sie trägt
+`--flaeche`, einen Hauch Weiß (3 %) von oben, der zur Mitte ausklingt, und
+`--kante-licht`, eine 1-px-Lichtkante an der Oberseite. Das ist Helligkeit,
+keine Farbe, und ändert den Kontrast von Text darauf um weniger als ein
+Prozent. Alle Kartenklassen (`.v-card`, `.card`, `.tile`, `.kpi-hero`,
+`.stat-card`, `.stat-kpi`) teilen sich diese eine Fläche. Karten runden mit
+`--radius-lg` (18 px), innere Flächen mit `--radius` (12 px), Blätter und
+große Kacheln mit `--radius-xl` (22 px).
+
 ## 2. Textrollen
 
 Vier Rollen, mehr braucht es nicht. Gemessene Kontraste gelten gegen
@@ -63,6 +72,11 @@ Vier Rollen, mehr braucht es nicht. Gemessene Kontraste gelten gegen
   `font-variant-numeric: tabular-nums`. Immer.
 - Schriftgrößen aus der Skala: 12 / 13 / 15 / 17 / 22 / 28 px. Überschriften
   mit `letter-spacing: -0.02em`, Fließtext ohne.
+- Dazu **eine** Stufe darüber, `--fs-display` (36 px), für die eine große Zahl,
+  um die es auf einer Seite geht: die Kalorien des Tages, der Kontostand. Sie
+  steht höchstens einmal je Seite und trägt immer eine Zahl, nie ein Wort.
+  Große Zahlen laufen enger (`-0.03em`); die Ziffern stehen sonst zu weit
+  auseinander.
 - Systemschrift, keine Webfonts. Auf Apple-Geräten ist das SF Pro, und genau so
   soll es aussehen.
 
@@ -77,6 +91,9 @@ Farbe ist Information, nicht Dekoration.
   Beide tragen **dunkle** Schrift `--accent-ink` (6,1:1) — nie weiße. Damit
   gilt in der ganzen App dieselbe Regel wie bei den Statusfarben: helle
   Farbe, dunkle Schrift.
+- **Ein Knopf ohne eigene Klasse ist neutral** (`--surface-2`, `--line-strong`).
+  Bis v2.17.0 war er weiß und damit der lauteste Knopf jeder Seite, lauter als
+  die Primäraktion daneben. Lauter als die Primäraktion ist nichts.
 - **Modultöne**: Ausgaben Türkis, Gesundheit Rosa, Sparziel Grün, Notizen Blau,
   Blog Bernstein, Verwaltung Violett, Musik Spotify-Grün, Schach Holzbrett-Orange,
   Ernährung Blattgrün. Sie färben Modul-Icons,
@@ -98,7 +115,9 @@ Farbe ist Information, nicht Dekoration.
 
 **Verläufe und Leuchten** gibt es genau an vier Stellen: Modul-Icon-Kacheln,
 die primäre Aktion, Fortschrittsbalken und Diagrammfüllungen. Alle vier tragen
-keinen Text. Hinter Zahlen liegt nie ein Verlauf.
+keinen Text. Hinter Zahlen liegt nie ein Verlauf. Das Leuchten bleibt klein
+(`--gl-…`: 6 px Versatz, 20 px Weite, 22 %): Es hebt einen Knopf ab, statt
+einen Hof um ihn zu legen.
 
 **Alle vier sind einstellbar** (v1.74.0, erweitert in v1.78.0). In den
 Einstellungen wählt man je ein Preset für die primäre Aktion
@@ -134,13 +153,19 @@ nicht fertig.
 |---|---|
 | Ruhe | Basisfläche, `--line` |
 | Hover | eine Ebene heller **oder** `--line-strong`, nie beides |
-| Aktiv/Gedrückt | `transform: scale(.97)`, `--dur-1` |
-| Ausgewählt | Akzent trägt die Bedeutung (Fläche `--accent-strong`, Text `--accent-ink`) |
+| Aktiv/Gedrückt | `transform: scale(.97)`, `--dur-1`; breite Zeilen und Kacheln `.99` |
+| Ausgewählt | Akzent als Schrift auf getöntem Grund (`--accent-soft`, Text `--accent`); Reiter: die gleitende Markierung |
 | Fokus | `--focus-ring`, sichtbar nur bei `:focus-visible` |
 | Deaktiviert | `opacity:.45`, `cursor:default`, keine Transformation |
 | Lädt | Skeleton (`.skel`) statt Text; nie ein „Lade …“ als Fließtext |
 
 Berührungsziele auf Mobilgeräten sind mindestens 44 px hoch.
+
+Als **Vollfläche** trägt der Akzent nur noch die primäre Aktion. Ein
+ausgewählter Chip in voller Akzentfläche war lauter als der Knopf, um den es
+auf der Seite geht. Seit v2.18.0 ist „ausgewählt“ dieselbe Tönung wie im
+Zeitraumfilter und beim aktiven Modul in der Leiste; Stellen in den Modulen,
+die noch die Vollfläche tragen, ziehen mit ihrem Modul nach.
 
 **Der achte Zustand: die Seite selbst.** Modulseiten starten unsichtbar
 (`body{visibility:hidden}` in `css/statistics.css`), damit vor einer
@@ -160,6 +185,12 @@ Kurve `--ease` `cubic-bezier(.2,.7,.2,1)`.
 
 - Bewegung erklärt eine Veränderung: etwas kommt dorthin, wo es herkam.
 - Kein Federn, kein Nachschwingen, keine Dauerbewegung außer Skeleton-Puls.
+- **Auftritt** (v2.18.0): Karten erscheinen beim Laden und beim Reiterwechsel
+  einmal von unten (8 px, `--dur-3`), gestaffelt um 40 ms, ab der fünften
+  gleichzeitig. Die Animation füllt nur `backwards`: Danach gehört die
+  Transformation wieder dem Element, sonst hielte sie Hover und Druck fest.
+- Der Skeleton-Schimmer läuft über die ganze Fläche des Platzhalters, nicht
+  als Streifen darüber.
 - Nichts bewegt sich beim reinen Betrachten. Was sich ohne Zutun bewegt, ist
   ein Fehler.
 - `prefers-reduced-motion` schaltet alles ab — das ist bereits global gelöst.
@@ -265,6 +296,12 @@ Ein Modul behält seine Funktion `openModal` und leitet in einer Zeile dorthin
 — so bleiben die Aufrufstellen unberührt. Optionen: `breit`/`wide`, `voll`,
 `beimSchliessen`/`onClose`.
 
+**Am Handy ist der Dialog ein Blatt** (v2.18.0): Unter 720 px kommt jeder
+Dialog, der nicht `voll` ist, von unten, oben gerundet, mit Griff. Am Kopf
+nach unten ziehen schließt ihn; im Körper wird gescrollt, nicht gezogen, sonst
+wanderte das Blatt beim Scrollen der Liste mit. Am Rechner bleibt es der
+Kasten in der Mitte, der Grund dahinter wird weich.
+
 Das Muster stammt aus der Ernährungsseite (v1.95.0): dort standen Eingabefeld,
 Mahlzeiten-Chips, Vorschlagsliste, Tagesbild und Eintragsliste als fünf Klötze
 untereinander — und das, weswegen man die Seite öffnet (was habe ich heute
@@ -283,6 +320,21 @@ gegessen), begann unter dem Bildschirmrand.
 - **Erklärabsätze sind ein Warnzeichen.** Wo drei Sätze erklären, wie ein
   Bedienelement gemeint ist, stimmt meist das Bedienelement nicht. Bleibt ein
   Satz nötig, steht er direkt daneben — nicht als Karte am Seitenende.
+
+## 6e. Seitenkopf und Reiter
+
+**Am Handy gibt es keinen Seitenkopf.** Der Modulname steht in der Leiste; ein
+zweites Mal als Überschrift darunter kostete siebzig Pixel der ersten Ansicht.
+`.page-head` ist unter 720 px ausgeblendet, für alle Seiten an einer Stelle.
+Was im Seitenkopf an Handlung steht, braucht deshalb am Handy einen zweiten
+Ort. Am Rechner bleibt der Kopf, aber ohne Erklärabsatz (6d).
+
+**Reiter stehen in einer Zeile** (`.tabs`), auch am Handy. Unter den aktiven
+gleitet eine Markierung (`js/reiter.js`); das Modul setzt wie bisher nur die
+Klasse `active`. Passt die Zeile nicht in die Breite, rollt sie, der Rand
+blendet weich aus, und der aktive Reiter steht in der Mitte. Jede Seite mit
+`.tabs` bindet `js/reiter.js` ein; der Test in `test_navigation.py` wacht
+darüber.
 
 ## 7. Diagramme
 
@@ -376,4 +428,6 @@ Modul für Modul, während die Seiten auf die Komponenten umgestellt werden —
 nicht in einem großen Schnitt, damit jede Etappe lauffähig bleibt.
 
 Reihenfolge: **Fundament** (v1.55.0) → Startseite und Ausgaben → Gesundheit,
-Sparziel, Notizen, Blog, Login.
+Sparziel, Notizen, Blog, Login. **Auffrischung** (v2.18.0): Lichteinfall,
+Reiter, Blatt, Auftritt wirken auf allen Seiten; die Module ziehen danach
+einzeln nach.
