@@ -116,11 +116,10 @@ body{visibility:hidden}body.ready{visibility:visible}
     pointer-events: none; white-space: nowrap;
 }
 
-/* ---------- Heute: zwei Spalten am Rechner ---------- */
-.sz-heute-raster { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--space-5); }
-@media (min-width: 1000px) {
-    .sz-heute-raster { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
-}
+/* ---------- Heute: Wochenziele über den Achievements ----------
+   Die Abschnitte stehen untereinander; am Rechner laufen die Kacheln
+   innerhalb eines Abschnitts nebeneinander. */
+.sz-heute-raster { display: flex; flex-direction: column; }
 
 /* Gemeinsam für Kacheln, die man ziehen kann */
 .drag-handle {
@@ -140,7 +139,10 @@ body{visibility:hidden}body.ready{visibility:visible}
 /* ---------- Wochenziel-Kachel ----------
    Die ganze Kachel ist der Knopf für den häufigen Fall: einchecken. Der
    seltene (ändern, Verlauf, zurücknehmen) steht klein oben rechts. */
-.sz-gw-liste { display: flex; flex-direction: column; gap: var(--space-3); }
+.sz-gw-liste { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); align-items: start; }
+@media (min-width: 1000px) {
+    .sz-gw-liste { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .sz-gw {
     position: relative;
     border-radius: var(--radius-lg);
@@ -231,8 +233,11 @@ body{visibility:hidden}body.ready{visibility:visible}
 
 /* ---------- Achievement-Karte ---------- */
 .sz-ms-liste { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
-@media (min-width: 640px) and (max-width: 999px) {
+@media (min-width: 640px) {
     .sz-ms-liste { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1200px) {
+    .sz-ms-liste { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 .sz-ms {
     --ms-ton: var(--sz-ton);

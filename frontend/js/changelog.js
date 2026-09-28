@@ -14,6 +14,9 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.21.1', date: '2026-09-28', title: 'Sparziel nachgezogen', notes: [
+        'Nachgezogen: Die Wochenziele stehen wieder über den Achievements statt daneben; am Rechner liegen die Kacheln dafür nebeneinander.',
+    ]},
     { v: 'v2.21.0', date: '2026-09-28', title: 'Ausgaben neu gebaut', notes: [
         'Drei Bereiche statt sechs Pillen: Übersicht, Statistik und Verwalten mit Läden, Kategorien, Marken, Dubletten und Import.',
         'Oben der Monat als große Zahl, verglichen mit dem Vormonat bis zum selben Tag, dazu die Kurve beider Monate.',
