@@ -468,6 +468,9 @@ nicht in einem großen Schnitt, damit jede Etappe lauffähig bleibt.
 Reihenfolge: **Fundament** (v1.55.0) → Startseite und Ausgaben → Gesundheit,
 Sparziel, Notizen, Blog, Login. **Auffrischung** (v2.18.0): Lichteinfall,
 Reiter, Blatt, Auftritt wirken auf allen Seiten; die Module ziehen danach
-einzeln nach. **Neugestaltung** ab v2.19.0: Sparziel, Gesundheit, Ausgaben und
-die Startseite bekommen je ein neues Grundkonzept mit Bühne und Heldenzahl;
-das Sparziel ist das Muster, an dem die anderen sich ausrichten.
+einzeln nach. **Neugestaltung** ab v2.19.0: Sparziel, Gesundheit und Ausgaben
+bekommen je ein neues Grundkonzept mit Bühne und Heldenzahl; das Sparziel ist
+das Muster, an dem die anderen sich ausrichten. **Die Startseite bleibt, wie
+sie ist:** Kacheln je Modul und darüber zwei Zahlen. Eine Fassung mit einer
+Karte und einer aktuellen Zahl je Modul wurde gebaut und vor dem Push
+verworfen, weil dem Nutzer die bisherige besser gefiel.
