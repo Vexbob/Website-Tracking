@@ -650,8 +650,11 @@ input[type="checkbox"] { display: inline; width: auto; }
 
 .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
 .toolbar .toolbar-search {
+    /* Keine eigene Schriftgröße: unter 16 px zoomt iOS beim Tippen die ganze
+       Seite heran (die 14 px hier standen bis v2.20.0 und fielen dem Test
+       durch, weil der Selektor kein „input“ enthält). */
     flex: 1 1 220px; min-width: 0; margin: 0;
-    padding: 0.5rem 0.75rem; font-size: 0.875rem; border-radius: 10px;
+    padding: 0.5rem 0.75rem; border-radius: 10px;
 }
 .toolbar select {
     width: auto; margin: 0; padding: 0.5rem 0.625rem;
@@ -2125,6 +2128,21 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 .v-ring--halb { height: calc(var(--ring-size) * 0.6); overflow: hidden; }
 .v-ring--halb svg { height: var(--ring-size); transform: rotate(180deg); }
 .v-ring--halb .v-ring-over { stroke-dasharray: calc(var(--ring-c) / 2) var(--ring-c); }
+/* Die Spur des Halbrings ist nur die obere Hälfte, mit denselben runden
+   Kappen und demselben Abzug wie der Bogen (v2.20.1). Bis dahin war sie ein
+   voller Kreis: im Streifen unter der Kante lief sie auf beiden Seiten nach
+   unten weiter, und der Bogen sah aus, als finge er unter null an. Jetzt
+   beginnen Spur und Bogen an derselben Stelle und genau auf der Kante. */
+.v-ring--halb .v-ring-track {
+    stroke-linecap: round;
+    stroke-dasharray: max(0px, calc(var(--ring-c) / 2 - var(--ring-w))) var(--ring-c);
+    stroke-dashoffset: calc(var(--ring-w) / -2);
+}
+/* Die gestrichelte Spur (.is-unvollstaendig) hat ihr eigenes Muster und
+   liefe damit wieder um den ganzen Kreis. Die Zeichnung endet deshalb an der
+   Kante: abgeschnitten wird im eigenen Koordinatensystem des gedrehten SVG,
+   dessen untere Hälfte nach der Drehung oben liegt. */
+.v-ring--halb svg { clip-path: inset(calc(50% - 1px) 0 0 0); }
 /* Halbe Strecke, gleicher Kappen-Abzug wie oben -- hier faellt er sogar
    staerker ins Gewicht, weil eine Strichbreite an der halben Bogenlaenge
    knapp 9 % sind. */
@@ -2635,6 +2653,9 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
     pointer-events: none;
 }
 .tabs--gleitend .tab-btn.active { background: transparent; box-shadow: none; }
+/* Ein Reiter darf ein Link sein, wenn jeder Bereich eine eigene Seite ist
+   (Ausgaben, v2.21.0) -- dieselbe Leiste, nur dass der Wechsel lädt. */
+a.tab-btn, a.tab-btn:hover { text-decoration: none; }
 .tabs--rollt {
     -webkit-mask-image: linear-gradient(90deg, transparent 0, var(--bg) 14px, var(--bg) calc(100% - 28px), transparent 100%);
             mask-image: linear-gradient(90deg, transparent 0, var(--bg) 14px, var(--bg) calc(100% - 28px), transparent 100%);
