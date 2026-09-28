@@ -127,7 +127,7 @@ function renderBrandRow(b) {
         </div>
         <div></div>
         <select class="store" title="Ladenzuordnung ändern (Eigenmarke / Hersteller)">${storeOpts}</select>
-        <button class="del" title="Löschen">🗑</button>
+        <button class="del" title="Löschen" aria-label="Löschen">${window.VexIkon ? VexIkon.svg('muell', 17) : ''}</button>
     </div>`;
 }
 

@@ -13,6 +13,8 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
+<script src="/js/reiter.js"></script>
 <script src="/js/sw-update.js"></script>
     <script src="/js/bild.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
@@ -44,6 +46,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .brand-purchases{padding:1px 6px;border-radius:999px;font-size:0.6875rem;font-weight:700;background:var(--surface-3);color:var(--text-2)}
 .brand-purchases.muted{background:var(--surface-2);color:var(--text-3);border:1px solid var(--line)}
 </style>
+<link rel="stylesheet" href="/ausgaben/ausgaben.css">
 </head>
 <body>
 <nav class="navbar">
@@ -53,8 +56,9 @@ body{visibility:hidden}body.ready{visibility:visible}
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main>
+<main class="wide az">
 <div id="subnav" data-active="marken"></div>
+    <script>renderSubnav();</script>
 
     <header class="page-head">
         <h1>Marken</h1>
@@ -77,7 +81,7 @@ body{visibility:hidden}body.ready{visibility:visible}
     <div class="card">
         <h3>Meine Marken</h3>
         <div class="brand-toolbar">
-            <input type="search" class="search" id="q" placeholder="🔍 Marke suchen …">
+            <input type="search" class="search" id="q" placeholder="Marke suchen">
             <button class="filter-chip active" data-filter="all">Alle</button>
             <button class="filter-chip" data-filter="private">Nur Eigenmarken</button>
             <button class="filter-chip" data-filter="brand">Nur Hersteller</button>

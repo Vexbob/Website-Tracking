@@ -13,6 +13,8 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
+<script src="/js/reiter.js"></script>
 <script src="/js/sw-update.js"></script>
     <script src="/js/bild.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
@@ -29,6 +31,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .dup-dismiss{position:absolute;top:0.5rem;right:0.5rem;width:auto;margin:0;padding:0.25rem 0.4rem;font-size:0.9rem;line-height:1;background:transparent;border:none;color:var(--text-3);cursor:pointer}
 .dup-dismiss:hover{color:var(--danger)}
 </style>
+<link rel="stylesheet" href="/ausgaben/ausgaben.css">
 </head>
 <body>
 <nav class="navbar">
@@ -38,8 +41,9 @@ body{visibility:hidden}body.ready{visibility:visible}
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main>
+<main class="wide az">
 <div id="subnav" data-active="duplikate"></div>
+    <script>renderSubnav();</script>
 
     <header class="page-head">
         <h1>Duplikate</h1>

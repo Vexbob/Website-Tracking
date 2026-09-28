@@ -52,6 +52,22 @@
         pfeil:  '<path d="M9.5 6l6 6-6 6"/>',
         filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
         herunter: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/>',
+        // v2.21.0 (Ausgaben): Rueckweg, Erfassen, Verwalten, Positionen.
+        links:  '<path d="M14.5 6l-6 6 6 6"/>',
+        bild:   '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 16.5l-5-5-8.5 8.5"/>',
+        ablage: '<rect x="8" y="3" width="8" height="4" rx="1.2"/>'
+              + '<path d="M8 5H6.5A1.5 1.5 0 0 0 5 6.5v13A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 17.5 5H16"/>',
+        statistik: '<path d="M5 20v-8M12 20V5M19 20v-5"/>',
+        auge:   '<path d="M2.5 12c1-2.5 4.5-7 9.5-7s8.5 4.5 9.5 7c-1 2.5-4.5 7-9.5 7s-8.5-4.5-9.5-7Z"/><circle cx="12" cy="12" r="3"/>',
+        augezu: '<path d="M3.5 3.5l17 17"/><path d="M10.6 5.2A9.8 9.8 0 0 1 12 5c5 0 8.5 4.5 9.5 7-.5 1.2-1.4 2.6-2.6 3.8"/>'
+              + '<path d="M6.3 6.4C4.4 7.7 3.1 9.7 2.5 12c1 2.5 4.5 7 9.5 7 1.7 0 3.2-.5 4.5-1.3"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+        wiederkehr: '<path d="M19.5 12a7.5 7.5 0 0 1-13 5.1"/><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1"/><path d="M17.5 3.5v3.4h-3.4M6.5 20.5v-3.4h3.4"/>',
+        laden:  '<path d="M4 9.5 5.5 4.5h13L20 9.5"/><path d="M4 9.5a2.7 2.5 0 0 0 5.3 0 2.7 2.5 0 0 0 5.4 0 2.7 2.5 0 0 0 5.3 0"/>'
+              + '<path d="M5.5 12v7.5h13V12M10 19.5V15h4v4.5"/>',
+        etikett: '<path d="M3.5 12.5v-8h8l9 9-8 8Z"/><circle cx="8" cy="9" r="1.4"/>',
+        kopie:  '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>',
+        stern:  '<path d="M12 3.8l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.8l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z"/>',
+        bank:   '<path d="M3.5 9.5 12 4l8.5 5.5"/><path d="M5.5 10.5v7M10 10.5v7M14 10.5v7M18.5 10.5v7M3.5 20h17"/>',
     };
 
     /* Das Zeichen als SVG-Text. `groesse` ist die Kantenlänge in Pixeln; 18

@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.21.0', date: '2026-09-28', title: 'Ausgaben neu gebaut', notes: [
+        'Drei Bereiche statt sechs Pillen: Übersicht, Statistik und Verwalten mit Läden, Kategorien, Marken, Dubletten und Import.',
+        'Oben der Monat als große Zahl, verglichen mit dem Vormonat bis zum selben Tag, dazu die Kurve beider Monate.',
+        'Ein Bon sieht aus wie ein Kassenzettel; Ändern und Positionen öffnen sich im Dialog.',
+        'Die vier Wege zum neuen Bon stehen in einer Zeile, die Bons nach Tagen als ruhige Liste.',
+        '„Gefiltert“ steht über der Liste nur noch, wenn wirklich gefiltert ist.',
+    ]},
     { v: 'v2.20.1', date: '2026-09-28', title: 'Gesundheit neu gebaut', notes: [
         'Oben steht der letzte volle Tag: Schritte, Energie und Schlaf als Ringe gegen deinen 30-Tage-Schnitt.',
         'Vier Reiter statt fünf: Schlüssel, Protokoll, Import und Löschen stehen unter „Daten & Verbindung“.',

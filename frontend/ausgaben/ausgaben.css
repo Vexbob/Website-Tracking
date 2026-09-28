@@ -1,0 +1,202 @@
+/* ausgaben.css — v2.21.0
+ *
+ * Was ALLE Ausgaben-Seiten teilen: der Kopf mit den drei Bereichen, die
+ * Bühne, der Kassenzettel und die Zeilen der Bon-Liste. Bis v2.20.0 stand
+ * davon nichts an einer Stelle -- jede der neun Seiten hatte ihren eigenen
+ * <style>-Block, und die Unterleiste war sechs Emoji-Pillen in zwei Zeilen.
+ * Keine festen Farben: jede Farbe ist ein Token, eine Ladenfarbe ist
+ * Nutzerdatum und erscheint nur als Tönung (DESIGN 3). */
+
+.az { --az-ton: var(--figure, var(--m-ausgaben)); }
+
+/* ---------- Kopf: drei Bereiche und der Weg zurück ---------- */
+.az-kopf { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-5); }
+.az-kopf .tabs { margin: 0; }
+.az-zurueck {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    min-height: 44px; padding: 0 0.5rem 0 0.25rem; border-radius: 10px;
+    color: var(--text-2); font-size: 0.875rem; font-weight: 600; text-decoration: none;
+}
+.az-zurueck:hover { color: var(--text-1); background: var(--surface-2); text-decoration: none; }
+.az-zurueck svg { flex: none; }
+@media (max-width: 500px) {
+    .az-kopf { gap: var(--space-2); margin-bottom: var(--space-4); }
+    .az-zurueck { order: -1; }
+}
+
+/* ---------- Bühne (Übersicht, Statistik) ---------- */
+.az-buehne { --buehne-ton: var(--az-ton); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+@media (min-width: 900px) {
+    .az-buehne { grid-template-columns: minmax(300px, 1fr) minmax(0, 1.2fr); gap: var(--space-6); padding: var(--space-6); align-items: stretch; }
+}
+.az-b-haupt { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.az-b-haupt .v-held { margin-top: 0.25rem; }
+.az-b-vergleich { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; min-height: 1.5rem; }
+.az-delta { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: var(--surface-2); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.az-delta.ist-mehr { background: var(--warn-soft); color: var(--warn); }
+.az-delta.ist-weniger { background: var(--ok-soft); color: var(--ok); }
+.az-b-fakten {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px; margin: var(--space-3) 0 0; background: var(--line);
+    border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+}
+.az-b-fakten > div, .az-b-fakten > a { background: color-mix(in srgb, var(--surface-2) 72%, transparent); padding: 0.625rem 0.75rem; min-width: 0; color: inherit; text-decoration: none; }
+.az-b-fakten > a:hover { background: var(--surface-2); text-decoration: none; }
+.az-b-fakten dt, .az-b-fakten .lbl {
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.az-b-fakten dd, .az-b-fakten .val {
+    margin: 2px 0 0; font-size: 0.9375rem; font-weight: 700; color: var(--text-1);
+    font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.az-b-fakten .note { font-size: 0.6875rem; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.az-b-fakten--vier { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 560px) { .az-b-fakten--vier { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.az-b-kurve { display: flex; flex-direction: column; min-width: 0; }
+.az-b-kurve-kopf { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-bottom: 0.375rem; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+.az-legende { display: inline-flex; gap: 0.75rem; text-transform: none; letter-spacing: 0; font-weight: 600; }
+.az-legende span { display: inline-flex; align-items: center; gap: 0.375rem; }
+.az-legende i { width: 14px; height: 0; border-top: 2px solid var(--ton); }
+.az-legende i.ist-gestrichelt { border-top-style: dashed; }
+.az-b-flaeche { position: relative; height: 120px; }
+@media (min-width: 900px) { .az-b-flaeche { flex: 1; min-height: 200px; } }
+.az-held-skel { display: inline-block; width: 6ch; height: 0.85em; border-radius: 10px; }
+.az-skel-text { display: inline-block; width: 14rem; max-width: 100%; height: 1em; border-radius: 6px; }
+
+/* ---------- Tagesköpfe und Bon-Zeilen ---------- */
+.az-tag-kopf {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem;
+    margin: var(--space-4) 0.125rem var(--space-2);
+    font-size: 0.75rem; font-weight: 600; color: var(--text-3);
+}
+.az-tag-kopf:first-child { margin-top: 0; }
+.az-tag-kopf strong { color: var(--text-2); font-weight: 650; font-size: 0.8125rem; }
+.az-tag-kopf span:last-child { font-variant-numeric: tabular-nums; }
+.az-bons .rec-mark { font-size: 0.9375rem; }
+.az-bons .rec-title { display: flex; align-items: center; gap: 0.375rem; }
+.az-bons .rec-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.az-bons .rec-title svg { flex: none; color: var(--text-3); }
+.az-bons .rec-val { font-size: 0.9375rem; }
+
+/* ---------- Kassenzettel ----------
+   Der Bon sieht aus wie das, was er ist: ein Zettel mit dem Laden oben, den
+   Positionen untereinander und der Summe unten, darunter die gezackte
+   Abrisskante. Keine Karte mit Formularfeldern -- geändert wird im Dialog. */
+.az-zettel {
+    position: relative;
+    background: var(--surface-1);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 1.5rem 1.25rem 1.25rem;
+    box-shadow: var(--kante-licht);
+    margin-bottom: 12px;
+}
+.az-zettel::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px;
+    background:
+        linear-gradient(135deg, var(--surface-1) 50%, transparent 50%) 0 0 / 14px 10px repeat-x,
+        linear-gradient(225deg, var(--surface-1) 50%, transparent 50%) 0 0 / 14px 10px repeat-x;
+}
+.az-zettel-kopf { display: flex; flex-direction: column; align-items: center; gap: 0.375rem; text-align: center; }
+.az-zettel-mark {
+    display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%;
+    font-size: 1.375rem; font-weight: 800;
+    color: var(--tone, var(--az-ton));
+    background: color-mix(in srgb, var(--tone, var(--az-ton)) 18%, transparent);
+}
+.az-zettel-laden { font-size: 1.25rem; font-weight: 750; letter-spacing: -0.02em; margin-top: 0.25rem; overflow-wrap: anywhere; }
+.az-zettel-meta { font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.az-zettel-trenner { border: 0; border-top: 1px dashed var(--line-strong); margin: 1rem 0; }
+.az-zettel-pos { display: flex; flex-direction: column; gap: 0.5rem; }
+.az-pos { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.125rem 0.75rem; align-items: baseline; }
+.az-pos-name { font-size: 0.875rem; color: var(--text-1); overflow-wrap: anywhere; }
+.az-pos-name b { color: var(--text-3); font-weight: 600; margin-right: 0.25rem; }
+.az-pos-preis { font-size: 0.875rem; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.az-pos-unter { grid-column: 1 / -1; font-size: 0.6875rem; color: var(--text-3); display: flex; gap: 0.375rem; flex-wrap: wrap; }
+.az-pos.ist-aus .az-pos-name { color: var(--text-3); }
+.az-reduziert { color: var(--ok); font-weight: 700; }
+.az-zettel-leer { font-size: 0.8125rem; color: var(--text-3); text-align: center; }
+.az-zettel-summe { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.az-zettel-summe span { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); }
+.az-zettel-summe strong { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.az-zettel-fuss { margin-top: 0.5rem; display: flex; justify-content: space-between; gap: 1rem; font-size: 0.75rem; color: var(--text-3); }
+.az-zettel-notiz { margin-top: 0.75rem; padding: 0.625rem 0.75rem; border-radius: var(--radius); background: var(--surface-2); font-size: 0.8125rem; color: var(--text-2); overflow-wrap: anywhere; }
+.az-zettel-foto { display: block; width: 100%; max-height: 220px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--line); margin-top: 1rem; cursor: zoom-in; background: var(--surface-2); }
+
+/* ---------- Leere Zustände ---------- */
+.az .empty { margin: 0; }
+
+/* ---------- Berührungsziele (DESIGN 4) ---------- */
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .az .v-abschnitt-kopf .v-btn { min-height: 44px; }
+    /* Die Pflegeseiten erben ihre Knöpfe aus älteren Bausteinen; hier bekommen
+       sie die 44 px, die ein Daumen braucht. */
+    .az .entity-action, .az #addBtn, .az #newBtn, .az #impClassify, .az .cleanup-do,
+    #addItemBtn, .az .del { min-height: 44px; min-width: 44px; }
+}
+
+/* ---------- Hinweis (Ausweich-Toast) ----------
+   Seit v1.58.0 gibt es den Toast der ganzen App (ui.js). Dieser hier springt
+   nur ein, solange ui.js noch nicht geladen ist -- auf jeder Ausgaben-Seite,
+   deshalb steht er hier und nicht mehr nur in dashboard.css. */
+.ausg-toast {
+    position: fixed; left: 50%; bottom: calc(1.25rem + env(safe-area-inset-bottom)); z-index: 2100;
+    transform: translate(-50%, 8px); opacity: 0; pointer-events: none;
+    display: flex; align-items: center; gap: 0.75rem; max-width: min(92vw, 440px);
+    padding: 0.625rem 1rem; border-radius: 999px;
+    background: var(--surface-3); color: var(--text-1); border: 1px solid var(--line-strong);
+    box-shadow: var(--shadow-float); font-size: 0.875rem;
+    transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+}
+.ausg-toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.ausg-toast-success { border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.ausg-toast-error { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.ausg-toast .undo-btn { flex: none; width: auto; margin: 0; min-height: 34px; padding: 0 0.75rem; border: 0; border-radius: 999px; background: transparent; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
+@media (max-width: 720px) { .ausg-toast { bottom: calc(76px + env(safe-area-inset-bottom)); } }
+
+/* ---------- Bon-Seite ---------- */
+.az-bon-raster { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+@media (min-width: 900px) { .az-bon-raster { grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: var(--space-6); } }
+.az-bon-skel { display: block; height: 420px; border-radius: var(--radius-lg); }
+.az-bon-seite { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.az-bon-aktionen { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.az-bon-aktionen .v-btn { min-height: 44px; flex: 1 1 auto; }
+@media (min-width: 900px) { .az-bon-aktionen .v-btn { flex: 0 0 auto; } }
+.az-bon-foto { display: block; max-width: 100%; max-height: 70vh; border-radius: var(--radius-lg); border: 1px solid var(--line); cursor: zoom-in; background: var(--surface-2); }
+.az-bon-hinweis { margin: 0; font-size: 0.8125rem; color: var(--text-3); }
+.az-felder { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 0.75rem; }
+.az-felder > div { min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.modal-body :where(input:not([type="checkbox"]), select, textarea) { background: var(--surface-2); }
+
+/* Positionen bearbeiten: eine Zeile je Position, am Handy in drei Reihen */
+.az-posliste { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.item-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) 64px 96px minmax(0, 150px) 44px 44px;
+    gap: 0.375rem; align-items: center; padding: 0.5rem;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.item-row input, .item-row select { margin: 0; min-width: 0; background: var(--surface-1); }
+.item-row .v-btn--icon { width: 44px; height: 44px; color: var(--text-3); }
+.item-row .del:hover { color: var(--danger); background: var(--danger-soft); }
+.item-row .d-red { grid-column: 1 / -1; font-size: 0.6875rem; }
+.item-row.not-comparable { background: var(--surface-1); border-style: dashed; }
+.item-row.not-comparable .d-desc { color: var(--text-3); }
+@media (max-width: 640px) {
+    .item-row { grid-template-columns: 64px minmax(0, 1fr) 44px 44px; grid-template-areas: 'desc desc desc desc' 'qty price cmp del' 'cat cat cat cat'; }
+    .item-row .d-desc { grid-area: desc; }
+    .item-row .d-qty { grid-area: qty; }
+    .item-row .d-price { grid-area: price; }
+    .item-row .d-cat { grid-area: cat; }
+    .item-row .cmp { grid-area: cmp; }
+    .item-row .del { grid-area: del; }
+}
+
+/* ---------- Leiste über einer Seite (Statistik) ----------
+   Der Zeitraum steht als Knopf in einer Zeile, nicht in einer eigenen Karte. */
+.az-leiste { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
+.az-leiste-text { font-size: 0.8125rem; color: var(--text-3); }
+@media (min-width: 900px) {
+    .az-buehne--stat { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
+    .az-buehne--stat .az-b-fakten--vier { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+}
+.az-buehne--stat + .stat-card, .az-buehne--stat + * { margin-top: var(--space-5); }

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0c10">
+<meta name="description" content="Ausgaben verwalten: Läden, Kategorien, Marken, Dubletten und Kontoauszug-Import.">
+<title>Verwalten — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav-switcher.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/reiter.js"></script>
+<script src="/js/ikon.js"></script>
+<script src="/js/sw-update.js"></script>
+<script src="/js/bild.js"></script>
+<script src="/ausgaben/ausgaben.js"></script>
+<link rel="stylesheet" href="/ausgaben/ausgaben.css">
+<style>
+body{visibility:hidden}body.ready{visibility:visible}
+.az-verwalten { max-width: 720px; }
+.az-verwalten .rec-row { min-height: 64px; padding: 0.625rem 0.875rem; }
+.az-verwalten .rec-mark { width: 2.5rem; height: 2.5rem; border-radius: 12px; }
+.az-verwalten .rec-title { font-size: 0.9375rem; }
+.az-verwalten .rec-val { font-size: 0.8125rem; font-weight: 600; color: var(--text-2); }
+.az-verwalten .rec-val.ist-offen { color: var(--warn); }
+</style>
+</head>
+<body>
+<nav class="navbar">
+    <span class="nav-title">Ausgaben</span>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main class="wide az">
+    <div id="subnav" data-active="verwalten"></div>
+    <script>renderSubnav();</script>
+    <!-- v2.21.0: Was man selten braucht, an einer Stelle (DESIGN 6d). Bis
+         dahin standen diese fünf Seiten als Pillen gleichrangig neben der
+         Übersicht und der Statistik. -->
+    <section class="v-abschnitt az-verwalten">
+        <header class="v-abschnitt-kopf"><h2>Verwalten</h2></header>
+        <div class="rec-list">
+            <a class="rec-row" href="/ausgaben/laeden.html">
+                <span class="rec-mark" style="--tone:var(--az-ton)"><span data-ikon="laden" data-ikon-gross="20"></span></span>
+                <span class="rec-main"><span class="rec-title">Läden</span><span class="rec-meta">Zeichen, Farbe, doppelte zusammenführen</span></span>
+                <span class="rec-side"><span class="rec-val" id="azNLaeden"></span></span>
+                <span class="rec-go"><span data-ikon="pfeil" data-ikon-gross="16"></span></span>
+            </a>
+            <a class="rec-row" href="/ausgaben/kategorien.html">
+                <span class="rec-mark" style="--tone:var(--az-ton)"><span data-ikon="etikett" data-ikon-gross="20"></span></span>
+                <span class="rec-main"><span class="rec-title">Kategorien</span><span class="rec-meta">und die Regeln, nach denen Positionen einsortiert werden</span></span>
+                <span class="rec-side"><span class="rec-val" id="azNKategorien"></span></span>
+                <span class="rec-go"><span data-ikon="pfeil" data-ikon-gross="16"></span></span>
+            </a>
+            <a class="rec-row" href="/ausgaben/marken.html">
+                <span class="rec-mark" style="--tone:var(--az-ton)"><span data-ikon="stern" data-ikon-gross="20"></span></span>
+                <span class="rec-main"><span class="rec-title">Marken</span><span class="rec-meta">Marken auf einzelnen Positionen</span></span>
+                <span class="rec-side"><span class="rec-val" id="azNMarken"></span></span>
+                <span class="rec-go"><span data-ikon="pfeil" data-ikon-gross="16"></span></span>
+            </a>
+            <a class="rec-row" href="/ausgaben/duplikate.html">
+                <span class="rec-mark" style="--tone:var(--warn)"><span data-ikon="kopie" data-ikon-gross="20"></span></span>
+                <span class="rec-main"><span class="rec-title">Dubletten</span><span class="rec-meta">Bons, die zweimal erfasst sein könnten</span></span>
+                <span class="rec-side"><span class="rec-val" id="azNDubletten"></span></span>
+                <span class="rec-go"><span data-ikon="pfeil" data-ikon-gross="16"></span></span>
+            </a>
+            <a class="rec-row" href="/ausgaben/import.html">
+                <span class="rec-mark" style="--tone:var(--info)"><span data-ikon="bank" data-ikon-gross="20"></span></span>
+                <span class="rec-main"><span class="rec-title">Kontoauszug</span><span class="rec-meta">CSV aus der Banking-App, samt Einordnen</span></span>
+                <span class="rec-side"><span class="rec-val" id="azNImport"></span></span>
+                <span class="rec-go"><span data-ikon="pfeil" data-ikon-gross="16"></span></span>
+            </a>
+        </div>
+    </section>
+</main>
+<div class="version-tag"></div>
+<script src="/ausgaben/verwalten.js"></script>
+</body>
+</html>

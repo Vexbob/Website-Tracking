@@ -14,12 +14,15 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/reiter.js"></script>
+<script src="/js/ikon.js"></script>
 <script src="/js/sw-update.js"></script>
     <script src="/js/bild.js"></script>
 <script src="/js/range-filter.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 <script src="/js/charts.js"></script>
+<link rel="stylesheet" href="/ausgaben/ausgaben.css">
 <link rel="stylesheet" href="/ausgaben/dashboard.css">
 </head>
 <body>
@@ -30,94 +33,94 @@
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main class="wide">
-    <!-- v2.17.0: Leiste und Kennzahlen-Platzhalter werden HIER gezeichnet,
-         direkt an ihrer Stelle und vor dem ersten Bild. Kamen sie erst aus
-         dashboard.js, rutschten die vier Kacheln darunter am Handy beim
-         Laden in drei Stufen um ueber 400 px nach unten. -->
+<main class="wide az">
+    <!-- v2.21.0: Kopf und Bühne werden HIER gezeichnet, direkt an ihrer
+         Stelle und vor dem ersten Bild (v2.17.0: kamen sie erst aus
+         dashboard.js, rutschte am Handy alles darunter beim Laden). -->
     <div id="subnav" data-active="dashboard"></div>
-    <div class="kpi-block" id="kpiGrid"></div>
-    <script>renderSubnav(); zeichneKpis(null);</script>
+    <script>renderSubnav();</script>
+    <section class="v-buehne az-buehne" id="kpiGrid"></section>
+    <script>zeichneKpis(null);</script>
 
-    <!-- v1.38.3: Neuer Bon als 4 Tiles im Homepage-Look (farbiges Icon-Badge + Text).
-         Drag & Drop funktioniert weiter unsichtbar auf der ganzen Seite, Strg+V ebenfalls. -->
+    <!-- Erfassen: vier Wege, ein Bon hineinzukommen, in einer Zeile. Ziehen
+         einer Bilddatei auf die Seite und Strg+V gehen weiter überall. -->
     <section class="nq-section" id="newQuick" aria-label="Neuer Bon">
         <div class="nq-grid">
             <button type="button" class="nq-tile" id="nqCamera">
-                <span class="nq-badge nq-badge-teal" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
-                </span>
-                <span class="nq-text"><span class="nq-title">Kamera</span><span class="nq-sub">Bon direkt fotografieren</span></span>
+                <span class="nq-badge" aria-hidden="true"><span data-ikon="kamera" data-ikon-gross="22"></span></span>
+                <span class="nq-text"><span class="nq-title">Kamera</span><span class="nq-sub">Bon fotografieren</span></span>
             </button>
             <button type="button" class="nq-tile" id="nqGallery">
-                <span class="nq-badge nq-badge-blue" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 17l-5-5-8 8"/></svg>
-                </span>
-                <span class="nq-text"><span class="nq-title">Galerie</span><span class="nq-sub">Bild aus der Galerie wählen</span></span>
+                <span class="nq-badge" aria-hidden="true"><span data-ikon="bild" data-ikon-gross="22"></span></span>
+                <span class="nq-text"><span class="nq-title">Galerie</span><span class="nq-sub">Foto auswählen</span></span>
             </button>
             <button type="button" class="nq-tile" id="nqPaste">
-                <span class="nq-badge nq-badge-purple" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="4" width="10" height="4" rx="1"/><path d="M9 6H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3"/></svg>
-                </span>
-                <span class="nq-text"><span class="nq-title">Einfügen</span><span class="nq-sub">Aus Zwischenablage <kbd>Strg</kbd>+<kbd>V</kbd></span></span>
+                <span class="nq-badge" aria-hidden="true"><span data-ikon="ablage" data-ikon-gross="22"></span></span>
+                <span class="nq-text"><span class="nq-title">Einfügen</span><span class="nq-sub"><kbd>Strg</kbd>+<kbd>V</kbd></span></span>
             </button>
             <a href="/ausgaben/neu.html#manual" class="nq-tile" id="nqManual">
-                <span class="nq-badge nq-badge-pink" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M14 6l4 4"/></svg>
-                </span>
-                <span class="nq-text"><span class="nq-title">Manuell</span><span class="nq-sub">Ohne Foto eintragen</span></span>
+                <span class="nq-badge" aria-hidden="true"><span data-ikon="stift" data-ikon-gross="22"></span></span>
+                <span class="nq-text"><span class="nq-title">Manuell</span><span class="nq-sub">ohne Foto</span></span>
             </a>
         </div>
         <input type="file" id="nqFileCam" accept="image/*" capture="environment" hidden style="display:none">
         <input type="file" id="nqFileGal" accept="image/*" hidden style="display:none">
     </section>
 
-    <div class="card">
-        <!-- v1.38.0: Kompakte Filter-Zeile — Suche + Presets bleiben sichtbar,
-             erweiterte Filter (Typ, Laden, Kategorie, Datum) liegen im Popover. -->
-        <div class="filter-bar-v2">
-            <h3 class="filter-title">Letzte Ausgaben</h3>
-            <div class="filter-tools">
-                <input type="search" id="filterQ" placeholder="Suchen (Laden, Artikel, Notiz)">
-                <div class="stat-filter-slot" id="expRange"></div>
-                <div class="filter-popover-wrap">
-                    <button type="button" id="filterToggle" class="filter-toggle-btn" aria-expanded="false" aria-haspopup="dialog" aria-controls="filterPopover">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16M7 12h10M10 19h4"/></svg>
-                        <span>Filter</span>
-                        <span class="filter-badge" id="filterBadge" hidden>0</span>
-                    </button>
-                    <div id="filterPopover" class="filter-popover" role="dialog" aria-label="Filter" hidden>
-                        <div class="fp-row">
-                            <label class="fp-label">Typ</label>
-                            <!-- Optionen kommen aus /api/expense-types (eingebaute + eigene). -->
-                            <select id="filterType">
-                                <option value="">Alle Typen</option>
-                            </select>
-                        </div>
-                        <div class="fp-row">
-                            <label class="fp-label">Laden</label>
-                            <select id="filterStore"><option value="">Alle Läden</option></select>
-                        </div>
-                        <div class="fp-row">
-                            <label class="fp-label">Kategorie</label>
-                            <select id="filterCategory"><option value="">Alle Kategorien</option></select>
-                        </div>
-                        <div class="fp-actions">
-                            <button type="button" id="filterReset" class="fp-btn fp-btn-ghost">Zurücksetzen</button>
-                            <button type="button" id="filterApply" class="fp-btn fp-btn-primary">Fertig</button>
-                        </div>
+    <section class="v-abschnitt az-liste">
+        <header class="v-abschnitt-kopf">
+            <h2>Bons</h2>
+            <span class="v-abschnitt-sub" id="azListeSub"></span>
+        </header>
+        <!-- v1.38.0: Suche, Zeitraum und Filter in einer Zeile; Typ, Laden
+             und Kategorie liegen im schwebenden Feld (DESIGN 6b). -->
+        <div class="az-werkzeuge">
+            <label class="az-suche">
+                <span data-ikon="lupe" data-ikon-gross="17"></span>
+                <input type="search" id="filterQ" placeholder="Laden, Artikel, Notiz" aria-label="Bons durchsuchen" autocomplete="off">
+            </label>
+            <div id="expRange"></div>
+            <div class="filter-popover-wrap">
+                <button type="button" id="filterToggle" class="filter-toggle-btn" aria-expanded="false" aria-haspopup="dialog" aria-controls="filterPopover">
+                    <span data-ikon="filter" data-ikon-gross="16"></span>
+                    <span>Filter</span>
+                    <span class="filter-badge" id="filterBadge" hidden>0</span>
+                </button>
+                <div id="filterPopover" class="filter-popover" role="dialog" aria-label="Filter" hidden>
+                    <div class="fp-row">
+                        <label class="fp-label" for="filterType">Typ</label>
+                        <!-- Optionen kommen aus /api/expense-types (eingebaute + eigene). -->
+                        <select id="filterType">
+                            <option value="">Alle Typen</option>
+                        </select>
+                    </div>
+                    <div class="fp-row">
+                        <label class="fp-label" for="filterStore">Laden</label>
+                        <select id="filterStore"><option value="">Alle Läden</option></select>
+                    </div>
+                    <div class="fp-row">
+                        <label class="fp-label" for="filterCategory">Kategorie</label>
+                        <select id="filterCategory"><option value="">Alle Kategorien</option></select>
+                    </div>
+                    <div class="fp-actions">
+                        <button type="button" id="filterReset" class="fp-btn fp-btn-ghost">Zurücksetzen</button>
+                        <button type="button" id="filterApply" class="fp-btn fp-btn-primary">Fertig</button>
                     </div>
                 </div>
             </div>
         </div>
         <div id="activeFilterChips" class="active-filter-chips"></div>
         <div id="filterTotal"></div>
-        <div id="expList" class="exp-list"></div>
-    </div>
-    <div class="card" id="recurringCard" style="display:none">
-        <h3>🔁 Wiederkehrende Ausgaben (erkannt)</h3>
+        <div id="expList" class="az-bons"><span class="skel az-skel-zeile"></span><span class="skel az-skel-zeile"></span><span class="skel az-skel-zeile"></span></div>
+    </section>
+
+    <section class="v-abschnitt" id="recurringCard" hidden>
+        <header class="v-abschnitt-kopf">
+            <h2>Wiederkehrend</h2>
+            <span class="v-abschnitt-sub">erkannt aus den letzten Monaten</span>
+        </header>
         <div id="recurringList"></div>
-    </div>
+    </section>
 </main>
 <div class="version-tag"></div>
 <script src="/ausgaben/dashboard.js"></script>

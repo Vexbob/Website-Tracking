@@ -15,9 +15,12 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
+<script src="/js/reiter.js"></script>
 <script src="/js/sw-update.js"></script>
 <script src="/js/bild.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
+<link rel="stylesheet" href="/ausgaben/ausgaben.css">
 </head>
 <body>
 <nav class="navbar">
@@ -27,8 +30,9 @@
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main>
+<main class="wide az">
 <div id="subnav" data-active="import"></div>
+    <script>renderSubnav();</script>
 
     <header class="page-head">
         <h1>Kontoauszug übernehmen</h1>
@@ -39,7 +43,7 @@
 
     <div class="v-card">
         <div class="v-card-head">
-            <h2>⬆️ CSV wählen</h2>
+            <h2>CSV wählen</h2>
             <span class="v-card-sub">Buchungsdatum · Betrag · Zahlungsempfänger</span>
         </div>
         <p class="imp-hint">
@@ -63,7 +67,7 @@
 
     <div class="v-card">
         <div class="v-card-head">
-            <h2>🧾 Bisherige Uploads</h2>
+            <h2>Bisherige Uploads</h2>
             <span class="v-card-sub">Woher welche Buchungen stammen</span>
         </div>
         <div id="impLog"><span class="skel skel-block"></span></div>
@@ -71,7 +75,7 @@
 
     <div class="v-card">
         <div class="v-card-head">
-            <h2>🏷️ Einordnen lassen</h2>
+            <h2>Einordnen lassen</h2>
             <span class="v-card-sub">Beleg-Typ und Kategorie</span>
         </div>
         <p class="imp-hint">

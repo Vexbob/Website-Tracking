@@ -445,7 +445,7 @@ function bindFilters() {
 // NDJSON, wir lesen inkrementell mit.
 
 function openReparseModal() {
-    const modal = openModal('🔄 Alle Bons neu parsen', `
+    const modal = openModal('Alle Bons neu parsen', `
         <p style="margin-top:0;font-size:0.875rem;color:var(--text-muted)">
             Ruft für jeden Bon mit hinterlegtem Foto den KI-Parser erneut auf und
             <strong>ersetzt die Einzelpositionen</strong>. Kopfdaten (Betrag, Datum, Laden)

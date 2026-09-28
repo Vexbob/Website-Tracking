@@ -13,44 +13,13 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/reiter.js"></script>
+<script src="/js/ikon.js"></script>
 <script src="/js/sw-update.js"></script>
-    <script src="/js/bild.js"></script>
+<script src="/js/bild.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
-<style>
-body{visibility:hidden}body.ready{visibility:visible}
-/* Ruhende Flaeche: Ebene + Haarlinie, kein Schatten (docs/DESIGN.md). */
-.card{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1rem}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem}
-@media(max-width:500px){.form-row{grid-template-columns:1fr}}
-.item-list{display:flex;flex-direction:column;gap:0.375rem;margin-top:0.5rem}
-.item-row{display:grid;grid-template-columns:1fr 56px 80px 130px 28px 28px;gap:0.375rem;align-items:center;padding:0.4375rem;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);transition:opacity .15s}
-.item-row input,.item-row select{margin:0;padding:0.375rem 0.5rem}
-.item-row .del,.item-row .cmp{background:transparent;border:1px solid transparent;font-size:1rem;width:auto;padding:0;margin:0;cursor:pointer;height:28px;border-radius:5px}
-.item-row .del{color:var(--danger)}
-.item-row .cmp{color:var(--text-3)}
-.item-row .cmp:hover{border-color:var(--line);background:var(--surface-1)}
-.item-row.not-comparable{opacity:0.6;background:var(--surface-1);border-style:dashed}
-.item-row.not-comparable .d-desc{text-decoration:line-through;text-decoration-color:var(--text-3);text-decoration-thickness:1px}
-@media(max-width:500px){
-    .item-row{grid-template-columns:52px 1fr 28px 28px;grid-template-areas:'desc desc desc desc' 'qty price cmp del'  'cat cat cat cat'}
-    .item-row .d-desc{grid-area:desc}
-    .item-row .d-qty{grid-area:qty}
-    .item-row .d-price{grid-area:price}
-    .item-row .d-cat{grid-area:cat}
-    .item-row .cmp{grid-area:cmp}
-    .item-row .del{grid-area:del}
-}
-.actions{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem}
-.actions button{width:auto;padding:0.5rem 1rem;font-size:0.875rem;margin:0}
-.actions button.primary{background:var(--grad-accent);color:var(--accent-ink);box-shadow:var(--glow-accent)}
-.actions button.danger{background:transparent;color:var(--danger);border:1px solid transparent}
-.actions button.secondary{background:var(--surface-2);color:var(--text-1);border:1px solid var(--line)}
-/* Das Foto ist Beleg, nicht Hauptsache: kleiner, damit die Positionen darunter
-   ohne Scrollen sichtbar bleiben. */
-.preview-img{max-width:100%;max-height:260px;border-radius:var(--radius);border:1px solid var(--line);display:block;margin:0 auto}
-.total-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.75rem}
-.total-val{font-size:1.75rem;font-weight:700;color:var(--text-1);font-variant-numeric:tabular-nums}
-</style>
+<link rel="stylesheet" href="/ausgaben/ausgaben.css">
+<style>body{visibility:hidden}body.ready{visibility:visible}</style>
 </head>
 <body>
 <nav class="navbar">
@@ -60,9 +29,22 @@ body{visibility:hidden}body.ready{visibility:visible}
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main>
-<div id="subnav" data-active="dashboard"></div>
-    <div id="content"></div>
+<main class="wide az">
+    <div id="subnav" data-active="bon"></div>
+    <script>renderSubnav();</script>
+    <!-- v2.21.0: Der Bon ist ein Kassenzettel, kein Formular. Ändern und die
+         Positionen stehen je in einem Dialog (DESIGN 6d): angesehen wird ein
+         Bon viel öfter, als er geändert wird. -->
+    <div class="az-bon-raster">
+        <div id="content"><span class="skel az-bon-skel"></span></div>
+        <aside class="az-bon-seite" id="azBonSeite" hidden>
+            <div class="az-bon-aktionen">
+                <button type="button" class="v-btn v-btn--primary" id="eEdit"><span data-ikon="stift" data-ikon-gross="16"></span>Bearbeiten</button>
+                <button type="button" class="v-btn" id="ePositionen"><span data-ikon="etikett" data-ikon-gross="16"></span>Positionen</button>
+            </div>
+            <div id="azBonFoto"></div>
+        </aside>
+    </div>
 </main>
 <div class="version-tag"></div>
 <script src="/ausgaben/bon.js"></script>

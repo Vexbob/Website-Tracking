@@ -14,6 +14,7 @@
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/reiter.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
 <script src="/js/sw-update.js"></script>
     <script src="/js/bild.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
@@ -65,6 +66,7 @@ kbd{display:inline-block;padding:0 4px;font-size:0.6875rem;background:var(--surf
 .actions button.secondary{background:var(--surface-2);color:var(--text-1);border:1px solid var(--line)}
 .dupe-warn{background:var(--warn-soft);border:1px solid transparent;border-radius:var(--radius);padding:0.75rem;font-size:0.875rem;color:var(--warn);margin-top:0.75rem}
 </style>
+<link rel="stylesheet" href="/ausgaben/ausgaben.css">
 </head>
 <body>
 <nav class="navbar">
@@ -74,23 +76,24 @@ kbd{display:inline-block;padding:0 4px;font-size:0.6875rem;background:var(--surf
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main>
+<main class="wide az">
 <div id="subnav" data-active="neu"></div>
+    <script>renderSubnav();</script>
 <div class="tabs">
-<button class="tab-btn active" data-tab="ocr">📸 Foto / OCR</button>
-<button class="tab-btn" data-tab="manual">✍️ Manuell</button>
+<button class="tab-btn active" data-tab="ocr">Foto</button>
+<button class="tab-btn" data-tab="manual">Manuell</button>
 </div>
 
 <div id="ocrPanel" class="tab-panel active">
 <div class="card" id="uploadCard">
 <h3>Kassenbon aufnehmen, hochladen oder einfügen</h3>
 <div id="uploadDrop" class="upload-drop">
-<div class="icon">📸</div>
+<div class="icon"><span data-ikon="kamera" data-ikon-gross="34"></span></div>
 <div style="font-weight:600;margin-bottom:0.5rem">Bild wählen</div>
 <div class="upload-actions">
-<button type="button" class="upload-btn" id="btnCamera">📷 Kamera</button>
-<button type="button" class="upload-btn" id="btnGallery">🖼️ Galerie</button>
-<button type="button" class="upload-btn" id="btnPaste">📋 Einfügen</button>
+<button type="button" class="upload-btn" id="btnCamera"><span data-ikon="kamera"></span> Kamera</button>
+<button type="button" class="upload-btn" id="btnGallery"><span data-ikon="bild"></span> Galerie</button>
+<button type="button" class="upload-btn" id="btnPaste"><span data-ikon="ablage"></span> Einfügen</button>
 </div>
 <div style="font-size:0.75rem;color:var(--text-3);margin-top:0.75rem">oder Datei hierher ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> · JPG/PNG · max 8 MB</div>
 <input type="file" id="fileInputCamera" accept="image/*" capture="environment" style="display:none">

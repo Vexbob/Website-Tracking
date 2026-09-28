@@ -354,7 +354,10 @@ gleitet eine Markierung (`js/reiter.js`); das Modul setzt wie bisher nur die
 Klasse `active`. Passt die Zeile nicht in die Breite, rollt sie, der Rand
 blendet weich aus, und der aktive Reiter steht in der Mitte. Jede Seite mit
 `.tabs` bindet `js/reiter.js` ein; der Test in `test_navigation.py` wacht
-darüber.
+darüber. Ein Reiter darf ein **Link** sein (`a.tab-btn`), wenn jeder Bereich
+eine eigene Seite ist: Die Ausgaben haben seit v2.21.0 drei Bereiche
+(Übersicht, Statistik, Verwalten) über neun Seiten, und die Pflegeseiten unter
+„Verwalten“ tragen zusätzlich einen Weg zurück.
 
 **Ein Abschnitt** (`.v-abschnitt`, v2.19.0) ist eine Überschrift über einer
 Gruppe von Karten, mit der Handlung am Rand („Neu“). Er ist kein Kasten: die
@@ -431,6 +434,10 @@ Eine Komponente, zwei Formen (`.v-ring` in `css/style.css`, Muster in
   „10.000 Schritte“ wäre ein Ziel, das niemand gesetzt hat; der eigene
   Schnitt ist eine Zahl aus den Daten, und die Beschriftung nennt ihn
   („37 % von Ø 8.489“).
+- **Wo es kein Ziel gibt und keins geben soll, gibt es keinen Ring**
+  (v2.21.0, Ausgaben): Ausgaben haben kein Ziel, also steht die Heldenzahl
+  dort ohne Ring. Verglichen wird mit dem Vormonat **bis zum selben Tag** --
+  der ganze Vormonat gegen den angebrochenen hieß am 5. jeden Monat „−80 %“.
 - **`.is-unvollstaendig`** macht die Spur gestrichelt. Ein Wert, zu dem
   Angaben fehlen, darf nicht aussehen wie einer, zu dem alle da sind.
 - **Die runden Kappen werden abgezogen.** Der Bogen wird eine Strichbreite

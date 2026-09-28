@@ -15,12 +15,15 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
+<script src="/js/reiter.js"></script>
 <script src="/js/sw-update.js"></script>
     <script src="/js/bild.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 <script src="/js/charts.js"></script>
 <script src="/js/range-filter.js"></script>
+<link rel="stylesheet" href="/ausgaben/ausgaben.css">
 </head>
 <body>
 <nav class="navbar">
@@ -30,30 +33,38 @@
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main class="wide">
+<main class="wide az">
     <div id="subnav" data-active="statistik"></div>
+    <script>renderSubnav();</script>
 
     <!-- v1.60.0: Der Zeitraum liegt hinter einem Knopf (js/range-filter.js);
          vorher standen fünf Chips und zwei Datumsfelder dauerhaft im Weg.
          Seit v1.64.0 gilt er für die ganze Seite, Produkte eingeschlossen. -->
-    <div class="stat-filterbar">
-        <span class="stat-filter-title">Zeitraum</span>
-        <span class="stat-range-lbl" id="statRangeInfo"></span>
-        <div class="stat-filter-slot" id="statRange"></div>
+    <div class="az-leiste">
+        <span class="az-leiste-text" id="statRangeInfo"></span>
+        <div id="statRange"></div>
     </div>
 
-    <!-- v1.62.0: eine Hauptzahl statt vier gleich lauter Kacheln — derselbe
-         Baustein wie auf dem Ausgaben-Dashboard. -->
-    <div class="kpi-block" id="statKpiGrid">
-        <div class="kpi-hero"><div class="kpi-hero-main">
-            <div class="lbl">Ausgaben im Zeitraum</div>
-            <span class="skel" style="display:block;width:9rem;height:2.5rem"></span>
-        </div></div>
-    </div>
+    <!-- v2.21.0: die Summe des Zeitraums als Heldenzahl auf der Bühne --
+         derselbe Baustein wie auf der Übersicht. Kein Ring: für Ausgaben
+         gibt es kein Ziel (DESIGN 7a). -->
+    <section class="v-buehne az-buehne az-buehne--stat" id="statKpiGrid">
+        <div class="az-b-haupt">
+            <span class="v-buehne-marke">Ausgaben im Zeitraum</span>
+            <strong class="v-held"><span class="skel az-held-skel"></span></strong>
+            <div class="az-b-vergleich"><span class="skel az-skel-text"></span></div>
+        </div>
+        <dl class="az-b-fakten az-b-fakten--vier">
+            <div><dt>&nbsp;</dt><dd><span class="skel az-skel-text" style="width:4rem"></span></dd></div>
+            <div><dt>&nbsp;</dt><dd><span class="skel az-skel-text" style="width:4rem"></span></dd></div>
+            <div><dt>&nbsp;</dt><dd><span class="skel az-skel-text" style="width:4rem"></span></dd></div>
+            <div><dt>&nbsp;</dt><dd><span class="skel az-skel-text" style="width:4rem"></span></dd></div>
+        </dl>
+    </section>
 
     <div class="stat-card">
         <div class="stat-card-head">
-            <h3>📈 Zeitverlauf <span id="statSeriesRange" class="stat-range-lbl"></span></h3>
+            <h3>Zeitverlauf <span id="statSeriesRange" class="stat-range-lbl"></span></h3>
             <div class="stat-mini-toggle" id="statGranularity">
                 <button data-gran="daily" class="active">Tag</button>
                 <button data-gran="weekly">Woche</button>
@@ -69,7 +80,7 @@
          Kopf und Verlauf darüber bleiben beim Wechsel stehen. -->
     <div class="stat-card">
         <div class="stat-card-head">
-            <h3>🧭 Aufschlüsselung</h3>
+            <h3>Aufschlüsselung</h3>
             <div class="stat-mini-toggle" id="statBreakdown">
                 <button data-view="kategorien" class="active">Kategorien</button>
                 <button data-view="laeden">Läden</button>
@@ -97,7 +108,7 @@
                     <option value="">Alle Läden</option>
                 </select>
                 <button id="prodReparse" class="prod-reparse-btn"
-                        title="Alle Bons mit Foto neu von der KI parsen — aktualisiert Namen, Kategorien und Mengeneinheiten">🔄 Alle neu parsen</button>
+                        title="Alle Bons mit Foto neu von der KI parsen — aktualisiert Namen, Kategorien und Mengeneinheiten">Alle neu parsen</button>
             </div>
             <!-- Zusammenführen-Vorschläge: erscheint nur, wenn der Server
                  Schreibvarianten desselben Artikels gefunden hat. -->
@@ -133,7 +144,7 @@
          Zahlen, nicht der Einstieg. Oben zwischen Kennzahlen und Zeitverlauf
          haben sie die Diagramme aus dem ersten Bildschirm gedrängt. -->
     <section class="stat-card" id="statInsightsCard" hidden>
-        <h3>💡 Erkenntnisse</h3>
+        <h3>Erkenntnisse</h3>
         <div class="stat-insights" id="statInsights"></div>
     </section>
 </main>

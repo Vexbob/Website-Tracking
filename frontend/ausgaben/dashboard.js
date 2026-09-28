@@ -5,6 +5,10 @@ let stores=[], categories=[];
    zusaetzlich Von/Bis im Filter-Popover. Welche gerade galt, sah man keiner
    von beiden an, und markiert war ohnehin nie eine. */
 let zeitraum = null;
+/* Ein Zeitraum filtert nur, wenn er nicht „Gesamt“ ist. „Gesamt“ schickt
+   ein Enddatum (heute) mit -- bis v2.20.0 zählte das als Filter, und über
+   der ungefilterten Liste stand „247 Bons gefiltert“. */
+function zeitraumAktiv() { return !!(zeitraum && zeitraum.preset && zeitraum.preset !== 'all'); }
 
 async function loadInit() {
     // Leiste und Platzhalter stehen schon -- gezeichnet von zwei Zeilen im
@@ -40,13 +44,99 @@ async function loadKpis() {
     try {
         zeichneKpis(await AUSGABEN_API.statsSummary());
     } catch(e) {
-        box.innerHTML = `<div class="empty is-error"><span class="empty-mark">⚠️</span>
-            <p class="empty-text">Kennzahlen konnten nicht geladen werden.</p></div>`;
+        box.innerHTML = `<div class="empty is-error"><p class="empty-text">Die Kennzahlen konnten nicht geladen werden.</p>
+            <button type="button" class="v-btn v-btn--sm" onclick="loadKpis()">Erneut versuchen</button></div>`;
         console.error(e);
+        return;
     }
+    monatsverlauf();
 }
 
-// Cache pro Bon-ID: { detail: fullExpense, imgUrl: blobUrl|null, expanded: bool }
+/* Der Monat gegen den Vormonat, Tag für Tag aufsummiert. Die Zahl neben der
+   Heldenzahl vergleicht bis zum SELBEN Tag -- am 5. gegen die ersten fünf
+   Tage des Vormonats, nicht gegen seine ganze Summe. */
+let monatsKurve = null;
+async function monatsverlauf() {
+    const heute = new Date();
+    const tagHeute = heute.getDate();
+    const start = new Date(heute.getFullYear(), heute.getMonth() - 1, 1);
+    let rows;
+    try {
+        rows = await AUSGABEN_API.statsDaily({ from: isoDate(start), to: isoDate(heute) });
+    } catch (e) { console.warn(e); return; }
+    const monatStart = new Date(heute.getFullYear(), heute.getMonth(), 1);
+    const vormonatTage = new Date(heute.getFullYear(), heute.getMonth(), 0).getDate();
+    const dies = new Array(tagHeute).fill(0), vor = new Array(vormonatTage).fill(0);
+    (rows || []).forEach(r => {
+        const d = new Date(String(r.date).slice(0, 10) + 'T12:00:00');
+        const betrag = Number(r.total) || 0;
+        if (d >= monatStart) { if (d.getDate() <= tagHeute) dies[d.getDate() - 1] += betrag; }
+        else if (d >= start) vor[d.getDate() - 1] += betrag;
+    });
+    const kum = (a) => { let s = 0; return a.map(v => (s += v)); };
+    const diesK = kum(dies), vorK = kum(vor);
+    const bisHeute = vorK[Math.min(tagHeute, vormonatTage) - 1] || 0;
+    const jetzt = diesK[tagHeute - 1] || 0;
+    const box = document.getElementById('azVergleich');
+    if (box && bisHeute > 0) {
+        const pct = Math.round((jetzt / bisHeute - 1) * 100);
+        const cls = Math.abs(pct) < 5 ? '' : (pct > 0 ? ' ist-mehr' : ' ist-weniger');
+        box.innerHTML = `<span class="az-delta${cls}">${pct > 0 ? '+' : pct < 0 ? '−' : '±'}${Math.abs(pct)} %</span>`
+            + `<span>zum Vormonat bis zum ${tagHeute}. (${fmtEur(bisHeute)})</span>`;
+    }
+    const monatName = (d) => d.toLocaleDateString('de-DE', { month: 'short' });
+    const leg = document.getElementById('azLegende');
+    if (leg) leg.innerHTML = `<span><i style="--ton:var(--az-ton)"></i>${monatName(heute)}</span>`
+        + `<span><i class="ist-gestrichelt" style="--ton:var(--text-3)"></i>${monatName(start)}</span>`;
+    const tage = Math.max(vormonatTage, new Date(heute.getFullYear(), heute.getMonth() + 1, 0).getDate());
+    const labels = Array.from({ length: tage }, (_, i) => String(i + 1));
+    const reihe = (k, n) => labels.map((_, i) => i < n ? k[i] : null);
+    const zeichnen = () => {
+        const cv = document.getElementById('azKurve');
+        if (!cv || typeof Chart === 'undefined') return;
+        const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+        const ton = css('--figure') || css('--m-ausgaben');
+        const schmal = window.matchMedia('(max-width: 899px)').matches;
+        if (monatsKurve) monatsKurve.destroy();
+        monatsKurve = new Chart(cv.getContext('2d'), {
+            type: 'line',
+            data: { labels, datasets: [
+                { label: monatName(heute), data: reihe(diesK, tagHeute), borderColor: ton,
+                  backgroundColor: tonMitAlpha(ton, 0.16), fill: true, tension: 0.25,
+                  pointRadius: 0, pointHoverRadius: 4, borderWidth: 2 },
+                { label: monatName(start), data: reihe(vorK, vormonatTage), borderColor: css('--text-3'),
+                  borderDash: [5, 4], fill: false, tension: 0.25, pointRadius: 0, pointHoverRadius: 3, borderWidth: 1.5 },
+            ] },
+            options: { responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { display: false }, tooltip: { callbacks: {
+                    title: (it) => it.length ? it[0].label + '. des Monats' : '',
+                    label: (c) => ` ${c.dataset.label}: ${fmtEur(c.parsed.y)}` } } },
+                scales: {
+                    x: { ticks: { color: css('--chart-axis'), font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: schmal ? 6 : 10 },
+                         grid: { display: false }, border: { display: false } },
+                    y: { display: !schmal, beginAtZero: true, ticks: { color: css('--chart-axis'), font: { size: 10 }, maxTicksLimit: 4,
+                         callback: (v) => fmtEur(v).replace(/,00\s/, ' ') }, grid: { color: css('--chart-grid') }, border: { display: false } },
+                },
+            },
+        });
+    };
+    // Chart.js kommt mit defer vom CDN und kann später da sein als die
+    // Antwort (derselbe Fehler, der den Sparverlauf leer liess).
+    if (typeof Chart !== 'undefined') zeichnen();
+    else if (document.readyState !== 'complete') window.addEventListener('load', zeichnen, { once: true });
+}
+
+// Eine Tokenfarbe mit Deckkraft -- Chart.js kennt kein color-mix().
+function tonMitAlpha(farbe, a) {
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(farbe || '').trim());
+    if (!m) return farbe;
+    let h = m[1];
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
+}
+
+// Cache pro Bon-ID: { detail: fullExpense, imgUrl: blobUrl|null }
 const expDetailCache = new Map();
 
 let searchDebounceTimer = null;
@@ -62,11 +152,20 @@ async function loadExpenses() {
         limit: 200,
     };
     const list = document.getElementById('expList');
-    list.innerHTML = '<div class="empty muted">Laden …</div>';
+    // Beim Nachladen bleibt die alte Liste stehen und wird nur gedimmt --
+    // ein Platzhalter an ihrer Stelle liess alles darunter springen.
+    list.classList.add('is-loading');
+    const sub = document.getElementById('azListeSub');
+    const hasFilterParam = !!(params.q || params.expense_type || params.store_id || params.category_id || zeitraumAktiv());
     try {
         const rows = await AUSGABEN_API.expenses(params);
+        list.classList.remove('is-loading');
+        if (sub) sub.textContent = hasFilterParam ? 'gefiltert' : 'die letzten 14 Tage';
         if (!rows.length) {
-            list.innerHTML = '<div class="empty"><div class="empty-icon">🧾</div>Noch keine Ausgaben — <a href="/ausgaben/neu.html">jetzt anlegen</a></div>';
+            list.innerHTML = hasFilterParam
+                ? '<div class="empty"><p class="empty-text">Kein Bon passt zu diesem Filter.</p><button type="button" class="v-btn v-btn--sm" onclick="document.getElementById(\'filterReset\').click()">Filter zurücksetzen</button></div>'
+                : `<div class="empty"><span class="empty-mark">${ikon('kamera', 26)}</span><p class="empty-text">Noch kein Bon. Mit der Kamera oben ist der erste in einer halben Minute drin.</p></div>`;
+            renderFilterTotal(rows, params);
             return;
         }
         // Total-Row (nur wenn Filter aktiv)
@@ -85,25 +184,29 @@ async function loadExpenses() {
             cur.total += Number(r.total_amount) || 0;
         }
 
-        const hasFilter = !!(params.q || params.expense_type || params.store_id || params.category_id || params.from || params.to);
+        const hasFilter = !!(params.q || params.expense_type || params.store_id || params.category_id || zeitraumAktiv());
         const cutoff = new Date(); cutoff.setHours(0, 0, 0, 0); cutoff.setDate(cutoff.getDate() - 13);
         const cutoffIso = isoDate(cutoff);
         const recent = hasFilter ? groups : groups.filter(g => g.date >= cutoffIso);
         const older = hasFilter ? [] : groups.filter(g => g.date < cutoffIso);
 
-        const renderGroups = (gs) => gs.map(g => renderDateHeader(g) + g.items.map(r => renderExpItem(r)).join('')).join('');
-        list.innerHTML = recent.length ? renderGroups(recent) : (older.length ? '<div class="empty muted">Keine Ausgaben in den letzten 14 Tagen.</div>' : '');
+        const renderGroups = (gs) => gs.map(g => renderDateHeader(g)
+            + '<div class="rec-list">' + g.items.map(r => renderExpItem(r)).join('') + '</div>').join('');
+        list.innerHTML = recent.length ? renderGroups(recent)
+            : (older.length ? '<div class="empty"><p class="empty-text">In den letzten 14 Tagen kam kein Bon dazu.</p></div>' : '');
         if (older.length) {
             const oldCount = older.reduce((n, g) => n + g.items.length, 0);
-            list.insertAdjacentHTML('beforeend', `<button type="button" id="expShowAllBtn" class="exp-show-all">Alle anzeigen (+${oldCount} älter als 14 Tage)</button>`);
+            list.insertAdjacentHTML('beforeend', `<button type="button" id="expShowAllBtn" class="v-btn v-btn--ghost az-mehr">Ältere zeigen (${oldCount})</button>`);
             document.getElementById('expShowAllBtn').onclick = () => {
                 list.innerHTML = renderGroups(groups);
-                list.querySelectorAll('.exp-item').forEach(bindItemHandlers);
+                if (sub) sub.textContent = 'alle geladenen';
             };
         }
-        // Klick-Handler + Swipe binden
-        list.querySelectorAll('.exp-item').forEach(bindItemHandlers);
-    } catch(e) { list.innerHTML = '<div class="empty muted">Fehler: '+e.message+'</div>'; }
+    } catch(e) {
+        list.classList.remove('is-loading');
+        list.innerHTML = `<div class="empty is-error"><p class="empty-text">Die Bons konnten nicht geladen werden: ${escapeHtml(e.message)}</p>
+            <button type="button" class="v-btn v-btn--sm" onclick="loadExpenses()">Erneut versuchen</button></div>`;
+    }
 }
 
 /* v2.11.8: Die Zeile rechnete ueber `rows` -- und `rows` endet bei 200.
@@ -115,7 +218,7 @@ let summenLauf = 0;
 async function renderFilterTotal(rows, params) {
     const el = document.getElementById('filterTotal');
     if (!el) return;
-    const hasFilter = params.q || params.expense_type || params.store_id || params.category_id || params.from || params.to;
+    const hasFilter = params.q || params.expense_type || params.store_id || params.category_id || zeitraumAktiv();
     if (!hasFilter || !rows.length) { el.innerHTML = ''; return; }
     const lauf = ++summenLauf;
     let zahl;
@@ -139,17 +242,9 @@ async function renderFilterTotal(rows, params) {
     </div>`;
 }
 
-function bindItemHandlers(itemEl) {
-    const row = itemEl.querySelector('.exp-row');
-    if (!row) return;
-    row.onclick = (e) => {
-        e.preventDefault();
-        const id = +row.dataset.id;
-        toggleExpDetail(id, row);
-    };
-}
+function ikon(name, groesse) { return window.VexIkon ? VexIkon.svg(name, groesse || 18) : ''; }
 
-// Datums-Trennlinie mit „Heute“ / „Gestern“ / „<Wochentag>, DD.MM.YYYY“ + Tagesumsatz
+// Tageskopf: „Heute“ / „Gestern“ / „Montag, 22.9.“ und die Summe des Tages
 function renderDateHeader(g) {
     const iso = g.date;
     const d = new Date(iso + 'T00:00:00');
@@ -159,121 +254,80 @@ function renderDateHeader(g) {
     let label;
     if (isSameDay(d, today)) label = 'Heute';
     else if (isSameDay(d, yesterday)) label = 'Gestern';
-    else {
-        const wd = d.toLocaleDateString('de-DE', { weekday: 'long' });
-        label = `${wd}, ${d.toLocaleDateString('de-DE')}`;
-    }
-    return `<div class="date-header">
-        <span class="date-label">${label}</span>
-        <span class="date-line"></span>
-        <span class="date-total">${g.items.length} Bon${g.items.length===1?'':'s'} · ${fmtEur(g.total)}</span>
-    </div>`;
+    else label = d.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+    return `<div class="az-tag-kopf"><strong>${label}</strong>
+        <span>${g.items.length} Bon${g.items.length===1?'':'s'} · ${fmtEur(g.total)}</span></div>`;
 }
 
+/* Eine Zeile je Bon. Die Ladenfarbe ist Nutzerdatum und erscheint nur als
+   Tönung der Marke (DESIGN 3) -- bis v2.20.0 war sie die Vollfläche hinter
+   weißer Schrift. Die Zeile öffnet den Kassenzettel als Blatt. */
 function renderExpItem(r) {
     const initial = (r.store_name || '€').slice(0,1).toUpperCase();
-    const color = r.store_color || '#6b7280';
-    const typeIcon = expenseTypeIcon(r.expense_type);
     const typeLabel = expenseTypeLabel(r.expense_type);
-    // Foto-Icon wenn der Bon ein Bild im Anhang hat (aus OCR-Upload)
-    const photoBadge = r.has_image
-        ? `<span class="exp-photo-badge" title="Foto vorhanden">📷</span>`
-        : '';
-    return `<div class="exp-item" data-item-id="${r.id}">
-        <div class="exp-row" data-id="${r.id}" role="button" tabindex="0">
-            <div class="exp-store" style="background:${color}">${r.store_icon || initial}</div>
-            <div class="exp-info">
-                <div class="exp-name">${typeIcon} ${escapeHtml(r.store_name || typeLabel)}${r.is_recurring?' 🔁':''}${photoBadge}</div>
-                <div class="exp-meta">${fmtDate(r.purchase_date)} · ${r.item_count||0} Position${r.item_count===1?'':'en'}${r.expense_type && r.expense_type !== 'receipt' ? ' · ' + escapeHtml(typeLabel) : ''}</div>
-            </div>
-            <div class="exp-amount">${fmtEur(r.total_amount)}</div>
-            <span class="exp-chevron">▶</span>
-        </div>
-    </div>`;
+    const ton = r.store_color ? ` style="--tone:${escapeHtml(r.store_color)}"` : '';
+    const meta = [];
+    if (r.expense_type && r.expense_type !== 'receipt') meta.push(escapeHtml(typeLabel));
+    meta.push(`${r.item_count||0} Position${r.item_count===1?'':'en'}`);
+    if (r.is_recurring) meta.push('wiederkehrend');
+    return `<button type="button" class="rec-row" data-id="${r.id}" onclick="dlgBon(${r.id})">
+        <span class="rec-mark"${ton}>${escapeHtml(r.store_icon || initial)}</span>
+        <span class="rec-main">
+            <span class="rec-title"><span>${escapeHtml(r.store_name || typeLabel)}</span>${r.has_image ? ikon('kamera', 14) : ''}</span>
+            <span class="rec-meta">${meta.join('<span class="sep">·</span>')}</span>
+        </span>
+        <span class="rec-side"><span class="rec-val">${fmtEur(r.total_amount)}</span></span>
+        <span class="rec-go">${ikon('pfeil', 16)}</span>
+    </button>`;
 }
 
-async function toggleExpDetail(id, rowEl) {
-    const container = rowEl.parentElement; // .exp-item
-    const existingDetail = container.querySelector('.exp-detail');
-    if (existingDetail) {
-        // schließen
-        existingDetail.remove();
-        rowEl.classList.remove('open');
-        container.classList.remove('expanded');
-        return;
-    }
-    // Öffnen: placeholder rendern
-    const placeholder = document.createElement('div');
-    placeholder.className = 'exp-detail';
-    placeholder.innerHTML = '<div class="muted" style="text-align:center;padding:0.5rem">Laden …</div>';
-    container.appendChild(placeholder);
-    rowEl.classList.add('open');
-    container.classList.add('expanded');
-
+/* Der Kassenzettel als Blatt: dieselbe Gestalt wie auf bon.html
+   (kassenzettelHTML in ausgaben.js). Bis v2.20.0 klappte die Zeile auf, mit
+   einem türkisen „✏️ Bearbeiten“ in weißer Schrift darunter. */
+async function dlgBon(id) {
+    const d = openModal('Bon', '<div id="azBonBlatt"><span class="skel skel-block"></span></div>'
+        + `<div class="modal-fuss"><a class="v-btn" href="/ausgaben/bon.html?id=${id}">${ikon('stift', 16)} Bearbeiten</a></div>`);
+    const box = document.getElementById('azBonBlatt');
     try {
         let cache = expDetailCache.get(id);
         if (!cache) {
             const detail = await AUSGABEN_API.getExpense(id);
             let imgUrl = null;
             if (detail.receipt_image_id) {
-                try {
-                    imgUrl = await fetchImageAsBlobUrl(AUSGABEN_API.receiptThumbUrl(detail.receipt_image_id));
-                } catch (_) {}
+                try { imgUrl = await fetchImageAsBlobUrl(AUSGABEN_API.receiptThumbUrl(detail.receipt_image_id)); } catch (_) {}
             }
             cache = { detail, imgUrl };
             expDetailCache.set(id, cache);
         }
-        placeholder.innerHTML = renderExpDetail(cache.detail, cache.imgUrl);
-        // Bild-Fullscreen aktivieren
-        const thumbImg = placeholder.querySelector('img[data-fullscreen]');
-        if (thumbImg) thumbImg.onclick = () => openImageFullscreen(thumbImg.src);
+        if (!box.isConnected) return;
+        const kopf = d.el.querySelector('.modal-head h3');
+        if (kopf) kopf.textContent = cache.detail.store_name || expenseTypeLabel(cache.detail.expense_type);
+        box.innerHTML = kassenzettelHTML(cache.detail, cache.imgUrl);
+        // Die Vollansicht braucht das ganze Bild; die Adresse verlangt eine
+        // Anmeldung, also als Blob holen -- im Zweifel reicht das Vorschaubild.
+        const foto = box.querySelector('[data-vollbild]');
+        if (foto) foto.onclick = async () => {
+            let url = cache.imgUrl;
+            try { url = await fetchImageAsBlobUrl(AUSGABEN_API.receiptImageUrl(cache.detail.receipt_image_id)); } catch (_) {}
+            openImageFullscreen(url);
+        };
     } catch (e) {
-        placeholder.innerHTML = `<div class="muted">Fehler: ${escapeHtml(e.message)}</div>`;
+        if (box.isConnected) box.innerHTML = `<div class="empty is-error"><p class="empty-text">Der Bon konnte nicht geladen werden: ${escapeHtml(e.message)}</p></div>`;
     }
-}
-
-function renderExpDetail(e, imgUrl) {
-    const items = e.items || [];
-    const itemsHtml = items.length
-        ? items.map(it => {
-            const catIcon = it.category_icon || (it.category_id ? '🏷️' : '');
-            const catName = it.category_name ? `${catIcon ? catIcon + ' ' : ''}${escapeHtml(it.category_name)}` : '';
-            // Stückzahl nur zeigen, wenn der Artikel mehrfach gekauft wurde.
-            const q = itemPieceCount(it);
-            const qtyPrefix = q ? `<span class="it-qty">${q}× </span>` : '';
-            return `<div class="it">
-                <span class="it-desc">${qtyPrefix}${escapeHtml(it.description || '')}${catName ? '<span class="it-cat">· ' + catName + '</span>' : ''}</span>
-                <span class="it-price">${fmtEur(it.total_price)}</span>
-            </div>`;
-        }).join('')
-        : '<div class="muted" style="font-size:0.75rem">Keine Einzelpositionen gespeichert.</div>';
-
-    const typeLabel = expenseTypeLabel(e.expense_type);
-
-    return `
-        ${imgUrl ? `<img src="${imgUrl}" class="thumb" alt="Bon-Foto" data-fullscreen="1" style="cursor:zoom-in">` : ''}
-        <div class="grid">
-            <div class="k">Typ</div><div class="v">${expenseTypeIcon(e.expense_type)} ${escapeHtml(typeLabel)}</div>
-            <div class="k">Datum</div><div class="v">${fmtDate(e.purchase_date)}</div>
-            <div class="k">Laden</div><div class="v">${escapeHtml(e.store_name || '–')}</div>
-            <div class="k">Gesamt</div><div class="v"><strong>${fmtEur(e.total_amount)}</strong></div>
-            ${e.note ? `<div class="k">Notiz</div><div class="v">${escapeHtml(e.note)}</div>` : ''}
-        </div>
-        ${items.length ? `<div class="items-hdr">Positionen (${items.length})</div><div class="items">${itemsHtml}</div>` : itemsHtml}
-        <div class="actions">
-            <a href="/ausgaben/bon.html?id=${e.id}" class="nav-btn primary" style="background:var(--teal);color:#fff;border:none">✏️ Bearbeiten</a>
-        </div>
-    `;
 }
 
 async function loadRecurring() {
     try {
         const rows = await AUSGABEN_API.recurring();
         if (!rows.length) return;
-        document.getElementById('recurringCard').style.display = '';
-        document.getElementById('recurringList').innerHTML = rows.map(r =>
-            `<div class="rec-item"><span class="dot"></span><strong>${escapeHtml(r.store_name)}</strong> · ~${fmtEur(r.avg_amount)} · ${r.months} Monate hintereinander · zuletzt ${fmtDate(r.last_date)}</div>`
-        ).join('');
+        document.getElementById('recurringCard').hidden = false;
+        document.getElementById('recurringList').innerHTML = '<div class="rec-list az-wiederkehr">' + rows.map(r =>
+            `<div class="rec-row">
+                <span class="rec-mark">${ikon('wiederkehr', 16)}</span>
+                <span class="rec-main"><span class="rec-title">${escapeHtml(r.store_name)}</span>
+                    <span class="rec-meta">${r.months} Monate in Folge<span class="sep">·</span>zuletzt ${fmtDate(r.last_date)}</span></span>
+                <span class="rec-side"><span class="rec-val">~${fmtEur(r.avg_amount)}</span></span>
+            </div>`).join('') + '</div>';
     } catch(e) { console.warn(e); }
 }
 
@@ -383,7 +437,7 @@ function renderActiveFilterChips() {
     const chips = [];
     const push = (id, label, valueLabel) => {
         chips.push('<span class="aff-chip">' + escapeHtml(label) + ': <strong>' + escapeHtml(valueLabel) + '</strong>' +
-            '<button type="button" data-clear="' + id + '" aria-label="' + escapeHtml(label) + ' entfernen">✕</button></span>');
+            '<button type="button" data-clear="' + id + '" aria-label="' + escapeHtml(label) + ' entfernen">' + ikon('plus', 14).replace('<svg ', '<svg style="transform:rotate(45deg)" ') + '</button></span>');
     };
     const typeEl = document.getElementById('filterType');
     if (typeEl && typeEl.value) push('filterType', 'Typ', typeEl.options[typeEl.selectedIndex].text);

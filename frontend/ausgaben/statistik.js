@@ -209,10 +209,18 @@ function renderKPI(data){
     const k = data.kpi, cp = data.compare_prev;
     const box = document.getElementById('statKpiGrid');
     const prev = Number(cp && cp.total) || 0;
-    const pill = deltaPill(prev > 0 ? (k.total / prev - 1) * 100 : null);
+    const pct = prev > 0 ? (k.total / prev - 1) * 100 : null;
+    // Mehr ausgegeben ist ein Hinweis (--warn), weniger ein gutes Zeichen
+    // (--ok); unter 5 % bleibt es neutral -- dasselbe wie auf der Übersicht.
+    const cls = pct == null || Math.abs(pct) < 5 ? '' : (pct > 0 ? ' ist-mehr' : ' ist-weniger');
+    const pill = pct == null ? '' : `<span class="az-delta${cls}">${pct > 0 ? '+' : pct < 0 ? '\u2212' : '\u00b1'}${Math.abs(pct).toFixed(0)} %</span>`;
     const sub = prev > 0
         ? `gegen\u00fcber ${fmtEur(prev)} in der Vorperiode`
         : 'keine Vorperiode zum Vergleich';
+    const held = (v) => {
+        const t = fmtEur(v), i = t.lastIndexOf(',');
+        return i < 0 ? t : t.slice(0, i) + '<span class="v-held-rest">' + t.slice(i) + '</span>';
+    };
 
     const minis = [
         { lbl: `\u00d8 / Tag (${data.range.days} T.)`, val: fmtEur(k.avg_per_day) },
@@ -232,22 +240,20 @@ function renderKPI(data){
         minis.push({ lbl: 'Teuerster Tag', val: days[top.dow] || '?',
                      note: `${share.toFixed(0)} % der Ausgaben` });
     }
-
+    const zeitraum = STAT.preset === 'all' ? 'seit dem ersten Bon' : `${data.range.days} Tage`;
     box.innerHTML = `
-        <div class="kpi-hero">
-            <div class="kpi-hero-main">
-                <div class="lbl">Ausgaben im Zeitraum</div>
-                <div class="val">${fmtEur(k.total)}</div>
-                <div class="sub">${pill} ${sub}</div>
-            </div>
+        <div class="az-b-haupt">
+            <span class="v-buehne-marke">Ausgaben \u00b7 ${zeitraum}</span>
+            <strong class="v-held">${held(k.total)}</strong>
+            <div class="az-b-vergleich">${pill}<span>${sub}</span></div>
         </div>
-        <div class="kpi-mini-row">
+        <div class="az-b-fakten az-b-fakten--vier">
             ${minis.map(m => {
                 const inner = `<div class="lbl">${m.lbl}</div><div class="val">${m.val}</div>`
                     + (m.note ? `<div class="note">${m.note}</div>` : '');
                 return m.href
-                    ? `<a class="kpi-mini" href="${m.href}">${inner}</a>`
-                    : `<div class="kpi-mini">${inner}</div>`;
+                    ? `<a href="${m.href}">${inner}</a>`
+                    : `<div>${inner}</div>`;
             }).join('')}
         </div>`;
 }

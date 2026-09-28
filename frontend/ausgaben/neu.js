@@ -245,12 +245,12 @@ function resetUploadDrop() {
     const drop = document.getElementById('uploadDrop');
     drop.classList.remove('working');
     drop.innerHTML = `
-        <div class="icon">📸</div>
+        <div class="icon">${window.VexIkon ? VexIkon.svg('kamera', 34) : ''}</div>
         <div style="font-weight:600;margin-bottom:0.5rem">Bild wählen</div>
         <div class="upload-actions">
-            <button type="button" class="upload-btn" id="btnCamera">📷 Kamera</button>
-            <button type="button" class="upload-btn" id="btnGallery">🖼️ Galerie</button>
-            <button type="button" class="upload-btn" id="btnPaste">📋 Einfügen</button>
+            <button type="button" class="upload-btn" id="btnCamera">${window.VexIkon ? VexIkon.svg('kamera', 18) : ''} Kamera</button>
+            <button type="button" class="upload-btn" id="btnGallery">${window.VexIkon ? VexIkon.svg('bild', 18) : ''} Galerie</button>
+            <button type="button" class="upload-btn" id="btnPaste">${window.VexIkon ? VexIkon.svg('ablage', 18) : ''} Einfügen</button>
         </div>
         <div style="font-size:0.75rem;color:var(--text-3);margin-top:0.75rem">oder Datei hierher ziehen · <kbd>Strg</kbd>+<kbd>V</kbd> · JPG/PNG · max 8 MB</div>
         <input type="file" id="fileInputCamera" accept="image/*" capture="environment" style="display:none">

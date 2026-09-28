@@ -30,7 +30,7 @@ async function loadDuplicates() {
                     <span>${it.store_icon} <strong>${escapeHtml(it.store_name)}</strong></span>
                     <span>${fmtDate(it.purchase_date)}</span>
                     <span>${fmtEur(it.total_amount)}</span>
-                    <span class="muted">${it.item_count} Positionen${it.has_image ? ' · 📷 Beleg' : ''}</span>
+                    <span class="muted">${it.item_count} Positionen${it.has_image ? ' · mit Foto' : ''}</span>
                     ${it.id === g.keep_id ? '<span class="muted">← wird behalten</span>' : ''}
                 </div>`).join('');
             const allIds = g.items.map(it => it.id);

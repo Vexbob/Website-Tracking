@@ -13,6 +13,8 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
+<script src="/js/reiter.js"></script>
 <script src="/js/sw-update.js"></script>
     <script src="/js/bild.js"></script>
 <script src="/ausgaben/ausgaben.js"></script>
@@ -49,6 +51,7 @@ details[open] .rules-chevron{transform:rotate(90deg)}
 
 
 </style>
+<link rel="stylesheet" href="/ausgaben/ausgaben.css">
 </head>
 <body>
 <nav class="navbar">
@@ -58,8 +61,9 @@ details[open] .rules-chevron{transform:rotate(90deg)}
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
 </nav>
-<main>
+<main class="wide az">
 <div id="subnav" data-active="kategorien"></div>
+    <script>renderSubnav();</script>
 
     <header class="page-head">
         <h1>Kategorien</h1>
@@ -68,7 +72,7 @@ details[open] .rules-chevron{transform:rotate(90deg)}
     </header>
 
     <div class="toolbar">
-        <input type="search" id="q" class="toolbar-search" placeholder="🔍 Kategorie suchen …" aria-label="Kategorie suchen">
+        <input type="search" id="q" class="toolbar-search" placeholder="Kategorie suchen" aria-label="Kategorie suchen">
         <select id="sort" aria-label="Sortierung">
             <option value="spent">Nach Ausgaben</option>
             <option value="count">Nach Häufigkeit</option>
@@ -83,7 +87,7 @@ details[open] .rules-chevron{transform:rotate(90deg)}
 
     <details class="card" id="rulesCard" style="margin-top:1.5rem">
         <summary class="rules-head">
-            <h2>🧠 Auto-Zuordnungs-Regeln <span class="toolbar-count" id="rulesCount" style="margin:0"></span></h2>
+            <h2>Regeln für die Zuordnung <span class="toolbar-count" id="rulesCount" style="margin:0"></span></h2>
             <span class="rules-chevron">▶</span>
         </summary>
         <p class="page-sub" style="margin:0.75rem 0">Vexbob merkt sich, welche Kategorie du einem Artikel

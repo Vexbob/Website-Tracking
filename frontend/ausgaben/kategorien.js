@@ -115,7 +115,7 @@ function render() {
                 <div class="entity-sub">${meta}</div>
                 ${u.count ? `<div class="cat-bar"><span style="width:${share}%"></span></div>` : ''}
             </div>
-            <button class="entity-action" data-id="${c.id}" title="Bearbeiten" aria-label="${escAttr(c.name)} bearbeiten">✏️</button>
+            <button class="entity-action" data-id="${c.id}" title="Bearbeiten" aria-label="${escAttr(c.name)} bearbeiten">${window.VexIkon ? VexIkon.svg('stift', 17) : ''}</button>
         </article>`;
     }).join('');
 

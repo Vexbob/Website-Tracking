@@ -230,7 +230,7 @@ function showToast(msg, type='info', ms=2500) {
 function showUndoToast(msg, onUndo, ms=3000) {
     const t = document.createElement('div');
     t.className = 'ausg-toast ausg-toast-undo';
-    t.innerHTML = `<span>${msg}</span> <button class="undo-btn" type="button">↺ Rückgängig</button>`;
+    t.innerHTML = `<span>${msg}</span> <button class="undo-btn" type="button">Rückgängig</button>`;
     document.body.appendChild(t);
     let done = false;
     const cleanup = () => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); };
@@ -278,86 +278,139 @@ function todayISO() {
 /* ---------- Bild mit Auth laden -> Blob-URL ---------- */
 async function fetchImageAsBlobUrl(url) { return VexBild.alsBlobUrl(url); }
 
-/* ---------- Gemeinsame Subnav für alle Ausgaben-Seiten ---------- */
-// Nutzung: <div id="subnav" data-active="..."></div> ins HTML, wobei active z.B.
-// "dashboard" | "neu" | "statistik" | "produkte" | "laeden" | "kategorien"
+/* ---------- Kopf: drei Bereiche statt sechs Pillen (v2.21.0) ----------
+ * Bis v2.20.0 stand hier eine Leiste mit sechs Emoji-Pillen, am Handy in zwei
+ * Zeilen: Übersicht, Statistik, Läden, Kategorien, Duplikate, Import. Vier
+ * davon sind Pflege -- man braucht sie selten, und sie standen gleichrangig
+ * neben dem, was man täglich öffnet. Jetzt sind es drei Bereiche; die Pflege
+ * liegt unter „Verwalten“ (DESIGN 6d), und jede ihrer Seiten trägt einen Weg
+ * zurück. Die Adressen der Seiten sind dieselben geblieben.
+ *
+ * Nutzung: <div id="subnav" data-active="..."></div>, direkt dahinter
+ * <script>renderSubnav()</script> -- dann steht der Kopf vor dem ersten Bild,
+ * und nichts darunter rutscht, wenn er erscheint. */
+const AUSGABEN_BEREICHE = [
+    { key: 'uebersicht', href: '/ausgaben/',                label: 'Übersicht' },
+    { key: 'statistik',  href: '/ausgaben/statistik.html',  label: 'Statistik' },
+    { key: 'verwalten',  href: '/ausgaben/verwalten.html',  label: 'Verwalten' },
+];
+const AUSGABEN_SEITEN = {
+    dashboard: 'uebersicht', neu: 'uebersicht', bon: 'uebersicht',
+    statistik: 'statistik', produkte: 'statistik',
+    verwalten: 'verwalten', laeden: 'verwalten', kategorien: 'verwalten',
+    marken: 'verwalten', duplikate: 'verwalten', import: 'verwalten',
+};
+const AUSGABEN_ZURUECK = {
+    laeden: ['/ausgaben/verwalten.html', 'Verwalten'],
+    kategorien: ['/ausgaben/verwalten.html', 'Verwalten'],
+    marken: ['/ausgaben/verwalten.html', 'Verwalten'],
+    duplikate: ['/ausgaben/verwalten.html', 'Verwalten'],
+    import: ['/ausgaben/verwalten.html', 'Verwalten'],
+    bon: ['/ausgaben/', 'Übersicht'],
+    neu: ['/ausgaben/', 'Übersicht'],
+};
+
 function renderSubnav() {
     const el = document.getElementById('subnav');
     if (!el) return;
-    const active = el.dataset.active || '';
-    // v1.38.4: "+ Neuer Bon"-Eintrag entfernt — der Zugang laeuft jetzt
-    // ausschliesslich ueber die Quick-Action-Tiles auf dem Dashboard.
-    // v1.54.0: "Marken" ist raus. Auf Kassenbons steht selten eine Marke, die
-    // Seite war entsprechend leer. Sie existiert weiterhin unter
-    // /ausgaben/marken.html, nur eben nicht mehr als Dauergast in der Leiste.
-    const links = [
-        { key: 'dashboard',    href: '/ausgaben/',                   label: '📋 Übersicht' },
-        // v1.64.0: "Produkte" ist keine eigene Seite mehr -- die Tabelle ist
-        // eine der vier Aufschluesselungen auf der Statistik-Seite. Sie
-        // beantwortete dieselbe Frage wie die Statistik, nur nach Artikel,
-        // und hatte dafuer einen zweiten Zeitraum-Filter.
-        { key: 'statistik',    href: '/ausgaben/statistik.html',     label: '📊 Statistik' },
-        { key: 'laeden',       href: '/ausgaben/laeden.html',        label: '🏪 Läden' },
-        { key: 'kategorien',   href: '/ausgaben/kategorien.html',    label: '🏷️ Kategorien' },
-        { key: 'duplikate',    href: '/ausgaben/duplikate.html',     label: '♻️ Duplikate' },
-        // v1.80.0: Der Nachtrag aus der Banking-App.
-        { key: 'import',       href: '/ausgaben/import.html',        label: '⬆️ Import' },
-    ];
-    // v2.11.1: Kein eigener Export mehr in der Leiste. Jedes Modul hatte
-    // seinen -- mit eigenem Dateinamen, eigenem Zeitraum (keinem) und eigener
-    // Spaltenwahl (keiner). Der Gesamt-Export auf /einstellungen/ kann all
-    // das, und wer nur die Ausgaben will, schaltet die anderen Module dort
-    // ab. Zwei Wege zu derselben Datei sind einer zu viel: der zweite wird
-    // nicht gepflegt und liefert irgendwann etwas anderes als der erste.
-    el.className = 'subnav';
-    el.innerHTML = links.map(l =>
-        `<a href="${l.href}"${l.key === active ? ' class="primary"' : ''}>${l.label}</a>`
-    ).join('');
+    const seite = el.dataset.active || '';
+    const bereich = AUSGABEN_SEITEN[seite] || 'uebersicht';
+    const zurueck = AUSGABEN_ZURUECK[seite];
+    const zeichen = (n) => window.VexIkon ? VexIkon.svg(n, 18) : '';
+    el.className = 'az-kopf';
+    el.innerHTML = '<nav class="tabs" aria-label="Bereiche der Ausgaben">'
+        + AUSGABEN_BEREICHE.map(b => `<a class="tab-btn${b.key === bereich ? ' active' : ''}" href="${b.href}"`
+            + `${b.key === bereich ? ' aria-current="page"' : ''}>${b.label}</a>`).join('')
+        + '</nav>'
+        + (zurueck ? `<a class="az-zurueck" href="${zurueck[0]}">${zeichen('links')}${zurueck[1]}</a>` : '');
+    const leiste = el.querySelector('.tabs');
+    if (window.VexReiter && leiste) VexReiter.verzieren(leiste);
 }
 
-/* ---------- Kennzahlenblock der Uebersicht ----------
- * Er steht hier und nicht in dashboard.js, weil diese Datei im <head> geladen
- * wird: index.html ruft ihn direkt hinter #kpiGrid auf, bevor der Browser das
- * erste Mal zeichnet. Aus dashboard.js am Seitenende kam der Platzhalter bei
- * langsamem Netz zu spaet -- die Seite war dann schon einmal ohne ihn zu
- * sehen, und die Kacheln darunter sprangen. */
-/* Der Block in genau einer Gestalt -- geladen oder als Platzhalter. Der
- * Platzhalter ist dieselbe Struktur mit unsichtbarem Text an Stelle der
- * Zahlen (`.kpi-leer`): so ist er auf den Pixel so hoch wie das Ergebnis,
- * und nichts darunter bewegt sich, wenn die Zahlen kommen. */
+/* ---------- Die Bühne der Übersicht ----------
+ * Sie steht hier und nicht in dashboard.js, weil diese Datei im <head> geladen
+ * wird: index.html ruft sie direkt hinter #kpiGrid auf, bevor der Browser das
+ * erste Mal zeichnet (v2.17.0: sonst rutschten die Kacheln darunter).
+ *
+ * Eine Gestalt, geladen oder als Platzhalter: der Platzhalter hat dieselbe
+ * Struktur mit Skeletons an Stelle der Zahlen, damit nichts springt.
+ *
+ * Kein Ring: ein Ring sagt „wie viel von einem Ziel“ (DESIGN 7a), und für
+ * Ausgaben gibt es kein Ziel. Die Bühne vergleicht deshalb mit dem Vormonat --
+ * und zwar bis zum SELBEN Tag. Bis v2.20.0 stand hier der ganze Vormonat gegen
+ * den angebrochenen: am 5. hiess das jeden Monat „−80 %“. */
 function zeichneKpis(s) {
     const box = document.getElementById('kpiGrid');
     if (!box) return;
-    const wert = (v) => s ? fmtEur(v) : '<span class="skel kpi-leer">0.000,00 €</span>';
-    let delta = '', sub = '<span class="skel kpi-leer">gegenüber 000,00 € im Vormonat</span>';
+    const held = (v) => {
+        const t = fmtEur(v), i = t.lastIndexOf(',');
+        return i < 0 ? t : t.slice(0, i) + '<span class="v-held-rest">' + t.slice(i) + '</span>';
+    };
+    const wert = (v) => s ? fmtEur(v) : '<span class="skel az-skel-text" style="width:5rem"></span>';
+    const monat = new Date().toLocaleDateString('de-DE', { month: 'long' });
+    let vergleich = '<span class="skel az-skel-text"></span>';
     if (s) {
         const prev = Number(s.prev_month) || 0;
-        const now = Number(s.this_month) || 0;
-        if (prev > 0) {
-            const pct = Math.round((now / prev - 1) * 100);
-            const cls = Math.abs(pct) < 5 ? 'flat' : (pct > 0 ? 'up' : 'down');
-            const sign = pct > 0 ? '+' : '';
-            delta = `<span class="kpi-delta ${cls}">${sign}${pct} %</span>`;
-        }
-        sub = prev > 0 ? `gegenüber ${fmtEur(prev)} im Vormonat` : 'kein Vormonat zum Vergleich';
+        vergleich = prev > 0 ? `<span>Vormonat gesamt ${fmtEur(prev)}</span>` : '<span>Kein Vormonat zum Vergleich</span>';
     }
-    const minis = [
-        { lbl: 'Heute',       val: s && s.today },
-        { lbl: 'Diese Woche', val: s && s.this_week },
-        { lbl: 'Vormonat',    val: s && s.prev_month },
-        { lbl: 'Dieses Jahr', val: s && s.this_year },
-        { lbl: s ? `Gesamt · ${s.count} Bons` : 'Gesamt', val: s && s.total },
-    ];
+    box.className = 'v-buehne az-buehne';
     box.innerHTML = `
-        <div class="kpi-hero">
-            <div class="kpi-hero-main">
-                <div class="lbl">Dieser Monat</div>
-                <div class="val">${wert(s && s.this_month)}</div>
-                <div class="sub">${delta} ${sub}</div>
-            </div>
+        <div class="az-b-haupt">
+            <span class="v-buehne-marke">Dieser Monat · ${monat}</span>
+            <strong class="v-held" id="azMonat">${s ? held(s.this_month) : '<span class="skel az-held-skel"></span>'}</strong>
+            <div class="az-b-vergleich" id="azVergleich">${vergleich}</div>
+            <dl class="az-b-fakten">
+                <div><dt>Heute</dt><dd>${wert(s && s.today)}</dd></div>
+                <div><dt>Diese Woche</dt><dd>${wert(s && s.this_week)}</dd></div>
+                <div><dt>Dieses Jahr</dt><dd>${wert(s && s.this_year)}</dd></div>
+            </dl>
         </div>
-        <div class="kpi-mini-row">
-            ${minis.map(m => `<div class="kpi-mini"><div class="lbl">${m.lbl}</div><div class="val">${wert(m.val)}</div></div>`).join('')}
+        <div class="az-b-kurve">
+            <div class="az-b-kurve-kopf"><span>Monatsverlauf</span>
+                <span class="az-legende" id="azLegende"></span></div>
+            <div class="az-b-flaeche"><canvas id="azKurve" aria-label="Ausgaben dieses Monats gegen den Vormonat"></canvas></div>
         </div>`;
 }
 
+/* ---------- Kassenzettel ----------
+ * Ein Bon, gezeichnet wie ein Bon: Laden oben, Positionen untereinander,
+ * Summe unten. Dieselbe Gestalt im Blatt der Übersicht und auf bon.html --
+ * zwei Fassungen desselben Zettels würden sich beim nächsten Nachtrag
+ * unterscheiden. ``bildUrl`` ist eine Blob-URL (VexBild.alsBlobUrl) oder leer. */
+function kassenzettelHTML(e, bildUrl) {
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const items = e.items || [];
+    const typ = expenseTypeLabel(e.expense_type);
+    const tag = e.purchase_date
+        ? new Date(e.purchase_date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
+        : '';
+    const ton = e.store_color ? `--tone:${esc(e.store_color)}` : '';
+    const mark = e.store_icon || (e.store_name || typ || '€').slice(0, 1).toUpperCase();
+    const positionen = items.length ? items.map(it => {
+        const q = itemPieceCount(it);
+        const unter = [];
+        if (it.category_name) unter.push(`${esc(it.category_icon || '')} ${esc(it.category_name)}`.trim());
+        if (it.is_reduced) unter.push(`<span class="az-reduziert">reduziert${it.original_price ? ' · vorher ' + fmtEur(it.original_price) : ''}</span>`);
+        if (it.price_comparable === false) unter.push('nicht im Preisvergleich');
+        return `<div class="az-pos${it.price_comparable === false ? ' ist-aus' : ''}">
+            <span class="az-pos-name">${q ? `<b>${q}×</b>` : ''}${esc(it.description || '')}</span>
+            <span class="az-pos-preis">${fmtEur(it.total_price)}</span>
+            ${unter.length ? `<span class="az-pos-unter">${unter.join('<span>·</span>')}</span>` : ''}
+        </div>`;
+    }).join('') : '<p class="az-zettel-leer">Keine Einzelpositionen gespeichert.</p>';
+    return `<article class="az-zettel" style="${ton}">
+        <header class="az-zettel-kopf">
+            <span class="az-zettel-mark" aria-hidden="true">${esc(mark)}</span>
+            <span class="az-zettel-laden">${esc(e.store_name || typ)}</span>
+            <span class="az-zettel-meta">${esc(typ)}${tag ? ' · ' + esc(tag) : ''}</span>
+        </header>
+        <hr class="az-zettel-trenner">
+        <div class="az-zettel-pos">${positionen}</div>
+        <hr class="az-zettel-trenner">
+        <div class="az-zettel-summe"><span>Summe</span><strong>${fmtEur(e.total_amount)}</strong></div>
+        <div class="az-zettel-fuss"><span>${items.length} ${items.length === 1 ? 'Position' : 'Positionen'}</span>${e.is_recurring ? '<span>wiederkehrend</span>' : ''}</div>
+        ${e.note ? `<div class="az-zettel-notiz">${esc(e.note)}</div>` : ''}
+        ${bildUrl ? `<img class="az-zettel-foto" src="${bildUrl}" alt="Foto des Bons" data-vollbild>` : ''}
+    </article>`;
+}
