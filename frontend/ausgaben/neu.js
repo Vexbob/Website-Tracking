@@ -215,7 +215,8 @@ async function handleFile(file) {
     drop.classList.add('working');
     drop.innerHTML = '<div class="icon">⏳</div><div style="font-weight:600">Wird verarbeitet …</div><div style="font-size:0.8125rem;color:var(--text-muted)" id="uploadStep">Bild wird komprimiert</div>';
     try {
-        const compressed = await compressImage(file, 1600, 0.85);
+        // v2.23.0: 3200 px -- bei 1600 war das Kleingedruckte langer Bons weg.
+        const compressed = await compressImage(file, 3200, 0.85);
         document.getElementById('uploadStep').textContent = 'Wird hochgeladen & OCR läuft …';
         const resp = await AUSGABEN_API.uploadReceipt(compressed, true);
         uploadedReceipt = resp.receipt;

@@ -25,7 +25,7 @@ from deps import (
 )
 
 # Ausgaben-Services (nur hier importiert)
-from services.expenses import suggest_category, learn_rule, process_image
+from services.expenses import suggest_category, learn_rule, process_image, RECEIPT_IMAGE_DIM, RECEIPT_KEEP
 from services.ocr import get_ocr_provider
 from services.receipt_parser import parse_receipt
 from services.ai_receipt_parser import ai_parse_receipt, normalize_expense_type
@@ -689,6 +689,28 @@ async def list_receipts(db=Depends(get_db), user=Depends(get_current_user), limi
         user["id"], max(1, min(limit, 500)))
     return [_ser_exp(r) for r in rows]
 
+async def receipt_images_kuerzen(db, user_id: int) -> int:
+    """Behält nur die Fotos der letzten RECEIPT_KEEP Uploads (v2.23.0).
+
+    Gelöscht wird die ganze Zeile samt OCR-Text; ``expenses.receipt_image_id``
+    fällt per ON DELETE SET NULL auf leer. Betrag und Positionen des Bons
+    bleiben, nur das Foto ist weg -- und damit fällt der Bon auch aus
+    „Alle neu parsen“, das den gespeicherten OCR-Text braucht.
+    """
+    r = await db.execute(
+        "DELETE FROM receipt_images WHERE user_id=$1 AND id NOT IN ("
+        "  SELECT id FROM receipt_images WHERE user_id=$1"
+        "  ORDER BY uploaded_at DESC, id DESC LIMIT $2)",
+        user_id, RECEIPT_KEEP)
+    try:
+        weg = int(r.split()[-1])
+    except (ValueError, IndexError):
+        weg = 0
+    if weg:
+        logger.info(f"User {user_id}: {weg} alte Bon-Fotos entfernt (behalten: {RECEIPT_KEEP})")
+    return weg
+
+
 @router.post("/api/receipts/upload")
 @limiter.limit(LIMIT_WRITE_RARE)
 async def upload_receipt(request: Request,
@@ -700,7 +722,7 @@ async def upload_receipt(request: Request,
         raise HTTPException(400, "Leere Datei")
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(400, f"Datei zu groß (max {MAX_UPLOAD_BYTES // 1024 // 1024} MB)")
-    main_bytes, thumb_bytes, mime, size = process_image(raw)
+    main_bytes, thumb_bytes, mime, size = process_image(raw, RECEIPT_IMAGE_DIM)
 
     ocr_text = ""
     ocr_name = None
@@ -726,6 +748,7 @@ async def upload_receipt(request: Request,
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, filename, mime_type, size_bytes, uploaded_at""",
         user["id"], file.filename or "receipt.jpg", mime, size,
         main_bytes, thumb_bytes, ocr_name, ocr_text)
+    await receipt_images_kuerzen(db, user["id"])
 
     # Bekannte Läden, Kategorien & Marken des Users für AI-Parsing (v1.16.0)
     user_stores_rows = await db.fetch("SELECT name FROM stores WHERE user_id=$1", user["id"])

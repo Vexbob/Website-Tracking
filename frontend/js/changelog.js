@@ -14,6 +14,10 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.23.0', date: '2026-09-28', title: 'Schärfere Bon-Fotos', notes: [
+        'Bon-Fotos werden mit doppelter Auflösung gespeichert, auch Kleingedrucktes bleibt lesbar.',
+        'Dafür behält Vexbob nur die Fotos der letzten 20 Bons; Betrag und Positionen älterer Bons bleiben.',
+    ]},
     { v: 'v2.22.0', date: '2026-09-28', title: 'CS2: jeder Gegenstand hat seinen Preisverlauf', notes: [
         'Der Dialog einer Position zeigt ihren Preisverlauf als Kurve, dazu ersten, tiefsten und höchsten Preis.',
         'Jede Preisbestätigung setzt einen Punkt, auch wenn der Preis gleich bleibt.',

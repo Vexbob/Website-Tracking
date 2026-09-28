@@ -83,11 +83,16 @@ except Exception:      # pragma: no cover - haengt an der Installation
 MAX_IMAGE_DIM = 1600      # px – längste Kante nach Kompression
 JPEG_QUALITY = 82
 THUMB_DIM = 320
+# v2.23.0: Bon-Fotos doppelt so groß. Bei 1600 px war das Kleingedruckte
+# langer Bons nicht mehr lesbar. Dafür behält jedes Konto nur die Fotos der
+# letzten RECEIPT_KEEP Bons (``receipt_images_kuerzen`` im Router).
+RECEIPT_IMAGE_DIM = 3200
+RECEIPT_KEEP = 20
 
 
-def process_image(raw_bytes: bytes) -> tuple:
+def process_image(raw_bytes: bytes, max_dim: int = MAX_IMAGE_DIM) -> tuple:
     """Nimmt Rohdaten (JPEG/PNG/HEIC), gibt (image_data, thumb_data, mime, size).
-    Konvertiert zu JPEG, verkleinert auf MAX_IMAGE_DIM, erstellt Thumbnail.
+    Konvertiert zu JPEG, verkleinert auf ``max_dim``, erstellt Thumbnail.
     """
     from PIL import Image
     try:
@@ -103,7 +108,7 @@ def process_image(raw_bytes: bytes) -> tuple:
 
         # Hauptbild
         img_main = img.copy()
-        img_main.thumbnail((MAX_IMAGE_DIM, MAX_IMAGE_DIM), Image.LANCZOS)
+        img_main.thumbnail((max_dim, max_dim), Image.LANCZOS)
         buf_main = io.BytesIO()
         img_main.save(buf_main, format="JPEG", quality=JPEG_QUALITY, optimize=True)
         main_bytes = buf_main.getvalue()
