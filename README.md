@@ -14,7 +14,7 @@ Persönliche Web-App — Sparziele, Ausgaben, Notizen, Gesundheit, Ernährung, M
 | **Nährwerte** (`/naehrwerte/`) | Mengen, kcal und Makros, Tagesziele, Gerichte, Strichcode, eigener Open-Food-Facts-Katalog |
 | **Musik** | Hörregister aus dem Spotify-Datenexport |
 | **Schach** | Partien und Wertung von Lichess/Chess.com |
-| **CS2** | Bestand an Spielgegenständen und sein Zeitwert |
+| **CS2** | Bestand an Spielgegenständen, sein Zeitwert und der Preisverlauf je Gegenstand |
 | **Blog** | Öffentlich unter `/blog/`, geschrieben im Admin-Bereich |
 
 Dazu: Gesamt-Export aller Module (CSV oder ZIP, mit Zeitraum und Verdichtung), JSON-Backup, anpassbare Tab-Leiste, Versions-Zeitstrahl.

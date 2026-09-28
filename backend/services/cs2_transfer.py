@@ -9,7 +9,7 @@ entweder nichts oder das Falsche. Verknuepft wird ueber Namen -- Kategorie
 und Gegenstand --, und die legt der Import an, wenn es sie noch nicht gibt.
 
     {
-      "modul": "cs2", "fassung": 3, "erzeugt_am": "2026-09-23T10:00:00+00:00",
+      "modul": "cs2", "fassung": 4, "erzeugt_am": "2026-09-23T10:00:00+00:00",
       "kategorien":   [{"name": "Skin", "wear": true, "stattrak": true,
                         "reihenfolge": 0}],
       "gegenstaende": [{"kategorie": "Skin", "name": "AK-47 | Frontside Misty"}],
@@ -18,8 +18,22 @@ und Gegenstand --, und die legt der Import an, wenn es sie noch nicht gibt.
                         "menge": 1, "preis": "16.10",
                         "preis_am": "2026-09-22T10:13:16+00:00"}],
       "staende":      [{"datum": "2026-09-22", "brutto": "3089.81",
-                        "je_kategorie": {"Case": "2520.21", …}, …}]
+                        "je_kategorie": {"Case": "2520.21", …}, …}],
+      "preisverlauf": [{"kategorie": "Case", "gegenstand": "Revolution",
+                        "wear": null, "stattrak": false, "preis": "0.31",
+                        "menge": 1404, "preis_am": "2026-03-07T03:41:05+00:00"}, …]
     }
+
+**Zwei Arten Historie, zwei Listen.** ``staende`` sind der Gesamtwert an
+einem Tag -- daraus wird die Kurve im Reiter „Verlauf“. ``preisverlauf`` ist
+der Preis JEDES Gegenstands zu jedem Zeitpunkt, an dem er bestaetigt wurde
+(seit Fassung 4). Er reicht weiter als der Bestand: auch verkaufte
+Gegenstaende haben einen Verlauf, und der Import legt sie dafuer als
+Gegenstand an, ohne Position.
+
+Der Preisverlauf wird nur ERGAENZT, nie ersetzt. Eine Beobachtung ist ein
+Zeitpunkt mit einem Preis; dieselbe zweimal einzuspielen aendert nichts, und
+eine, die die Datei nicht nennt, bleibt stehen.
 
 **Die aelteren Fassungen werden weiter gelesen.** Fassung 1 trug an jeder
 Position noch ein ``lager``, Fassung 1 und 2 zusaetzlich ein ``playskin``;
@@ -44,8 +58,8 @@ from typing import Optional
 # Was ``aufnehmen`` schreibt. ``LESBAR`` sagt, was ``pruefen`` annimmt: die
 # alte Fassung bleibt lesbar, weil sonst eine Datei wertlos waere, die jemand
 # vor dem Wegfall der Lager erzeugt hat.
-FASSUNG = 3
-LESBAR = (1, 2, 3)
+FASSUNG = 4
+LESBAR = (1, 2, 3, 4)
 
 WEAR_WERTE = ["FN", "MW", "FT", "WW", "BS"]
 
@@ -87,6 +101,13 @@ async def aufnehmen(db, user_id: int) -> dict:
             "  JOIN cs2_snapshots s  ON s.id = sc.snapshot_id "
             " WHERE s.user_id=$1", user_id):
         aufteilung.setdefault(r["snapshot_id"], {})[r["name"]] = str(r["gross"])
+    verlauf = await db.fetch(
+        "SELECT c.name AS kategorie, i.name AS gegenstand, h.wear, h.stattrak, "
+        "       h.price_eur, h.quantity, h.priced_at "
+        "  FROM cs2_price_history h "
+        "  JOIN cs2_items i      ON i.id = h.item_id "
+        "  JOIN cs2_categories c ON c.id = i.category_id "
+        " WHERE h.user_id=$1 ORDER BY i.name, h.priced_at", user_id)
 
     return {
         "modul": "cs2",
@@ -110,6 +131,12 @@ async def aufnehmen(db, user_id: int) -> dict:
             "veraltet": r["stale_rows"], "notiz": r["note"],
             "je_kategorie": aufteilung.get(r["id"], {}),
         } for r in staende],
+        "preisverlauf": [{
+            "kategorie": r["kategorie"], "gegenstand": r["gegenstand"],
+            "wear": r["wear"], "stattrak": r["stattrak"],
+            "preis": str(r["price_eur"]), "menge": r["quantity"],
+            "preis_am": r["priced_at"].isoformat(),
+        } for r in verlauf],
     }
 
 
@@ -197,6 +224,49 @@ def _staende_pruefen(roh) -> list:
     return sauber
 
 
+def _preisverlauf_pruefen(roh) -> list:
+    """Den Preisverlauf lesen -- so streng wie die Positionen.
+
+    Eine Beobachtung braucht Preis UND Zeitpunkt: ohne Zeitpunkt ist sie kein
+    Punkt auf einer Kurve, ohne Preis keine Beobachtung. Doppelte Punkte in
+    der Datei fallen still zusammen -- sie beschreiben dasselbe.
+    """
+    if not isinstance(roh, list):
+        raise TransferFehler("„preisverlauf“ ist keine Liste.")
+    gesehen, sauber = set(), []
+    for nr, v in enumerate(roh, 1):
+        wo = f"Preispunkt {nr}"
+        if not isinstance(v, dict):
+            raise TransferFehler(f"{wo} ist kein Datensatz.")
+        kat = (v.get("kategorie") or "").strip()
+        name = (v.get("gegenstand") or "").strip()
+        if not kat or not name:
+            raise TransferFehler(f"{wo}: Kategorie oder Gegenstand fehlt.")
+        wear = v.get("wear") or None
+        if wear is not None and wear not in WEAR_WERTE:
+            raise TransferFehler(f"{wo}: „{wear}“ ist keine Abnutzung.")
+        preis = _betrag(v.get("preis"), wo)
+        am = _zeitpunkt(v.get("preis_am"), wo)
+        if preis is None or am is None:
+            raise TransferFehler(f"{wo}: Preis und Zeitpunkt gehören beide dazu.")
+        menge = v.get("menge")
+        if menge not in (None, ""):
+            try:
+                menge = max(0, int(menge))
+            except (TypeError, ValueError):
+                raise TransferFehler(f"{wo}: „{menge}“ ist keine Stückzahl.")
+        else:
+            menge = None
+        schluessel = (kat, name, wear, bool(v.get("stattrak")), am)
+        if schluessel in gesehen:
+            continue
+        gesehen.add(schluessel)
+        sauber.append({"kategorie": kat, "gegenstand": name, "wear": wear,
+                       "stattrak": bool(v.get("stattrak")), "preis": preis,
+                       "menge": menge, "preis_am": am})
+    return sauber
+
+
 def pruefen(dok) -> dict:
     """Die Datei lesen und dabei sagen, was ihr fehlt.
 
@@ -256,6 +326,7 @@ def pruefen(dok) -> dict:
         "positionen": positionen,
         "zusammengefuehrt": zusammengefuehrt,
         "staende": _staende_pruefen(dok.get("staende") or []),
+        "preisverlauf": _preisverlauf_pruefen(dok.get("preisverlauf") or []),
         "erzeugt_am": dok.get("erzeugt_am"),
     }
 
@@ -347,6 +418,24 @@ async def vorschau(db, user_id: int, daten: dict) -> dict:
     kat_da = {r["name"] for r in await db.fetch(
         "SELECT name FROM cs2_categories WHERE user_id=$1", user_id)}
 
+    # Welche Preispunkte schon da sind -- ueber Namen und Zeitpunkt, wie
+    # alles in diesem Format. Die Zahl „neu“ ist, was der Import hinzufuegt;
+    # der Rest aendert nichts.
+    punkte_da = {(r["kategorie"], r["gegenstand"], r["wear"], r["stattrak"], r["priced_at"])
+                 for r in await db.fetch(
+        "SELECT c.name AS kategorie, i.name AS gegenstand, h.wear, h.stattrak, h.priced_at "
+        "  FROM cs2_price_history h "
+        "  JOIN cs2_items i      ON i.id = h.item_id "
+        "  JOIN cs2_categories c ON c.id = i.category_id "
+        " WHERE h.user_id=$1", user_id)}
+    verlauf = daten.get("preisverlauf") or []
+    punkte_neu = sum(1 for v in verlauf
+                     if (v["kategorie"], v["gegenstand"], v["wear"], v["stattrak"],
+                         v["preis_am"]) not in punkte_da)
+    im_bestand = {(p["kategorie"], p["gegenstand"], p["wear"], p["stattrak"])
+                  for p in daten["positionen"]}
+    mit_verlauf = {(v["kategorie"], v["gegenstand"], v["wear"], v["stattrak"]) for v in verlauf}
+
     return {
         "erzeugt_am": daten.get("erzeugt_am"),
         "positionen": len(daten["positionen"]),
@@ -360,6 +449,14 @@ async def vorschau(db, user_id: int, daten: dict) -> dict:
         # unterschieden und deshalb schon beim Lesen zu einer wurden.
         "zusammengefuehrt": daten.get("zusammengefuehrt", 0),
         "staende": len(daten["staende"]),
+        "preispunkte": len(verlauf),
+        "preispunkte_neu": punkte_neu,
+        "preis_gegenstaende": len(mit_verlauf),
+        # Gegenstaende mit Verlauf, die es im Bestand nicht mehr gibt --
+        # verkauft. Ihr Verlauf kommt trotzdem mit; man soll es wissen.
+        "preis_ohne_position": len(mit_verlauf - im_bestand),
+        "verlauf_von": min((v["preis_am"] for v in verlauf), default=None),
+        "verlauf_bis": max((v["preis_am"] for v in verlauf), default=None),
         "beispiele_neu": [zeige(p) for p in neu[:5]],
         "beispiele_geaendert": [zeige(p, a) for p, a in geaendert[:5]],
     }
@@ -377,7 +474,8 @@ async def einspielen(db, user_id: int, daten: dict) -> dict:
         for name in sorted({p["kategorie"] for p in daten["positionen"]}
                            | set(regeln)
                            | {g.get("kategorie") for g in daten["gegenstaende"]
-                              if g.get("kategorie")}):
+                              if g.get("kategorie")}
+                           | {v["kategorie"] for v in daten.get("preisverlauf") or []}):
             r = regeln.get(name, {})
             kat_id[name] = await db.fetchval(
                 "INSERT INTO cs2_categories (user_id, name, supports_wear, "
@@ -466,4 +564,44 @@ async def einspielen(db, user_id: int, daten: dict) -> dict:
                         snap_id, kid, wert)
             staende += 1
 
-    return {"neu": neu, "geaendert": geaendert, "staende": staende}
+        # ---- Preisverlauf ------------------------------------------------
+        # Gezaehlt wird davor und danach statt je Zeile: ``ON CONFLICT DO
+        # NOTHING`` meldet nicht zuverlaessig, ob es etwas getan hat, und die
+        # Zahl soll sagen, was WIRKLICH dazukam.
+        vorher = await db.fetchval(
+            "SELECT COUNT(*) FROM cs2_price_history WHERE user_id=$1", user_id)
+
+        # Jede uebernommene Position ist selbst eine Beobachtung. Ohne diesen
+        # Schritt haette eine Datei der Fassung 1 bis 3 -- ohne Liste
+        # „preisverlauf“ -- Positionen mit Preis, aber keinen Verlauf dazu.
+        await db.execute(
+            """INSERT INTO cs2_price_history
+                   (user_id, item_id, wear, stattrak, price_eur, quantity, priced_at)
+               SELECT user_id, item_id, wear, stattrak, price_eur, quantity, priced_at
+                 FROM cs2_positions
+                WHERE user_id=$1 AND price_eur IS NOT NULL AND priced_at IS NOT NULL
+               ON CONFLICT (user_id, item_id, COALESCE(wear, ''::text), stattrak, priced_at)
+               DO NOTHING""", user_id)
+
+        for v in daten.get("preisverlauf") or []:
+            schluessel = (v["kategorie"], v["gegenstand"])
+            if schluessel not in item_id:
+                # Ein verkaufter Gegenstand: es gibt ihn nur noch im Verlauf.
+                item_id[schluessel] = await db.fetchval(
+                    "INSERT INTO cs2_items (user_id, category_id, name) VALUES ($1,$2,$3) "
+                    "ON CONFLICT (user_id, category_id, name) DO UPDATE SET name=EXCLUDED.name "
+                    "RETURNING id", user_id, kat_id[v["kategorie"]], v["gegenstand"])
+            await db.execute(
+                "INSERT INTO cs2_price_history "
+                "       (user_id, item_id, wear, stattrak, price_eur, quantity, priced_at) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7) "
+                "ON CONFLICT (user_id, item_id, COALESCE(wear, ''::text), stattrak, priced_at) "
+                "DO NOTHING",
+                user_id, item_id[schluessel], v["wear"], v["stattrak"],
+                v["preis"], v["menge"], v["preis_am"])
+
+        nachher = await db.fetchval(
+            "SELECT COUNT(*) FROM cs2_price_history WHERE user_id=$1", user_id)
+
+    return {"neu": neu, "geaendert": geaendert, "staende": staende,
+            "preispunkte": int(nachher) - int(vorher)}

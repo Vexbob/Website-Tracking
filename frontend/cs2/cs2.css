@@ -378,6 +378,62 @@
     color: var(--text-4);
 }
 
+/* ---------- Preisverlauf im Dialog ----------
+   Steht ueber dem Formular: wer eine Position oeffnet, will meist erst
+   sehen, wohin sich der Preis bewegt hat. Die Flaeche hat eine feste Hoehe,
+   damit der Dialog nicht springt, wenn das Diagramm nach dem Laden erscheint
+   -- das Skeleton davor ist genau so hoch. */
+.cs-pv {
+    margin-bottom: 1.1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+}
+.cs-pv-kopf {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+.cs-pv .cs-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+.cs-pv-zahl { font-size: 0.75rem; color: var(--text-3); }
+.cs-pv-flaeche { min-height: 11rem; }
+.cs-pv-flaeche > .skel-block { height: 11rem; }
+.cs-pv-kurve { position: relative; height: 11rem; }
+
+/* Vier Kennzahlen unter der Linie. Eine Zeile, gleich breit -- es sind vier
+   Antworten auf dieselbe Frage („wie hat sich der Preis bewegt?“), und
+   nebeneinander vergleicht man sie mit einem Blick. */
+.cs-pv-werte {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin: 0.75rem 0 0;
+}
+.cs-pv-werte div { min-width: 0; }
+.cs-pv-werte dt {
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+.cs-pv-werte dd {
+    margin: 0.1rem 0 0;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
+}
+/* Steigend ist hier gut: der Bestand ist mehr wert. */
+.cs-pv-werte .cs-plus  { color: var(--ok); }
+.cs-pv-werte .cs-minus { color: var(--danger); }
+
 /* ---------- Formular im Dialog ---------- */
 .cs-form { display: grid; gap: 0.875rem; }
 .cs-form-reihe { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }

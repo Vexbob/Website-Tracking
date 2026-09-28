@@ -96,11 +96,16 @@ TABLES_ORDERED = [
     # Oberflaechen-Einstellungen (v1.46.1) -- ohne die waere nach einem Restore
     # z.B. die selbst gelegte Reihenfolge der Vitalwerte-Diagramme weg.
     # CS2-Modul. Kategorien zuerst: Items zeigen auf die Kategorie,
-    # Positionen auf die Items, die Snapshot-Aufteilung auf den Snapshot.
-    # Die Lagertabellen gab es bis v2.13.0; Migration 052 hat sie entfernt.
+    # Positionen und Preisverlauf auf die Items, die Snapshot-Aufteilung auf
+    # den Snapshot. Die Lagertabellen gab es bis v2.13.0; Migration 052 hat
+    # sie entfernt.
     "cs2_categories",
     "cs2_items",
     "cs2_positions",
+    # Seit 054: jede Preisbestaetigung als eigene Zeile. Ohne diesen Eintrag
+    # kaeme nach einem Restore der Bestand zurueck, aber kein einziger
+    # Preisverlauf -- und keine Meldung, die das sagt.
+    "cs2_price_history",
     "cs2_snapshots",
     "cs2_snapshot_categories",
     "user_prefs",

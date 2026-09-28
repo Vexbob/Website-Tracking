@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.22.0', date: '2026-09-28', title: 'CS2: jeder Gegenstand hat seinen Preisverlauf', notes: [
+        'Der Dialog einer Position zeigt ihren Preisverlauf als Kurve, dazu ersten, tiefsten und höchsten Preis.',
+        'Jede Preisbestätigung setzt einen Punkt, auch wenn der Preis gleich bleibt.',
+        'Der Import übernimmt die Preishistorie der Vorgängerfassung: 783 Preisstände seit März, auch verkaufte Gegenstände.',
+        'Der Tooltip der Standkurve nennt wieder den ganzen Tag statt eines ISO-Datums.',
+    ]},
     { v: 'v2.21.1', date: '2026-09-28', title: 'Sparziel nachgezogen', notes: [
         'Nachgezogen: Die Wochenziele stehen wieder über den Achievements statt daneben; am Rechner liegen die Kacheln dafür nebeneinander.',
     ]},

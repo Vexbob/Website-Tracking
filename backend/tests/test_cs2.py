@@ -182,6 +182,10 @@ class AttrappeDB:
         self._pruefe(sql, args)
         return 1
 
+    async def execute(self, sql, *args):
+        self._pruefe(sql, args)
+        return "INSERT 0 1"
+
 
 def _router():
     from routers import cs2_router
@@ -266,6 +270,7 @@ def test_regeln_raeumen_statt_abzulehnen():
 SQL_051 = BACKEND / "migrations" / "sql" / "051_cs2.sql"
 SQL_052 = BACKEND / "migrations" / "sql" / "052_cs2_ohne_lager.sql"
 SQL_053 = BACKEND / "migrations" / "sql" / "053_cs2_ohne_playskin.sql"
+SQL_055 = BACKEND / "migrations" / "sql" / "055_cs2_preisverlauf.sql"
 
 QUELLEN = (
     BACKEND / "routers" / "cs2_router.py",
@@ -578,3 +583,92 @@ def test_die_beiden_wegfaelle_fuehren_zusammen_statt_zu_ueberschreiben():
         assert "row_number() OVER" in sql, f"{datei.name} kuert keine Siegerzeile"
         assert "priced_at DESC NULLS LAST" in sql, \
             f"{datei.name}: der Preis muss von der zuletzt gepflegten Zeile kommen"
+
+
+# =========================================================================
+# 6. Der Preisverlauf je Gegenstand (Migration 055, Fassung 4)
+# =========================================================================
+
+def test_die_verlaufstabelle_traegt_die_signatur_samt_zeitpunkt():
+    """Eine Zeile je (Signatur, Zeitpunkt) -- und dieselbe Falle wie ueberall.
+
+    Postgres haelt zwei NULL fuer verschieden; ohne ``COALESCE`` liesse der
+    Index denselben Preispunkt beliebig oft zu, sobald die Abnutzung fehlt,
+    und ein zweiter Import verdoppelte jeden Verlauf einer Kiste.
+    """
+    sql = _ohne_kommentare(SQL_055)
+    assert "CREATE TABLE IF NOT EXISTS cs2_price_history" in sql
+    assert ("(user_id, item_id, COALESCE(wear, \'\'::text), stattrak, priced_at)" in sql), \
+        "Der eindeutige Index muss den Zeitpunkt UND COALESCE(wear) tragen"
+    # Der heutige Preis jeder Position ist der erste Punkt ihres Verlaufs.
+    assert "FROM cs2_positions" in sql and "ON CONFLICT" in sql
+
+
+def test_jedes_on_conflict_auf_den_verlauf_nennt_denselben_ausdruck():
+    """Ein ``ON CONFLICT``, das den Ausdruck nicht nennt, findet den Index nicht."""
+    for datei in QUELLEN:
+        code = _nur_code(datei)
+        for block in re.findall(r"INSERT INTO cs2_price_history.*?DO NOTHING", code, re.S):
+            assert "COALESCE(wear, \'\'::text), stattrak, priced_at)" in block, \
+                f"{datei.name}: ON CONFLICT auf cs2_price_history ohne den Index-Ausdruck"
+
+
+def test_jede_preisbestaetigung_schreibt_in_den_verlauf():
+    """Alle drei Schreibwege, die ``priced_at`` bewegen, rufen ``_preis_merken``.
+
+    Fehlt der Aufruf an einem, entsteht ein Verlauf mit Luecken, die man ihm
+    nicht ansieht: die Linie liefe ueber eine Bestaetigung hinweg, als habe
+    es sie nie gegeben.
+    """
+    baum = ast.parse(QUELLEN[0].read_text(encoding="utf-8"))
+    rufe = {}
+    for knoten in ast.walk(baum):
+        if isinstance(knoten, ast.AsyncFunctionDef):
+            rufe[knoten.name] = {getattr(n.func, "id", None) for n in ast.walk(knoten)
+                                 if isinstance(n, ast.Call)}
+    for weg in ("position_anlegen", "position_aendern", "preis_bestaetigen"):
+        assert "_preis_merken" in rufe[weg], f"{weg} schreibt nicht in den Preisverlauf"
+
+
+def test_preis_merken_liest_aus_der_position_und_ueberschreibt_nichts():
+    """Der Verlauf nimmt den Stand aus der Zeile -- und nie doppelt."""
+    cr = _router()
+    db = AttrappeDB()
+    asyncio.run(cr._preis_merken(db, 1, 11))
+    sql = db.abfragen[-1]
+    assert "INSERT INTO cs2_price_history" in sql
+    assert "FROM cs2_positions" in sql, "Der Stand muss aus der Position kommen"
+    assert "DO NOTHING" in sql, "Ein Preispunkt darf nie einen vorhandenen ueberschreiben"
+    assert "price_eur IS NOT NULL" in sql, "Eine Zeile ohne Preis ist keine Beobachtung"
+
+
+def test_preisverlauf_braucht_preis_und_zeitpunkt():
+    """Ohne Zeitpunkt kein Punkt auf der Kurve, ohne Preis keine Beobachtung."""
+    for murks, stueck in [
+        ({"kategorie": "Case", "gegenstand": "Fever", "preis": "0.77"}, "Zeitpunkt"),
+        ({"kategorie": "Case", "gegenstand": "Fever", "preis_am": "2026-09-22T10:00:00+00:00"},
+         "Zeitpunkt"),
+        ({"kategorie": "Case", "gegenstand": "", "preis": "0.77",
+          "preis_am": "2026-09-22T10:00:00+00:00"}, "Gegenstand"),
+        ({"kategorie": "Skin", "gegenstand": "AK-47 | X", "wear": "XX", "preis": "1",
+          "preis_am": "2026-09-22T10:00:00+00:00"}, "Abnutzung"),
+    ]:
+        with pytest.raises(t.TransferFehler) as fehler:
+            t.pruefen(_dok(fassung=4, preisverlauf=[murks]))
+        assert "Preispunkt 1" in str(fehler.value) and stueck in str(fehler.value)
+
+
+def test_doppelte_preispunkte_in_der_datei_fallen_zusammen():
+    punkt = {"kategorie": "Case", "gegenstand": "Revolution", "preis": "0.31",
+             "preis_am": "2026-03-07T03:41:05+00:00", "menge": 1404}
+    daten = t.pruefen(_dok(fassung=4, preisverlauf=[punkt, dict(punkt)]))
+    assert len(daten["preisverlauf"]) == 1
+    assert daten["preisverlauf"][0]["preis"] == Decimal("0.31")
+    assert daten["preisverlauf"][0]["preis_am"].tzinfo is not None
+
+
+def test_eine_datei_ohne_preisverlauf_bleibt_gueltig():
+    """Fassung 1 bis 3 kannten keinen Preisverlauf -- sie werden weiter gelesen."""
+    for fassung in (1, 2, 3):
+        daten = t.pruefen(_dok(fassung=fassung))
+        assert daten["preisverlauf"] == []

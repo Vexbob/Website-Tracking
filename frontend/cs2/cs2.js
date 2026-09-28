@@ -39,6 +39,7 @@ const API = {
     preis:     (id, p)       => apiCall('/api/cs2/positions/' + id + '/preis',
                                         { method: 'PUT', body: { price_eur: p } }),
     entfernen: (id)          => apiCall('/api/cs2/positions/' + id, { method: 'DELETE' }),
+    verlauf:   (id)          => apiCall('/api/cs2/positions/' + id + '/verlauf'),
     staende:   (tage)        => apiCall('/api/cs2/snapshots?tage=' + tage),
     festhalten:()            => apiCall('/api/cs2/snapshots', { method: 'POST', body: {} }),
     einlesen:  (daten, tun)  => apiCall('/api/cs2/import',
@@ -56,6 +57,7 @@ const state = {
     richtung: 'ab',
     tage: 365,
     chart: null,
+    pvChart: null,
     zeilen: [],
 };
 
@@ -647,7 +649,9 @@ function zeichneKurve(staende) {
             y: { grid: { color: cssVar('--chart-grid') }, ticks: { color: cssVar('--chart-axis') } },
         },
     };
-    if (window.VexCharts) VexCharts.applyFullDates(optionen, achse);
+    // Volle Daten fuer den Tooltip, wie ueberall: bis v2.15.0 standen hier die
+    // rohen ISO-Daten, und der Tooltip zeigte „2026-09-22“ statt des Tages.
+    if (window.VexCharts) VexCharts.applyFullDates(optionen, achse.map(VexCharts.fullDay));
 
     state.chart = new Chart(leinwand, {
         type: 'line',
@@ -759,7 +763,13 @@ function zeigeVorschau(dok, v, dateiname) {
             ${v.neue_kategorien.length ? `<p class="cs-hinweis">Neue Kategorien:
                ${v.neue_kategorien.map(esc).join(', ')}</p>` : ''}
             ${v.staende ? `<p class="cs-hinweis">Dazu ${zahl(v.staende)} festgehaltene Stände
-               für den Verlauf.</p>` : ''}
+               für die Kurve im Reiter „Verlauf“.</p>` : ''}
+            ${v.preispunkte ? `<p class="cs-hinweis">Und der Preisverlauf je Gegenstand:
+               <strong>${zahl(v.preispunkte)} Preisstände</strong> für ${zahl(v.preis_gegenstaende)}
+               Gegenstände vom ${esc(tagDatum(v.verlauf_von))} bis ${esc(tagDatum(v.verlauf_bis))}${
+               v.preispunkte_neu === v.preispunkte ? '' : ` — ${zahl(v.preispunkte_neu)} davon neu`}.${
+               v.preis_ohne_position ? ` ${zahl(v.preis_ohne_position)} davon gibt es im Bestand nicht mehr;
+               ihr Verlauf kommt trotzdem mit.` : ''}</p>` : ''}
             ${v.beispiele_neu.length ? `<div class="cs-beispiele">
                <span class="cs-label">Neu, zum Beispiel</span>
                <div class="rec-list">${v.beispiele_neu.map(p => zeile(p, false)).join('')}</div></div>` : ''}
@@ -769,7 +779,7 @@ function zeigeVorschau(dok, v, dateiname) {
             <div class="cs-form-fuss">
                 <button type="button" class="v-btn" data-abbruch="1">Verwerfen</button>
                 <button type="button" class="v-btn v-btn--primary" data-uebernehmen="1"
-                        ${v.neu + v.geaendert + v.staende ? '' : 'disabled'}>Übernehmen</button>
+                        ${v.neu + v.geaendert + v.staende + (v.preispunkte_neu || 0) ? '' : 'disabled'}>Übernehmen</button>
             </div>
         </div>`;
     el.querySelector('[data-abbruch]').addEventListener('click', () => { el.innerHTML = ''; });
@@ -780,7 +790,8 @@ function zeigeVorschau(dok, v, dateiname) {
         try {
             const { uebernommen } = await API.einlesen(dok, true);
             melde('success', `${uebernommen.neu} neu, ${uebernommen.geaendert} aktualisiert`
-                + (uebernommen.staende ? `, ${uebernommen.staende} Stände` : ''));
+                + (uebernommen.staende ? `, ${uebernommen.staende} Stände` : '')
+                + (uebernommen.preispunkte ? `, ${uebernommen.preispunkte} Preisstände` : ''));
             el.innerHTML = '';
             document.getElementById('csDatei').value = '';
             await neuLaden();
@@ -802,7 +813,19 @@ function formular(position) {
     const optionen = (liste, aktiv) => liste.map((e) =>
         `<option value="${e.id}"${String(e.id) === String(aktiv) ? ' selected' : ''}>${esc(e.name)}</option>`).join('');
 
-    const html = `<form class="cs-form" id="csForm">
+    // Der Preisverlauf steht OBEN im Dialog einer vorhandenen Position: wer
+    // sie oeffnet, will meist erst sehen, wohin sich der Preis bewegt hat,
+    // bevor er etwas aendert. Beim Anlegen gibt es noch keinen.
+    const verlaufHtml = istNeu ? '' : `
+        <section class="cs-pv" aria-labelledby="csPvTitel">
+            <div class="cs-pv-kopf">
+                <span class="cs-label" id="csPvTitel">Preisverlauf</span>
+                <span class="cs-pv-zahl" id="csPvZahl"></span>
+            </div>
+            <div class="cs-pv-flaeche" id="csPv"><span class="skel skel-block"></span></div>
+        </section>`;
+
+    const html = `${verlaufHtml}<form class="cs-form" id="csForm">
         <label><span class="cs-label">Kategorie</span>
             <select name="category_id"${istNeu ? '' : ' disabled'}>${optionen(k.kategorien, gewaehlteKat)}</select>
         </label>
@@ -834,7 +857,13 @@ function formular(position) {
         </div>
     </form>`;
 
-    const fenster = VexModal.open(istNeu ? 'Position anlegen' : 'Position ändern', html);
+    const fenster = VexModal.open(istNeu ? 'Position anlegen' : 'Position ändern', html, {
+        // Chart.js haelt jede Instanz in einem eigenen Verzeichnis. Ohne
+        // destroy() bliebe sie nach dem Schliessen dort haengen, und das
+        // naechste Oeffnen zeichnete in eine Leinwand, die es nicht mehr gibt.
+        onClose: () => { if (state.pvChart) { state.pvChart.destroy(); state.pvChart = null; } },
+    });
+    if (!istNeu) zeichnePreisverlauf(fenster.el, position);
     const form = fenster.el.querySelector('#csForm');
     const katFeld = form.querySelector('[name=category_id]');
     const liste = form.querySelector('#csItemVorschlag');
@@ -893,6 +922,106 @@ function formular(position) {
             melde('success', istNeu ? 'Angelegt' : 'Gespeichert');
             await neuLaden();
         } catch (e) { melde('error', e.message); }
+    });
+}
+
+/* -------------------------------------------------------- Preisverlauf */
+
+/* Die Preise einer Position ueber die Zeit, im Dialog.
+
+   Ein Punkt je Bestaetigung -- auch wo der Preis gleich blieb: „am 30. Juni
+   stimmte er noch“ ist eine Beobachtung, und ohne den Punkt saehe die Linie
+   aus, als sei zwischen zwei Aenderungen nie nachgesehen worden.
+
+   Die Linie ist gestuft (``stepped``): ein von Hand gepflegter Preis gilt,
+   bis er wieder bestaetigt wird. Eine schraege Linie zwischen zwei Punkten
+   behauptete Preise an Tagen, an denen niemand nachgesehen hat.
+
+   Die Achse ist die ZEIT, nicht die Reihenfolge. Auf einer Kategorienachse
+   stuenden die Punkte in gleichen Abstaenden -- fuenf Preise aus zehn Tagen
+   im Juni saehen dann aus wie ein halbes Jahr, und die zwei Monate zwischen
+   Juli und September wie ein Tag. Vexbob hat keinen Datums-Adapter fuer
+   Chart.js; statt einen einzuziehen, rechnet die Achse in Millisekunden und
+   beschriftet sich selbst. */
+async function zeichnePreisverlauf(wurzel, position) {
+    const feld = wurzel.querySelector('#csPv');
+    const kopfzahl = wurzel.querySelector('#csPvZahl');
+    if (!feld) return;
+    let v;
+    try {
+        v = await API.verlauf(position.id);
+    } catch (e) {
+        zeigeFehler(feld, 'Der Preisverlauf konnte nicht geladen werden: ' + e.message,
+            () => zeichnePreisverlauf(wurzel, position));
+        return;
+    }
+    if (!v.anzahl) {
+        feld.innerHTML = '<p class="cs-hinweis">Für diese Position wurde noch kein Preis bestätigt — '
+            + 'der erste Eintrag beginnt den Verlauf.</p>';
+        return;
+    }
+    kopfzahl.textContent = v.anzahl === 1
+        ? `1 Preisstand vom ${tagDatum(v.von)}`
+        : `${zahl(v.anzahl)} Preisstände seit ${tagDatum(v.von)}`;
+    if (v.anzahl === 1) {
+        feld.innerHTML = `<p class="cs-hinweis">Bisher ein einziger Preis: ${esc(eur(v.punkte[0].price_eur))}.
+            Mit der nächsten Bestätigung entsteht eine Linie.</p>`;
+        return;
+    }
+    const erster = v.punkte[0].price_eur;
+    const letzter = v.punkte[v.punkte.length - 1].price_eur;
+    const aenderung = erster ? (letzter - erster) / erster * 100 : 0;
+    feld.innerHTML = `
+        <div class="cs-pv-kurve"><canvas id="csPvChart"
+            aria-label="Preisverlauf von ${esc(position.item_name)}" role="img"></canvas></div>
+        <dl class="cs-pv-werte">
+            <div><dt>Erster</dt><dd>${esc(eur(erster))}</dd></div>
+            <div><dt>Tiefst</dt><dd>${esc(eur(v.tiefst))}</dd></div>
+            <div><dt>Höchst</dt><dd>${esc(eur(v.hoechst))}</dd></div>
+            <div><dt>Seitdem</dt><dd class="${aenderung > 0 ? 'cs-plus' : (aenderung < 0 ? 'cs-minus' : '')}">${
+                (aenderung > 0 ? '+' : '') + aenderung.toFixed(1).replace('.', ',')} %</dd></div>
+        </dl>`;
+    if (typeof Chart === 'undefined') return;
+    const zeiten = v.punkte.map((p) => new Date(p.priced_at).getTime());
+    const kurzesDatum = (ms) => new Date(ms).toLocaleDateString('de-DE',
+        { day: '2-digit', month: 'short' });
+    const optionen = {
+        responsive: true, maintainAspectRatio: false,
+        // ``nearest`` statt ``index``: auf einer linearen Achse gibt es keinen
+        // gemeinsamen Index, der Tooltip soll den Punkt unter dem Finger nennen.
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (k) => eur(k.parsed.y) } },
+        },
+        scales: {
+            x: { type: 'linear', min: zeiten[0], max: zeiten[zeiten.length - 1],
+                 grid: { color: cssVar('--chart-grid') },
+                 ticks: { color: cssVar('--chart-axis'), maxTicksLimit: 5,
+                          maxRotation: 0, callback: (ms) => kurzesDatum(ms) } },
+            y: { grid: { color: cssVar('--chart-grid') },
+                 ticks: { color: cssVar('--chart-axis'), callback: (w) => eur(w) } },
+        },
+    };
+    // Der Tooltip nennt den vollen Tag samt Jahr -- dieselbe Regel wie in
+    // jedem Diagramm der Seite (js/charts.js).
+    if (window.VexCharts) {
+        VexCharts.applyFullDates(optionen, v.punkte.map((p) => VexCharts.fullDay(p.priced_at)));
+    }
+    if (state.pvChart) { state.pvChart.destroy(); state.pvChart = null; }
+    state.pvChart = new Chart(wurzel.querySelector('#csPvChart'), {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: 'Preis je Stück',
+                data: v.punkte.map((p, i) => ({ x: zeiten[i], y: p.price_eur })),
+                borderColor: ton(), backgroundColor: 'transparent',
+                stepped: 'before', pointRadius: 3, pointHoverRadius: 5,
+                pointBackgroundColor: ton(),
+                order: window.VexCharts ? VexCharts.ORDER.VALUE : 1,
+            }],
+        },
+        options: optionen,
     });
 }
 

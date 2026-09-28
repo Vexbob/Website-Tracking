@@ -8,6 +8,7 @@ Endpoints:
   PATCH  /api/cs2/positions/{id}       — Position aendern
   DELETE /api/cs2/positions/{id}       — Position entfernen
   PUT    /api/cs2/positions/{id}/preis — nur den Preis bestaetigen
+  GET    /api/cs2/positions/{id}/verlauf — die Preise dieser Position ueber die Zeit
   POST   /api/cs2/items                — Item anlegen
   PUT    /api/cs2/items/{id}           — Item umbenennen
   DELETE /api/cs2/items/{id}           — Item loeschen (nur ohne Positionen)
@@ -444,6 +445,8 @@ async def position_anlegen(request: Request, daten: PositionNeu,
                                 THEN cs2_positions.priced_at ELSE now() END
            RETURNING id""",
         user["id"], item_id, wear, stattrak, menge, preis)
+    if preis is not None:
+        await _preis_merken(db, user["id"], row["id"])
     return await _eine_position(db, user["id"], row["id"])
 
 
@@ -491,6 +494,8 @@ async def position_aendern(request: Request, pid: int, daten: PositionAenderung,
                 400, "Diese Position gibt es schon — gleicher Gegenstand, "
                      "gleiche Ausführung.")
         raise
+    if preis_neu:
+        await _preis_merken(db, user["id"], pid)
     return await _eine_position(db, user["id"], pid)
 
 
@@ -512,7 +517,40 @@ async def preis_bestaetigen(request: Request, pid: int, daten: PreisEingabe,
         " WHERE id=$1 AND user_id=$2", pid, user["id"], preis)
     if getroffen.endswith(" 0"):
         raise HTTPException(404, "Diese Position gibt es nicht.")
+    # Auch wenn der Preis gleich blieb: „stimmt noch“ ist eine Beobachtung.
+    await _preis_merken(db, user["id"], pid)
     return await _eine_position(db, user["id"], pid)
+
+
+@router.get("/api/cs2/positions/{pid}/verlauf")
+async def preisverlauf(pid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    """Alle Preise, die diese Position je hatte -- aelteste zuerst.
+
+    Gesucht wird ueber die Signatur und nicht ueber die Positions-id: der
+    Verlauf gehoert dem Gegenstand samt Abnutzung und StatTrak, und er reicht
+    weiter zurueck als die Position, die es heute gibt.
+    """
+    pos = await db.fetchrow(
+        "SELECT item_id, wear, stattrak FROM cs2_positions WHERE id=$1 AND user_id=$2",
+        pid, user["id"])
+    if not pos:
+        raise HTTPException(404, "Diese Position gibt es nicht.")
+    rows = await db.fetch(
+        """SELECT price_eur, quantity, priced_at FROM cs2_price_history
+            WHERE user_id=$1 AND item_id=$2
+              AND COALESCE(wear, ''::text) = COALESCE($3::text, ''::text)
+              AND stattrak=$4
+            ORDER BY priced_at""",
+        user["id"], pos["item_id"], pos["wear"], pos["stattrak"])
+    punkte = [ser(r, decimals_as_float=True) for r in rows]
+    preise = [p["price_eur"] for p in punkte]
+    return {
+        "punkte": punkte,
+        "anzahl": len(punkte),
+        "von": punkte[0]["priced_at"] if punkte else None,
+        "tiefst": min(preise) if preise else None,
+        "hoechst": max(preise) if preise else None,
+    }
 
 
 @router.delete("/api/cs2/positions/{pid}")
@@ -524,6 +562,28 @@ async def position_loeschen(request: Request, pid: int,
     if getroffen.endswith(" 0"):
         raise HTTPException(404, "Diese Position gibt es nicht.")
     return {"geloescht": pid}
+
+
+async def _preis_merken(db, user_id: int, pid: int) -> None:
+    """Den aktuellen Preis einer Position in den Verlauf schreiben.
+
+    Aufgerufen nach jedem Schreibweg, der ``priced_at`` bewegt -- und nur
+    dann. Er liest den Stand aus der Position selbst, statt ihn mitgegeben zu
+    bekommen: so steht im Verlauf genau das, was auch in der Zeile steht, samt
+    dem Zeitpunkt, den die Datenbank vergeben hat.
+
+    Eine Mengenaenderung allein schreibt KEINE Zeile. Das ist ein
+    Preisverlauf; „es sind jetzt mehr“ ist keine Beobachtung eines Preises.
+    """
+    await db.execute(
+        """INSERT INTO cs2_price_history
+               (user_id, item_id, wear, stattrak, price_eur, quantity, priced_at)
+           SELECT user_id, item_id, wear, stattrak, price_eur, quantity, priced_at
+             FROM cs2_positions
+            WHERE id=$1 AND user_id=$2
+              AND price_eur IS NOT NULL AND priced_at IS NOT NULL
+           ON CONFLICT (user_id, item_id, COALESCE(wear, ''::text), stattrak, priced_at)
+           DO NOTHING""", pid, user_id)
 
 
 async def _eine_position(db, user_id: int, pid: int) -> dict:
@@ -577,17 +637,28 @@ async def item_umbenennen(request: Request, iid: int, daten: NameEingabe,
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def item_loeschen(request: Request, iid: int,
                         db=Depends(get_db), user=Depends(get_current_user)):
-    """Ein Gegenstand mit Positionen wird nicht geloescht.
+    """Ein Gegenstand mit Positionen oder Preisverlauf wird nicht geloescht.
 
     Sonst verschwindet mit dem Namen der Bestand -- und zwar still, weil der
     Fremdschluessel kaskadiert. Wer ihn loswerden will, loescht erst die
     Positionen; dann steht auch da, was dabei weggeht.
+
+    Der Verlauf zaehlt seit 055 mit: ein verkaufter Gegenstand hat keine
+    Position mehr, aber Monate an Preisen. Die gingen mit dem Gegenstand
+    verloren, und der Fremdschluessel fragt nicht nach.
     """
     benutzt = await db.fetchval(
         "SELECT COUNT(*) FROM cs2_positions WHERE item_id=$1 AND user_id=$2", iid, user["id"])
     if benutzt:
         raise HTTPException(
             400, f"Dazu gibt es noch {benutzt} Position(en) im Bestand.")
+    punkte = await db.fetchval(
+        "SELECT COUNT(*) FROM cs2_price_history WHERE item_id=$1 AND user_id=$2",
+        iid, user["id"])
+    if punkte:
+        raise HTTPException(
+            400, f"Dazu gibt es {punkte} Preisstände im Verlauf — "
+                 "sie gingen mit dem Gegenstand verloren.")
     getroffen = await db.execute(
         "DELETE FROM cs2_items WHERE id=$1 AND user_id=$2", iid, user["id"])
     if getroffen.endswith(" 0"):
