@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.31.0', date: '2026-10-01', title: 'Export neu gebaut', notes: [
+        'Größe und Zeilenzahl stehen im Fuß neben „Exportieren“ und bleiben beim Scrollen stehen.',
+        'Jedes Modul hat einen Schalter, darunter seine Tabellen mit der Zahl ihrer Zeilen.',
+        'Die Spaltenwahl liegt je Modul in einem eigenen kleinen Dialog.',
+        'Am Rechner stehen die Einstellungen links und die Module rechts.',
+        'Das Kreuz in jedem Dialog und die Auswahlfelder sind am Handy groß genug für den Daumen.',
+    ]},
     { v: 'v2.30.0', date: '2026-10-01', title: 'Einstellungen, Schach, Musik, Notizen und Verwaltung neu', notes: [
         'In den Einstellungen schalten Schalter die Module und den Export, statt 13 roter Knöpfe.',
         'Schach und Musik zeigen oben die Hauptzahl mit ihrem Verlauf, darunter ruhige Zeilen statt Emoji-Kacheln.',

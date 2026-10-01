@@ -938,12 +938,11 @@ input[type="checkbox"] { display: inline; width: auto; }
     /* Chips und Filter -- Zeitraum, Statistik, Musik, Nährwerte. */
     .rf-opt, .stat-chip, .filter-toggle-btn, .fp-btn { min-height: 44px; }
     .v-chip { min-height: 44px; }
+    .v-select { min-height: 44px; }
+    /* Das Kreuz im Dialogkopf: 44 px Fläche, ohne den Kopf höher zu machen. */
+    .modal-head .modal-close { width: 44px; height: 44px; margin: -8px -10px -8px 0; }
     .sort-btn { min-height: 44px; }
     .stat-mini-toggle button { min-height: 44px; }
-    /* Der Export-Dialog: seine Kästchen und die Spaltenwahl. */
-    .exp-check { min-height: 44px; }
-    .exp-colpick-btn { min-height: 44px; }
-    .exp-chip-row button { min-height: 44px; }
 }
 
 
@@ -1159,150 +1158,150 @@ input[type="checkbox"] { display: inline; width: auto; }
 }
 
 /* ==========================================================================
-   v1.37.1 — Export-Dialog (Presets + Aggregation)
+   Export-Dialog (v2.31.0, js/export-dialog.js)
+   Links die Einstellungen, rechts die Module; am Handy untereinander. Größe
+   und Zeilenzahl stehen im Fuß neben „Exportieren“ und bleiben beim Scrollen
+   stehen -- vorher kam das Ergebnis erst am Ende einer langen Liste.
    ========================================================================== */
-.exp-dialog { max-width: 480px; }
-.exp-body { display: flex; flex-direction: column; gap: 1.15rem; }
+.modal-box.exp-dialog { max-width: 980px; width: min(980px, calc(100vw - 2rem)); }
+.exp { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+.exp-einst { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+@media (min-width: 880px) {
+    .exp { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: start; }
+    /* Die Einstellungen sind kurz, die Module lang: links bleibt stehen,
+       während rechts gescrollt wird. */
+    .exp-einst { position: sticky; top: 0; }
+}
+.exp-block { min-width: 0; }
 .exp-label {
-    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--text-faint);
-    margin-bottom: 0.5rem;
+    margin: 0 0 var(--space-2);
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-3);
 }
-.exp-chip-row {
-    display: flex; flex-wrap: wrap; gap: 0.375rem;
-}
-.exp-chip-row button {
-    padding: 0.4375rem 0.75rem; font-size: 0.8125rem;
-    background: var(--surface-2); color: var(--text-muted);
-    border: 1px solid var(--border); border-radius: 999px;
-    cursor: pointer; width: auto; margin: 0; font-weight: 500;
-    transition: background .15s, color .15s, border-color .15s, transform .05s;
-    min-height: 34px;
-}
-.exp-chip-row button:hover { color: var(--text); border-color: var(--border-strong); }
-.exp-chip-row button:active { transform: scale(0.96); }
-.exp-chip-row button.active {
-    background: var(--text); color: var(--surface);
-    border-color: var(--text); font-weight: 600;
-}
-.exp-custom {
-    display: none; gap: 0.5rem; margin-top: 0.5rem;
-}
-/* Die Verdichtungsgrenze haengt an keinem Voreinstellungsknopf -- sie steht
-   immer offen, weil sie immer gilt. */
-.exp-custom--offen { display: flex; }
-.exp-custom label {
-    flex: 1; display: flex; flex-direction: column; gap: 0.25rem;
-    font-size: 0.75rem; color: var(--text-muted);
-}
-.exp-custom input[type="date"],
-.exp-custom input[type="number"] {
-    /* 16 px, nicht 14: darunter zoomt iPhone-Safari beim Antippen die ganze
-       Seite heran und danach nicht zurueck. */
-    padding: 0.4375rem 0.625rem; font-size: 1rem;
-    background: var(--surface-2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 8px;
-    font-family: inherit; margin: 0; width: 100%;
-}
-/* Die eigene Höchstgröße wird bestätigt, nicht bei jeder Ziffer gerechnet --
-   deshalb steht hier ein Knopf neben dem Feld. */
-.exp-custom .v-btn { align-self: flex-end; flex: none; }
-/* Der Stand gegen die Grenze: erreicht (--ok) oder überschritten (--warn,
-   über .exp-warn). Beides Text auf dunklem Grund, keine Fläche. */
-.exp-ok { color: var(--ok); font-weight: 650; }
-.exp-hint {
-    margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-faint);
-    line-height: 1.5;
-}
+.exp-label-zeile { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.exp-label-wert { font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.exp-hint { margin: var(--space-2) 0 0; font-size: 0.75rem; color: var(--text-3); line-height: 1.5; }
+.exp-hint[hidden] { display: none; }
+.exp-ok { color: var(--ok); }
+.exp-warn { color: var(--warn); }
 
-/* v1.60.0 — zusammenstellbarer Export: links die Auswahl, rechts die
-   Vorschau. Auf schmalen Bildschirmen untereinander, die Vorschau zuletzt —
-   sie ist die Kontrolle, nicht der Einstieg. */
-.exp-dialog { max-width: 900px; width: min(900px, calc(100vw - 2rem)); }
-/* Seit v2.10.0 steht die Vorschau unter der Maske statt neben ihr: sie gilt
-   für beide Zustände des Dialogs, auch wenn die Maske gar nicht offen ist. */
-.exp-cols { display: grid; grid-template-columns: 1fr; gap: var(--space-5); }
-.exp-col { min-width: 0; }
-.exp-col-preview { border-left: 1px solid var(--line); padding-left: var(--space-5); }
-@media (max-width: 760px) {
-    .exp-col-preview { border-left: none; border-top: 1px solid var(--line);
-        padding-left: 0; padding-top: var(--space-4); }
+/* Form: zwei Karten nebeneinander. Die Erläuterung steht IN der Wahl, nicht
+   als Absatz darunter, der sich mit ihr ändert. */
+.exp-formen { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.exp-form {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    width: auto; min-height: 64px; margin: 0; padding: 0.75rem 0.875rem;
+    font: inherit; text-align: left; cursor: pointer;
+    color: var(--text-2); background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease),
+                transform var(--dur-1) var(--ease);
 }
+.exp-form:hover { border-color: var(--line-strong); opacity: 1; }
+.exp-form:active { transform: scale(0.98); }
+.exp-form:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.exp-form[aria-pressed="true"] {
+    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.exp-form-name { font-size: 0.9375rem; font-weight: 650; color: var(--text-1); }
+.exp-form[aria-pressed="true"] .exp-form-name { color: var(--accent); }
+.exp-form-hint { font-size: 0.75rem; color: var(--text-3); line-height: 1.4; }
 
-/* v2.10.2 — Form und Maske.
-   v2.10.0 hatte den Einstieg durch drei fertige Zusammenstellungen ersetzt.
-   Das war ein Schritt zu weit: wer Zeitraum und Module einstellen will, will
-   sie sehen und nicht erst aufklappen. Geblieben ist die Wahl der Form und
-   die Vorschau unter der Maske statt neben ihr. */
-.exp-ergebnis { border-top: 1px solid var(--line); padding-top: var(--space-4); }
+.exp-chips { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.exp-felder { display: flex; align-items: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
+.exp-felder[hidden] { display: none; }
+.exp-feld {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem;
+    font-size: 0.75rem; color: var(--text-3);
+}
+.exp-feld input {
+    width: 100%; min-height: 44px; margin: 0; padding: 0.5rem 0.625rem;
+    background: var(--surface-2); color: var(--text-1);
+    border: 1px solid var(--line); border-radius: 10px; font-family: inherit;
+}
+.exp-felder .v-btn { flex: none; min-height: 44px; }
+
+/* Module: eine Schalter-Zeile je Modul (.v-schalt-liste), darunter seine
+   Tabellen mit der Zeilenzahl aus der Vorschau. */
+.exp-skel { display: block; height: 56px; border-radius: 0; }
+.exp-mods .v-schalt-sub,
+.exp-sek-zahl { transition: opacity var(--dur-2) var(--ease); }
+/* Während die Vorschau rechnet, treten die alten Zahlen zurück -- stehen
+   bleiben sie, damit die Liste nicht springt. */
+.exp-mods.is-alt .v-schalt-sub,
+.exp-mods.is-alt .exp-sek-zahl { opacity: 0.45; }
+.exp-mod-body { padding: 0 0.875rem 0.75rem; }
+.exp-sek {
+    display: flex; align-items: center; gap: 0.75rem;
+    min-height: 48px; padding: 0.375rem 0;
+    border-top: 1px solid var(--line); cursor: pointer;
+}
+.exp-sek--allein { cursor: default; }
+.exp-sek input {
+    flex: none; width: 1.125rem; height: 1.125rem; margin: 0;
+    accent-color: var(--accent-strong); cursor: pointer;
+}
+.exp-sek-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.exp-sek-name { font-size: 0.875rem; color: var(--text-1); }
+.exp-sek-meta { font-size: 0.75rem; color: var(--text-3); line-height: 1.4; }
+.exp-sek-meta:empty { display: none; }
+.exp-sek.is-aus .exp-sek-name { color: var(--text-3); }
+.exp-sek-zahl {
+    flex: none; font-size: 0.8125rem; font-weight: 650;
+    color: var(--text-2); font-variant-numeric: tabular-nums;
+}
+.exp-mod-fuss {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding-top: 0.625rem; border-top: 1px solid var(--line);
+}
+.exp-stufe { display: flex; align-items: center; gap: var(--space-2); font-size: 0.8125rem; color: var(--text-3); }
+.exp-mod-fuss .exp-spalten-btn { margin-left: auto; }
+
+/* Fuß: links das Ergebnis, rechts die eine Handlung. */
+.modal-fuss.exp-fuss { flex-wrap: nowrap; gap: var(--space-3); }
+.modal-fuss.exp-fuss > .exp-ergebnis:first-child { margin-left: 0; }
+.exp-ergebnis { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.exp-groesse {
+    display: flex; align-items: baseline; gap: 0.5rem;
+    font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15;
+    color: var(--text-1); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.exp-groesse > span { font-size: 0.8125rem; font-weight: 650; letter-spacing: 0; }
+.exp-zeilen {
+    font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.exp-fuss .v-btn--primary { flex: none; padding: 0.625rem 1.375rem; }
+.exp-skel-zahl { display: block; width: 5.5rem; height: 1.5rem; }
+.exp-skel-text { display: block; width: 9rem; height: 0.8rem; margin-top: 2px; }
+
 /* Die ersten Zeilen sind die Kontrolle für den Zweifelsfall, nicht der
-   Einstieg — im Normalfall will man die Zahl darüber und sonst nichts. */
+   Einstieg -- im Normalfall will man die Zahl im Fuß und sonst nichts. */
+.exp-sample-box { margin-top: var(--space-3); }
 .exp-sample-box > summary {
-    cursor: pointer; font-size: 0.75rem; color: var(--text-3);
-    padding: 0.25rem 0; list-style: none;
+    display: flex; align-items: center; min-height: 44px;
+    cursor: pointer; font-size: 0.8125rem; color: var(--text-3); list-style: none;
 }
-.exp-sample-box > summary::before { content: '▸ '; }
-.exp-sample-box[open] > summary::before { content: '▾ '; }
+.exp-sample-box > summary::before { content: '▸'; width: 1rem; }
+.exp-sample-box[open] > summary::before { content: '▾'; }
 .exp-sample-box > summary::-webkit-details-marker { display: none; }
-
-.exp-sections { display: flex; flex-direction: column; gap: var(--space-2); }
-.exp-group {
-    background: var(--surface-2); border: 1px solid var(--line);
+.exp-sample {
+    margin: 0; max-height: 210px; overflow: auto;
+    background: var(--bg); border: 1px solid var(--line);
     border-radius: var(--radius); padding: var(--space-3);
-    transition: opacity var(--dur-1) var(--ease);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.6875rem; line-height: 1.5; color: var(--text-3);
+    white-space: pre; tab-size: 4;
 }
-/* Ein ganz abgewaehltes Modul bleibt sichtbar, tritt aber zurueck — es
-   auszublenden wuerde die Liste bei jedem Haken springen lassen. */
-.exp-group.is-off { opacity: 0.55; }
-.exp-group-head {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: var(--space-2); margin-bottom: var(--space-2);
-}
-.exp-check {
-    display: flex; align-items: center; gap: 0.5rem;
-    font-size: 0.8125rem; color: var(--text-2); cursor: pointer;
-    padding: 0.25rem 0; min-height: 30px;
-}
-.exp-check input { width: auto; margin: 0; accent-color: var(--accent); flex: none; }
-.exp-check-all { font-size: 0.9375rem; font-weight: 650; color: var(--text-1); }
-.exp-group-body { display: flex; flex-direction: column; padding-left: 1.5rem; }
-.exp-tag {
-    font-style: normal; font-size: 0.625rem; font-weight: 700;
-    letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--text-4); border: 1px solid var(--line);
-    border-radius: 5px; padding: 0.0625rem 0.3125rem;
-}
-.exp-agg {
-    width: auto; margin: 0; padding: 0.3125rem 0.5rem;
-    font-size: 0.75rem; font-weight: 600;
-    background: var(--surface-1); color: var(--text-2);
-    border: 1px solid var(--line); border-radius: 8px;
-}
-.exp-agg:disabled { opacity: 0.4; }
 
-/* Spaltenauswahl je Sektion (v1.67.0). Sie liegt zugeklappt unter ihrer
-   Sektion und nennt im Ruhezustand ihren Stand ("4 von 9 Spalten") -- offen
-   waeren es bei neun Sektionen fuenfzig Kaestchen, und die Frage stellt sich
-   selten. */
-.exp-item { display: flex; flex-direction: column; }
-.exp-colpick { padding: 0 0 0.375rem 1.5rem; }
-.exp-colpick-btn {
-    display: inline-flex; align-items: center; gap: 0.25rem;
-    width: auto; margin: 0; padding: 0.125rem 0;
-    font-size: 0.6875rem; font-weight: 600;
-    background: transparent; color: var(--text-4);
-    border: none; border-radius: 0;
-}
-.exp-colpick-btn:hover { color: var(--text-2); opacity: 1; }
-.exp-colpick-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.exp-colpick.is-open .exp-colpick-btn { color: var(--accent); }
-.exp-colpick-list {
-    display: flex; flex-wrap: wrap; gap: 0.125rem 0.875rem;
-    margin-top: 0.25rem; padding: 0.5rem 0.625rem;
-    background: var(--surface-1); border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-}
-.exp-check-col { font-size: 0.75rem; color: var(--text-3); }
+/* Spalten-Dialog: je Tabelle eine Chipreihe, „Alle“ am Rand. */
+.exp-spalten { display: flex; flex-direction: column; gap: var(--space-5); }
+.exp-spalten-kopf { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.exp-spalten-name { font-size: 0.9375rem; font-weight: 650; color: var(--text-1); }
+.exp-spalten-stand { font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.exp-spalten-kopf .v-btn { margin-left: auto; }
+
 /* Eigene Themen: das Kreuz zum Entfernen sitzt in der Kachel und faellt
    erst beim Daruebergehen auf -- es soll nicht mit der Auswahl konkurrieren. */
 .grad-own { position: absolute; top: 3px; right: 5px; font-style: normal;
@@ -1319,27 +1318,6 @@ input[type="checkbox"] { display: inline; width: auto; }
     border: 1px solid var(--line); border-radius: 8px; }
 #themeSaveRow .v-btn { flex: none; }
 
-.exp-summary { font-size: 0.875rem; color: var(--text-2); margin-bottom: var(--space-3); }
-.exp-summary strong { color: var(--text-1); font-variant-numeric: tabular-nums; }
-.exp-warn { color: var(--warn); }
-.exp-preview-table { display: flex; flex-direction: column; gap: 0.3125rem; }
-.exp-prow {
-    display: grid; grid-template-columns: 1fr 72px auto;
-    align-items: center; gap: 0.5rem; font-size: 0.75rem;
-}
-.exp-prow.is-empty { opacity: 0.45; }
-.exp-pname { color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.exp-pbar { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
-.exp-pbar i { display: block; height: 100%; background: var(--grad-progress); }
-.exp-pnum { color: var(--text-2); font-weight: 650; font-variant-numeric: tabular-nums; }
-.exp-sample {
-    margin: 0; max-height: 210px; overflow: auto;
-    background: var(--bg); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: var(--space-3);
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 0.6875rem; line-height: 1.5; color: var(--text-3);
-    white-space: pre; tab-size: 4;
-}
 
 
 /* ==========================================================================

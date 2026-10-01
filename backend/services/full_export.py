@@ -54,15 +54,15 @@ EXPORT_AGGREGATES: list[dict] = [
     {"key": "none", "label": "Einzeln",
      "hint": "Jeder Eintrag steht einzeln in der Datei."},
     {"key": "auto", "label": "Automatisch",
-     "hint": "Die Stufe richtet sich nach der Laenge des Zeitraums."},
+     "hint": "Die Stufe richtet sich nach der Länge des Zeitraums."},
     {"key": "day", "label": "Pro Tag",
      "hint": "Je Tag eine Summenzeile."},
     {"key": "week", "label": "Pro Woche",
-     "hint": "Je Woche eine Summenzeile; Einkaeufe bleiben einzeln, aber ohne Positionen."},
+     "hint": "Je Woche eine Summenzeile; Einkäufe bleiben einzeln, aber ohne Positionen."},
     {"key": "month", "label": "Pro Monat",
      "hint": "Je Monat eine Summenzeile."},
     {"key": "year", "label": "Pro Jahr",
-     "hint": "Je Jahr eine Zeile. Fuer zehn Jahre Historie die einzige lesbare Form."},
+     "hint": "Je Jahr eine Zeile. Für zehn Jahre Historie die einzige lesbare Form."},
 ]
 AGG_KEYS = [a["key"] for a in EXPORT_AGGREGATES]
 # Die Stufen, die wirklich zusammenfassen -- ``none`` und ``auto`` sind keine.
@@ -235,7 +235,7 @@ def _euro_de(v) -> str:
 
 EXPORT_SECTIONS: list[dict] = [
     {"key": "sparziel_meta", "group": "sparziel", "aggregatable": False, "dated": False,
-     "label": "Ziele, Achievements, Wochenziele, Trophaeen"},
+     "label": "Ziele, Achievements, Wochenziele, Trophäen"},
     {"key": "sparziel_log", "group": "sparziel", "aggregatable": True, "dated": True,
      "label": "Protokoll (Check-ins, Meilensteine, Auszahlungen)"},
     {"key": "ausgaben", "group": "ausgaben", "aggregatable": True, "dated": True,
@@ -266,9 +266,9 @@ EXPORT_SECTIONS: list[dict] = [
     {"key": "diary_log", "group": "ernaehrung", "aggregatable": True, "dated": True,
      "label": "Essenstagebuch (Tag, Mahlzeit, Was, Stufe)"},
     {"key": "track_log", "group": "ernaehrung", "aggregatable": True, "dated": True,
-     "label": "Naehrwerte-Eintraege (Menge, kcal, Makros)"},
+     "label": "Nährwerte-Einträge (Menge, kcal, Makros)"},
     {"key": "food_stock", "group": "ernaehrung", "aggregatable": False, "dated": False,
-     "label": "Eigener Bestand samt eigenen Groessen"},
+     "label": "Eigener Bestand samt eigenen Größen"},
     {"key": "food_dishes", "group": "ernaehrung", "aggregatable": False, "dated": False,
      "label": "Eigene Gerichte (eine Zeile je Zutat)"},
     # Schach (v2.1.0). Die Zugfolge steht bewusst in einer EIGENEN Sektion:
@@ -276,7 +276,7 @@ EXPORT_SECTIONS: list[dict] = [
     # Zelle wird. In der Partienliste haette es jede Tabellenkalkulation
     # unlesbar gemacht -- getrennt nimmt es mit, wer es braucht.
     {"key": "chess_games", "group": "schach", "aggregatable": True, "dated": True,
-     "label": "Partien (Ergebnis, Gegner, Wertung, Eroeffnung)"},
+     "label": "Partien (Ergebnis, Gegner, Wertung, Eröffnung)"},
     {"key": "chess_pgn", "group": "schach", "aggregatable": False, "dated": True,
      "bulk": True,
      "label": "Zugfolgen als PGN (eine Zeile je Partie)"},
@@ -288,7 +288,7 @@ EXPORT_SECTIONS: list[dict] = [
     {"key": "cs2_positions", "group": "cs2", "aggregatable": False, "dated": False,
      "label": "Bestand (Gegenstand, Menge, Preis, Preisstand)"},
     {"key": "cs2_snapshots", "group": "cs2", "aggregatable": False, "dated": True,
-     "label": "Festgehaltene Staende (ein Tag je Zeile)"},
+     "label": "Festgehaltene Stände (ein Tag je Zeile)"},
     {"key": "notes", "group": "notizen", "aggregatable": False, "dated": False,
      "label": "Notizen samt Text, Farbe und Schlagworten"},
 ]

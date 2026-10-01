@@ -1,27 +1,30 @@
-/* export-dialog.js — v1.67.0
+/* export-dialog.js — v2.31.0
  * Der Gesamt-Export als zusammenstellbarer Dialog.
  *
  * Bis v1.59.x gab es zwei Entscheidungen: Zeitraum und eine Aggregation für
- * die ganze Datei. Alles andere war fest — jeder Export enthielt jedes Modul,
- * und man sah erst nach dem Herunterladen, was drin gelandet war. Seit
- * v1.60.0 sind Sektionen einzeln wählbar und die Aggregation gilt je Modul.
- *
- * v1.67.0 nimmt die letzten beiden festen Listen heraus:
+ * die ganze Datei. Seit v1.60.0 sind Sektionen einzeln wählbar und die
+ * Aggregation gilt je Modul. v1.67.0 hat die letzten festen Listen
+ * herausgenommen:
  *
  *   - **Die Aggregationsstufen kommen vom Server** (/api/export/sections).
- *     Sie standen hier ein zweites Mal, also war eine neue Stufe zwei
- *     Änderungen an zwei Orten. Neu dabei: Tag, Jahr und „Automatisch“,
- *     das sich nach der Länge des Zeitraums richtet.
- *   - **Eine Höchstgröße stellt sich selbst ein** (v1.68.0): man sagt, wie
- *     groß die Datei höchstens werden darf, und der Server sucht die feinste
- *     Aggregation, die darunter bleibt. Gedreht wird dabei nur an der Zeit —
- *     Sektionen und Spalten bleiben, wie sie gewählt sind. Was entschieden
- *     wurde, landet sichtbar in den Auswahlfeldern, nicht in einer Blackbox.
+ *   - **Eine Höchstgröße stellt sich selbst ein** (v1.68.0): der Server sucht
+ *     die feinste Aggregation, die unter die Grenze passt. Gedreht wird nur an
+ *     der Zeit; was entschieden wurde, landet sichtbar in den Auswahlfeldern.
  *   - **Die Spalten sind je Sektion wählbar.** Welche es gibt, sagt die
- *     Vorschau — sie baut den Export ohnehin und liest die Überschriften aus
- *     den fertigen Zeilen. Eine hier gepflegte Spaltenliste wäre spätestens
- *     bei der nächsten Änderung an einer Sektion falsch, und in der
- *     Aggregation hat dieselbe Sektion ohnehin andere Spalten.
+ *     Vorschau -- sie baut den Export ohnehin.
+ *
+ * v2.31.0 baut die Oberfläche neu, ohne etwas wegzuklappen (die Lehre aus
+ * v2.10.1: Zeitraum, Module und Verdichtung will man sehen und stellen):
+ *
+ *   - Ein Modul ist eine Zeile mit Schalter. Darunter stehen seine Tabellen
+ *     mit der Zeilenzahl aus der Vorschau -- die eigene Vorschautabelle unter
+ *     der Maske nannte dieselben Namen ein zweites Mal.
+ *   - Die Spaltenwahl liegt einen Griff tiefer im eigenen Dialog. Unter jeder
+ *     Tabelle stand „Alle 3 Spalten“: zwanzig Zeilen für eine Frage, die sich
+ *     selten stellt (DESIGN 6d).
+ *   - Größe und Zeilenzahl stehen im Fuß neben „Exportieren“ und bleiben
+ *     beim Scrollen stehen. Vorher kam das Ergebnis erst am Ende einer fast
+ *     vier Bildschirme langen Liste.
  */
 (function () {
     const PRESETS = [
@@ -30,7 +33,7 @@
         { key: '90',  label: '3 Monate' },
         { key: '365', label: '12 Monate' },
         { key: 'ytd', label: 'Dieses Jahr' },
-        { key: 'custom', label: 'Eigener Zeitraum' },
+        { key: 'custom', label: 'Eigener' },
     ];
 
     /* Höchstgrößen als Stufen, die man wirklich meint: eine Mail-Anlage, ein
@@ -48,10 +51,10 @@
     /* Die eine Datei ist zum Lesen und Auswerten da — mit dem Vorspann davor,
        der sagt, was drin ist. Das Archiv ist für ein Tabellenprogramm: 20
        Tabellen mit verschiedener Spaltenzahl in EINEM Blatt kann keines
-       öffnen, und genau das war die eine Datei für jeden, der sie anklickte. */
+       öffnen. */
     const FORMATE = [
-        { key: 'csv', label: 'Eine Datei', hint: 'Alle Tabellen untereinander. Zum Hochladen und Auswerten.' },
-        { key: 'zip', label: 'Archiv (ZIP)', hint: 'Eine Datei je Tabelle, dazu eine LIESMICH. Für Excel und Numbers.' },
+        { key: 'csv', label: 'Eine Datei', hint: 'Alle Tabellen untereinander, zum Auswerten' },
+        { key: 'zip', label: 'Archiv (ZIP)', hint: 'Eine Datei je Tabelle, für Excel und Numbers' },
     ];
 
     const iso = (d) => {
@@ -63,12 +66,21 @@
     const isoYearStart = () => new Date().getFullYear() + '-01-01';
     const esc = (v) => String(v == null ? '' : v)
         .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const zahl = (n) => (Number(n) || 0).toLocaleString('de-DE');
+    const tabellen = (n) => n + (n === 1 ? ' Tabelle' : ' Tabellen');
 
     function fmtBytes(n) {
         const v = Number(n) || 0;
         if (v < 1024) return v + ' B';
         if (v < 1024 * 1024) return (v / 1024).toFixed(1).replace('.', ',') + ' kB';
         return (v / 1048576).toFixed(1).replace('.', ',') + ' MB';
+    }
+
+    /* „Vitalwerte (ein Tag je Zeile)“ wird Name und Erläuterung: der Name
+       trägt die Zeile, die Klammer steht leiser darunter. */
+    function teile(label) {
+        const m = /^(.*?)\s*\((.*)\)\s*$/.exec(label || '');
+        return m ? { name: m[1], mehr: m[2] } : { name: label || '', mehr: '' };
     }
 
     /* ------------------------------------------------------------- Zustand */
@@ -87,7 +99,7 @@
         // Abgeschaltete Module (v2.11.0). Gespeichert ist, was AUS ist --
         // ein neues Modul ist damit von selbst dabei. Abgewählt heißt nicht
         // versteckt: die Zeile steht weiter in der Liste und lässt sich hier
-        // für diesen einen Export wieder anhaken.
+        // für diesen einen Export wieder anschalten.
         const aus = new Set(vorgabe.off || []);
         const dabei = sections.filter(x => !aus.has(x.group)).map(x => x.key);
         return {
@@ -108,13 +120,14 @@
             // Anfrage ohne cols_-Parameter, solange nichts abgewählt wurde.
             columns: {},
             chosen: {},
-            openCols: new Set(),
             resolved: {},
+            // Zeilen je Sektion aus der letzten Vorschau; fehlt ein Schlüssel,
+            // steht noch keine Zahl da.
+            zeilen: {},
             // Höchstgröße in Byte; 0 heißt „egal“. `limitPick` ist nur der
             // gewählte Knopf, damit „Eigene“ auch bei gleichem Wert aktiv bleibt.
             limit: 0,
             limitPick: 0,
-            limitMb: '',
             fitNote: '',
             fitting: false,
         };
@@ -157,72 +170,66 @@
     }
 
     /* -------------------------------------------------------------- Aufbau */
+    const chips = (liste, attr) => liste.map(x =>
+        '<button type="button" class="v-chip" ' + attr + '="' + x.key + '" aria-pressed="false">' +
+            esc(x.label) + '</button>').join('');
+
     function dialogHtml() {
-        return [
-            '<div class="modal-box exp-dialog">',
-            '  <div class="modal-head">',
-            '    <h3>Gesamt-Export</h3>',
-            '    <button class="modal-close" data-act="close" type="button" aria-label="Schließen">✕</button>',
-            '  </div>',
-            '  <div class="modal-body exp-body">',
-            '    <div class="exp-label">Form</div>',
-            '    <div class="exp-chip-row" id="expFormat">',
-                 FORMATE.map(f => '<button type="button" data-format="' + f.key + '">' +
-                    esc(f.label) + '</button>').join(''),
-            '    </div>',
-            '    <p class="exp-hint" id="expFormatNote"></p>',
-            '    <div class="exp-maske">',
-            '      <div class="exp-cols">',
-            '        <div class="exp-col">',
-            '          <div class="exp-label">Zeitraum</div>',
-            '          <div class="exp-chip-row" id="expRange">',
-                       PRESETS.map(p => '<button type="button" data-preset="' + p.key + '">' +
-                          p.label + '</button>').join(''),
-            '          </div>',
-            '          <div id="expCustom" class="exp-custom">',
-            '            <label>Von<input type="date" id="expFrom"></label>',
-            '            <label>Bis<input type="date" id="expTo"></label>',
-            '          </div>',
-            '          <div class="exp-label" style="margin-top:1.15rem">Höchstgröße</div>',
-            '          <div class="exp-chip-row" id="expLimit">',
-                       LIMITS.map(l => '<button type="button" data-limit="' + l.key + '">' +
-                          l.label + '</button>').join(''),
-            '          </div>',
-            '          <div id="expLimitCustom" class="exp-custom">',
-            '            <label>Megabyte<input type="number" id="expLimitMb" min="1" step="1" placeholder="z. B. 8"></label>',
-            '            <button type="button" class="v-btn v-btn--sm" id="expLimitApply">Anpassen</button>',
-            '          </div>',
-            '          <p class="exp-hint" id="expLimitNote"></p>',
-            '          <div class="exp-label" style="margin-top:1.15rem">Verdichten</div>',
-            '          <div class="exp-custom exp-custom--offen">',
-            '            <label>Alles davor monatlich<input type="date" id="expCompact"></label>',
-            '          </div>',
-            '          <p class="exp-hint">Ab diesem Tag gilt die Stufe des Moduls. '
-            + 'Leer heißt: keine Grenze.</p>',
-            '          <div class="exp-label" style="margin-top:1.15rem">Was soll hinein?</div>',
-            '          <div id="expSections" class="exp-sections"><span class="skel skel-block"></span></div>',
-            '        </div>',
-            '      </div>',
-            '    </div>',
-            '    <div class="exp-ergebnis">',
-            '      <div class="exp-label">Das kommt heraus</div>',
-            '      <div id="expSummary" class="exp-summary"></div>',
-            '      <div id="expTable" class="exp-preview-table"></div>',
-            '      <details class="exp-sample-box">',
-            '        <summary>Erste Zeilen ansehen</summary>',
-            '        <pre id="expSample" class="exp-sample"></pre>',
-            '      </details>',
-            '    </div>',
-            '  </div>',
-            '  <div class="ui-confirm-actions">',
-            '    <button type="button" class="ui-confirm-btn" data-act="close">Abbrechen</button>',
-            '    <button type="button" class="ui-confirm-btn ui-confirm-ok" id="expGo">Exportieren</button>',
-            '  </div>',
-            '</div>',
-        ].join('');
+        return '<div class="exp">' +
+            '<div class="exp-einst">' +
+                '<section class="exp-block">' +
+                    '<h4 class="exp-label">Form</h4>' +
+                    '<div class="exp-formen" id="expFormat">' + FORMATE.map(f =>
+                        '<button type="button" class="exp-form" data-format="' + f.key + '" aria-pressed="false">' +
+                            '<span class="exp-form-name">' + esc(f.label) + '</span>' +
+                            '<span class="exp-form-hint">' + esc(f.hint) + '</span>' +
+                        '</button>').join('') +
+                    '</div>' +
+                '</section>' +
+                '<section class="exp-block">' +
+                    '<h4 class="exp-label">Zeitraum</h4>' +
+                    '<div class="exp-chips" id="expRange">' + chips(PRESETS, 'data-preset') + '</div>' +
+                    '<div class="exp-felder" id="expCustom" hidden>' +
+                        '<label class="exp-feld">Von<input type="date" id="expFrom"></label>' +
+                        '<label class="exp-feld">Bis<input type="date" id="expTo"></label>' +
+                    '</div>' +
+                '</section>' +
+                '<section class="exp-block">' +
+                    '<h4 class="exp-label">Höchstgröße</h4>' +
+                    '<div class="exp-chips" id="expLimit">' + chips(LIMITS, 'data-limit') + '</div>' +
+                    '<div class="exp-felder" id="expLimitCustom" hidden>' +
+                        '<label class="exp-feld">Megabyte<input type="number" id="expLimitMb" min="1" step="1" inputmode="decimal" placeholder="z. B. 8"></label>' +
+                        '<button type="button" class="v-btn" id="expLimitApply">Anpassen</button>' +
+                    '</div>' +
+                    '<p class="exp-hint" id="expLimitNote" hidden></p>' +
+                '</section>' +
+                '<section class="exp-block">' +
+                    '<h4 class="exp-label">Verdichten</h4>' +
+                    '<div class="exp-felder">' +
+                        '<label class="exp-feld">Vor diesem Tag alles monatlich<input type="date" id="expCompact"></label>' +
+                    '</div>' +
+                    '<p class="exp-hint">Leer heißt: keine Grenze.</p>' +
+                '</section>' +
+            '</div>' +
+            '<section class="exp-block exp-module">' +
+                '<div class="exp-label-zeile"><h4 class="exp-label">Module</h4>' +
+                    '<span class="exp-label-wert" id="expModAnzahl"></span></div>' +
+                '<div id="expSections" class="v-schalt-liste exp-mods">' +
+                    '<span class="skel exp-skel"></span><span class="skel exp-skel"></span><span class="skel exp-skel"></span>' +
+                '</div>' +
+                '<details class="exp-sample-box">' +
+                    '<summary>Erste Zeilen ansehen</summary>' +
+                    '<pre id="expSample" class="exp-sample"></pre>' +
+                '</details>' +
+            '</section>' +
+        '</div>' +
+        '<div class="modal-fuss exp-fuss">' +
+            '<div class="exp-ergebnis" id="expSummary" aria-live="polite"></div>' +
+            '<button type="button" class="v-btn v-btn--primary" id="expGo">Exportieren</button>' +
+        '</div>';
     }
 
-    /* Der Hinweis unter einer Gruppe. Bei „Automatisch“ nennt er die Stufe,
+    /* Der Hinweis unter der Stufe. Bei „Automatisch“ nennt er die Stufe,
        auf die es hinausläuft — sonst wäre die Einstellung eine Blackbox. */
     function aggHint(state, groupKey) {
         const key = state.agg[groupKey];
@@ -236,116 +243,228 @@
         return text;
     }
 
-    function columnsHtml(state, section) {
-        const all = state.columns[section.key];
-        if (!all || !all.length || !state.picked.has(section.key)) return '';
-        const chosen = state.chosen[section.key];
-        const count = chosen ? chosen.size : all.length;
-        const open = state.openCols.has(section.key);
-        return '<div class="exp-colpick' + (open ? ' is-open' : '') + '">' +
-            '<button type="button" class="exp-colpick-btn" data-cols-toggle="' + section.key + '"' +
-                    ' aria-expanded="' + open + '">' +
-                (count >= all.length ? 'Alle ' + all.length + ' Spalten'
-                                     : count + ' von ' + all.length + ' Spalten') +
-                '<span class="exp-colpick-caret" aria-hidden="true">' + (open ? '▴' : '▾') + '</span>' +
-            '</button>' +
-            (open ? '<div class="exp-colpick-list">' + all.map(name =>
-                '<label class="exp-check exp-check-col">' +
-                    '<input type="checkbox" data-col-section="' + esc(section.key) + '"' +
-                        ' data-col="' + esc(name) + '"' +
-                        (!chosen || chosen.has(name) ? ' checked' : '') + '>' +
-                    '<span>' + esc(name) + '</span>' +
-                '</label>').join('') + '</div>' : '') +
+    function itemsOf(state, groupKey) {
+        return state.sections.filter(s => s.group === groupKey);
+    }
+
+    /* Die Unterzeile eines Moduls: wie viel davon drin ist, und -- sobald die
+       Vorschau steht -- wie viele Zeilen das sind. */
+    function modulMeta(state, items) {
+        const an = items.filter(s => state.picked.has(s.key));
+        if (!an.length) return 'Nicht im Export';
+        let text = an.length === items.length ? tabellen(items.length)
+                                              : an.length + ' von ' + tabellen(items.length);
+        const bekannt = an.filter(s => s.key in state.zeilen);
+        if (bekannt.length) {
+            text += ' · ' + zahl(bekannt.reduce((n, s) => n + state.zeilen[s.key], 0)) + ' Zeilen';
+        }
+        return text;
+    }
+
+    function sekMeta(state, s) {
+        const teil = teile(s.label).mehr;
+        const all = state.columns[s.key];
+        const gew = state.chosen[s.key];
+        return [
+            teil,
+            s.aggregatable ? '' : 'Stammdaten',
+            gew && all ? gew.size + ' von ' + all.length + ' Spalten' : '',
+        ].filter(Boolean).join(' · ');
+    }
+
+    function sekZahl(state, s) {
+        if (!state.picked.has(s.key) || !(s.key in state.zeilen)) return '';
+        return state.zeilen[s.key] ? zahl(state.zeilen[s.key]) : 'leer';
+    }
+
+    function sekHtml(state, s, allein) {
+        const an = state.picked.has(s.key);
+        const meta = sekMeta(state, s);
+        const inhalt =
+            '<span class="exp-sek-main">' +
+                '<span class="exp-sek-name">' + esc(teile(s.label).name) + '</span>' +
+                '<span class="exp-sek-meta" data-sek-meta="' + s.key + '">' + esc(meta) + '</span>' +
+            '</span>' +
+            '<span class="exp-sek-zahl" data-sek-zahl="' + s.key + '">' + sekZahl(state, s) + '</span>';
+        // Ein Modul mit einer einzigen Tabelle braucht kein zweites Kästchen
+        // neben seinem Schalter -- beide sagten dasselbe.
+        if (allein) return '<div class="exp-sek exp-sek--allein">' + inhalt + '</div>';
+        return '<label class="exp-sek' + (an ? '' : ' is-aus') + '">' +
+            '<input type="checkbox" data-section="' + s.key + '"' + (an ? ' checked' : '') + '>' +
+            inhalt + '</label>';
+    }
+
+    function modulHtml(state, g) {
+        const items = itemsOf(state, g.key);
+        if (!items.length) return '';
+        const an = items.some(s => state.picked.has(s.key));
+        // Die Aggregation gehoert zum Modul, nicht zur Sektion: sie betrifft
+        // immer alle Zeitreihen eines Moduls gemeinsam.
+        const canAgg = items.some(s => s.aggregatable && state.picked.has(s.key));
+        const mitSpalten = items.some(s => state.picked.has(s.key) && (state.columns[s.key] || []).length > 1);
+        const kopf =
+            '<button type="button" class="v-schalt-zeile exp-mod-kopf" role="switch" aria-checked="' + an + '" data-group="' + g.key + '">' +
+                '<span class="v-schalt-text">' +
+                    '<span class="v-schalt-name">' + esc(g.label) + '</span>' +
+                    '<span class="v-schalt-sub" data-mod-meta="' + g.key + '">' + esc(modulMeta(state, items)) + '</span>' +
+                '</span>' +
+                '<span class="v-schalter" aria-hidden="true"></span>' +
+            '</button>';
+        if (!an) return '<div class="exp-mod is-aus">' + kopf + '</div>';
+        return '<div class="exp-mod">' + kopf +
+            '<div class="exp-mod-body">' +
+                items.map(s => sekHtml(state, s, items.length === 1)).join('') +
+                (canAgg || mitSpalten ? '<div class="exp-mod-fuss">' +
+                    (canAgg ? '<label class="exp-stufe"><span>Stufe</span>' +
+                        '<select class="v-select" data-agg-group="' + g.key + '">' +
+                            state.aggregates.map(a => '<option value="' + a.key + '"' +
+                                (state.agg[g.key] === a.key ? ' selected' : '') + '>' +
+                                esc(a.label) + '</option>').join('') +
+                        '</select></label>' : '') +
+                    (mitSpalten ? '<button type="button" class="v-btn v-btn--ghost v-btn--sm exp-spalten-btn" data-spalten="' + g.key + '">Spalten</button>' : '') +
+                '</div>' : '') +
+                (canAgg ? '<p class="exp-hint" data-agg-hint="' + g.key + '"' + (state.agg[g.key] === 'none' ? ' hidden' : '') + '>' +
+                    esc(aggHint(state, g.key)) + '</p>' : '') +
+            '</div>' +
         '</div>';
     }
 
     function renderSections(box, state) {
-        const byGroup = new Map();
-        state.sections.forEach(s => {
-            if (!byGroup.has(s.group)) byGroup.set(s.group, []);
-            byGroup.get(s.group).push(s);
-        });
-        box.innerHTML = state.groups.map(g => {
-            const items = byGroup.get(g.key) || [];
-            if (!items.length) return '';
-            const allOn = items.every(s => state.picked.has(s.key));
-            const someOn = items.some(s => state.picked.has(s.key));
-            // Die Aggregation gehoert zur Gruppe, nicht zur Sektion: sie
-            // betrifft immer alle Zeitreihen eines Moduls gemeinsam.
-            const canAgg = items.some(s => s.aggregatable && state.picked.has(s.key));
-            return '<div class="exp-group' + (someOn ? '' : ' is-off') + '">' +
-                '<div class="exp-group-head">' +
-                    '<label class="exp-check exp-check-all">' +
-                        '<input type="checkbox" data-group="' + g.key + '"' +
-                            (allOn ? ' checked' : '') + (someOn && !allOn ? ' data-partial="1"' : '') + '>' +
-                        '<span>' + esc(g.label) + '</span>' +
-                    '</label>' +
-                    '<select class="exp-agg" data-agg-group="' + g.key + '"' + (canAgg ? '' : ' disabled') + '>' +
-                        state.aggregates.map(a => '<option value="' + a.key + '"' +
-                            (state.agg[g.key] === a.key ? ' selected' : '') + '>' +
-                            esc(a.label) + '</option>').join('') +
-                    '</select>' +
-                '</div>' +
-                '<div class="exp-group-body">' +
-                    items.map(s => '<div class="exp-item">' +
-                        '<label class="exp-check">' +
-                            '<input type="checkbox" data-section="' + s.key + '"' +
-                                (state.picked.has(s.key) ? ' checked' : '') + '>' +
-                            '<span>' + esc(s.label) + '</span>' +
-                            (s.aggregatable ? '' : '<em class="exp-tag">Stammdaten</em>') +
-                        '</label>' +
-                        columnsHtml(state, s) +
-                    '</div>').join('') +
-                '</div>' +
-                (canAgg ? '<p class="exp-hint">' + esc(aggHint(state, g.key)) + '</p>' : '') +
-            '</div>';
-        }).join('');
-        // Teilweise gewaehlte Gruppen bekommen den Zwischenzustand -- als
-        // Attribut geht das nicht, das kennt nur die Eigenschaft.
-        box.querySelectorAll('input[data-partial]').forEach(el => { el.indeterminate = true; });
+        // Wer gerade ein Bedienelement in der Liste hatte, behält es: die
+        // Liste wird bei jedem Schalter neu gezeichnet.
+        const fokus = document.activeElement && box.contains(document.activeElement)
+            ? document.activeElement : null;
+        const merk = fokus && (fokus.dataset.group ? '[data-group="' + fokus.dataset.group + '"]'
+            : fokus.dataset.section ? '[data-section="' + fokus.dataset.section + '"]' : null);
+        box.innerHTML = state.groups.map(g => modulHtml(state, g)).join('');
+        if (merk) { const el = box.querySelector(merk); if (el) el.focus({ preventScroll: true }); }
+        const anzahl = box.closest('.exp').querySelector('#expModAnzahl');
+        const sichtbar = state.groups.filter(g => itemsOf(state, g.key).length);
+        const an = sichtbar.filter(g => itemsOf(state, g.key).some(s => state.picked.has(s.key)));
+        anzahl.textContent = an.length === sichtbar.length ? 'alle ' + sichtbar.length
+                                                           : an.length + ' von ' + sichtbar.length;
     }
 
-    function renderPreview(overlay, data, state) {
-        const sum = overlay.querySelector('#expSummary');
-        const table = overlay.querySelector('#expTable');
-        const sample = overlay.querySelector('#expSample');
+    /* Die Zahlen aus der Vorschau, ohne die Liste neu zu zeichnen: ein
+       Auswahlfeld, das gerade bedient wird, verlöre sonst den Fokus. */
+    function paintZahlen(box, state) {
+        box.querySelectorAll('[data-sek-zahl]').forEach(el => {
+            const s = state.sections.find(x => x.key === el.dataset.sekZahl);
+            if (s) el.textContent = sekZahl(state, s);
+        });
+        box.querySelectorAll('[data-sek-meta]').forEach(el => {
+            const s = state.sections.find(x => x.key === el.dataset.sekMeta);
+            if (s) el.textContent = sekMeta(state, s);
+        });
+        box.querySelectorAll('[data-mod-meta]').forEach(el => {
+            el.textContent = modulMeta(state, itemsOf(state, el.dataset.modMeta));
+        });
+    }
+
+    function renderSumme(root, data, state) {
+        const sum = root.querySelector('#expSummary');
+        const sample = root.querySelector('#expSample');
         if (!data) {
-            sum.innerHTML = '<span class="skel" style="display:block;width:8rem;height:1.25rem"></span>';
-            table.innerHTML = '';
-            sample.textContent = '';
+            sum.innerHTML = '<span class="skel exp-skel-zahl"></span><span class="skel exp-skel-text"></span>';
             return;
         }
         if (data.error) {
             sum.innerHTML = '<span class="exp-warn">Vorschau nicht möglich: ' + esc(data.error) + '</span>';
-            table.innerHTML = '';
             sample.textContent = '';
             return;
         }
         // Ist eine Grenze gesetzt, steht der Stand DARAN -- eine nackte
         // Zahl beantwortet die Frage "passt das noch?" nicht.
-        var against = '';
-        if (state && state.limit > 0) {
-            var over = data.bytes > state.limit;
-            against = ' <span class="' + (over ? 'exp-warn' : 'exp-ok') + '">' +
-                (over ? 'über' : 'von') + ' ' + fmtBytes(state.limit) + '</span>';
+        let grenze = '';
+        if (state.limit > 0) {
+            const over = data.bytes > state.limit;
+            grenze = '<span class="' + (over ? 'exp-warn' : 'exp-ok') + '">' +
+                (over ? 'über ' : 'von ') + fmtBytes(state.limit) + '</span>';
         }
         // Die Groesse ist die der Zeilen, nicht die der Datei auf der Platte:
         // ein Archiv packt sie noch. Eine Zahl, die fuer beide Formen
         // dieselbe waere, waere fuer eines von beiden falsch.
-        const form = (state && state.format === 'zip')
-            ? '</strong> an Zeilen (gepackt deutlich weniger)'
-            : '</strong> als Datei';
-        sum.innerHTML = '<strong>' + data.total_rows.toLocaleString('de-DE') + '</strong> Datenzeilen · ' +
-            '<strong>' + fmtBytes(data.bytes) + form + against;
-        const max = Math.max(1, ...data.sections.map(s => s.rows));
-        table.innerHTML = data.sections.map(s =>
-            '<div class="exp-prow' + (s.rows ? '' : ' is-empty') + '">' +
-                '<span class="exp-pname">' + esc(s.label) + '</span>' +
-                '<span class="exp-pbar"><i style="width:' +
-                    Math.round(s.rows / max * 100) + '%"></i></span>' +
-                '<span class="exp-pnum">' + s.rows.toLocaleString('de-DE') + '</span>' +
-            '</div>').join('') || '<div class="exp-hint">Keine Sektion gewählt.</div>';
-        sample.textContent = data.sample + (data.truncated ? '\n…' : '');
+        const mit = (data.sections || []).filter(s => s.rows).length;
+        sum.innerHTML =
+            '<span class="exp-groesse">' + fmtBytes(data.bytes) + grenze + '</span>' +
+            '<span class="exp-zeilen">' + zahl(data.total_rows) + ' Zeilen · ' +
+                (state.format === 'zip' ? 'gepackt deutlich kleiner' : tabellen(mit)) + '</span>';
+        sample.textContent = (data.sample || '') + (data.truncated ? '\n…' : '');
+    }
+
+    /* Die Spalten eines Moduls, einen Griff tiefer. Geändert wird sofort --
+       der Dialog darunter rechnet die Vorschau nach, „Fertig“ schließt nur. */
+    function spaltenDialog(state, groupKey, geaendert) {
+        const g = state.groups.find(x => x.key === groupKey);
+        const items = itemsOf(state, groupKey).filter(s => state.picked.has(s.key));
+        const stand = (key) => {
+            const all = state.columns[key] || [];
+            const gew = state.chosen[key];
+            return gew ? gew.size + ' von ' + all.length : 'alle ' + all.length;
+        };
+        const inhalt = '<div class="exp-spalten">' + items.map(s => {
+            const all = state.columns[s.key] || [];
+            const kopf = '<div class="exp-spalten-kopf"><span class="exp-spalten-name">' +
+                esc(teile(s.label).name) + '</span>';
+            if (all.length < 2) {
+                return '<div class="exp-spalten-sek">' + kopf + '</div>' +
+                    '<p class="exp-hint">' + (all.length ? 'Nur eine Spalte.'
+                        : 'Die Spalten stehen fest, sobald die Vorschau gerechnet ist.') + '</p></div>';
+            }
+            const gew = state.chosen[s.key];
+            return '<div class="exp-spalten-sek" data-sek="' + esc(s.key) + '">' + kopf +
+                    '<span class="exp-spalten-stand">' + stand(s.key) + '</span>' +
+                    '<button type="button" class="v-btn v-btn--ghost v-btn--sm" data-alle="' + esc(s.key) + '"' + (gew ? '' : ' hidden') + '>Alle</button>' +
+                '</div>' +
+                '<div class="exp-chips">' + all.map(c => {
+                    const an = !gew || gew.has(c);
+                    return '<button type="button" class="v-chip' + (an ? ' is-active' : '') + '" aria-pressed="' + an + '"' +
+                        ' data-col="' + esc(c) + '">' + esc(c) + '</button>';
+                }).join('') + '</div>' +
+            '</div>';
+        }).join('') + '</div>' +
+        '<div class="modal-fuss"><button type="button" class="v-btn v-btn--primary" data-fertig>Fertig</button></div>';
+        const dlg = VexModal.open('Spalten · ' + esc(g ? g.label : ''), inhalt, {});
+        dlg.box.classList.add('exp-spalten-dialog');
+
+        const malen = (key) => {
+            const sek = dlg.root.querySelector('[data-sek="' + key + '"]');
+            if (!sek) return;
+            const gew = state.chosen[key];
+            sek.querySelectorAll('[data-col]').forEach(b => {
+                const an = !gew || gew.has(b.dataset.col);
+                b.classList.toggle('is-active', an);
+                b.setAttribute('aria-pressed', an);
+            });
+            sek.querySelector('.exp-spalten-stand').textContent = stand(key);
+            sek.querySelector('[data-alle]').hidden = !gew;
+        };
+        dlg.root.addEventListener('click', (e) => {
+            if (e.target.closest('[data-fertig]')) { dlg.close(); return; }
+            const alle = e.target.closest('[data-alle]');
+            if (alle) {
+                delete state.chosen[alle.dataset.alle];
+                malen(alle.dataset.alle);
+                geaendert();
+                return;
+            }
+            const chip = e.target.closest('[data-col]');
+            if (!chip) return;
+            const key = chip.closest('[data-sek]').dataset.sek;
+            const all = state.columns[key] || [];
+            const set = new Set(state.chosen[key] || all);
+            set.has(chip.dataset.col) ? set.delete(chip.dataset.col) : set.add(chip.dataset.col);
+            // Eine Tabelle ohne Spalten waere eine kaputte Datei. Wer nichts
+            // von ihr will, schaltet die Tabelle selbst ab.
+            if (!set.size) {
+                if (window.Toast) Toast.info('Eine Spalte bleibt mindestens. Ganz weglassen: Tabelle abwählen.');
+                return;
+            }
+            if (set.size >= all.length) delete state.chosen[key];
+            else state.chosen[key] = set;
+            malen(key);
+            geaendert();
+        });
     }
 
     async function doExport(state) {
@@ -377,72 +496,80 @@
         }
     }
 
-    function wire(overlay, state) {
-        const sectionBox = overlay.querySelector('#expSections');
-        const fromEl = overlay.querySelector('#expFrom');
-        const toEl = overlay.querySelector('#expTo');
-        const compactEl = overlay.querySelector('#expCompact');
+    function wire(dlg, state) {
+        const root = dlg.root;
+        const sectionBox = root.querySelector('#expSections');
+        const fromEl = root.querySelector('#expFrom');
+        const toEl = root.querySelector('#expTo');
+        const compactEl = root.querySelector('#expCompact');
+        const limitNote = root.querySelector('#expLimitNote');
+        const limitMbEl = root.querySelector('#expLimitMb');
         let previewTimer = null;
         let previewSeq = 0;
+        dlg.stop = () => { clearTimeout(previewTimer); previewSeq++; };
 
         /* Was die Vorschau über den Aufbau der Datei verrät, fließt zurück in
-           die Auswahl links: die Spaltenlisten und die Stufe, auf die
-           „Automatisch“ hinausläuft. */
+           die Auswahl: Zeilen je Tabelle, die Spaltenlisten und die Stufe,
+           auf die „Automatisch“ hinausläuft. */
         function absorb(data) {
-            let changed = false;
+            let neu = false;
+            state.zeilen = {};
             (data.sections || []).forEach(s => {
-                const before = (state.columns[s.key] || []).join(' ');
-                const now = (s.columns || []).join(' ');
+                state.zeilen[s.key] = s.rows || 0;
+                const before = (state.columns[s.key] || []).join(' ');
+                const now = (s.columns || []).join(' ');
                 if (before !== now) {
+                    // Ob ein Spalten-Knopf erscheint, haengt an der Liste.
+                    if (!before || !now) neu = true;
                     state.columns[s.key] = s.columns || [];
                     // Eine Auswahl, die es in der neuen Spaltenliste nicht mehr
                     // gibt (andere Aggregation), gilt nicht weiter.
                     if (state.chosen[s.key]) {
                         const kept = new Set(
                             (s.columns || []).filter(c => state.chosen[s.key].has(c)));
-                        if (kept.size) state.chosen[s.key] = kept;
+                        if (kept.size && kept.size < (s.columns || []).length) state.chosen[s.key] = kept;
                         else delete state.chosen[s.key];
                     }
-                    changed = true;
                 }
             });
-            const resolved = data.aggregate || {};
-            Object.keys(resolved).forEach(g => {
-                if (state.resolved[g] !== resolved[g]) {
-                    state.resolved[g] = resolved[g];
-                    if (state.agg[g] === 'auto') changed = true;
-                }
+            Object.keys(data.aggregate || {}).forEach(g => {
+                state.resolved[g] = data.aggregate[g];
+                const hint = sectionBox.querySelector('[data-agg-hint="' + g + '"]');
+                if (hint) hint.textContent = aggHint(state, g);
             });
-            if (changed) renderSections(sectionBox, state);
+            if (neu) renderSections(sectionBox, state);
+            else paintZahlen(sectionBox, state);
+            sectionBox.classList.remove('is-alt');
         }
 
-        const limitNote = overlay.querySelector('#expLimitNote');
-        const limitMbEl = overlay.querySelector('#expLimitMb');
-
         function paintLimit() {
-            overlay.querySelectorAll('#expLimit button').forEach(b => {
-                b.classList.toggle('active', Number(b.dataset.limit) === state.limitPick);
+            root.querySelectorAll('#expLimit .v-chip').forEach(b => {
+                const an = Number(b.dataset.limit) === state.limitPick;
+                b.classList.toggle('is-active', an);
+                b.setAttribute('aria-pressed', an);
                 b.disabled = state.fitting;
             });
-            overlay.querySelector('#expLimitCustom').style.display =
-                state.limitPick === -1 ? 'flex' : 'none';
+            root.querySelector('#expLimitCustom').hidden = state.limitPick !== -1;
             if (state.fitting) {
                 // Laden heißt Skeleton, nicht „Lade …“ als Fließtext.
-                limitNote.innerHTML = '<span class="skel" style="display:inline-block;width:14rem;height:0.85rem"></span>';
+                limitNote.hidden = false;
+                limitNote.innerHTML = '<span class="skel exp-skel-text"></span>';
             } else {
+                limitNote.hidden = !state.fitNote;
                 limitNote.textContent = state.fitNote || '';
             }
         }
 
         /* Der Server sucht die feinste Aggregation, die unter die Grenze
            passt, und liefert die fertige Vorschau gleich mit. Was er
-           entschieden hat, landet in den Auswahlfeldern links — sonst wäre
-           die Einstellung eine Blackbox. */
+           entschieden hat, landet in den Auswahlfeldern — sonst wäre die
+           Einstellung eine Blackbox. */
         async function fitToLimit() {
             if (!state.limit || !state.picked.size) return;
             state.fitting = true;
             paintLimit();
-            renderPreview(overlay, null, state);
+            renderSumme(root, null, state);
+            sectionBox.classList.add('is-alt');
             const seq = ++previewSeq;
             const p = queryOf(state);
             p.set('max_bytes', state.limit);
@@ -456,12 +583,13 @@
                     + (data.note || '');
                 if (!data.fits && data.largest_section) {
                     state.fitNote += ' Am schwersten wiegt „' + data.largest_section.label
-                        + '" mit ' + fmtBytes(data.largest_section.bytes) + '.';
+                        + '“ mit ' + fmtBytes(data.largest_section.bytes) + '.';
                 }
                 state.fitting = false;
                 renderSections(sectionBox, state);
                 if (data.preview) {
-                    renderPreview(overlay, data.preview, state);
+                    state.letzteVorschau = data.preview;
+                    renderSumme(root, data.preview, state);
                     absorb(data.preview);
                 } else {
                     refreshPreview();
@@ -482,10 +610,12 @@
             // leere Auswahl als "alles" und zeigte dann etwas anderes an, als
             // hier angehakt ist.
             if (!state.picked.size) {
-                renderPreview(overlay, { sections: [], total_rows: 0, bytes: 0, sample: '' }, state);
+                state.letzteVorschau = { sections: [], total_rows: 0, bytes: 0, sample: '' };
+                renderSumme(root, state.letzteVorschau, state);
                 return;
             }
-            renderPreview(overlay, null, state);
+            renderSumme(root, null, state);
+            sectionBox.classList.add('is-alt');
             // Die Vorschau baut serverseitig den echten Export -- deshalb erst
             // kurz warten, statt bei jedem Haken eine Anfrage zu schicken.
             previewTimer = setTimeout(async () => {
@@ -495,44 +625,43 @@
                     const data = await apiCall('/api/export/preview' + (qs ? '?' + qs : ''));
                     if (seq !== previewSeq) return;   // eine neuere Anfrage laeuft
                     state.letzteVorschau = data;
-                    renderPreview(overlay, data, state);
+                    renderSumme(root, data, state);
                     absorb(data);
                 } catch (e) {
                     if (seq !== previewSeq) return;
-                    renderPreview(overlay, { error: e.message || String(e) }, state);
+                    renderSumme(root, { error: e.message || String(e) }, state);
                 }
             }, 400);
         }
 
         function paintRange() {
-            overlay.querySelectorAll('#expRange button').forEach(b => {
-                b.classList.toggle('active', b.dataset.preset === state.preset);
+            root.querySelectorAll('#expRange .v-chip').forEach(b => {
+                const an = b.dataset.preset === state.preset;
+                b.classList.toggle('is-active', an);
+                b.setAttribute('aria-pressed', an);
             });
-            overlay.querySelector('#expCustom').style.display =
-                state.preset === 'custom' ? 'flex' : 'none';
+            root.querySelector('#expCustom').hidden = state.preset !== 'custom';
         }
 
         function paintFormat() {
-            overlay.querySelectorAll('#expFormat button').forEach(b => {
-                b.classList.toggle('active', b.dataset.format === state.format);
+            root.querySelectorAll('#expFormat .exp-form').forEach(b => {
+                b.setAttribute('aria-pressed', b.dataset.format === state.format);
             });
-            const eintrag = FORMATE.find(f => f.key === state.format);
-            overlay.querySelector('#expFormatNote').textContent = eintrag ? eintrag.hint : '';
         }
 
-        overlay.querySelector('#expFormat').addEventListener('click', (e) => {
-            const b = e.target.closest('button');
+        root.querySelector('#expFormat').addEventListener('click', (e) => {
+            const b = e.target.closest('.exp-form');
             if (!b) return;
             state.format = b.dataset.format;
             paintFormat();
             // Die Form aendert die Verpackung, nicht den Inhalt -- die
             // Vorschau zaehlt dieselben Zeilen. Nur der Hinweis unter der
             // Groesse muss nachziehen.
-            renderPreview(overlay, state.letzteVorschau || null, state);
+            if (state.letzteVorschau) renderSumme(root, state.letzteVorschau, state);
         });
 
-        overlay.querySelector('#expLimit').addEventListener('click', (e) => {
-            const b = e.target.closest('button');
+        root.querySelector('#expLimit').addEventListener('click', (e) => {
+            const b = e.target.closest('.v-chip');
             if (!b || state.fitting) return;
             const value = Number(b.dataset.limit);
             state.limitPick = value;
@@ -549,8 +678,8 @@
             if (value > 0) fitToLimit(); else refreshPreview();
         });
 
-        overlay.querySelector('#expLimitApply').addEventListener('click', () => {
-            const mb = parseFloat(limitMbEl.value);
+        root.querySelector('#expLimitApply').addEventListener('click', () => {
+            const mb = parseFloat(String(limitMbEl.value).replace(',', '.'));
             if (!mb || mb <= 0) {
                 if (window.Toast) Toast.error('Bitte eine Größe in Megabyte angeben');
                 return;
@@ -560,8 +689,8 @@
             fitToLimit();
         });
 
-        overlay.querySelector('#expRange').addEventListener('click', (e) => {
-            const b = e.target.closest('button');
+        root.querySelector('#expRange').addEventListener('click', (e) => {
+            const b = e.target.closest('.v-chip');
             if (!b) return;
             state.preset = b.dataset.preset;
             paintRange();
@@ -582,75 +711,51 @@
             refreshPreview();
         }));
 
-        // Die Spaltenliste auf- und zuklappen aendert nichts an der Datei --
-        // deshalb nur neu zeichnen, keine neue Vorschau.
         sectionBox.addEventListener('click', (e) => {
-            const b = e.target.closest('[data-cols-toggle]');
-            if (!b) return;
-            const key = b.dataset.colsToggle;
-            state.openCols.has(key) ? state.openCols.delete(key) : state.openCols.add(key);
+            const spalten = e.target.closest('[data-spalten]');
+            if (spalten) {
+                spaltenDialog(state, spalten.dataset.spalten, () => {
+                    paintZahlen(sectionBox, state);
+                    refreshPreview();
+                });
+                return;
+            }
+            // Der Schalter am Modul: an heißt alle Tabellen, aus heißt keine.
+            const kopf = e.target.closest('.exp-mod-kopf');
+            if (!kopf) return;
+            const keys = itemsOf(state, kopf.dataset.group).map(s => s.key);
+            const an = keys.some(k => state.picked.has(k));
+            keys.forEach(k => an ? state.picked.delete(k) : state.picked.add(k));
             renderSections(sectionBox, state);
+            refreshPreview();
         });
 
         sectionBox.addEventListener('change', (e) => {
             const el = e.target;
-            // Das Auswahlfeld zuerst: es trug frueher dasselbe data-group wie
-            // die Gruppen-Checkbox, landete in deren Zweig und hakte mit
-            // el.checked === undefined die ganze Gruppe ab.
             if (el.dataset.aggGroup) {
                 state.agg[el.dataset.aggGroup] = el.value;
                 // Nur der Hinweistext darunter aendert sich. Die ganze Liste
                 // neu zu zeichnen naehme dem Auswahlfeld mitten im Bedienen
                 // den Fokus.
-                const group = el.closest('.exp-group');
-                const hint = group ? group.querySelector('.exp-hint') : null;
-                if (hint) hint.textContent = aggHint(state, el.dataset.aggGroup);
+                const hint = sectionBox.querySelector('[data-agg-hint="' + el.dataset.aggGroup + '"]');
+                // „Einzeln“ sagt schon selbst, was es heißt.
+                if (hint) {
+                    hint.textContent = aggHint(state, el.dataset.aggGroup);
+                    hint.hidden = el.value === 'none';
+                }
                 refreshPreview();
                 return;
             }
-            if (el.dataset.colSection) {
-                const key = el.dataset.colSection;
-                const all = state.columns[key] || [];
-                const set = state.chosen[key] || new Set(all);
-                el.checked ? set.add(el.dataset.col) : set.delete(el.dataset.col);
-                // Nichts mehr gewaehlt heisst hier "alles" -- eine Sektion
-                // ohne Spalten waere eine kaputte Datei, und wer nichts von
-                // ihr will, haekelt die Sektion selbst ab.
-                if (!set.size || set.size >= all.length) delete state.chosen[key];
-                else state.chosen[key] = set;
-                renderSections(sectionBox, state);
-                refreshPreview();
-                return;
-            }
-            if (el.dataset.section) {
-                el.checked ? state.picked.add(el.dataset.section)
-                           : state.picked.delete(el.dataset.section);
-            } else if (el.dataset.group) {
-                const keys = state.sections.filter(s => s.group === el.dataset.group).map(s => s.key);
-                keys.forEach(k => el.checked ? state.picked.add(k) : state.picked.delete(k));
-            } else return;
+            if (!el.dataset.section) return;
+            el.checked ? state.picked.add(el.dataset.section)
+                       : state.picked.delete(el.dataset.section);
             renderSections(sectionBox, state);
             refreshPreview();
         });
 
-        const close = () => {
-            clearTimeout(previewTimer);
-            previewSeq++;
-            overlay.classList.remove('show');
-            document.removeEventListener('keydown', onKey);
-            setTimeout(() => overlay.remove(), 180);
-        };
-        const onKey = (e) => { if (e.key === 'Escape') close(); };
-        document.addEventListener('keydown', onKey);
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) return close();
-            const act = e.target.closest('[data-act="close"]');
-            if (act) close();
-        });
-
-        overlay.querySelector('#expGo').onclick = async () => {
+        root.querySelector('#expGo').onclick = async () => {
             if (!state.picked.size) {
-                if (window.Toast) Toast.error('Ohne Sektion gäbe es nichts zu exportieren');
+                if (window.Toast) Toast.error('Ohne Modul gäbe es nichts zu exportieren');
                 return;
             }
             const r = rangeOf(state);
@@ -658,7 +763,7 @@
                 if (window.Toast) Toast.error('„Von“ liegt nach „Bis“');
                 return;
             }
-            close();
+            dlg.close();
             await doExport(state);
         };
 
@@ -669,37 +774,41 @@
     }
 
     window.exportAll = async function exportAll() {
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.setAttribute('role', 'dialog');
-        overlay.setAttribute('aria-modal', 'true');
-        overlay.innerHTML = dialogHtml();
-        document.body.appendChild(overlay);
-        requestAnimationFrame(() => overlay.classList.add('show'));
+        // Ein Dialog, in dem man tippt (Datum, Megabyte), ist am Handy
+        // ``voll`` -- als Blatt rückte er bei jeder Höhenänderung.
+        let steuerung = null;
+        const dlg = VexModal.open('Export', dialogHtml(), {
+            voll: true,
+            beimSchliessen: () => { if (steuerung) steuerung.stop(); },
+        });
+        dlg.box.classList.add('exp-dialog');
+        steuerung = dlg;
+        renderSumme(dlg.root, null, null);
 
         let meta;
         try {
             // Die Voreinstellung KOMMT VOM SERVER, nicht aus dem Cache. Der
             // localStorage ist nur ein Cache, und `navReady()` steigt früh
             // aus, sobald die Leiste steht — er kann hier also veraltet oder
-            // leer sein. Dann machte der Dialog mit „Einzeln“ auf, obwohl auf
-            // /einstellungen etwas anderes gespeichert war, und das sah aus,
-            // als hätte er die Einstellung nicht behalten. `load()` ist
-            // idempotent, der Aufruf kostet eine Anfrage.
+            // leer sein. `load()` ist idempotent, der Aufruf kostet eine Anfrage.
             const [sections] = await Promise.all([
                 apiCall('/api/export/sections'),
                 (window.VexPrefs ? VexPrefs.load() : Promise.resolve()).catch(() => {}),
             ]);
             meta = sections;
         } catch (e) {
-            overlay.querySelector('#expSections').innerHTML =
+            // Der Fehler steht dort, wo die Module stünden -- und „Exportieren“
+            // ist aus, weil ohne die Liste nichts zusammenzustellen ist.
+            dlg.root.querySelector('#expSections').innerHTML =
                 '<div class="empty is-error"><span class="empty-mark">⚠️</span>' +
-                '<p class="empty-text">Die Sektionsliste konnte nicht geladen werden. ' +
+                '<p class="empty-text">Die Modulliste konnte nicht geladen werden. ' +
                 'Ohne sie lässt sich nichts zusammenstellen.</p></div>';
+            dlg.root.querySelector('#expSummary').innerHTML = '';
+            dlg.root.querySelector('#expGo').disabled = true;
             return;
         }
         const state = newState(meta);
-        renderSections(overlay.querySelector('#expSections'), state);
-        wire(overlay, state).refreshPreview();
+        renderSections(dlg.root.querySelector('#expSections'), state);
+        wire(dlg, state).refreshPreview();
     };
 })();
