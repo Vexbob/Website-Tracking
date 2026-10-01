@@ -528,7 +528,8 @@ BONS = [
 
 AUSGABEN_SUMME = {
     "today": 55.32, "this_week": 142.41, "this_month": 486.90,
-    "prev_month": 531.08, "this_year": 4820.55, "total": 9614.02, "count": 213,
+    "prev_month": 531.08, "prev_month_to_date": 512.40,
+    "this_year": 4820.55, "total": 9614.02, "count": 213,
 }
 
 

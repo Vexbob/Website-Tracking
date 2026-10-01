@@ -179,9 +179,26 @@
         };
     }
 
+    /* Chart.js kommt mit ``defer`` vom CDN und kann NACH den Daten ankommen.
+       Wer zeichnet, wartet hierauf (v2.25.0): in der Statistik fiel das erst
+       auf, als ein zweiter Abruf wegfiel, der das Zeichnen bis dahin zufaellig
+       lange genug verzoegert hatte -- „Chart is not defined“. Laedt die
+       Bibliothek gar nicht, wird abgelehnt statt ewig gewartet. */
+    function bereit() {
+        if (window.Chart) return Promise.resolve();
+        return new Promise(function (ja, nein) {
+            var pruefen = function () {
+                if (window.Chart) ja(); else nein(new Error('Chart.js nicht geladen'));
+            };
+            if (document.readyState === 'complete') pruefen();
+            else window.addEventListener('load', pruefen, { once: true });
+        });
+    }
+
     window.VexCharts = {
         ORDER: ORDER,
         balken: balken,
+        bereit: bereit,
         fullDay: fullDay,
         fullMonth: fullMonth,
         fullWeek: fullWeek,

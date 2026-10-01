@@ -52,9 +52,9 @@ async function loadKpis() {
     monatsverlauf();
 }
 
-/* Der Monat gegen den Vormonat, Tag für Tag aufsummiert. Die Zahl neben der
-   Heldenzahl vergleicht bis zum SELBEN Tag -- am 5. gegen die ersten fünf
-   Tage des Vormonats, nicht gegen seine ganze Summe. */
+/* Der Monat gegen den Vormonat, Tag für Tag aufsummiert -- die Kurve. Die
+   Zahl neben der Heldenzahl vergleicht bis zum SELBEN Tag und kommt seit
+   v2.25.0 vom Server (prev_month_to_date). */
 let monatsKurve = null;
 async function monatsverlauf() {
     const heute = new Date();
@@ -75,15 +75,8 @@ async function monatsverlauf() {
     });
     const kum = (a) => { let s = 0; return a.map(v => (s += v)); };
     const diesK = kum(dies), vorK = kum(vor);
-    const bisHeute = vorK[Math.min(tagHeute, vormonatTage) - 1] || 0;
-    const jetzt = diesK[tagHeute - 1] || 0;
-    const box = document.getElementById('azVergleich');
-    if (box && bisHeute > 0) {
-        const pct = Math.round((jetzt / bisHeute - 1) * 100);
-        const cls = Math.abs(pct) < 5 ? '' : (pct > 0 ? ' ist-mehr' : ' ist-weniger');
-        box.innerHTML = `<span class="az-delta${cls}">${pct > 0 ? '+' : pct < 0 ? '−' : '±'}${Math.abs(pct)} %</span>`
-            + `<span>zum Vormonat bis zum ${tagHeute}. (${fmtEur(bisHeute)})</span>`;
-    }
+    // Die Zahl daneben steht schon (zeichneKpis, aus prev_month_to_date) --
+    // hier nur die Kurve, damit es keine zweite Rechnung derselben Zahl gibt.
     const monatName = (d) => d.toLocaleDateString('de-DE', { month: 'short' });
     const leg = document.getElementById('azLegende');
     if (leg) leg.innerHTML = `<span><i style="--ton:var(--az-ton)"></i>${monatName(heute)}</span>`

@@ -1031,6 +1031,11 @@ async def stats_summary(db=Depends(get_db), user=Depends(get_current_user)):
         "this_week":   await sum_between(week_start, today),
         "this_month":  await sum_between(month_start, today),
         "prev_month":  await sum_between(prev_month_start, prev_month_end),
+        # v2.25.0: Der Vormonat BIS ZUM SELBEN TAG -- dagegen wird verglichen.
+        # Der ganze Vormonat gegen den angebrochenen hiess am 1. jeden Monat
+        # „−97 %“. Hat der Vormonat weniger Tage, gilt sein letzter.
+        "prev_month_to_date": await sum_between(
+            prev_month_start, prev_month_start.replace(day=min(today.day, prev_month_end.day))),
         "this_year":   await sum_between(year_start, today),
         "total":       float(total_all or 0),
         "count":       int(count_all or 0),

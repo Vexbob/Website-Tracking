@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.25.0', date: '2026-10-01', title: 'Ausgaben: nur noch der faire Vergleich', notes: [
+        'Die Statistik vergleicht nicht mehr mit einer Vorperiode.',
+        'Ausgaben und Startseite vergleichen den Monat mit dem Vormonat nur bis zum selben Tag.',
+        'Der Zeitverlauf in der Statistik zeichnet wieder zuverlässig, auch wenn die Diagramme spät laden.',
+    ]},
     { v: 'v2.24.0', date: '2026-10-01', title: 'Saubere Ecken in Diagrammen', notes: [
         'Balken sind oben rund und unten gerade, gestapelte nur am obersten Stück.',
         'Der Bogen über dem Ziel hat in jedem Ring runde Enden statt gerader.',

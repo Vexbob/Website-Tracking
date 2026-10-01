@@ -222,14 +222,17 @@
         ]);
         const cards = [];
         if (exp) {
-            const prev = Number(exp.prev_month) || 0;
+            // Gegen den Vormonat BIS ZUM SELBEN TAG (v2.25.0), nicht gegen
+            // seine ganze Summe -- sonst hiesse es am 1. jeden Monat „−97 %“.
+            const prev = Number(exp.prev_month_to_date) || 0;
             const now = Number(exp.this_month) || 0;
             const pct = prev > 0 ? Math.round((now / prev - 1) * 100) : null;
+            const tag = new Date().getDate();
             cards.push(`<a class="home-stat" href="/ausgaben/">
                 <div class="lbl">Diesen Monat</div>
                 <div class="val">${fmtEur(now)}</div>
                 <div class="sub">${pct === null ? `${exp.count || 0} Bons insgesamt`
-                    : `${pct > 0 ? '+' : ''}${pct} % gegenüber dem Vormonat`}</div>
+                    : `${pct > 0 ? '+' : pct < 0 ? '\u2212' : '±'}${Math.abs(pct)} % zum Vormonat bis zum ${tag}.`}</div>
             </a>`);
         }
         if (sav) {

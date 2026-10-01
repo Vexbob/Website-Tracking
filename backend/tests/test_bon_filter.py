@@ -111,3 +111,40 @@ def test_die_summenabfrage_verbindet_die_laeden():
     auf einen Fehler, den man erst beim Suchen saehe."""
     quelle = er.stats_filtered.__doc__ and inspect.getsource(er.stats_filtered)
     assert "LEFT JOIN stores s" in quelle
+
+
+# ============================== Vormonat bis zum selben Tag (v2.25.0)
+class _SummenAttrappe:
+    def __init__(self):
+        self.spannen = []
+
+    async def fetchval(self, sql, *werte):
+        if "BETWEEN" in sql:
+            self.spannen.append((werte[1], werte[2]))
+        return 0
+
+
+def _summary_am(monkeypatch, tag):
+    import asyncio
+    from datetime import date as echt
+
+    class Fest(echt):
+        @classmethod
+        def today(cls):
+            return tag
+    monkeypatch.setattr(er, "date", Fest)
+    db = _SummenAttrappe()
+    asyncio.run(er.stats_summary(db=db, user={"id": 1}))
+    return db.spannen
+
+
+def test_vormonat_bis_zum_selben_tag(monkeypatch):
+    from datetime import date
+    spannen = _summary_am(monkeypatch, date(2026, 10, 1))
+    assert (date(2026, 9, 1), date(2026, 9, 1)) in spannen
+
+
+def test_kuerzerer_vormonat_endet_an_seinem_letzten_tag(monkeypatch):
+    from datetime import date
+    spannen = _summary_am(monkeypatch, date(2026, 3, 31))
+    assert (date(2026, 2, 1), date(2026, 2, 28)) in spannen

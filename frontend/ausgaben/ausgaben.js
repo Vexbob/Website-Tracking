@@ -350,8 +350,20 @@ function zeichneKpis(s) {
     const monat = new Date().toLocaleDateString('de-DE', { month: 'long' });
     let vergleich = '<span class="skel az-skel-text"></span>';
     if (s) {
-        const prev = Number(s.prev_month) || 0;
-        vergleich = prev > 0 ? `<span>Vormonat gesamt ${fmtEur(prev)}</span>` : '<span>Kein Vormonat zum Vergleich</span>';
+        // Verglichen wird NUR mit dem Vormonat bis zum selben Tag (v2.25.0:
+        // der Server rechnet ihn, vorher stand hier bis zum Laden der Kurve
+        // „Vormonat gesamt“ -- und blieb stehen, wenn der Vormonat bis
+        // heute leer war).
+        const tag = new Date().getDate();
+        const prev = Number(s.prev_month_to_date) || 0;
+        if (prev > 0) {
+            const pct = Math.round(((Number(s.this_month) || 0) / prev - 1) * 100);
+            const cls = Math.abs(pct) < 5 ? '' : (pct > 0 ? ' ist-mehr' : ' ist-weniger');
+            vergleich = `<span class="az-delta${cls}">${pct > 0 ? '+' : pct < 0 ? '\u2212' : '\u00b1'}${Math.abs(pct)} %</span>`
+                + `<span>zum Vormonat bis zum ${tag}. (${fmtEur(prev)})</span>`;
+        } else {
+            vergleich = `<span>Im Vormonat bis zum ${tag}. nichts ausgegeben</span>`;
+        }
     }
     box.className = 'v-buehne az-buehne';
     box.innerHTML = `

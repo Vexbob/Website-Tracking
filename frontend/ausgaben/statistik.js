@@ -168,8 +168,9 @@ async function loadInsights(){
         STAT.insightsCache = data;
         renderKPI(data);
         renderInsights(data);
-        renderWeekday(data);
         renderRanks(data);
+        await VexCharts.bereit();
+        renderWeekday(data);
     } catch(e) {
         // Ohne diesen Zweig blieb das Skelett aus statistik.html FÜR IMMER
         // stehen: ein Ladezustand, der nie endet, sieht aus wie ein
@@ -195,28 +196,12 @@ function fehlerKarte(id, satz, nochmal){
     if (knopf && typeof nochmal === 'function') knopf.addEventListener('click', nochmal);
 }
 
-/* Die Hauptzahl bekommt die Veraenderung als Pille daneben; sie ist die
- * Antwort auf "ist das viel?" und gehoert deshalb neben die Zahl, nicht in
- * eine eigene Kachel. */
-function deltaPill(pct){
-    if(pct == null) return '<span class="kpi-delta flat">neu</span>';
-    const cls = Math.abs(pct) < 5 ? 'flat' : (pct > 0 ? 'up' : 'down');
-    const sign = pct > 0 ? '+' : '';
-    return `<span class="kpi-delta ${cls}">${sign}${pct.toFixed(0)} %</span>`;
-}
-
 function renderKPI(data){
-    const k = data.kpi, cp = data.compare_prev;
+    // v2.25.0: ohne Vorperiode. Die gleich lange Spanne davor war bei „90
+    // Tage“ ein willkürlicher Ausschnitt, der mit nichts Gewohntem
+    // übereinstimmt; den Vormonat bis zum selben Tag zeigt die Übersicht.
+    const k = data.kpi;
     const box = document.getElementById('statKpiGrid');
-    const prev = Number(cp && cp.total) || 0;
-    const pct = prev > 0 ? (k.total / prev - 1) * 100 : null;
-    // Mehr ausgegeben ist ein Hinweis (--warn), weniger ein gutes Zeichen
-    // (--ok); unter 5 % bleibt es neutral -- dasselbe wie auf der Übersicht.
-    const cls = pct == null || Math.abs(pct) < 5 ? '' : (pct > 0 ? ' ist-mehr' : ' ist-weniger');
-    const pill = pct == null ? '' : `<span class="az-delta${cls}">${pct > 0 ? '+' : pct < 0 ? '\u2212' : '\u00b1'}${Math.abs(pct).toFixed(0)} %</span>`;
-    const sub = prev > 0
-        ? `gegen\u00fcber ${fmtEur(prev)} in der Vorperiode`
-        : 'keine Vorperiode zum Vergleich';
     const held = (v) => {
         const t = fmtEur(v), i = t.lastIndexOf(',');
         return i < 0 ? t : t.slice(0, i) + '<span class="v-held-rest">' + t.slice(i) + '</span>';
@@ -245,7 +230,6 @@ function renderKPI(data){
         <div class="az-b-haupt">
             <span class="v-buehne-marke">Ausgaben \u00b7 ${zeitraum}</span>
             <strong class="v-held">${held(k.total)}</strong>
-            <div class="az-b-vergleich">${pill}<span>${sub}</span></div>
         </div>
         <div class="az-b-fakten az-b-fakten--vier">
             ${minis.map(m => {
@@ -261,12 +245,7 @@ function renderKPI(data){
 function renderInsights(data){
     const el = document.getElementById('statInsights');
     const out = [];
-    const k = data.kpi, cp = data.compare_prev;
-    if(cp.diff_pct != null && Math.abs(cp.diff_pct) >= 5){
-        const dir = cp.diff_pct > 0 ? 'mehr' : 'weniger';
-        const emoji = cp.diff_pct > 0 ? '📈' : '📉';
-        out.push(`<div class="insight"><span class="icon">${emoji}</span><div>Du hast diese Periode <strong>${Math.abs(cp.diff_pct).toFixed(0)} % ${dir}</strong> ausgegeben als in der vorherigen (${fmtEur(cp.total)} → <strong>${fmtEur(k.total)}</strong>).</div></div>`);
-    }
+    const k = data.kpi;
     if(data.top_categories && data.top_categories.length && k.total > 0){
         const top = data.top_categories[0];
         const share = (top.total / k.total * 100).toFixed(0);
@@ -289,14 +268,6 @@ function renderInsights(data){
                 const pctOver = ((top.total/avg - 1) * 100).toFixed(0);
                 out.push(`<div class="insight"><span class="icon">📊</span><div>Du gibst <strong>${days[top.dow]}</strong> im Schnitt <strong>${pctOver} %</strong> mehr aus als an anderen Tagen.</div></div>`);
             }
-        }
-    }
-    if(data.top_categories){
-        const risers = data.top_categories.filter(c => c.prev_total > 0 && c.total > c.prev_total * 1.3 && c.total > 5);
-        if(risers.length){
-            const top = risers[0];
-            const pct = ((top.total/top.prev_total - 1)*100).toFixed(0);
-            out.push(`<div class="insight"><span class="icon">⚠️</span><div>Kategorie <strong>${escHtml(top.name)}</strong> stieg um <strong>+${pct} %</strong> ggü. Vorperiode (${fmtEur(top.prev_total)} → ${fmtEur(top.total)}).</div></div>`);
         }
     }
     el.innerHTML = out.join('');
@@ -356,16 +327,12 @@ function renderRankList(boxId, noteId, items, total, subOf){
     box.innerHTML = items.map(x => {
         const val = Number(x.total) || 0;
         const tone = safeColor(x.color);
-        const delta = Number(x.prev_total) > 0 ? (val / x.prev_total - 1) * 100 : null;
-        const pill = (delta != null && Math.abs(delta) >= 10)
-            ? `<span class="delta-pill ${delta > 0 ? 'up' : 'down'}">${delta > 0 ? '+' : ''}${delta.toFixed(0)} %</span>`
-            : '';
         return `<div class="rank-row"${tone ? ` style="--tone:${tone}"` : ''}>
             <span class="rank-mark">${escHtml(x.icon || '')}</span>
             <span class="rank-name">${escHtml(x.name)}</span>
             <span class="rank-val">${fmtEur(val)}</span>
             <span class="rank-bar"><i style="width:${Math.max(2, val / max * 100).toFixed(1)}%"></i></span>
-            <span class="rank-sub">${subOf(x, val)}${pill}</span>
+            <span class="rank-sub">${subOf(x, val)}</span>
         </div>`;
     }).join('');
 
@@ -459,40 +426,22 @@ function densify(rows, gran, from, to){
     return out;
 }
 
-/* Die gleich lange Spanne unmittelbar davor. "Gesamt" hat keine Vorperiode --
- * davor liegt nichts. */
-function prevRange(){
-    if(!STAT.from) return null;
-    const from = new Date(STAT.from + 'T00:00:00');
-    const to = new Date((STAT.to || isoDay(new Date())) + 'T00:00:00');
-    const days = Math.round((to - from) / 86400000) + 1;
-    const pTo = new Date(from.getTime() - 86400000);
-    const pFrom = new Date(pTo.getTime() - (days - 1) * 86400000);
-    return { from: isoDay(pFrom), to: isoDay(pTo) };
-}
-
 async function loadSeries(){
     try {
         const gran = STAT.granularity;
         const fetchFor = (p) => gran === 'daily' ? AUSGABEN_API.statsDaily(p)
                               : gran === 'weekly' ? AUSGABEN_API.statsWeekly(p)
                               : AUSGABEN_API.statsMonthly(p);
-        const pr = prevRange();
-        const [rows, prevRows] = await Promise.all([
-            fetchFor(rangeParams()),
-            pr ? fetchFor({ from: pr.from, to: pr.to }).catch(() => []) : Promise.resolve(null),
-        ]);
-        renderSeriesChart(
-            densify(rows, gran, STAT.from, STAT.to),
-            pr ? densify(prevRows, gran, pr.from, pr.to) : null,
-            gran);
+        const rows = await fetchFor(rangeParams());
+        await VexCharts.bereit();
+        renderSeriesChart(densify(rows, gran, STAT.from, STAT.to), gran);
     } catch(e) {
         console.error('series failed:', e);
         fehlerKarte('chartSeriesWrap', 'Der Zeitverlauf konnte nicht geladen werden.', loadSeries);
     }
 }
 
-function renderSeriesChart(points, prevPoints, gran){
+function renderSeriesChart(points, gran){
     const canvas = document.getElementById('chartSeries');
     if(!canvas) return;
     if(STAT.charts.series) STAT.charts.series.destroy();
@@ -509,23 +458,11 @@ function renderSeriesChart(points, prevPoints, gran){
         return slice.reduce((a, b) => a + b, 0) / slice.length;
     });
 
-    // Die Vorperiode liegt Position fuer Position hinter der aktuellen. Sie
-    // beantwortet die Frage, die ein Balken allein nicht beantwortet: ist das
-    // viel? Ungleiche Laengen (Monate) werden hinten abgeschnitten.
     const datasets = [
         Object.assign({ type: 'bar', label: 'Ausgaben', data: values,
           backgroundColor: figureColor(),
           order: VexCharts.ORDER.VALUE }, VexCharts.balken(4)),
     ];
-    if(prevPoints && prevPoints.length){
-        datasets.push({
-            type: 'line', label: 'Vorperiode',
-            data: points.map((_, i) => prevPoints[i] ? prevPoints[i].value : null),
-            borderColor: cssVar('--text-3'), borderWidth: 1.5, borderDash: [2, 3],
-            pointRadius: 0, tension: 0.35, fill: false, spanGaps: true,
-            order: VexCharts.ORDER.CONTEXT,
-        });
-    }
     datasets.push({
         type: 'line', label: `\u00d8 (${win} Perioden)`, data: trend,
         borderColor: cssVar('--text-2'), borderWidth: 2, borderDash: [6, 4],
