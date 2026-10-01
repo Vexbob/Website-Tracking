@@ -955,49 +955,49 @@ const SLEEP_SEGMENTS = [
     { key: 'awake',  label: 'Wach',              color: cssVar('--h-sleep-awake') },
 ];
 
-/* Die geschlafenen Stunden stehen im Balken ihrer Nacht (v2.28.0) --
-   dieselbe Zahl wie in „Ø Schlafdauer“, also nur Tief, Kern und REM. Passt
-   sie waagerecht nicht in die Spalte (viele Nächte am Handy), steht sie
-   senkrecht; ist die Spalte auch dafür zu schmal, bleibt sie weg, und der
-   Tooltip nennt sie weiter. Die Phasen sind hell, also dunkle Schrift. */
+/* Die geschlafenen Stunden jeder Nacht (v2.28.0) -- dieselbe Zahl wie in
+   „Ø Schlafdauer“, also nur Tief, Kern und REM. Sie steht in gedämpfter
+   Schrift ÜBER der Spalte, am Zubettgeh-Ende: in der Spalte lag sie auf
+   wechselnden Phasenfarben und sah unruhig aus (v2.28.1). Erscheinen darf
+   sie erst, wenn die Balken stehen -- vorher hing sie in der Luft, während
+   die Spalten noch einfuhren. Ist die Spalte schmaler als die Zahl (30
+   Nächte am Handy), steht keine da; der Tooltip nennt sie weiter. */
 function schlafStundenPlugin() {
     return {
         id: 'schlafStunden',
+        beforeUpdate(chart) { chart.$stundenZeigen = false; },
         afterDatasetsDraw(chart) {
+            if (!chart.$stundenZeigen) return;
             const naechte = state.sleepUsable || [], fenster = state.sleepWindows || [];
             const n = chart.data.labels.length;
             if (!naechte.length || !n) return;
             const x = chart.scales.x, y = chart.scales.y, ctx = chart.ctx;
-            // Eine Spalte je Nacht: Kategorienbreite mal category- und barPercentage.
-            const breite = (x.width / n) * 0.9 * 0.8;
+            const platz = x.width / n;
             ctx.save();
-            ctx.font = '650 10px system-ui, -apple-system, "Segoe UI", sans-serif';
-            ctx.fillStyle = cssVar('--accent-ink');
+            ctx.font = '600 10px system-ui, -apple-system, "Segoe UI", sans-serif';
+            ctx.fillStyle = cssVar('--text-2');
             ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            ctx.textBaseline = 'bottom';
             naechte.forEach((r, i) => {
                 const w = fenster[i];
                 const min = schlafMinuten(r);
                 if (!w || !min) return;
                 const text = fmt1(min / 60);
-                const oben = y.getPixelForValue(w[0]);
-                const unten = y.getPixelForValue(Math.min(w[1], 24));
-                const hoehe = unten - oben, mitte = (oben + unten) / 2;
-                const tw = ctx.measureText(text).width;
-                const xm = x.getPixelForValue(i);
-                if (breite >= tw + 4 && hoehe >= 14) {
-                    ctx.fillText(text, xm, mitte);
-                } else if (breite >= 11 && hoehe >= tw + 8) {
-                    ctx.save();
-                    ctx.translate(xm, mitte);
-                    ctx.rotate(-Math.PI / 2);
-                    ctx.fillText(text, 0, 0);
-                    ctx.restore();
-                }
+                if (ctx.measureText(text).width + 4 > platz) return;
+                const oben = Math.max(chart.chartArea.top + 10, y.getPixelForValue(w[0]) - 4);
+                ctx.fillText(text, x.getPixelForValue(i), oben);
             });
             ctx.restore();
         },
     };
+}
+/* Nach dem Einfahren einmal nachzeichnen, jetzt mit den Zahlen. Der
+   Zeitgeber fängt den Fall ab, dass gar keine Animation läuft (reduzierte
+   Bewegung) und onComplete deshalb nicht kommt. */
+function schlafStundenZeigen(chart) {
+    if (!chart || chart.$stundenZeigen) return;
+    chart.$stundenZeigen = true;
+    chart.draw();
 }
 
 function initSchlaf() {
@@ -1065,6 +1065,7 @@ function initSchlaf() {
                     },
                 }),
             },
+            animation: { onComplete: (e) => schlafStundenZeigen(e.chart) },
             scales: {
                 x: { stacked: true, ticks: { color: th.muted, maxRotation: 0, autoSkipPadding: 12, font: { size: 10 } },
                      grid: { display: false }, border: { display: false } },
@@ -1184,6 +1185,7 @@ async function loadSleepChart() {
         ds[2 * N].data = cutLow;
         ds[2 * N + 1].data = cutHigh;
         state.chartSleepTimes.update();
+        setTimeout(() => schlafStundenZeigen(state.chartSleepTimes), 1200);
         renderSleepRhythm(windows);
 
         const meanOf = (extract) => {
