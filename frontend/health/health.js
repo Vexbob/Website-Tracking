@@ -320,24 +320,22 @@ const state = {
 };
 
 // ---------- Schlaf einer Nacht ----------
-// v1.36.1: Apple's `asleep_minutes` zaehlt oft nur den "asleep unspecified"-
-// Anteil und ignoriert Core/Deep/REM. Wenn Phasen vorhanden sind, ist deren
-// Summe die verlaessliche geschlafene Zeit.
+/* Geschlafen ist Tief + Kern + REM -- sonst nichts (v2.26.0). Bis dahin
+   galt das Groessere aus Phasensumme und `asleep_minutes`; Letzteres
+   enthaelt aber den Anteil ohne Phasen-Zuordnung, und so stand mehr Schlaf
+   da, als die drei Phasen hergaben. Nur eine Nacht ganz OHNE Phasen (aeltere
+   Uhr, anderer Tracker) faellt auf `asleep_minutes` zurueck -- sonst waere
+   sie leer. Eine Stelle fuer alle: Ring, Karte, Schlaf-Reiter. */
+function schlafMinuten(sl) {
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const phasen = num(sl.core_minutes) + num(sl.deep_minutes) + num(sl.rem_minutes);
+    return phasen > 0 ? phasen : num(sl.asleep_minutes);
+}
+
 function nachtZahlen(sl) {
     const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
     const phases = num(sl.core_minutes) + num(sl.deep_minutes) + num(sl.rem_minutes);
-    const rawAsleep = num(sl.asleep_minutes);
-    const asleepMin = phases > 0 ? Math.max(phases, rawAsleep) : rawAsleep;
-    let inBedMin = num(sl.in_bed_minutes);
-    if (inBedMin <= 0) {
-        const awake = num(sl.awake_minutes);
-        if (asleepMin + awake > 0) inBedMin = asleepMin + awake;
-        else if (sl.sleep_start && sl.sleep_end) {
-            const diff = (new Date(sl.sleep_end) - new Date(sl.sleep_start)) / 60000;
-            if (diff > 0) inBedMin = diff;
-        }
-    }
-    return { phases, asleepMin, inBedMin, awake: num(sl.awake_minutes) };
+    return { phases, asleepMin: schlafMinuten(sl), awake: num(sl.awake_minutes) };
 }
 
 // ---------- Überblick ----------
@@ -494,9 +492,6 @@ function renderSleepBlock(elId, sl) {
     const total = z.phases + z.awake;
     const pct = (v) => total ? (100 * (v || 0) / total).toFixed(1) : 0;
     const pctInt = (v) => total ? Math.round(100 * (v || 0) / total) : 0;
-    const eff = z.inBedMin > 0 ? (z.asleepMin / z.inBedMin) * 100 : null;
-    const effCls = eff == null ? '' : eff >= 90 ? 'good' : eff >= 80 ? 'mid' : 'low';
-    const effHtml = eff != null ? `<span class="h-sleep-eff ${effCls}">Effizienz ${fmt0(eff)} %</span>` : '';
     const timeRange = (sl.sleep_start && sl.sleep_end) ? `${fmtHM(sl.sleep_start)} → ${fmtHM(sl.sleep_end)}` : '';
     // Das Datum einer Nacht ist der Tag, an dem sie endet.
     if (sub) sub.textContent = sl.sleep_date ? 'Nacht zum ' + tagName(String(sl.sleep_date).slice(0, 10)) : '';
@@ -506,7 +501,6 @@ function renderSleepBlock(elId, sl) {
             <div class="h-sleep-head">
                 <span class="h-big">${fmt1(z.asleepMin / 60)} h</span>
                 <span class="h-sub">geschlafen${timeRange ? ' · ' + timeRange : ''}</span>
-                ${effHtml}
             </div>
             ${total ? `<div class="h-phase-bars">
                 <span class="h-phase-deep" style="width:${pct(sl.deep_minutes)}%"></span>
@@ -968,10 +962,8 @@ function initSchlaf() {
     state.chartSleepTimes = new Chart(document.getElementById('hChartSleepTimes').getContext('2d'), {
         type: 'bar',
         data: { labels: [], datasets: [
-            // Dataset 0 ist der helle Rahmen "Zeit im Bett".
-            { label: 'Im Bett', data: [], backgroundColor: th.grid,
-              borderColor: th.border, borderWidth: 1, borderSkipped: false,
-              borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.9 },
+            // v2.26.0: kein Rahmen „Im Bett“ mehr -- die Spalte besteht nur
+            // noch aus den Phasen selbst.
             ...SLEEP_SEGMENTS.map(seg => ({
                 label: seg.label, data: [], backgroundColor: seg.color,
                 borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.9,
@@ -980,9 +972,6 @@ function initSchlaf() {
             // Spalte ab der Oberkante weitergezeichnet -- die Achse ist ein
             // 24-h-Kreis. Die naechste Spalte ist die naechste aufgezeichnete
             // Nacht und oft nicht der naechste Tag.
-            { label: 'Im Bett (Fortsetzung)', data: [], backgroundColor: th.grid,
-              borderColor: th.border, borderWidth: 1, borderSkipped: false,
-              borderRadius: 4, wrap: true, barPercentage: 0.8, categoryPercentage: 0.9 },
             ...SLEEP_SEGMENTS.map(seg => ({
                 label: seg.label + ' (nach 18:00)', data: [], backgroundColor: seg.color,
                 wrap: true, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.9,
@@ -1005,7 +994,9 @@ function initSchlaf() {
                     filter: (item, data) => {
                         const ds = data.datasets[item.datasetIndex];
                         if (ds.wrap) return false;
-                        return !ds.marker || (ds.data || []).some(v => Array.isArray(v));
+                        // Nur, was in diesem Zeitraum vorkommt -- „ohne
+                        // Phasendetail“ etwa gibt es nur bei aelteren Naechten.
+                        return (ds.data || []).some(v => Array.isArray(v));
                     } } },
                 tooltip: themedTooltip({
                     // Segmente ohne Dauer wuerden den Tooltip nur zumuellen, und
@@ -1066,24 +1057,7 @@ async function loadSleepChart() {
         // Ø nur ueber Naechte mit tatsaechlichem Wert; faellt das Feld leer
         // aus, zaehlen die Phasen -- damit KPIs und Diagramm uebereinstimmen.
         const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
-        const asleepMin = (r) => {
-            const v = num(r.asleep_minutes);
-            if (v != null && v > 0) return v;
-            const phases = (num(r.core_minutes)||0) + (num(r.deep_minutes)||0) + (num(r.rem_minutes)||0);
-            return phases > 0 ? phases : null;
-        };
-        const inBedMin = (r) => {
-            const v = num(r.in_bed_minutes);
-            if (v != null && v > 0) return v;
-            const sleep = asleepMin(r) || 0;
-            const awake = num(r.awake_minutes) || 0;
-            if (sleep + awake > 0) return sleep + awake;
-            if (r.sleep_start && r.sleep_end) {
-                const diff = (new Date(r.sleep_end) - new Date(r.sleep_start)) / 60000;
-                return diff > 0 ? diff : null;
-            }
-            return null;
-        };
+        const asleepMin = (r) => schlafMinuten(r) || null;
         // Uhrzeit -> Stunden-Offset ab 18:00 (0 = 18:00, 24 = 18:00 Folgetag)
         const toOffset = (iso) => {
             if (!iso) return null;
@@ -1116,7 +1090,6 @@ async function loadSleepChart() {
         // `sleepWindows` behaelt die UNGEKAPPTEN Zeiten fuer Tooltip und Fusszeile.
         state.sleepWindows = windows;
         const AXIS_END = 24;   // 18:00 des Folgetags
-        const clipped = windows.map(w => w ? [w[0], Math.min(w[1], AXIS_END)] : null);
         // Der Rest laeuft oben in DERSELBEN Spalte weiter und hoert spaetestens
         // am eigenen Zubettgeh-Zeitpunkt auf.
         const wrapped = windows.map(w => (w && w[1] > AXIS_END + 1e-6)
@@ -1160,12 +1133,10 @@ async function loadSleepChart() {
         const N = SLEEP_SEGMENTS.length;
         state.chartSleepTimes.data.labels = plotted.map(r => fmtDate(r.sleep_date));
         setChartDates(state.chartSleepTimes, plotted.map(r => r.sleep_date));
-        ds[0].data = clipped;
-        segData.forEach((d, si) => { ds[si + 1].data = d; });
-        ds[N + 1].data = wrapped;
-        segWrap.forEach((d, si) => { ds[N + 2 + si].data = d; });
-        ds[2 * N + 2].data = cutLow;
-        ds[2 * N + 3].data = cutHigh;
+        segData.forEach((d, si) => { ds[si].data = d; });
+        segWrap.forEach((d, si) => { ds[N + si].data = d; });
+        ds[2 * N].data = cutLow;
+        ds[2 * N + 1].data = cutHigh;
         state.chartSleepTimes.update();
         renderSleepRhythm(windows);
 
@@ -1174,20 +1145,17 @@ async function loadSleepChart() {
             return arr.length ? arr.reduce((s,v)=>s+v,0) / arr.length : null;
         };
         const meanAsleepMin = meanOf(asleepMin);
-        const meanInBedMin  = meanOf(inBedMin);
         const meanDeepMin   = meanOf(r => num(r.deep_minutes));
-        const effList = usable.map(r => {
-            const a = asleepMin(r), b = inBedMin(r);
-            return (a != null && b != null && b > 0) ? (a / b) * 100 : null;
-        }).filter(v => v != null);
-        const avgEff = effList.length ? effList.reduce((s,v)=>s+v,0) / effList.length : null;
+        const meanCoreMin   = meanOf(r => num(r.core_minutes));
+        const meanRemMin    = meanOf(r => num(r.rem_minutes));
 
         const fmtH = (min) => min == null ? '<span class="gh-leer">–</span>' : fmt1(min / 60) + '<small>h</small>';
         const kpis = [
+            // v2.26.0: ohne „Im Bett“ und die Effizienz, die daraus folgte.
             { label: 'Ø Schlafdauer', value: fmtH(meanAsleepMin) },
-            { label: 'Ø Im Bett',     value: fmtH(meanInBedMin) },
-            { label: 'Ø Tiefschlaf',  value: fmtH(meanDeepMin) },
-            { label: 'Ø Effizienz',   value: avgEff != null ? fmt0(avgEff) + '<small>%</small>' : '<span class="gh-leer">–</span>' },
+            { label: 'Ø Tief',        value: fmtH(meanDeepMin) },
+            { label: 'Ø Kern',        value: fmtH(meanCoreMin) },
+            { label: 'Ø REM',         value: fmtH(meanRemMin) },
         ];
         kpiBox.innerHTML = kpis.map(k => `
             <div class="gh-kpi"><div class="gh-kpi-lbl">${k.label}</div><div class="gh-kpi-val">${k.value}</div></div>`).join('');
@@ -1253,11 +1221,9 @@ function renderSleepRhythm(windows) {
 
     const bed = spreadStats(valid.map(w => w[0]), true);
     const wake = spreadStats(valid.map(w => w[1]), true);
-    const span = spreadStats(valid.map(w => w[1] - w[0]), false);
     const items = [
         { lbl: 'Zubettgehen', st: bed,  clock: true },
         { lbl: 'Aufstehen',   st: wake, clock: true },
-        { lbl: 'Zeit im Bett', st: span, clock: false },
     ];
     // Liegt die Haelfte der Naechte ueber mehr als zwei Stunden verteilt, ist
     // auch der Median wenig wert -- das steht dann dabei.

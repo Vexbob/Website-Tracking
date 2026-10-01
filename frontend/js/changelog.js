@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.26.0', date: '2026-10-01', title: 'Schlaf: nur echte Schlafphasen', notes: [
+        'Als Schlaf zählen nur noch Tief, Kern und REM.',
+        '„Im Bett“ ist überall raus, samt der Effizienz, die daraus berechnet wurde.',
+        'Im Schlaf-Reiter stehen jetzt Ø Tief, Kern und REM neben der Schlafdauer.',
+    ]},
     { v: 'v2.25.0', date: '2026-10-01', title: 'Ausgaben: nur noch der faire Vergleich', notes: [
         'Die Statistik vergleicht nicht mehr mit einer Vorperiode.',
         'Ausgaben und Startseite vergleichen den Monat mit dem Vormonat nur bis zum selben Tag.',

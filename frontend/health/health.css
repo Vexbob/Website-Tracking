@@ -78,10 +78,6 @@ body{visibility:hidden}body.ready{visibility:visible}
 .h-sleep-head { display: flex; align-items: baseline; gap: 0.625rem; flex-wrap: wrap; }
 .h-sleep-head .h-big { font-size: 1.75rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; letter-spacing: -0.03em; line-height: 1; }
 .h-sleep-head .h-sub { font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.h-sleep-eff { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: var(--surface-2); color: var(--text-2); }
-.h-sleep-eff.good { background: var(--ok-soft); color: var(--ok); }
-.h-sleep-eff.mid { background: var(--warn-soft); color: var(--warn); }
-.h-sleep-eff.low { background: var(--danger-soft); color: var(--danger); }
 .h-phase-bars { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-2); gap: 2px; }
 .h-phase-bars span { height: 100%; }
 .h-phase-bars span:first-child { border-radius: 999px 0 0 999px; }
