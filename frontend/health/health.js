@@ -955,6 +955,51 @@ const SLEEP_SEGMENTS = [
     { key: 'awake',  label: 'Wach',              color: cssVar('--h-sleep-awake') },
 ];
 
+/* Die geschlafenen Stunden stehen im Balken ihrer Nacht (v2.28.0) --
+   dieselbe Zahl wie in „Ø Schlafdauer“, also nur Tief, Kern und REM. Passt
+   sie waagerecht nicht in die Spalte (viele Nächte am Handy), steht sie
+   senkrecht; ist die Spalte auch dafür zu schmal, bleibt sie weg, und der
+   Tooltip nennt sie weiter. Die Phasen sind hell, also dunkle Schrift. */
+function schlafStundenPlugin() {
+    return {
+        id: 'schlafStunden',
+        afterDatasetsDraw(chart) {
+            const naechte = state.sleepUsable || [], fenster = state.sleepWindows || [];
+            const n = chart.data.labels.length;
+            if (!naechte.length || !n) return;
+            const x = chart.scales.x, y = chart.scales.y, ctx = chart.ctx;
+            // Eine Spalte je Nacht: Kategorienbreite mal category- und barPercentage.
+            const breite = (x.width / n) * 0.9 * 0.8;
+            ctx.save();
+            ctx.font = '650 10px system-ui, -apple-system, "Segoe UI", sans-serif';
+            ctx.fillStyle = cssVar('--accent-ink');
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            naechte.forEach((r, i) => {
+                const w = fenster[i];
+                const min = schlafMinuten(r);
+                if (!w || !min) return;
+                const text = fmt1(min / 60);
+                const oben = y.getPixelForValue(w[0]);
+                const unten = y.getPixelForValue(Math.min(w[1], 24));
+                const hoehe = unten - oben, mitte = (oben + unten) / 2;
+                const tw = ctx.measureText(text).width;
+                const xm = x.getPixelForValue(i);
+                if (breite >= tw + 4 && hoehe >= 14) {
+                    ctx.fillText(text, xm, mitte);
+                } else if (breite >= 11 && hoehe >= tw + 8) {
+                    ctx.save();
+                    ctx.translate(xm, mitte);
+                    ctx.rotate(-Math.PI / 2);
+                    ctx.fillText(text, 0, 0);
+                    ctx.restore();
+                }
+            });
+            ctx.restore();
+        },
+    };
+}
+
 function initSchlaf() {
     state.sleepInit = true;
     if (state.chartSleepTimes) state.chartSleepTimes.destroy();
@@ -1028,6 +1073,7 @@ function initSchlaf() {
                      grid: { color: th.grid }, border: { display: false } },
             },
         }),
+        plugins: [schlafStundenPlugin()],
     });
     VexRange.mount(document.getElementById('hSleepRange'), {
         onChange: (r) => { state.sleepRange = r; loadSleepChart(); },

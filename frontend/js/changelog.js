@@ -14,6 +14,10 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.28.0', date: '2026-10-01', title: 'Schlafstunden im Balken', notes: [
+        'Im Schlaf-Reiter steht in jedem Balken, wie viele Stunden du in der Nacht geschlafen hast.',
+        'Bei vielen Nächten am Handy steht die Zahl senkrecht oder fällt weg, wenn die Spalte zu schmal ist.',
+    ]},
     { v: 'v2.27.0', date: '2026-10-01', title: 'Workouts neu gebaut', notes: [
         'Oben steht die Trainingszeit im Zeitraum, daneben ihr Rhythmus je Tag, Woche oder Monat.',
         'Die Sportarten stehen als Liste mit Zeit und Anteil, ein Tipp darauf filtert.',

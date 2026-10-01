@@ -186,7 +186,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .h-metric-card.sortable-chosen { box-shadow: var(--shadow-float); }
 
 /* Schlaf: typische Zeiten unter dem Diagramm (v1.46.2) */
-.h-sleep-rhythm { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
+.h-sleep-rhythm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
 .h-sleep-rhythm:empty { display: none; }
 .h-rhythm-item { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.625rem 0.75rem; }
 .h-rhythm-lbl { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); font-weight: 600; }
