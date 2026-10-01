@@ -192,7 +192,7 @@ function renderState() {
     const p = S.posts.find(x => x.id === S.selectedId);
     if (!p) return;
     const st = document.getElementById('baState');
-    st.textContent = p.published_at ? `📰 Veröffentlicht am ${fmtDate(p.published_at)}` : 'Entwurf';
+    st.textContent = p.published_at ? `Veröffentlicht am ${fmtDate(p.published_at)}` : 'Entwurf';
     st.classList.toggle('published', !!p.published_at);
     document.getElementById('baPublish').style.display = p.published_at ? 'none' : '';
     document.getElementById('baUnpub').style.display = p.published_at ? '' : 'none';
@@ -489,7 +489,7 @@ async function uploadAndInsertImage(file) {
     // Placeholder an Cursor-Position einfügen
     const placeholder = document.createElement('div');
     placeholder.className = 'img-drop-zone';
-    placeholder.textContent = `⏳ Lade „${file.name || 'Bild'}“ hoch …`;
+    placeholder.textContent = `Lade „${file.name || 'Bild'}“ hoch …`;
     insertNodeAtCursor(placeholder);
     try {
         const fd = new FormData();

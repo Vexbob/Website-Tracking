@@ -16,6 +16,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/reiter.js"></script>
+<script src="/js/ikon.js"></script>
 <script src="/js/modal.js"></script>
 <script src="/js/sw-update.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -33,13 +34,13 @@
 <main class="wide">
 
     <header class="page-head">
-        <h1>♟️ Schach</h1>
+        <h1>Schach</h1>
     </header>
 
     <div class="tabs">
-        <button class="tab-btn active" data-tab="ueberblick">📈 Überblick</button>
-        <button class="tab-btn" data-tab="partien">♟️ Partien</button>
-        <button class="tab-btn" data-tab="konten">🔗 Konten</button>
+        <button class="tab-btn active" data-tab="ueberblick">Überblick</button>
+        <button class="tab-btn" data-tab="partien">Partien</button>
+        <button class="tab-btn" data-tab="konten">Konten</button>
     </div>
 
     <!-- ====================== Überblick ======================
@@ -66,7 +67,13 @@
                 <div class="stat-filter-slot" id="schRange"></div>
             </div>
 
-            <div class="stat-kpi-grid" id="schKpi"></div>
+            <!-- v2.30.0: die Bühne. Die Wertung der Disziplin mit den meisten
+                 Partien ist die Zahl, wegen der man hinschaut; Partien,
+                 Punktequote und Gegner stehen als Fakten darunter. Vorher
+                 vier gleich laute Kacheln mit Emoji-Deko. -->
+            <section class="v-buehne sch-buehne" id="schKpi">
+                <span class="skel skel-block"></span>
+            </section>
 
             <!-- Wertungsverlauf: alle Disziplinen auf einen Blick.
                  Je Disziplin eine kleine Kurve mit beiden Plattformen darin —
@@ -74,7 +81,7 @@
                  hinter einem Umschalter. -->
             <div class="stat-card">
                 <div class="stat-card-head">
-                    <h3>📈 Wertungsverlauf</h3>
+                    <h3>Wertungsverlauf</h3>
                     <div class="sch-legende" id="schLegende"></div>
                 </div>
                 <div class="sch-verlauf-gitter" id="schVerlauf">
@@ -86,13 +93,13 @@
             <div class="split-3-2">
                 <div class="stat-card">
                     <div class="stat-card-head">
-                        <h3>⚖️ Bilanz</h3>
+                        <h3>Bilanz</h3>
                         <span class="stat-range-lbl" id="schBilanzSub"></span>
                     </div>
                     <div id="schBilanz"><span class="skel skel-block"></span></div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-card-head"><h3>🔥 Form</h3></div>
+                    <div class="stat-card-head"><h3>Form</h3></div>
                     <div id="schForm"><span class="skel skel-block"></span></div>
                 </div>
             </div>
@@ -101,7 +108,7 @@
                  eine Siegquote allein nie beantwortet: wann lief es. -->
             <div class="stat-card">
                 <div class="stat-card-head">
-                    <h3>📊 Aktivität</h3>
+                    <h3>Aktivität</h3>
                     <span class="stat-range-lbl" id="schAktivitaetSub"></span>
                 </div>
                 <div id="schAktivitaetLeer" hidden></div>
@@ -112,7 +119,7 @@
 
             <div class="split-2">
                 <div class="stat-card">
-                    <div class="stat-card-head"><h3>🎯 Gegnerstärke</h3></div>
+                    <div class="stat-card-head"><h3>Gegnerstärke</h3></div>
                     <div id="schStaerkeLeer" hidden></div>
                     <div class="chart-wrap small" id="schStaerkeBox">
                         <canvas id="schStaerkeChart"></canvas>
@@ -120,18 +127,18 @@
                     <p class="sch-note" id="schStaerkeNote"></p>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-card-head"><h3>⏱️ Zeitkontrolle und Farbe</h3></div>
+                    <div class="stat-card-head"><h3>Zeitkontrolle und Farbe</h3></div>
                     <div id="schArten"><span class="skel skel-block"></span></div>
                 </div>
             </div>
 
             <div class="split-2">
                 <div class="stat-card">
-                    <div class="stat-card-head"><h3>📖 Eröffnungen</h3></div>
+                    <div class="stat-card-head"><h3>Eröffnungen</h3></div>
                     <div id="schEroeffnungen"><span class="skel skel-block"></span></div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-card-head"><h3>👥 Gegner</h3></div>
+                    <div class="stat-card-head"><h3>Gegner</h3></div>
                     <div id="schGegner"><span class="skel skel-block"></span></div>
                 </div>
             </div>
@@ -142,7 +149,7 @@
     <div id="tab-partien" hidden>
         <div class="stat-filterbar sch-filterbar">
             <label class="sch-suche">
-                <span class="sch-suche-ico" aria-hidden="true">🔎</span>
+                <span class="sch-suche-ico" aria-hidden="true" data-ikon="lupe" data-ikon-gross="16"></span>
                 <input type="search" id="schSuche" placeholder="Gegner oder Eröffnung"
                        aria-label="In den Partien suchen" autocomplete="off">
             </label>
@@ -198,7 +205,7 @@
 
         <div class="stat-card">
             <div class="stat-card-head">
-                <h3>♟️ Partien</h3>
+                <h3>Partien</h3>
                 <span class="stat-range-lbl" id="schPartienSumme"></span>
             </div>
             <div id="schPartienListe"><span class="skel skel-block"></span></div>
@@ -228,8 +235,7 @@
                     <select class="v-select" id="schAutoHour"></select>
                 </label>
             </div>
-            <p class="sch-hinweis sch-hinweis--klein">Dafür muss keine Seite offen sein — den
-                täglichen Lauf macht der Server.</p>
+            <p class="sch-hinweis sch-hinweis--klein">Läuft auf dem Server, auch wenn keine Seite offen ist.</p>
 
             <div class="sch-opt">
                 <label class="sch-feld sch-feld--eng">
@@ -243,10 +249,7 @@
                     </select>
                 </label>
             </div>
-            <p class="sch-hinweis sch-hinweis--klein">Häufiger als alle fünf Minuten geht bewusst
-                nicht: eine Wertungszahl bewegt sich nur nach einer Partie, und beide Plattformen
-                bremsen Abfragen im Minutentakt. Der Verlauf selbst hängt nicht daran — er kommt
-                aus den Partien und reicht deshalb so weit zurück wie deine Historie.</p>
+            <p class="sch-hinweis sch-hinweis--klein">Häufiger als alle fünf Minuten bremsen die Plattformen.</p>
 
             <div class="sch-konto-tasten">
                 <button type="button" class="v-btn v-btn--primary" id="schAutoSpeichern">Speichern</button>

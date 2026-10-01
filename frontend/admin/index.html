@@ -13,6 +13,7 @@
     <script src="/js/version.js"></script>
     <script src="/js/api.js"></script>
     <script src="/js/modal.js"></script>
+    <script src="/js/ikon.js"></script>
 <script src="/js/nav-switcher.js"></script>
     <script src="/js/sw-update.js"></script>
     <link rel="stylesheet" href="/admin/admin.css">
@@ -28,8 +29,7 @@
 <main>
     <header class="page-head">
         <h1>Accounts</h1>
-        <p class="page-sub">Wer sich anmelden darf. Ein neuer Account bekommt einen
-        einmaligen Einladungs-Link und legt sein Passwort selbst fest — du siehst es nie.</p>
+        <p class="page-sub">Wer sich anmelden darf. Ein neuer Account legt sein Passwort über einen Einladungs-Link selbst fest.</p>
     </header>
 
     <!-- v2.11.7: Das Einladen lag als dauerhaft offene Maske ueber der Liste,
@@ -37,50 +37,27 @@
          hat. Was man selten tut, steht nicht dauerhaft auf der Seite
          (DESIGN 6d). Dazu stand der erklaerende Satz zweimal: einmal im
          Seitenkopf, vier Zeilen tiefer noch einmal in der Karte. -->
-    <div class="card">
-        <div class="card-head-row">
-            <h3>Bestehende Accounts</h3>
-            <button type="button" class="v-btn v-btn--sm v-btn--primary" id="inviteBtn">+ Einladen</button>
-        </div>
+    <!-- v2.30.0: eine Zeile je Account; ein Tipp öffnet den Dialog mit
+         Passwort, Einladungs-Link und -- einen Griff tiefer -- Löschen. Vorher
+         standen bis zu drei Knöpfe an jeder Zeile, Löschen rot daneben. -->
+    <section class="v-abschnitt ad-abschnitt">
+        <header class="v-abschnitt-kopf">
+            <h2>Accounts</h2>
+            <span class="v-abschnitt-sub" id="userCount"></span>
+            <button type="button" class="v-btn v-btn--sm v-btn--primary" id="inviteBtn"><span data-ikon="plus" data-ikon-gross="16"></span>Einladen</button>
+        </header>
         <div id="userList">
             <span class="skel skel-line long"></span>
             <span class="skel skel-line"></span>
-            <span class="skel skel-line short"></span>
         </div>
-    </div>
+    </section>
 </main>
-
-<div class="modal" id="inviteModal">
-    <div class="modal-card">
-        <h3>Einladungs-Link</h3>
-        <p style="margin-bottom:0.75rem;font-size:0.875rem;color:var(--text-2)">Schicke diesen Link an <strong id="inviteUser">–</strong>. Der Link ist einmalig und gilt <strong id="inviteExp">–</strong>.</p>
-        <div class="invite-box" id="inviteLink">–</div>
-        <div class="modal-actions">
-            <button class="cancel" onclick="closeInviteModal()">Schließen</button>
-            <button class="primary" onclick="copyInvite()">Kopieren</button>
-        </div>
-    </div>
-</div>
-
-<div class="modal" id="pwModal">
-    <div class="modal-card">
-        <h3>Passwort zurücksetzen</h3>
-        <p style="margin-bottom:0.75rem;font-size:0.875rem;color:var(--text-2)">Für <strong id="pwModalUser">–</strong>. Nutze das nur, wenn der User sein Passwort verloren hat.</p>
-        <label>Neues Passwort (mind. 6 Zeichen)</label>
-        <input id="pwModalInput" type="password" autocomplete="new-password">
-        <div class="modal-actions">
-            <button class="cancel" onclick="closePwModal()">Abbrechen</button>
-            <button class="primary" onclick="savePwReset()">Speichern</button>
-        </div>
-    </div>
-</div>
 
 <div class="version-tag"></div>
 <div id="toast" class="toast"></div>
 
 <script>
 let users = [];
-let pwTargetId = null;
 let toastTimer = null;
 
 function showToast(m, err) {
@@ -118,32 +95,49 @@ async function loadUsers() {
 
 function renderUsers() {
     const box = document.getElementById('userList');
-    if (!users.length) { box.innerHTML = '<div class="muted">Keine Accounts.</div>'; return; }
-    box.innerHTML = users.map(u => {
-        const badge = u.is_admin ? '<span class="user-badge">ADMIN</span>' :
-                      (!u.activated ? '<span class="user-badge pending">⏳ NOCH NICHT AKTIVIERT</span>' : '');
-        let actions = '';
-        if (u.is_admin) {
-            actions = `<button onclick="openPwModal(${u.id},'${esc(u.username)}')">Passwort</button>`;
-        } else if (!u.activated && u.pending_token) {
-            actions = `<button class="primary" onclick="showInvite('${u.pending_token}','${esc(u.username)}','${u.pending_expires}')">Link anzeigen</button>
-                       <button onclick="regenerateInvite(${u.id},'${esc(u.username)}')">Neuer Link</button>
-                       <button class="danger" onclick="deleteUser(${u.id},'${esc(u.username)}')">Löschen</button>`;
-        } else if (!u.activated) {
-            actions = `<button class="primary" onclick="regenerateInvite(${u.id},'${esc(u.username)}')">Link erzeugen</button>
-                       <button class="danger" onclick="deleteUser(${u.id},'${esc(u.username)}')">Löschen</button>`;
-        } else {
-            actions = `<button onclick="openPwModal(${u.id},'${esc(u.username)}')">Passwort</button>
-                       <button class="danger" onclick="deleteUser(${u.id},'${esc(u.username)}')">Löschen</button>`;
-        }
-        return `<div class="user-row">
-            <span class="user-name">${esc(u.username)}</span>
-            ${badge}
-            <span class="user-meta">seit ${fmtDate(u.created_at)}</span>
-            <span style="flex:1"></span>
-            <div class="user-actions">${actions}</div>
-        </div>`;
-    }).join('');
+    document.getElementById('userCount').textContent = users.length ? users.length + (users.length === 1 ? ' Account' : ' Accounts') : '';
+    if (!users.length) { box.innerHTML = '<div class="empty"><p class="empty-text">Noch kein Account außer dir. Lade jemanden ein.</p></div>'; return; }
+    box.innerHTML = '<div class="rec-list">' + users.map(u => {
+        const status = u.is_admin ? '<span class="v-tag">Admin</span>'
+            : (!u.activated ? '<span class="v-tag v-tag--warn">nicht aktiviert</span>' : '');
+        return `<button type="button" class="rec-row" onclick="dlgUser(${u.id})">
+            <span class="rec-mark ad-mark" aria-hidden="true">${esc((u.username || '?').slice(0, 1).toUpperCase())}</span>
+            <span class="rec-main"><span class="rec-title">${esc(u.username)} ${status}</span>
+                <span class="rec-meta">seit ${fmtDate(u.created_at)}</span></span>
+            <span class="rec-go">${window.VexIkon ? VexIkon.svg('pfeil', 16) : ''}</span>
+        </button>`;
+    }).join('') + '</div>';
+}
+
+/* Alles zu einem Account an einer Stelle. Löschen steht im Fuß, links und
+   leise -- die zerstörendste Aktion der Anwendung gehört nicht als roter
+   Knopf an jede Zeile (CLAUDE.md, „Löschen ist kein Knopf in einer Liste“). */
+function dlgUser(id) {
+    const u = users.find(x => x.id === id);
+    if (!u) return;
+    const status = u.is_admin ? 'Administrator' : (u.activated ? 'Aktiv' : 'Noch nicht aktiviert');
+    const knoepfe = [];
+    if (!u.activated && u.pending_token) {
+        knoepfe.push('<button type="button" class="v-btn v-btn--primary" data-link>Einladungs-Link anzeigen</button>');
+        knoepfe.push('<button type="button" class="v-btn" data-neu>Neuen Link erzeugen</button>');
+    } else if (!u.activated) {
+        knoepfe.push('<button type="button" class="v-btn v-btn--primary" data-neu>Einladungs-Link erzeugen</button>');
+    } else {
+        knoepfe.push('<button type="button" class="v-btn" data-pw>Passwort zurücksetzen</button>');
+    }
+    const d = VexModal.open(esc(u.username), `
+        <p class="ad-dlg-note">${status} · seit ${fmtDate(u.created_at)}</p>
+        <div class="ad-knoepfe">${knoepfe.join('')}</div>
+        <div class="modal-fuss">
+            ${u.is_admin ? '<span></span>' : '<button type="button" class="v-btn v-btn--danger" data-weg>Löschen</button>'}
+            <button type="button" class="v-btn" data-zu>Schließen</button>
+        </div>`, {});
+    const an = (sel, fn) => { const el = d.root.querySelector(sel); if (el) el.onclick = fn; };
+    an('[data-zu]', () => d.close());
+    an('[data-link]', () => { d.close(); showInvite(u.pending_token, u.username, u.pending_expires); });
+    an('[data-neu]', () => { d.close(); regenerateInvite(u.id, u.username); });
+    an('[data-pw]', () => { d.close(); openPwModal(u.id, u.username); });
+    an('[data-weg]', async () => { if (await deleteUser(u.id, u.username)) d.close(); });
 }
 
 function openInviteDialog() {
@@ -152,7 +146,7 @@ function openInviteDialog() {
         + 'einmaligen Einladungs-Link und legt sein Passwort selbst fest.</p>'
         + '<label for="newUsername">Benutzername</label>'
         + '<input id="newUsername" placeholder="z.B. Anna" autocomplete="off">'
-        + '<div class="modal-actions"><button type="button" class="v-btn" data-zu>Abbrechen</button>'
+        + '<div class="modal-fuss"><button type="button" class="v-btn" data-zu>Abbrechen</button>'
         + '<button type="button" class="v-btn v-btn--primary" id="inviteGo">Einladung erstellen</button></div>',
         { voll: true });
     dlg.root.querySelector('[data-zu]').onclick = () => dlg.close();
@@ -200,54 +194,57 @@ async function regenerateInvite(id, name) {
 }
 
 function showInvite(token, name, expiresAt) {
-    document.getElementById('inviteUser').textContent = name;
-    document.getElementById('inviteLink').textContent = inviteUrl(token);
     const exp = new Date(expiresAt);
-    const days = Math.round((exp - Date.now())/(1000*60*60*24));
-    document.getElementById('inviteExp').textContent = `bis ${exp.toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'})} (${days} Tage)`;
-    document.getElementById('inviteModal').classList.add('open');
-}
-function closeInviteModal() {
-    document.getElementById('inviteModal').classList.remove('open');
-}
-async function copyInvite() {
-    const link = document.getElementById('inviteLink').textContent;
-    try {
-        await navigator.clipboard.writeText(link);
-        haptic('tap');
-        showToast('Link kopiert');
-    } catch(e) {
-        showToast('Kopieren fehlgeschlagen — bitte manuell markieren', true);
-    }
+    const days = Math.round((exp - Date.now()) / (1000 * 60 * 60 * 24));
+    const link = inviteUrl(token);
+    const d = VexModal.open('Einladungs-Link', `
+        <p class="ad-dlg-note">Schicke diesen Link an <strong>${esc(name)}</strong>. Er gilt einmal,
+            bis ${esc(exp.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' }))} (${days} Tage).</p>
+        <div class="invite-box">${esc(link)}</div>
+        <div class="modal-fuss">
+            <button type="button" class="v-btn" data-zu>Schließen</button>
+            <button type="button" class="v-btn v-btn--primary" data-kopie>Kopieren</button>
+        </div>`, {});
+    d.root.querySelector('[data-zu]').onclick = () => d.close();
+    d.root.querySelector('[data-kopie]').onclick = async () => {
+        try {
+            await navigator.clipboard.writeText(link);
+            haptic('tap');
+            showToast('Link kopiert');
+        } catch (e) {
+            showToast('Kopieren fehlgeschlagen — bitte manuell markieren', true);
+        }
+    };
 }
 
 function openPwModal(id, name) {
-    pwTargetId = id;
-    document.getElementById('pwModalUser').textContent = name;
-    document.getElementById('pwModalInput').value = '';
-    document.getElementById('pwModal').classList.add('open');
-    setTimeout(() => document.getElementById('pwModalInput').focus(), 100);
-}
-function closePwModal() {
-    document.getElementById('pwModal').classList.remove('open');
-    pwTargetId = null;
-}
-async function savePwReset() {
-    const pw = document.getElementById('pwModalInput').value;
-    if (!pw || pw.length < 6) { showToast('Mindestens 6 Zeichen', true); return; }
-    try {
-        await apiCall('/api/admin/users/' + pwTargetId + '/password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: pw })
-        });
-        closePwModal();
-        haptic('success');
-        showToast('Passwort geändert');
-    } catch(e) {
-        haptic('error');
-        showToast(e.message || 'Fehler', true);
-    }
+    const d = VexModal.open('Passwort zurücksetzen', `
+        <p class="ad-dlg-note">Für <strong>${esc(name)}</strong>. Nur nutzen, wenn das Passwort verloren ist.</p>
+        <label for="pwModalInput">Neues Passwort (mindestens 6 Zeichen)</label>
+        <input id="pwModalInput" type="password" autocomplete="new-password">
+        <div class="modal-fuss">
+            <button type="button" class="v-btn" data-zu>Abbrechen</button>
+            <button type="button" class="v-btn v-btn--primary" data-ok>Speichern</button>
+        </div>`, { voll: true });
+    d.root.querySelector('[data-zu]').onclick = () => d.close();
+    d.root.querySelector('[data-ok]').onclick = async () => {
+        const pw = d.root.querySelector('#pwModalInput').value;
+        if (!pw || pw.length < 6) { showToast('Mindestens 6 Zeichen', true); return; }
+        try {
+            await apiCall('/api/admin/users/' + id + '/password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pw })
+            });
+            d.close();
+            haptic('success');
+            showToast('Passwort geändert');
+        } catch (e) {
+            haptic('error');
+            showToast(e.message || 'Fehler', true);
+        }
+    };
+    if (window.matchMedia('(min-width: 721px)').matches) d.root.querySelector('#pwModalInput').focus();
 }
 
 async function deleteUser(id, name) {
@@ -260,22 +257,22 @@ async function deleteUser(id, name) {
         text: 'Alle Daten dieses Kontos werden unwiderruflich entfernt — '
             + 'Bons, Notizen, Sparziele, Gesundheitsdaten. Das lässt sich nicht rückgängig machen.',
         ok: 'Endgültig löschen', danger: true });
-    if (!ok) return;
+    if (!ok) return false;
     try {
         await apiCall('/api/admin/users/' + id, { method: 'DELETE' });
         haptic('success');
         showToast('Gelöscht');
         await loadUsers();
+        return true;
     } catch(e) {
         haptic('error');
         showToast(e.message || 'Fehler', true);
+        return false;
     }
 }
 
 document.getElementById('logoutBtn').onclick = () => { clearToken(); location.href = '/private/login.html'; };
 document.getElementById('inviteBtn').onclick = openInviteDialog;
-document.getElementById('pwModal').addEventListener('click', e => { if (e.target.id === 'pwModal') closePwModal(); });
-document.getElementById('inviteModal').addEventListener('click', e => { if (e.target.id === 'inviteModal') closeInviteModal(); });
 
 (async function boot() {
     if (!isLoggedIn()) { location.href = '/private/login.html'; return; }

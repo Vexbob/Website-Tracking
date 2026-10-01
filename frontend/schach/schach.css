@@ -486,3 +486,49 @@
        waeren 130 Pixel breit und damit keine Kurve mehr. */
     .sch-verlauf-gitter { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- Bühne (v2.30.0) ----------
+   Die Wertung der Disziplin mit den meisten Partien als Heldenzahl, ihr
+   Weg im Zeitraum daneben, darunter drei Fakten. */
+.sch-buehne {
+    --buehne-ton: var(--figure, var(--m-schach));
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+@media (min-width: 860px) {
+    .sch-buehne { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: end; }
+}
+.sch-b-haupt { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.sch-b-delta { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;
+    font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.sch-delta { font-weight: 700; font-size: 0.9375rem; color: var(--text-2); }
+.sch-delta.ist-gut { color: var(--ok); }
+.sch-delta.ist-schlecht { color: var(--danger); }
+.sch-b-fakten {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0;
+    background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+}
+.sch-b-fakten > div { background: color-mix(in srgb, var(--surface-2) 72%, transparent); padding: 0.625rem 0.75rem; min-width: 0; }
+.sch-b-fakten dt { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+.sch-b-fakten dd { margin: 0.125rem 0 0; font-size: 1.125rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.sch-b-fakten span { display: block; font-size: 0.6875rem; color: var(--text-3); margin-top: 0.125rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sch-konto-tile svg { width: 20px; height: 20px; }
+/* „Konto lösen“ ist der seltenste Handgriff -- leise, und erst in der
+   Rückfrage rot. */
+.sch-loesen { color: var(--text-3); margin-left: auto; }
+.sch-loesen:hover { color: var(--danger); }
+.sch-suche-ico { display: inline-flex; color: var(--text-3); }
+/* Platz halten, solange die Auswertung lädt -- sonst rückte beim Eintreffen
+   alles darunter um bis zu 190 px (v2.30.0). */
+.sch-kopfleiste .sch-kopf-text { min-height: 2.5rem; }
+@media (min-width: 860px) {
+    .sch-verlauf-gitter { min-height: 13rem; }
+}
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .sch-pip { width: 22px; height: 22px; }
+    .sch-konto-text a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+/* Der Platzhalter ist so hoch wie die geladene Bühne. */
+.sch-buehne > .skel-block { height: 11rem; }
+@media (min-width: 860px) { .sch-buehne > .skel-block { height: 6.5rem; } }

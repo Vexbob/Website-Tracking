@@ -6,6 +6,17 @@
 html, body { height: 100%; }
 body { display: flex; flex-direction: column; overflow: hidden; }
 .nz-app { flex: 1; display: flex; min-height: 0; overflow: hidden; background: var(--surface-2); }
+/* v2.30.0: die Notizfarben als Tokens statt fester Hex-Werte. */
+:root {
+    --nz-farbe-default: var(--text-3);
+    --nz-farbe-red: var(--danger);
+    --nz-farbe-orange: var(--m-schach);
+    --nz-farbe-yellow: var(--m-blog);
+    --nz-farbe-green: var(--ok);
+    --nz-farbe-blue: var(--m-notizen);
+    --nz-farbe-purple: var(--m-admin);
+    --nz-farbe-pink: var(--m-health);
+}
 
 /* ==================================================
  * Sidebar
@@ -29,9 +40,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .nz-search-ico{position:absolute;left:0.7rem;top:50%;transform:translateY(-50%);font-size:0.8125rem;color:var(--text-3);pointer-events:none}
 .nz-search-wrap input[type=search]{width:100%;padding:0.5rem 0.625rem 0.5rem 2rem;margin:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
 
-.nz-side-row{display:flex;gap:0.4rem}
-.nz-side-sort{flex:1;padding:0.45rem 0.55rem;font-size:0.8125rem;margin:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line);color:var(--text-1)}
-.nz-side-tabs{display:flex;gap:4px;background:var(--surface-2);padding:3px;border-radius:8px}
+.nz-side-row{display:flex;gap:0.4rem;align-items:stretch}
+/* Ohne eigene Schriftgröße: unter 16 px zoomt das iPhone beim Antippen. */
+.nz-side-sort{flex:0 1 auto;width:auto;max-width:48%;padding:0.4rem 0.55rem;margin:0;border-radius:8px;background:var(--surface-2);border:1px solid var(--line);color:var(--text-1)}
+.nz-side-tabs{flex:1;display:flex;gap:4px;background:var(--surface-2);padding:3px;border-radius:8px}
 .nz-side-tab{flex:1;padding:0.4rem;font-size:0.75rem;background:transparent;border:none;color:var(--text-2);font-weight:600;cursor:pointer;border-radius:6px;margin:0;width:auto;transition:background .15s}
 .nz-side-tab.active{background:var(--surface-3);color:var(--text-1)}
 
@@ -42,19 +54,21 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .nz-item{display:flex;gap:0.5rem;padding:0.75rem 0.875rem;margin:0.15rem 0;border-radius:10px;cursor:pointer;position:relative;transition:background .12s;border-left:3px solid transparent}
 .nz-item:hover{background:var(--surface-2)}
 .nz-item.active{background:var(--surface-2)}
-.nz-item.nz-color-red{border-left-color:#ef4444}
-.nz-item.nz-color-orange{border-left-color:#f59e0b}
-.nz-item.nz-color-yellow{border-left-color:#eab308}
-.nz-item.nz-color-green{border-left-color:#22c55e}
-.nz-item.nz-color-blue{border-left-color:#3b82f6}
-.nz-item.nz-color-purple{border-left-color:#8b5cf6}
-.nz-item.nz-color-pink{border-left-color:#ec4899}
+.nz-item.nz-color-red{border-left-color:var(--nz-farbe-red)}
+.nz-item.nz-color-orange{border-left-color:var(--nz-farbe-orange)}
+.nz-item.nz-color-yellow{border-left-color:var(--nz-farbe-yellow)}
+.nz-item.nz-color-green{border-left-color:var(--nz-farbe-green)}
+.nz-item.nz-color-blue{border-left-color:var(--nz-farbe-blue)}
+.nz-item.nz-color-purple{border-left-color:var(--nz-farbe-purple)}
+.nz-item.nz-color-pink{border-left-color:var(--nz-farbe-pink)}
 .nz-item-main{flex:1;min-width:0}
 .nz-item-title{font-size:0.9rem;font-weight:600;color:var(--text-1);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nz-item-preview{font-size:0.8125rem;color:var(--text-2);line-height:1.35;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nz-item-meta{display:flex;gap:0.5rem;align-items:center;font-size:0.6875rem;color:var(--text-3);margin-top:4px}
 .nz-item-badge{background:var(--surface-2);padding:1px 6px;border-radius:8px;font-weight:600}
-.nz-item-pin{font-size:0.75rem;flex-shrink:0}
+.nz-item-pin{display:inline-flex;flex-shrink:0;color:var(--warn)}
+.nz-section{display:flex;align-items:center;gap:0.35rem}
+.nz-d-act{display:inline-flex;align-items:center;gap:0.35rem}
 
 /* ==================================================
  * Detail-Bereich
@@ -184,3 +198,16 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .nz-undo-btn{background:transparent;border:1px solid rgba(255,255,255,0.3);color:inherit;padding:0.25rem 0.65rem;font-size:0.75rem;border-radius:6px;cursor:pointer;font-weight:600;margin:0;width:auto}
 .nz-undo-btn:hover{background:rgba(255,255,255,0.1)}
 
+
+/* ---------- v2.30.0: Handy ---------- */
+@media (max-width: 720px) {
+    .nz-new { display: none; }
+    /* Liegt der Editor offen, gehört der Schwebeknopf nicht darüber. */
+    .nz-app.nz-mobile-detail ~ .nz-fab { display: none; }
+}
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .nz-side-tab, .nz-side-sort, .nz-search-wrap input[type=search], .nz-d-act, .nz-back { min-height: 44px; }
+    .nz-d-swatch { width: 30px; height: 30px; }
+    /* Die Formatleiste scrollt am Handy ohnehin -- breit genug für den Daumen darf sie sein. */
+    .nz-tb { min-height: 44px; min-width: 44px; }
+}

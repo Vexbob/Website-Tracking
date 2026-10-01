@@ -620,6 +620,21 @@
     </section>
 
     <section class="sg-sec">
+        <h2>Schalter</h2>
+        <p class="sg-note">An oder aus. Bedient wird die ganze Zeile (<code>button role="switch"</code>), der Schalter zeigt nur den Zustand. Gespeichert wird beim Tippen, ohne Speichern-Knopf.</p>
+        <div class="v-schalt-liste" style="max-width:420px">
+            <button type="button" class="v-schalt-zeile" role="switch" aria-checked="true">
+                <span class="v-schalt-text"><span class="v-schalt-name">Sparziel</span><span class="v-schalt-sub">Achievements und Wochenziele</span></span>
+                <span class="v-schalter" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="v-schalt-zeile" role="switch" aria-checked="false">
+                <span class="v-schalt-text"><span class="v-schalt-name">Nährwerte</span><span class="v-schalt-sub">Ruht</span></span>
+                <span class="v-schalter" aria-hidden="true"></span>
+            </button>
+        </div>
+    </section>
+
+    <section class="sg-sec">
         <h2>Reiter</h2>
         <p class="sg-note">Eine Zeile, auch am Handy. Unter den aktiven Reiter gleitet eine
         Markierung (<code>js/reiter.js</code>); das Modul setzt wie bisher nur die Klasse

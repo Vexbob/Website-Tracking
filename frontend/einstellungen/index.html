@@ -15,6 +15,7 @@
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/sw-update.js"></script>
 <script src="/js/range-filter.js"></script>
+<script src="/js/ikon.js"></script>
 <style>
 /* Nur was es sonst nirgends gibt. Alles andere kommt aus style.css:
    .v-card, .v-btn, .navcfg-list/-row/-mini. */
@@ -30,37 +31,44 @@
 .navcfg-row.is-off .navcfg-name { text-decoration: line-through; }
 .set-eye.is-off { color: var(--text-4); }
 .navcfg-row.is-off .set-eye { opacity: 1; }
-/* Der Modul-Schalter traegt sein Wort, nicht nur ein Symbol: hier steht
-   mehr auf dem Spiel als bei der Leiste, und "Ruht" muss man lesen koennen. */
-.set-modsub { display: block; color: var(--text-4); font-size: 0.75rem;
+/* v2.30.0: Module und Export schalten mit .v-schalter (style.css) statt
+   mit einem roten Knopf je Zeile. Ruhend tritt die Zeile zurück. */
+.set-mod[aria-checked="false"] .set-mod-ico { opacity: 0.45; }
+.set-mod-ico { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
+    color: var(--text-1); background: color-mix(in srgb, var(--tone, var(--accent)) 22%, var(--surface-3)); flex: none; }
+.set-mod-ico svg { width: 17px; height: 17px; }
+.set-modsub { display: block; color: var(--text-3); font-size: 0.75rem;
     font-weight: 400; margin-top: 0.1rem; }
-.set-modbtn { width: auto; margin: 0; flex: none; min-width: 7.5rem; }
-.set-modbtn.is-an { background: var(--accent-strong); color: var(--accent-ink);
-    border-color: transparent; }
-.navcfg-row.is-schlaeft .navcfg-ico,
-.navcfg-row.is-schlaeft .navcfg-name { opacity: 0.55; }
-/* Die Export-Voreinstellung: eine Zeile je Modul, Name links, Stufe rechts.
-   Am Handy stapeln sie, damit das Auswahlfeld seine 44 Pixel behält. */
-.set-exp-row { display: flex; align-items: center; gap: var(--space-3);
-    padding: 0.4rem 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.set-exp-row:last-child { border-bottom: 0; }
+/* Die Export-Voreinstellung: eine Zeile je Modul -- Name, Stufe, Schalter.
+   Am Handy rutscht das Auswahlfeld unter den Namen und behält seine 44 px. */
+.set-exp-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name schalter" "stufe stufe";
+    align-items: center; gap: 0.5rem var(--space-3);
+    padding: 0.5rem 0.875rem; min-height: 56px; }
+@media (min-width: 560px) {
+    .set-exp-row { grid-template-columns: minmax(0, 1fr) 13rem auto;
+        grid-template-areas: "name stufe schalter"; }
+}
+.set-exp-name { grid-area: name; }
+.set-exp-row select, .set-exp-row input[type="date"] { grid-area: stufe; }
+.set-exp-row .v-schalt-zeile { grid-area: schalter; width: auto; min-height: 44px; padding: 0; }
+.set-exp-row .v-schalt-zeile:hover { background: none; }
 .set-exp-name { flex: 1; min-width: 8rem; font-size: 0.875rem; color: var(--text-2); }
 /* Das Auswahlfeld nimmt, was uebrig ist, statt eine feste Breite zu halten:
    am Handy rutscht es unter Name und Schalter, und dort soll es die Zeile
    ausfuellen -- ein halb breites Feld unter zwei anderen Dingen sieht aus,
    als sei es dorthin gefallen. */
 .set-exp-row select, .set-exp-row input[type="date"] {
-    flex: none; width: auto; min-width: 10rem; min-height: 44px; margin: 0;
+    width: 100%; min-height: 44px; margin: 0;
     padding: 0 0.75rem; background: var(--surface-2);
     border: 1px solid var(--line); border-radius: var(--radius);
     color: var(--text-1); font-family: inherit; font-size: 1.0625rem; }
-.set-exp-row select { flex: 1 1 10rem; }
 /* Der Schalter haelt den rechten Rand, auch wenn er am Handy in eine eigene
    Zeile rutscht: sonst steht er dort links und in der Zeile ohne
    Auswahlfeld rechts -- zwei Fluchtlinien in derselben Karte. */
-.set-exp-row .set-modbtn { margin-left: auto; }
-.set-exp-grenze { margin-top: var(--space-4); padding-top: var(--space-4);
-    border-top: 1px solid var(--line-strong); }
+.set-exp-grenze { margin-top: var(--space-3); }
+.set-actions input { flex: 1 1 12rem; min-height: 44px; margin: 0; }
 /* Abgeschaltet tritt zurück, verschwindet aber nicht: die Zeile bleibt an
    ihrem Platz, sonst springt die Liste bei jedem Schalter. Das Auswahlfeld
    daneben ist dann gegenstandslos und sagt das auch. */
@@ -77,23 +85,18 @@
     </div>
 </nav>
 <main>
-    <div class="section-header">
-        <span class="eyebrow">Persönlich</span>
-        <h2>Einstellungen</h2>
-        <div class="sub">Was hier steht, hängt am Konto — nicht am Browser — und gilt deshalb auf jedem Gerät.</div>
-    </div>
+    <header class="page-head">
+        <h1>Einstellungen</h1>
+        <p class="page-sub">Hängt am Konto und gilt deshalb auf jedem Gerät.</p>
+    </header>
 
     <div class="v-card">
         <div class="v-card-head">
             <h3>Module</h3>
             <span class="v-card-sub">Was du benutzt</span>
         </div>
-        <p class="set-hint">Ein ruhendes Modul steht in keiner Leiste und in keinem Menü —
-            auch nicht im Punkte-Schalter. Es ist keine Sperre: seine Daten bleiben vollständig
-            erhalten, Export und Backup nehmen sie weiter mit, und wer die Adresse direkt
-            aufruft, bekommt die Seite. Einschalten geht jederzeit und ändert nichts an dem,
-            was schon drinsteht.</p>
-        <div class="navcfg-list" id="modList"></div>
+        <p class="set-hint">Ein ausgeschaltetes Modul verschwindet aus Leiste und Menüs. Seine Daten bleiben.</p>
+        <div class="v-schalt-liste" id="modList"></div>
     </div>
 
     <div class="v-card">
@@ -101,11 +104,7 @@
             <h3>Leiste am Rechner</h3>
             <span class="v-card-sub">Reihenfolge der Module</span>
         </div>
-        <p class="set-hint">Auf breiten Bildschirmen stehen die Module offen in der
-            Navigationszeile. Was nicht mehr hineinpasst, rutscht von selbst ins Punkte-Menü —
-            diese Reihenfolge entscheidet also, was als Erstes weicht. Mit dem Auge nimmst du ein
-            Modul ganz aus der Leiste; erreichbar bleibt es über das Punkte-Menü. Neue Module
-            hängen sich hinten an, ohne dass du hier etwas tun musst.</p>
+        <p class="set-hint">Was nicht in die Zeile passt, rutscht ins Punkte-Menü. Das Auge nimmt ein Modul ganz heraus.</p>
         <div class="navcfg-list" id="deskList"></div>
         <div class="set-actions">
             <button type="button" class="v-btn" id="deskReset">Standard</button>
@@ -118,8 +117,7 @@
             <h3>Tab-Leiste am Handy</h3>
             <span class="v-card-sub">Zwei bis sechs Module</span>
         </div>
-        <p class="set-hint">Die Leiste am unteren Bildschirmrand. Sie erscheint nur auf schmalen
-            Bildschirmen; am Rechner übernimmt die Zeile oben.</p>
+        <p class="set-hint">Die Leiste am unteren Rand, nur auf schmalen Bildschirmen.</p>
         <button type="button" class="v-btn" id="tabCfg">Tab-Leiste anpassen</button>
     </div>
 
@@ -128,10 +126,7 @@
             <h3>Standard-Zeitraum</h3>
             <span class="v-card-sub">Womit Statistiken aufmachen</span>
         </div>
-        <p class="set-hint">Gilt für die Ausgaben-Statistik und die Gesundheits-Seiten.
-            Ein eigener Von/Bis-Zeitraum lässt sich hier nicht hinterlegen — er wäre
-            nach ein paar Tagen falsch, und eine Seite, die mit einem veralteten Fenster
-            aufmacht, sieht aus wie fehlende Daten.</p>
+        <p class="set-hint">Gilt für die Ausgaben-Statistik und die Gesundheit.</p>
         <div class="rf-presets" id="rangeList"></div>
     </div>
 
@@ -140,17 +135,9 @@
             <h3>Farbverläufe</h3>
             <span class="v-card-sub">Drei Stellen, je ein Preset</span>
         </div>
-        <p class="set-hint">Verläufe gibt es in Vexbob an genau vier Stellen — und nur dort,
-            wo kein Text darauf liegt. Drei davon kannst du hier umstellen; die vierte sind
-            die Diagrammfüllungen, die ihre Farbe vom jeweiligen Modul bekommen und deshalb
-            nicht frei wählbar sind. Die Auswahl ist bewusst eine feste Liste und kein
-            Farbwähler: jedes Preset ist hell genug, um die dunkle Beschriftung darauf
-            lesbar zu halten.</p>
         <div class="grad-slot">
             <div class="grad-slot-head">Thema</div>
-            <p class="grad-slot-hint">Ein Thema setzt alle drei Stellen auf einmal. Stellst du
-                danach eine einzeln um, steht hier „Eigen“ — und lässt sich unter einem Namen
-                sichern.</p>
+            <p class="grad-slot-hint">Setzt alle Stellen auf einmal. Einzeln umgestellt heißt es „Eigen“ und lässt sich sichern.</p>
             <div class="grad-opts" id="themeList"></div>
             <div class="set-actions" id="themeSaveRow">
                 <input type="text" id="themeName" maxlength="40" placeholder="Name für dein Thema">
@@ -165,10 +152,8 @@
             <h3>Daten</h3>
             <span class="v-card-sub">Gesamt-Export</span>
         </div>
-        <p class="set-hint">Eine CSV über die Module, die du auswählst. Zeitraum,
-            Auswahl und eine Vorschau des Ergebnisses stehen im Dialog — womit er
-            aufmacht, steht hier.</p>
-        <div id="expCfg"></div>
+        <p class="set-hint">Womit der Export-Dialog aufmacht. Zeitraum und Vorschau stehen im Dialog selbst.</p>
+        <div class="v-schalt-liste" id="expCfg"></div>
         <div class="set-actions">
             <button type="button" class="v-btn" id="expBtn">Alles exportieren</button>
             <button type="button" class="v-btn v-btn--primary" id="expSave">Voreinstellung speichern</button>

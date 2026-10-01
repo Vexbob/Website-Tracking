@@ -16,15 +16,17 @@ const NOTES_API = {
     remove: (id) => apiCall(`/api/notes/${id}`, { method: 'DELETE' }),
 };
 
+// v2.30.0: Farben aus Tokens (notizen.css, --nz-farbe-…) statt fester
+// Hex-Werte -- dieselbe Regel wie überall sonst.
 const COLORS = [
-    { key: 'default', hex: '#9ca3af', label: 'Standard' },
-    { key: 'red',     hex: '#ef4444', label: 'Rot' },
-    { key: 'orange',  hex: '#f59e0b', label: 'Orange' },
-    { key: 'yellow',  hex: '#eab308', label: 'Gelb' },
-    { key: 'green',   hex: '#22c55e', label: 'Grün' },
-    { key: 'blue',    hex: '#3b82f6', label: 'Blau' },
-    { key: 'purple',  hex: '#8b5cf6', label: 'Lila' },
-    { key: 'pink',    hex: '#ec4899', label: 'Pink' },
+    { key: 'default', label: 'Standard' },
+    { key: 'red',     label: 'Rot' },
+    { key: 'orange',  label: 'Orange' },
+    { key: 'yellow',  label: 'Gelb' },
+    { key: 'green',   label: 'Grün' },
+    { key: 'blue',    label: 'Blau' },
+    { key: 'purple',  label: 'Lila' },
+    { key: 'pink',    label: 'Pink' },
 ];
 
 const state = {
@@ -60,6 +62,7 @@ async function boot() {
 
 function bindUI() {
     document.getElementById('nzNew').onclick = newNote;
+    document.getElementById('nzFab').onclick = newNote;
     document.getElementById('nzDeCta').onclick = newNote;
     document.getElementById('nzSearch').addEventListener('input', (e) => {
         state.query = e.target.value.trim().toLowerCase();
@@ -106,7 +109,7 @@ function bindUI() {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'nz-d-swatch';
-        b.style.background = c.hex;
+        b.style.background = 'var(--nz-farbe-' + c.key + ')';
         b.dataset.color = c.key;
         b.title = c.label;
         b.onclick = () => setColor(c.key);
@@ -181,7 +184,7 @@ function renderSidebar() {
     const rest = notes.filter(n => !n.pinned || state.showArchived);
     let html = '';
     if (pinned.length) {
-        html += '<div class="nz-section">📌 Angepinnt</div>';
+        html += '<div class="nz-section"><span data-ikon="pin" data-ikon-gross="13"></span>Angeheftet</div>';
         html += pinned.map(renderNoteItem).join('');
     }
     if (rest.length) {
@@ -189,6 +192,7 @@ function renderSidebar() {
         html += rest.map(renderNoteItem).join('');
     }
     list.innerHTML = html;
+    if (window.VexIkon) VexIkon.einsetzen(list);
     list.querySelectorAll('.nz-item').forEach(el => {
         el.addEventListener('click', () => selectNote(Number(el.dataset.id)));
     });
@@ -199,7 +203,7 @@ function renderNoteItem(n) {
     const color = 'nz-color-' + (n.color || 'default');
     const title = escapeHtml(n.title || '');
     const preview = escapeHtml(previewText(n.content || ''));
-    const pin = n.pinned ? '<span class="nz-item-pin">📌</span>' : '';
+    const pin = n.pinned ? '<span class="nz-item-pin" aria-label="angeheftet" data-ikon="pin" data-ikon-gross="14"></span>' : '';
     const badges = n.archived ? '<span class="nz-item-badge">Archiv</span>' : '';
     return `<div class="nz-item ${color}${active}" data-id="${n.id}">
         <div class="nz-item-main">
@@ -245,8 +249,9 @@ function renderDetail() {
     editor.innerHTML = n.content || '';
     normalizeTasks(editor);
     document.getElementById('nzDPin').classList.toggle('active-pin', !!n.pinned);
-    document.getElementById('nzDPin').textContent = n.pinned ? '📌 Angepinnt' : '📍 Pin';
-    document.getElementById('nzDArchive').textContent = n.archived ? '📤 Wiederherstellen' : '🗄️ Archiv';
+    const ik = (name) => window.VexIkon ? VexIkon.svg(name, 15) : '';
+    document.getElementById('nzDPin').innerHTML = ik('pin') + (n.pinned ? 'Angeheftet' : 'Anheften');
+    document.getElementById('nzDArchive').innerHTML = ik('archiv') + (n.archived ? 'Wiederherstellen' : 'Archivieren');
     document.querySelectorAll('.nz-d-swatch').forEach(s => {
         s.classList.toggle('active', s.dataset.color === (n.color || 'default'));
     });

@@ -38,30 +38,34 @@ const EYE_OFF = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" str
    Leiste, Punkte-Menue, Tab-Leiste und Dashboard. Gespeichert wird sofort:
    ein Speichern-Knopf fuer einen einzelnen Schalter ist ein Klick, der nur
    fragt, ob man es wirklich gemeint hat. */
+/* v2.30.0: Eine Zeile je Modul, die ganze Zeile ist der Schalter. Bis
+   dahin trug jede Zeile einen roten Knopf „Benutze ich“ -- dreizehnmal
+   dieselbe laute Fläche, und ob sie den Zustand meinte oder das, was beim
+   Tippen passiert, sah man ihr nicht an. */
 function renderModuleList() {
     const box = document.getElementById('modList');
     if (!box) return;
     box.innerHTML = SET.alle.map(m => {
-        const aus = SET.aus.has(m.href);
+        const an = !SET.aus.has(m.href);
         const name = m.label.split(' ').slice(1).join(' ');
-        return '<div class="navcfg-row' + (aus ? ' is-schlaeft' : '') + '">' +
-                   '<span class="navcfg-ico">' + VexNav.iconSvg(m) + '</span>' +
-                   '<span class="navcfg-name">' + name +
-                       (m.sub ? '<span class="set-modsub">' + m.sub + '</span>' : '') +
-                   '</span>' +
-                   '<button type="button" class="v-btn v-btn--sm set-modbtn' +
-                       (aus ? '' : ' is-an') + '" data-href="' + m.href + '"' +
-                       ' aria-pressed="' + (aus ? 'false' : 'true') + '">' +
-                       (aus ? 'Ruht' : 'Benutze ich') + '</button>' +
-               '</div>';
+        const ton = m.tone ? ' style="--tone:var(' + m.tone + ')"' : '';
+        return '<button type="button" class="v-schalt-zeile set-mod" role="switch"' +
+                   ' aria-checked="' + an + '" data-href="' + m.href + '">' +
+                   '<span class="set-mod-ico"' + ton + '>' + VexNav.iconSvg(m) + '</span>' +
+                   '<span class="v-schalt-text"><span class="v-schalt-name">' + escHtml(name) + '</span>' +
+                       '<span class="v-schalt-sub">' + escHtml(an ? (m.sub || '') : 'Ausgeschaltet') + '</span></span>' +
+                   '<span class="v-schalter" aria-hidden="true"></span>' +
+               '</button>';
     }).join('');
 }
 
 async function toggleModule(href, btn) {
     const warAus = SET.aus.has(href);
     warAus ? SET.aus.delete(href) : SET.aus.add(href);
+    // Der Schalter springt sofort um; das Neuladen danach zieht Leiste und
+    // Menüs nach.
+    btn.setAttribute('aria-checked', String(warAus));
     btn.disabled = true;
-    btn.classList.add('is-loading');
     try {
         await VexPrefs.set(VexNav.MODULE_OFF_PREF, [...SET.aus]);
         // Neu laden statt an vier Stellen nachzuzeichnen: Leiste, Menue,
@@ -312,10 +316,10 @@ function renderExportCfg() {
         return '<div class="set-exp-row' + (aus ? ' is-schlaeft' : '') + '">' +
                    '<span class="set-exp-name">' + g.label + '</span>' +
                    stufe +
-                   '<button type="button" class="v-btn v-btn--sm set-modbtn' +
-                       (aus ? '' : ' is-an') + '" data-aus="' + g.key + '"' +
-                       ' aria-pressed="' + (aus ? 'false' : 'true') + '">' +
-                       (aus ? 'Nicht dabei' : 'Exportieren') + '</button>' +
+                   '<button type="button" class="v-schalt-zeile" role="switch"' +
+                       ' aria-checked="' + !aus + '" data-aus="' + g.key + '"' +
+                       ' aria-label="' + g.label + ' exportieren">' +
+                       '<span class="v-schalter" aria-hidden="true"></span></button>' +
                '</div>';
     }).join('')
         + '<div class="set-exp-row set-exp-grenze">' +
@@ -433,6 +437,10 @@ async function ladeExportCfg() {
     // sie wieder einzuschalten. Das Dashboard steht nicht zur Wahl.
     SET.alle = ((window.VexNav && VexNav.allModules && VexNav.allModules())
                 || SET.modules).filter(m => m.href !== '/');
+    // Der Blog steht zweimal in der Registry: öffentlich und als Editor für
+    // den Admin. Hier ist es EIN Modul -- sonst stand „Blog“ zweimal da.
+    SET.alle = SET.alle.filter(m => !(m.hideForAdmin
+        && SET.alle.some(o => o !== m && o.admin && o.icon === m.icon)));
     SET.aus = new Set((window.VexNav && VexNav.readOff && VexNav.readOff()) || []);
     renderModuleList();
     const modBox = document.getElementById('modList');

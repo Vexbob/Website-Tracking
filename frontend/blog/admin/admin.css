@@ -63,3 +63,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
        ab, bevor man sie ueberhaupt gelesen hat. */
     .ba-title{font-size:1.25rem}
 }
+
+/* ---------- v2.30.0: Handy ---------- */
+.ba-del, #baImageBtn { display: inline-flex; align-items: center; gap: 0.35rem; }
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .ba-slug, .ba-cover, .ba-tags, .ba-title, .ba-subtitle, .ba-btn, .ba-new { min-height: 44px; }
+}

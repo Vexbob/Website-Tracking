@@ -15,12 +15,13 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/sw-update.js"></script>
+<script src="/js/ikon.js"></script>
     </head>
 <body style="visibility:hidden">
 <nav class="navbar">
     <span class="nav-title">Blog-Admin</span>
     <div class="nav-right">
-        <a class="nav-btn" href="/blog/" target="_blank">📰 Live-Ansicht</a>
+        <a class="nav-btn" href="/blog/" target="_blank">Live-Ansicht</a>
         <span class="nav-btn" id="userLabel" style="cursor:default"></span>
         <button class="nav-btn" id="logoutBtn">Logout</button>
     </div>
@@ -66,10 +67,10 @@
                 <button class="nz-tb accent" data-cmd="task">☐ Aufgabe</button>
                 <span class="nz-tb-sep"></span>
                 <button class="nz-tb" data-cmd="quote">❝ Zitat</button>
-                <button class="nz-tb" data-cmd="link">🔗 Link</button>
+                <button class="nz-tb" data-cmd="link">Link</button>
                 <button class="nz-tb" data-cmd="hr">— HR</button>
                 <span class="nz-tb-sep"></span>
-                <button class="nz-tb accent" data-cmd="image" id="baImageBtn" title="Bild einfügen (auch Drag & Drop oder Paste)">🖼️ Bild</button>
+                <button class="nz-tb accent" data-cmd="image" id="baImageBtn" title="Bild einfügen (auch Drag & Drop oder Paste)"><span data-ikon="bild" data-ikon-gross="15"></span>Bild</button>
                 <input type="file" id="baImageInput" accept="image/*" style="display:none" multiple>
             </div>
             <div class="nz-d-body">
@@ -79,7 +80,7 @@
                 <div class="ba-state" id="baState">Entwurf</div>
                 <button class="ba-btn ba-publish" id="baPublish">Veröffentlichen</button>
                 <button class="ba-btn ba-unpub" id="baUnpub" style="display:none">Zurückziehen</button>
-                <button class="ba-btn ba-del" id="baDelete">🗑️ Löschen</button>
+                <button class="ba-btn ba-del" id="baDelete"><span data-ikon="muell" data-ikon-gross="15"></span>Löschen</button>
             </div>
         </div>
     </section>

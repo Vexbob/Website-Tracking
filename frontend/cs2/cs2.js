@@ -1044,7 +1044,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     try {
         const me = await fetchMe();
-        document.getElementById('userLabel').textContent = '👤 ' + me.username;
+        document.getElementById('userLabel').textContent = me.username;
     } catch (e) { /* der Name ist Beiwerk */ }
 
     document.querySelectorAll('.tab-btn').forEach((b) => {

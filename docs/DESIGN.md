@@ -368,6 +368,19 @@ Gruppe von Karten, mit der Handlung am Rand („Neu“). Er ist kein Kasten: die
 Karten darunter sind die Flächen, und eine Karte um Karten wäre eine Fläche
 auf einer Fläche derselben Stufe (Abschnitt 1).
 
+## 6f. Schalter
+
+**An oder aus ist ein Schalter** (v2.30.0, `.v-schalter`, Muster in
+`design.html`), kein Knopf, der seinen Zustand als Wort trägt. Die
+Einstellungen hatten dreizehn rote Knöpfe „Benutze ich“ — gleich laut,
+und ob das Wort den Zustand meinte oder das, was beim Tippen passiert,
+sah man ihm nicht an. Bedient wird die ganze Zeile
+(`button.v-schalt-zeile` mit `role="switch"` und `aria-checked`), der
+Schalter ist nur das Bild des Zustands. Ein Schalter speichert sofort;
+steht er neben Feldern, die auf einen Speichern-Knopf warten (Export-
+Voreinstellung), wartet er mit — zwei Verhaltensweisen in einer Karte
+kann man nicht auseinanderhalten.
+
 ## 7. Diagramme
 
 Reduziert, ruhig, dieselbe Farbwelt.

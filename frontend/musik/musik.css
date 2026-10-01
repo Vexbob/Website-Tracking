@@ -163,3 +163,41 @@
 @media (max-width: 700px) {
     .m-search { flex-basis: 100%; order: -1; }
 }
+
+/* ---------- Bühne (v2.30.0) ----------
+   Links die Hörzeit als Heldenzahl, rechts ihr Verlauf. */
+.m-buehne {
+    --buehne-ton: var(--figure, var(--m-musik));
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5);
+    margin-bottom: var(--space-4);
+}
+@media (min-width: 900px) {
+    .m-buehne { grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: var(--space-6); align-items: center; }
+}
+.m-b-haupt { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.m-held-min { margin-left: 0.3em; }
+.m-held-skel { display: block; width: 9rem; height: 3rem; border-radius: 10px; }
+.m-b-unter { font-size: 0.875rem; color: var(--text-3); line-height: 1.45; font-variant-numeric: tabular-nums; }
+.m-b-verlauf { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.m-b-verlauf-kopf { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.m-b-verlauf-titel {
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
+    margin-right: auto;
+}
+.m-b-verlauf-titel span { font-weight: 600; letter-spacing: 0; text-transform: none; }
+.m-b-flaeche { position: relative; height: 200px; }
+.m-b-flaeche canvas { position: absolute; inset: 0; }
+
+/* Je Art eine Faktenzeile statt vier Kacheln. */
+.m-fakten {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0 0 var(--space-3);
+    background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+}
+@media (max-width: 520px) { .m-fakten { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.m-fakten > div { background: var(--surface-1); padding: 0.625rem 0.75rem; min-width: 0; }
+.m-fakten dt { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+.m-fakten dd { margin: 0.125rem 0 0; font-size: 1.125rem; font-weight: 750; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.m-search-ico { display: inline-flex; color: var(--text-3); }
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    #mSearch { min-height: 44px; }
+}

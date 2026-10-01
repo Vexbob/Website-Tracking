@@ -359,52 +359,41 @@ function fuehrendeReihe() {
 
 /* ----------------------------------------------------------- Kopfzahlen */
 
-function kpiKarte(icon, label, wert, sub, ton) {
-    return `<div class="stat-kpi">
-        <div class="stat-kpi-icon" aria-hidden="true">${icon}</div>
-        <div class="stat-kpi-label">${label}</div>
-        <div class="stat-kpi-value"${ton ? ` style="color:${ton}"` : ''}>${wert}</div>
-        <div class="stat-kpi-sub">${sub || ''}</div>
-    </div>`;
-}
-
+/* Die Bühne (v2.30.0): die Wertung der führenden Reihe groß, ihre
+   Entwicklung im Zeitraum daneben, darunter Partien, Punktequote und Gegner.
+   Bis dahin vier gleich laute Kacheln -- die Wertung war dort nur das Delta
+   („+64“), die Zahl selbst stand klein im Untertitel. */
 function zeichneKpi() {
     const ziel = document.getElementById('schKpi');
     const s = state.stats;
-    if (!s) { ziel.innerHTML = ''; return; }
+    if (!s) { ziel.innerHTML = '<span class="skel skel-block"></span>'; return; }
 
     const g = gesamtBilanz();
     const wochen = Math.max(1, s.tage / 7);
-    const karten = [];
-
-    karten.push(kpiKarte('♟️', 'Partien', zahl(g.partien),
-        g.partien ? `Ø ${(g.partien / wochen).toFixed(1)} pro Woche` : 'in diesem Zeitraum'));
-
-    karten.push(kpiKarte('⚖️', 'Punktequote', g.partien ? punktequote(g) + ' %' : '–',
-        g.partien ? `${anteil(g.siege, g.partien)} % gewonnen · Remis zählt halb`
-                  : 'Remis zählt halb'));
-
-    // Die Wertungsentwicklung im Zeitraum, aus der fuehrenden Reihe.
     const f = fuehrendeReihe();
-    if (f) {
+    let haupt;
+    if (f && f.letzte != null) {
         const basis = f.start != null ? f.start : f.erste;
-        const delta = (f.letzte != null && basis != null) ? f.letzte - basis : null;
-        karten.push(kpiKarte('📈', 'Wertung',
-            delta == null ? wertung(f.letzte)
-                : (delta > 0 ? '+' + delta : (delta < 0 ? '−' + Math.abs(delta) : '±0')),
-            `${esc(f.label)} auf ${esc(LABEL[f.platform] || f.platform)}`
-                + (basis != null && f.letzte != null ? ` · ${basis} → ${f.letzte}` : ''),
-            delta == null || delta === 0 ? '' : (delta > 0 ? 'var(--ok)' : 'var(--danger)')));
+        const delta = basis != null ? f.letzte - basis : null;
+        const cls = delta == null || delta === 0 ? '' : (delta > 0 ? ' ist-gut' : ' ist-schlecht');
+        haupt = `<span class="v-buehne-marke">Wertung · ${esc(f.label)} auf ${esc(LABEL[f.platform] || f.platform)}</span>
+            <strong class="v-held">${wertung(f.letzte)}</strong>
+            ${delta != null ? `<div class="sch-b-delta"><span class="sch-delta${cls}">${delta > 0 ? '+' + delta : (delta < 0 ? '\u2212' + Math.abs(delta) : '±0')}</span>
+                <span>im Zeitraum · von ${wertung(basis)}</span></div>` : ''}`;
     } else {
-        karten.push(kpiKarte('📈', 'Wertung', '–', 'in diesem Zeitraum keine gewertete Partie'));
+        haupt = `<span class="v-buehne-marke">Wertung</span>
+            <strong class="v-held">–</strong>
+            <div class="sch-b-delta"><span>In diesem Zeitraum keine gewertete Partie</span></div>`;
     }
-
     const stark = s.staerkster_sieg;
-    karten.push(kpiKarte('👥', 'Ø Gegner', s.gegner_schnitt ? wertung(s.gegner_schnitt) : '–',
-        stark ? `Stärkster Sieg: ${wertung(stark.opponent_rating)} gegen ${esc(stark.opponent)}`
-              : 'noch kein Sieg mit bekannter Gegnerwertung'));
-
-    ziel.innerHTML = karten.join('');
+    const fakt = (dt, dd, sub) => `<div><dt>${dt}</dt><dd>${dd}</dd>${sub ? `<span>${sub}</span>` : ''}</div>`;
+    ziel.innerHTML = `<div class="sch-b-haupt">${haupt}</div>
+        <dl class="sch-b-fakten">
+            ${fakt('Partien', zahl(g.partien), g.partien ? `Ø ${(g.partien / wochen).toFixed(1).replace('.', ',')} pro Woche` : '')}
+            ${fakt('Punktequote', g.partien ? punktequote(g) + ' %' : '–', g.partien ? `${anteil(g.siege, g.partien)} % gewonnen` : '')}
+            ${fakt('Ø Gegner', s.gegner_schnitt ? wertung(s.gegner_schnitt) : '–',
+                   stark ? `stärkster Sieg ${wertung(stark.opponent_rating)}` : '')}
+        </dl>`;
 }
 
 /* --------------------------------------------------------------- Verlauf */
@@ -508,10 +497,10 @@ function zeichneVerlauf() {
 
     const wort = s.koernung === 'tag' ? ''
         : ` Bei diesem Zeitraum steht ${KOERNUNG_WORT[s.koernung]} der letzte Stand.`;
-    note.innerHTML = 'Gerechnet aus jeder gewerteten Partie — gezeigt wird die Wertung '
-        + '<em>nach</em> der Partie. An Tagen ohne Partie gilt der letzte bekannte Stand '
-        + 'weiter: eine Wertungszahl bewegt sich nur, wenn gespielt wurde.' + wort
-        + reichweiteSatz();
+    // v2.30.0: ein Satz statt eines Absatzes; die Reichweite bleibt, sie ist
+    // die Auskunft, wenn die Historie noch nicht ganz geholt ist.
+    note.innerHTML = 'Die Wertung nach jeder Partie; an Tagen ohne Partie gilt der letzte Stand.'
+        + wort + reichweiteSatz();
 }
 
 /* Wie weit die Kurven zurueckreichen -- und warum nicht weiter.
@@ -1337,8 +1326,7 @@ function zeichneKonten() {
                     </label>
                     <button type="submit" class="v-btn v-btn--primary">Verbinden</button>
                 </form>
-                <p class="sch-hinweis sch-hinweis--klein">Nur der Name — ${p.label} gibt Wertung
-                    und Partien öffentlich heraus, ein Passwort braucht es dafür nicht.</p>
+                <p class="sch-hinweis sch-hinweis--klein">Nur der Name, kein Passwort.</p>
             </div>`;
         }
         const bestand = k.games_count
@@ -1355,7 +1343,7 @@ function zeichneKonten() {
                 : '<span class="v-tag">Historie vollständig geholt</span>');
         return `<div class="v-card">${kopf}
             <div class="sch-konto">
-                <span class="v-icon-tile sch-konto-tile" style="--tone:var(--m-schach)" aria-hidden="true">♟️</span>
+                <span class="v-icon-tile sch-konto-tile" style="--tone:var(--m-schach)" aria-hidden="true">${window.VexNav ? VexNav.iconSvg({ icon: 'chess' }) : ''}</span>
                 <div class="sch-konto-text">
                     <a href="${esc(k.profile_url)}" target="_blank" rel="noopener">${esc(k.username)}</a>
                     <div class="sch-konto-sub">${bestand}</div>
@@ -1370,19 +1358,13 @@ function zeichneKonten() {
                       : (offen ? 'Historie weiterholen' : 'Neue Partien holen')}</button>
                 <button type="button" class="v-btn" data-stopp="${k.id}" hidden>Anhalten</button>
                 ${k.games_count ? `<button type="button" class="v-btn" data-vorn="${k.id}">Von vorn holen</button>` : ''}
-                <button type="button" class="v-btn v-btn--danger" data-loesen="${k.id}">Konto lösen</button>
+                <button type="button" class="v-btn v-btn--ghost sch-loesen" data-loesen="${k.id}">Konto lösen</button>
             </div>
             <p class="sch-hinweis sch-hinweis--klein">${!k.games_count
-                ? 'Beim ersten Mal dauert das bei langer Historie ein paar Minuten. Geholt wird '
-                  + 'stückweise — Anhalten verliert nichts, der nächste Lauf setzt dort fort. '
-                  + 'Der Wertungsverlauf entsteht dabei mit: er steckt in den Partien.'
+                ? 'Geholt wird stückweise; Anhalten verliert nichts.'
                 : (offen
-                    ? 'Es ist noch Historie offen: der Lauf setzt dort fort, wo er zuletzt '
-                      + 'aufgehört hat, und läuft weiter, bis nichts mehr kommt. Erst dann '
-                      + 'reicht der Wertungsverlauf so weit zurück wie dein Konto.'
-                    : 'Die Historie ist vollständig — geholt wird nur noch, was dazukommt. '
-                      + '„Von vorn holen“ fängt trotzdem wieder ganz vorn an; doppelte '
-                      + 'Partien fallen dabei weg, verloren geht nichts.')}</p>
+                    ? 'Der nächste Lauf setzt dort fort, wo der letzte aufgehört hat.'
+                    : 'Geholt wird nur noch, was dazukommt.')}</p>
         </div>`;
     }).join('');
 

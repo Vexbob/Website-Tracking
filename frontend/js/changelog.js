@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.30.0', date: '2026-10-01', title: 'Einstellungen, Schach, Musik, Notizen und Verwaltung neu', notes: [
+        'In den Einstellungen schalten Schalter die Module und den Export, statt 13 roter Knöpfe.',
+        'Schach und Musik zeigen oben die Hauptzahl mit ihrem Verlauf, darunter ruhige Zeilen statt Emoji-Kacheln.',
+        'Notizen: Ansicht und Sortierung in einer Zeile, „Neue Notiz“ schwebt am Handy unten.',
+        'Die User-Verwaltung zeigt eine Zeile je Account; Link, Passwort und Löschen stehen im Dialog.',
+        'Knöpfe und Filter sind am Handy überall 44 px hoch, der Blog-Editor kommt ohne Emoji aus.',
+    ]},
     { v: 'v2.29.0', date: '2026-10-01', title: 'Kleinigkeiten überall', notes: [
         'Der Konto-Knopf zeigt ein Zeichen statt „👤“ und ist am Handy endlich sichtbar und erreichbar.',
         'Das Datumsfeld in Nährwerten und Essen lässt das iPhone nicht mehr heranzoomen.',

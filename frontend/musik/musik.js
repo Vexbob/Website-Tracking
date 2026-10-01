@@ -331,45 +331,59 @@ function renderSeriesLegend(kinds) {
 
 /* ------------------------------------------------------------ Überblick */
 
-function kpiCard(label, value, sub, icon) {
-    return '<div class="stat-kpi">' +
-        '<div class="stat-kpi-icon" aria-hidden="true">' + icon + '</div>' +
-        '<div class="stat-kpi-label">' + esc(label) + '</div>' +
-        '<div class="stat-kpi-value">' + esc(value) + '</div>' +
-        (sub ? '<div class="stat-kpi-sub">' + esc(sub) + '</div>' : '') +
-    '</div>';
-}
-
-/* Ein Block je Art: Kopfzeile, Kennzahlen, zwei Ranglisten.
+/* Je Art eine Faktenzeile (v2.30.0) statt vier Kacheln mit Emoji-Deko.
  *
  * Eine gemeinsame Statistik ueber Musik UND Podcast waere eine Zahl ueber
  * zwei Dinge: "610 Titel" sind Lieder und Episoden zusammengezaehlt, und in
  * derselben Rangliste stuende ein Interpret neben einer Show. Deshalb wird
- * bei "Alle" je Art ein eigener Block gezeichnet -- nur der Verlauf oben
- * bleibt gemeinsam, denn dort ist der Vergleich der Punkt.
+ * bei "Alle" je Art ein eigener Block gezeichnet -- die Buehne oben bleibt
+ * gemeinsam, denn dort ist die Summe der Punkt.
  */
-function kpiRow(v, data, subFirst) {
+function faktenZeile(v, data) {
+    const fakt = (dt, dd) => '<div><dt>' + esc(dt) + '</dt><dd>' + esc(dd) + '</dd></div>';
     const dur = fmtDuration(data.ms_played);
-    return '<div class="stat-kpi-grid">' +
-        kpiCard(v.plays, fmtInt(data.plays), subFirst, '🎧') +
-        kpiCard(v.whats, fmtInt(data.titles), (data.rows != null
-            ? fmtInt(data.rows) + ' Registerzeilen' : null), v.mark) +
-        kpiCard(v.whos, fmtInt(data.artists), null, v.whoMark) +
-        (dur
-            ? kpiCard('Hörzeit', dur, null, '⏱️')
-            : kpiCard('Hörzeit', '—', 'die CSV enthielt keine Minuten', '⏱️')) +
-    '</div>';
+    return '<dl class="m-fakten">' +
+        fakt(v.plays, fmtInt(data.plays)) +
+        fakt(v.whats, fmtInt(data.titles)) +
+        fakt(v.whos, fmtInt(data.artists)) +
+        fakt('Hörzeit', dur || '—') +
+    '</dl>';
+}
+
+/* Die Bühne: Hörzeit als Heldenzahl, ganze Stunden groß. Ohne die Spalte
+   „Minuten“ im Import gibt es keine Hörzeit -- dann sind die Wiedergaben
+   die Zahl. */
+function zeichneBuehne(sum) {
+    const held = document.getElementById('mHeld');
+    const unter = document.getElementById('mUnter');
+    const marke = document.getElementById('mMarke');
+    const r = state.rangeLabel || 'Gesamt';
+    marke.textContent = (state.kind ? state.kind : 'Hören') + ' · ' + r;
+    const min = sum.ms_played != null ? Math.round(sum.ms_played / 60000) : null;
+    if (min != null && min > 0) {
+        const h = Math.floor(min / 60), m = min % 60;
+        held.innerHTML = h > 0
+            ? fmtInt(h) + '<span class="v-held-rest">h</span>' + (h < 100 ? '<span class="m-held-min">' + m + '</span><span class="v-held-rest">min</span>' : '')
+            : m + '<span class="v-held-rest">min</span>';
+    } else {
+        held.innerHTML = fmtInt(sum.plays || 0) + '<span class="v-held-rest">' + esc(vocab(state.kind).plays) + '</span>';
+    }
+    const teile = [fmtInt(sum.plays || 0) + ' Wiedergaben'];
+    if (sum.titles) teile.push(fmtInt(sum.titles) + ' Titel');
+    if (sum.artists) teile.push(fmtInt(sum.artists) + ' Interpreten');
+    if (sum.from && sum.to) teile.push(fmtDay(sum.from) + ' – ' + fmtDay(sum.to));
+    unter.textContent = sum.plays ? teile.join(' · ') : 'Noch nichts importiert';
 }
 
 function rankCards(v, artists, titles) {
     return '<div class="split-2">' +
         '<div class="stat-card"><div class="stat-card-head">' +
-            '<h3>' + v.whoMark + ' ' + esc(v.whos) + '</h3>' +
+            '<h3>' + esc(v.whos) + '</h3>' +
             '<span class="stat-range-lbl">' + esc(v.whoNote) + ' · Klick filtert</span>' +
         '</div>' + rankList(artists, { clickable: true, empty: v.whos,
                                        metric: v.whoMetric, unit: v.countUnit }) + '</div>' +
         '<div class="stat-card"><div class="stat-card-head">' +
-            '<h3>' + v.mark + ' ' + esc(v.whats) + '</h3>' +
+            '<h3>' + esc(v.whats) + '</h3>' +
             '<span class="stat-range-lbl">' + esc(v.whatNote) + '</span>' +
         '</div>' + rankList(titles, { empty: v.whats, metric: v.whatMetric }) + '</div>' +
     '</div>';
@@ -416,6 +430,7 @@ async function loadOverview() {
     const box = document.getElementById('mBlocks');
     try {
         const sum = await API.summary(qs());
+        zeichneBuehne(sum);
         const ser = await API.series(qs({ step: state.step, split: 'kind' }));
 
         document.getElementById('mSeriesLbl').textContent =
@@ -437,8 +452,6 @@ async function loadOverview() {
                 ? kinds.map(k => ({ kind: k.kind, data: k, head: true }))
                 : [{ kind: kinds.length ? kinds[0].kind : '', data: sum, head: false }]);
 
-        const span = (sum.from && sum.to)
-            ? fmtDay(sum.from) + ' – ' + fmtDay(sum.to) : 'noch nichts importiert';
 
         const parts = await Promise.all(blocks.map(async (b) => {
             const v = vocab(b.kind);
@@ -453,7 +466,7 @@ async function loadOverview() {
                 (b.head ? '<div class="m-block-head"><span class="m-kind" ' +
                           'style="--tone:var(' + v.tone + ')">' + v.mark + ' ' +
                           esc(b.kind) + '</span></div>' : '') +
-                kpiRow(v, b.data, b.head ? null : span) +
+                (b.head ? faktenZeile(v, b.data) : '') +
                 rankCards(v, artists.items || [], titles.items || []) +
             '</section>';
         }));
@@ -883,6 +896,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         preset: 'all',
         onChange: (r) => {
             state.range = { from: r.from, to: r.to };
+            state.rangeLabel = r.preset === 'all' ? 'Gesamt' : r.label;
             state.offset = 0;
             reload();
         },

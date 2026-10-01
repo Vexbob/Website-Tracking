@@ -35,16 +35,18 @@
                 <span class="nz-search-ico" data-ikon="lupe" data-ikon-gross="15"></span>
                 <input type="search" id="nzSearch" placeholder="Suchen…" aria-label="Notizen durchsuchen">
             </div>
+            <!-- v2.30.0: Aktiv/Archiv und die Sortierung in EINER Zeile -- über
+                 der Liste standen vorher vier Zeilen Bedienung. -->
             <div class="nz-side-row">
-                <select id="nzSort" title="Sortierung" class="nz-side-sort">
-                    <option value="updated">Zuletzt geändert</option>
+                <div class="nz-side-tabs">
+                    <button class="nz-side-tab active" data-scope="active">Aktiv</button>
+                    <button class="nz-side-tab" data-scope="archived">Archiv</button>
+                </div>
+                <select id="nzSort" title="Sortierung" aria-label="Sortierung" class="nz-side-sort">
+                    <option value="updated">Geändert</option>
                     <option value="created">Erstellt</option>
-                    <option value="title">Titel A-Z</option>
+                    <option value="title">Titel A–Z</option>
                 </select>
-            </div>
-            <div class="nz-side-tabs">
-                <button class="nz-side-tab active" data-scope="active">Aktiv</button>
-                <button class="nz-side-tab" data-scope="archived">Archiv</button>
             </div>
         </div>
         <div class="nz-list" id="nzList"></div>
@@ -93,6 +95,9 @@
         </div>
     </section>
 </div>
+<!-- Am Handy liegt „Neue Notiz“ als Schwebeknopf dort, wo der Daumen ist
+     (DESIGN, .v-fab); oben in der Liste fällt der breite Knopf dann weg. -->
+<button type="button" class="v-fab nz-fab" id="nzFab"><span class="v-fab-plus" aria-hidden="true">+</span>Neue Notiz</button>
 <div class="version-tag"></div>
 <script src="/notizen/notizen.js"></script>
 </body>

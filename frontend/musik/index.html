@@ -16,6 +16,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/nav-switcher.js"></script>
 <script src="/js/reiter.js"></script>
+<script src="/js/ikon.js"></script>
 <script src="/js/sw-update.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="/js/charts.js"></script>
@@ -45,7 +46,7 @@
          Reiter und sieht andere Zahlen. -->
     <div class="stat-filterbar m-filterbar" id="mFilterbar">
         <label class="m-search">
-            <span class="m-search-ico" aria-hidden="true">🔎</span>
+            <span class="m-search-ico" aria-hidden="true" data-ikon="lupe" data-ikon-gross="16"></span>
             <input type="search" id="mSearch" placeholder="Interpret, Titel oder Album"
                    aria-label="Im Hörregister suchen" autocomplete="off">
         </label>
@@ -57,31 +58,39 @@
 
     <!-- ---------- Überblick ---------- -->
     <div id="tab-ueberblick">
-        <div class="stat-card">
-            <div class="stat-card-head">
-                <h3>🎧 Verlauf <span class="stat-range-lbl" id="mSeriesLbl"></span></h3>
-                <div class="m-legend" id="mSeriesLegend"></div>
-                <div class="stat-mini-toggle" id="mStepToggle">
-                    <button class="active" data-step="auto">Auto</button>
-                    <button data-step="jahr">Jahr</button>
-                    <button data-step="monat">Monat</button>
-                    <button data-step="woche">Woche</button>
-                    <button data-step="tag">Tag</button>
-                </div>
+        <!-- v2.30.0: die Bühne. Links die Hörzeit im Zeitraum als die eine
+             Zahl, rechts ihr Verlauf -- vorher eine Verlaufskarte und darunter
+             vier gleich laute Kacheln je Art. -->
+        <section class="v-buehne m-buehne" id="mBuehne">
+            <div class="m-b-haupt">
+                <span class="v-buehne-marke" id="mMarke">Hören</span>
+                <strong class="v-held" id="mHeld"><span class="skel m-held-skel"></span></strong>
+                <span class="m-b-unter" id="mUnter"><span class="skel skel-line" style="width:12rem"></span></span>
             </div>
-            <div class="chart-wrap"><canvas id="mChartSeries"></canvas></div>
-            <p class="m-note" id="mSeriesNote"></p>
-        </div>
+            <div class="m-b-verlauf">
+                <div class="m-b-verlauf-kopf">
+                    <span class="m-b-verlauf-titel">Verlauf <span id="mSeriesLbl"></span></span>
+                    <div class="m-legend" id="mSeriesLegend"></div>
+                    <div class="stat-mini-toggle" id="mStepToggle">
+                        <button class="active" data-step="auto">Auto</button>
+                        <button data-step="jahr">Jahr</button>
+                        <button data-step="monat">Monat</button>
+                        <button data-step="woche">Woche</button>
+                        <button data-step="tag">Tag</button>
+                    </div>
+                </div>
+                <div class="m-b-flaeche"><canvas id="mChartSeries"></canvas></div>
+                <p class="m-note" id="mSeriesNote"></p>
+            </div>
+        </section>
 
         <!-- Je Art ein eigener Block. Musik und Podcast in EINER Statistik
              waeren zwei Dinge unter einer Zahl: 610 "Titel" sind Lieder UND
              Episoden, und ein Interpret steht neben einer Show. -->
         <div id="mBlocks">
-            <div class="stat-kpi-grid">
-                <div class="stat-kpi"><span class="skel skel-block"></span></div>
-                <div class="stat-kpi"><span class="skel skel-block"></span></div>
-                <div class="stat-kpi"><span class="skel skel-block"></span></div>
-                <div class="stat-kpi"><span class="skel skel-block"></span></div>
+            <div class="split-2">
+                <div class="stat-card"><span class="skel skel-block"></span></div>
+                <div class="stat-card"><span class="skel skel-block"></span></div>
             </div>
         </div>
     </div>
@@ -90,7 +99,7 @@
     <div id="tab-register" style="display:none">
         <div class="stat-card">
             <div class="stat-card-head">
-                <h3>🗂️ Hörregister</h3>
+                <h3>Hörregister</h3>
                 <span class="stat-range-lbl" id="mRegSummary"></span>
             </div>
             <!-- v2.11.9: Das Register war eine Tabelle mit sieben Spalten in
@@ -115,26 +124,17 @@
     <div id="tab-import" style="display:none">
         <div class="stat-card">
             <div class="stat-card-head">
-                <h3>⬆️ CSV übernehmen</h3>
+                <h3>CSV übernehmen</h3>
                 <span class="m-source"><i class="m-source-dot" aria-hidden="true"></i>Quelle: Spotify</span>
             </div>
-            <p class="m-hint">
-                Die Datei kommt aus dem Programm <strong>Spotify-Export</strong>: dort einen
-                Zeitblock mit einem <strong>Zeitraster</strong> (täglich, wöchentlich, monatlich
-                oder jährlich) und der Gruppierung <strong>nach Titel</strong> wählen, dann
-                exportieren. Für zehn Jahre Historie lohnt es sich, ältere Jahre monatlich und
-                die letzten Monate wöchentlich zu exportieren — beide Blöcke dürfen in derselben
-                Datei stehen.
-            </p>
-            <p class="m-hint">
-                Nimm im Export die Spalte <strong>Art</strong> mit, dann lassen sich Podcasts
-                hier von Musik trennen. <strong>Minuten</strong> ergänzt die Hörzeit; ohne die
-                Spalte zählt das Register nur Wiedergaben.
-            </p>
+            <p class="m-hint">Aus <strong>Spotify-Export</strong>: Zeitraster wählen, gruppiert
+                <strong>nach Titel</strong>, mit den Spalten <strong>Art</strong> und
+                <strong>Minuten</strong>. Ältere Jahre monatlich und die letzten Monate wöchentlich
+                dürfen in derselben Datei stehen.</p>
 
             <div class="dropzone" id="mDropzone" role="button" tabindex="0"
                  aria-label="CSV-Datei auswählen">
-                <div class="dropzone-icon" aria-hidden="true">📄</div>
+                <div class="dropzone-icon" aria-hidden="true" data-ikon="ablage" data-ikon-gross="26"></div>
                 <div class="dropzone-title">CSV hier ablegen oder klicken</div>
                 <div class="dropzone-sub" id="mDropzoneSub">Eine Datei, Semikolon oder Tabulator getrennt</div>
                 <input type="file" id="mFile" accept=".csv,.tsv,.txt,text/csv" hidden>
@@ -145,19 +145,15 @@
 
         <div class="stat-card">
             <div class="stat-card-head">
-                <h3>🧾 Protokoll</h3>
+                <h3>Protokoll</h3>
                 <span class="stat-range-lbl">Herkunft der Zeilen</span>
             </div>
             <div id="mImportLog"><span class="skel skel-block"></span></div>
         </div>
 
         <div class="stat-card">
-            <h3>🧹 Register leeren</h3>
-            <p class="m-hint">
-                Löscht alle Zeilen des Hörregisters. Das Protokoll bleibt stehen, damit
-                nachvollziehbar bleibt, was einmal da war — die Daten selbst holt nur ein
-                neuer Import zurück.
-            </p>
+            <h3>Register leeren</h3>
+            <p class="m-hint">Löscht alle Zeilen des Hörregisters; das Protokoll bleibt.</p>
             <button type="button" class="v-btn v-btn--danger" id="mClearBtn">Register leeren</button>
         </div>
     </div>
