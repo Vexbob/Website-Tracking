@@ -414,7 +414,7 @@ async function ladeExportCfg() {
     if (!isLoggedIn()) { location.href = '/private/login.html'; return; }
     try {
         const me = await fetchMe(true);
-        document.getElementById('userLabel').textContent = '👤 ' + me.username;
+        document.getElementById('userLabel').textContent = me.username;
     } catch (e) { /* api.js schickt bei 401 selbst zum Login */ }
     document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
     document.body.style.visibility = 'visible';

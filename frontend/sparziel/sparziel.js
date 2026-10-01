@@ -2136,7 +2136,7 @@ filterEinrichten();
     updatePeriodLabel();
     try{
         const me=await fetchMe(false);
-        document.getElementById('userLabel').textContent='👤 '+me.username;
+        document.getElementById('userLabel').textContent=me.username;
     }catch(e){return;}
     activateTab((location.hash||'#heute').slice(1));
     try{await loadAll();}catch(e){showToast('Laden fehlgeschlagen',true);console.error(e);}

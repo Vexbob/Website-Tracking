@@ -2139,7 +2139,7 @@ async function bulkDeleteHealth() {
     // Leiste geht es weiter, und jede Karte meldet ihren eigenen Fehler.
     try {
         const me = await fetchMe(true);
-        document.getElementById('userLabel').textContent = '👤 ' + me.username;
+        document.getElementById('userLabel').textContent = me.username;
     } catch (e) { /* Name bleibt leer */ }
     // Steht ein Reiter in der Adresse, wird er geoeffnet -- samt Nachladung.
     activateTab((location.hash || '').replace('#', '') || H_TABS[0]);

@@ -47,7 +47,7 @@ async function boot() {
     if (!isLoggedIn()) { window.location.href = '/private/login.html'; return; }
     try {
         const me = await fetchMe(true);
-        document.getElementById('userLabel').textContent = '👤 ' + me.username;
+        document.getElementById('userLabel').textContent = me.username;
     } catch (e) { return; }
     document.getElementById('logoutBtn').onclick = () => { clearToken(); location.reload(); };
     bindUI();

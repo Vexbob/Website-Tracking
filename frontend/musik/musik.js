@@ -864,7 +864,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('ready');
     try {
         const me = await fetchMe();
-        document.getElementById('userLabel').textContent = '👤 ' + me.username;
+        document.getElementById('userLabel').textContent = me.username;
     } catch (e) { /* Name ist Beiwerk */ }
     document.getElementById('logoutBtn').addEventListener('click',
         () => { clearToken(); location.href = '/private/login.html'; });

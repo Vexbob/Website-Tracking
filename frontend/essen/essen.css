@@ -349,7 +349,10 @@
    nachstellen laesst. Eine Regel, die man nicht ansehen kann, ist eine
    Behauptung. */
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
-    .es-stufe { min-height: 32px; padding-inline: 0.7rem; }
+    /* Sichtbar bleibt die schmale Pille; die Fläche, die den Finger nimmt,
+       ist 44 px hoch (v2.29.0). */
+    .es-stufe { min-height: 32px; padding-inline: 0.7rem; position: relative; }
+    .es-stufe::after { content: ""; position: absolute; inset: -6px -2px; }
     .es-chip { min-height: 44px; }
 }
 

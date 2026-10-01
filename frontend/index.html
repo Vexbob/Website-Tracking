@@ -16,7 +16,10 @@
         gap:1px;background:var(--line);border:1px solid var(--line);
         border-radius:var(--radius-lg);overflow:hidden;margin-bottom:var(--space-6)}
     .home-stat{background:var(--surface-1);padding:var(--space-4);text-decoration:none;
-        color:inherit;display:block;transition:background var(--dur-1) var(--ease)}
+        color:inherit;display:block;transition:background var(--dur-1) var(--ease);
+        /* So hoch wie die geladene Kachel, damit der Platzhalter beim
+           Eintreffen der Zahlen nichts verschiebt (v2.29.0). */
+        min-height:6.8125rem}
     a.home-stat:hover{background:var(--surface-2);text-decoration:none}
     .home-stat .lbl{font-size:0.6875rem;color:var(--text-4);text-transform:uppercase;
         letter-spacing:0.1em;font-weight:700}
@@ -37,6 +40,10 @@
 /* Der Export ist eine Aktion, kein Ziel -- deshalb ein Knopf. Als <a href="#">
    sprang die Seite bei einem Fehler nur an den Anfang. */
 .home-more button{cursor:pointer;font-family:inherit;width:auto;margin:0}
+/* v2.29.0: Berührungsziele 44 px (DESIGN 4). */
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .home-more a, .home-more button { min-height: 44px; }
+}
     </style>
     <meta name="description" content="Vexbob — persönliches Dashboard für Sparziele, Ausgaben, Notizen und Gesundheit.">
     <script src="/js/config.js"></script>
@@ -117,11 +124,15 @@
            nicht das Dashboard selbst, nicht der Blog und nicht die
            Verwaltung -- die drei stehen unten in „Mehr“. Ruhende Module
            haben hier ebenso wenig verloren wie in der Leiste. */
-        document.addEventListener('vexnav:ready', () => {
+        /* v2.29.0: sofort aus dem Zwischenspeicher zeichnen und bei
+           'vexnav:ready' nur noch nachziehen. Vorher erschien das ganze
+           Raster erst mit der Serverantwort, und alles darunter sprang. */
+        function zeichneKacheln() {
             const grid = document.getElementById('tileGrid');
             if (!grid || !window.VexNav) return;
             const kacheln = VexNav.modules().filter(m =>
-                m.href !== '/' && !m.admin && !m.public && m.status !== 'neu');
+                m.href !== '/' && !m.admin && !m.public && m.status !== 'neu'
+                && !VexNav.istAus(m.href));
             grid.innerHTML = kacheln.map(m => {
                 const teile = m.label.split(' ');
                 teile.shift();                       // das Emoji der Registry
@@ -133,7 +144,9 @@
                     + '<div class="tile-text"><div class="tile-title">' + name + '</div>'
                     + '<div class="tile-sub">' + (m.sub || '') + '</div></div></a>';
             }).join('');
-        });
+        }
+        zeichneKacheln();
+        document.addEventListener('vexnav:ready', zeichneKacheln);
 
         document.addEventListener('vexnav:ready', () => {
             const wip = (window.VexNav ? VexNav.modules() : [])
@@ -184,7 +197,7 @@
             document.body.style.visibility = 'visible';
             try {
                 const me = await fetchMe(true);
-                document.getElementById('userLabel').textContent = '👤 ' + me.username;
+                document.getElementById('userLabel').textContent = me.username;
                 // v1.36.0 — dynamisches Greeting je nach Tageszeit
                 const h = new Date().getHours();
                 const greet = h < 5 ? 'Gute Nacht' : h < 11 ? 'Guten Morgen' : h < 18 ? 'Hallo' : h < 22 ? 'Guten Abend' : 'Späten Abend';

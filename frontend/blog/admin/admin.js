@@ -31,7 +31,7 @@ async function boot() {
             await askAlert({ title: 'Kein Zugriff', text: 'Diese Seite ist Administratoren vorbehalten.' });
             window.location.href = '/'; return;
         }
-        document.getElementById('userLabel').textContent = '👤 ' + me.username;
+        document.getElementById('userLabel').textContent = me.username;
     } catch (e) {
         // Ein Serverfehler ist keine Abmeldung. Wer hier auf den Login
         // geschickt wird, haelt sich fuer ausgeloggt und meldet sich neu an,

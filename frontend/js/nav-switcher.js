@@ -442,6 +442,11 @@
         right.insertBefore(wrap, label);
         wrap.appendChild(btn);
         wrap.appendChild(menu);
+        // v2.29.0: ein gezeichnetes Zeichen statt „👤“ im Namen. Am Handy ist
+        // es das Einzige, was der Knopf zeigt -- vorher war er dort 21 px
+        // breit und leer, weil der Name ausgeblendet ist.
+        btn.insertAdjacentHTML('beforeend', '<svg class="nav-acct-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4"/></svg>');
+        btn.setAttribute('aria-label', 'Konto und Darstellung');
         // Der Name wandert IN den Knopf.
         btn.appendChild(label);
         label.style.cursor = '';
@@ -454,7 +459,7 @@
         const settings = document.createElement('a');
         settings.className = 'nav-acct-item';
         settings.href = '/einstellungen/';
-        settings.textContent = '⚙️ Einstellungen';
+        settings.textContent = 'Einstellungen';
         actions.appendChild(settings);
         // Der vorhandene Logout-Knopf zieht mit um -- mit seinem Handler.
         const logout = right.querySelector('#logoutBtn');

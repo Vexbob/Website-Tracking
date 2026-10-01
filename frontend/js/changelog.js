@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.29.0', date: '2026-10-01', title: 'Kleinigkeiten überall', notes: [
+        'Der Konto-Knopf zeigt ein Zeichen statt „👤“ und ist am Handy endlich sichtbar und erreichbar.',
+        'Das Datumsfeld in Nährwerten und Essen lässt das iPhone nicht mehr heranzoomen.',
+        'Knöpfe in der Leiste, auf der Startseite, in den Nährwerten und im Essen sind am Handy groß genug für den Daumen.',
+        'Die Startseite springt beim Laden nicht mehr.',
+    ]},
     { v: 'v2.28.1', date: '2026-10-01', title: 'Schlafstunden über dem Balken', notes: [
         'Im Schlaf-Reiter steht über jedem Balken, wie viele Stunden du in der Nacht geschlafen hast.',
         'Ist am Handy zu wenig Platz (30 Nächte), steht keine Zahl da; Antippen zeigt sie weiter.',

@@ -389,6 +389,9 @@ td, .num, .amount, [data-num] { font-variant-numeric: tabular-nums; }
     margin: 0;
 }
 .nav-switcher-btn:hover { background: var(--surface-2); color: var(--text); }
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .nav-switcher-btn { width: 44px; height: 44px; }
+}
 .nav-switcher-btn[aria-expanded="true"] {
     background: var(--surface-2); color: var(--text); border-color: var(--border);
 }
@@ -622,7 +625,9 @@ input[type="checkbox"] { display: inline; width: auto; }
        Einstellungen. Weg damit, statt drei Knoepfe zu quetschen. */
     .navbar #userLabel { display: none; }
     .navbar { gap: 0.5rem; }
-    .nav-right { gap: 0.25rem; }
+    /* Ohne Modulzeile verteilt space-between die Leiste auf drei Teile, und
+       der Konto-Knopf stand mitten im Titelbereich (v2.29.0). */
+    .nav-right { gap: 0.25rem; margin-left: auto; }
     .nav-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 }
 
@@ -1770,7 +1775,13 @@ a.rec-row:hover .rec-go, button.rec-row:hover .rec-go { color: var(--text-2); }
    Haarlinie, derselbe Schatten. Es traegt den Namen, die Themenwahl, den Weg
    in die Einstellungen und den Logout. */
 .nav-acct { position: relative; }
-.nav-acct-btn { gap: 0.35rem; }
+.nav-acct-btn { display: inline-flex; align-items: center; gap: 0.4rem; }
+.nav-acct-ico { flex: none; }
+/* Am Handy ist der Name ausgeblendet; der Knopf ist dann das Zeichen allein
+   und trägt die 44 px selbst. */
+@media (max-width: 720px) {
+    .nav-acct-btn { width: 44px; min-height: 44px; justify-content: center; padding: 0; }
+}
 /* Der Name, den jede Seite in #userLabel schreibt, wandert beim Aufbau IN den
    Konto-Knopf -- traegt dort aber noch seine eigene Knopf-Polsterung. Doppelt
    gepolstert war der Knopf 48 px hoch und hob die ganze Leiste um 15 px an,
@@ -2303,6 +2314,9 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
     margin: 0;
     cursor: pointer;
     font: inherit;
+    /* Unsichtbar, aber das iPhone zoomt trotzdem heran, sobald ein
+       fokussiertes Feld unter 16 px hat (v2.29.0). */
+    font-size: var(--eingabe-schrift);
 }
 .v-tagkopf-mitte:focus-within { outline: none; }
 .v-tagkopf-mitte:focus-within .v-tagkopf-datum { text-decoration-color: var(--accent); }

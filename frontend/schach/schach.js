@@ -1709,7 +1709,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
         const me = await fetchMe();
-        document.getElementById('userLabel').textContent = '👤 ' + me.username;
+        document.getElementById('userLabel').textContent = me.username;
     } catch (e) { /* Name ist Beiwerk */ }
 
     document.getElementById('logoutBtn').addEventListener('click',

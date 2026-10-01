@@ -393,6 +393,9 @@
        das steht in jeder Zeile eine andere Kante. */
     min-width: 7.5rem;
 }
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .nw-w-ok { min-height: 44px; }
+}
 .nw-w-ok:hover {
     background: color-mix(in srgb, var(--nw-figur) 26%, var(--surface-3));
     border-color: var(--nw-figur);

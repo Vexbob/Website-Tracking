@@ -194,7 +194,7 @@ async function ensureLoggedIn() {
     try {
         const me = await fetchMe(true);
         const label = document.getElementById('userLabel');
-        if (label) label.textContent = '👤 ' + me.username;
+        if (label) label.textContent = me.username;
         const logout = document.getElementById('logoutBtn'); if (logout) logout.onclick = () => { clearToken(); location.reload(); };
         return me;
     } catch (e) {
