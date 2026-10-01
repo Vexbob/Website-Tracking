@@ -661,6 +661,21 @@ WORKOUTS = [
     _training(7, "StrengthTraining", 11, (19, 0), 48, 305, None, 110),
     _training(8, "Schwimmbad Schwimmen", 13, (7, 0), 40, 352, 1450, 125),
 ]
+# v2.27.0: Vier Monate dahinter, damit der Wochenrhythmus im Workout-Reiter
+# etwas zu zeigen hat -- mit einer Lücke (Urlaub) und ruhigen Wochen.
+_PLAN = [("Outdoor Laufen", (18, 30), 40, 450, 7000, 150, 55),
+         ("StrengthTraining", (19, 0), 50, 320, None, 112, None),
+         ("Schwimmbad Schwimmen", (7, 0), 42, 370, 1500, 127, None),
+         ("Cycling", (9, 30), 75, 640, 26000, 128, 220),
+         ("Outdoor Spaziergang", (13, 0), 55, 210, 4800, 97, 20)]
+for _i, _vor in enumerate(range(15, 125, 2)):
+    if 52 <= _vor <= 64 or _vor % 7 == 3:          # Urlaub, ruhige Tage
+        continue
+    _art, _uhr, _dauer, _kcal, _m, _puls, _hoch = _PLAN[_i % len(_PLAN)]
+    _f = 0.85 + (_i % 5) * 0.07
+    WORKOUTS.append(_training(9 + _i, _art, _vor, _uhr, int(_dauer * _f), int(_kcal * _f),
+                              int(_m * _f) if _m else None, _puls + (_i % 4) - 2,
+                              int(_hoch * _f) if _hoch else None))
 
 
 # ------------------------------------------------------------------- Musik

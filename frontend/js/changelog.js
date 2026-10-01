@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.27.0', date: '2026-10-01', title: 'Workouts neu gebaut', notes: [
+        'Oben steht die Trainingszeit im Zeitraum, daneben ihr Rhythmus je Tag, Woche oder Monat.',
+        'Die Sportarten stehen als Liste mit Zeit und Anteil, ein Tipp darauf filtert.',
+        'Die Workouts stehen nach Wochen, jede mit ihrer Summe.',
+        'Im Workout stehen Dauer, Distanz und Energie groß, der Puls läuft auf einer echten Zeitachse.',
+        'Zusatzwerte ohne doppelte Einheit und Zählwerte ohne Nachkommastelle („6.980 Schritte“).',
+    ]},
     { v: 'v2.26.0', date: '2026-10-01', title: 'Schlaf: nur echte Schlafphasen', notes: [
         'Als Schlaf zählen nur noch Tief, Kern und REM.',
         '„Im Bett“ ist überall raus, samt der Effizienz, die daraus berechnet wurde.',

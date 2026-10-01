@@ -115,6 +115,10 @@ Farbe ist Information, nicht Dekoration.
   Fläche in Modulfarbe, und sie steht höchstens einmal je Seite, dort, wo die
   Heldenzahl steht. Der Grund: Ein Modul soll man am ersten Blick erkennen,
   nicht erst an der Überschrift. Der Text auf der Bühne bleibt über 14:1.
+  „Einmal je Seite“ heißt einmal je **Ansicht**: Ein Reiter, der eine eigene
+  Frage beantwortet, darf seine eigene Bühne haben (v2.27.0, Gesundheit:
+  „Überblick“ mit den Schritten von gestern, „Workouts“ mit der
+  Trainingszeit im Zeitraum). Sichtbar ist immer nur eine.
 - **Statusfarben** `--ok` `--warn` `--danger` `--info` sind helle Töne für
   **Text und Marken auf dunklem Grund**. Sie tragen **niemals weiße Schrift**
   (weiß auf `--ok` wäre 1,7:1). Wo eine Statusfläche nötig ist: getönter

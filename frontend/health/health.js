@@ -316,7 +316,7 @@ const state = {
     sleepRange: null, sleepInit: false, chartSleepTimes: null,
     sleepUsable: [], sleepWindows: [],   // Naechte hinter den Balken (Tooltip)
     workoutsInit: false, workoutsAll: null, workoutFilter: '', workoutRange: null,
-    workoutHrChart: null,
+    workoutHrChart: null, woRhythmus: null, workoutRangeMounted: false,
 };
 
 // ---------- Schlaf einer Nacht ----------
@@ -1247,6 +1247,10 @@ function renderSleepRhythm(windows) {
 }
 
 // ---------- Workouts ----------
+/* v2.27.0: Der Reiter erzählt von oben nach unten: wie viel trainiert wurde
+   und in welchem Rhythmus (Bühne), womit (Sportarten -- ein Tipp filtert,
+   sie ersetzen die Chipreihe) und wann (die Workouts nach Wochen). Alles
+   bezieht sich auf denselben Zeitraum und dieselbe Sportart. */
 async function initWorkouts() {
     state.workoutsInit = true;
     try {
@@ -1257,81 +1261,240 @@ async function initWorkouts() {
             <button type="button" class="v-btn v-btn--sm" onclick="initWorkouts()">Erneut versuchen</button></div>`;
         return;
     }
-    const chipsBox = document.getElementById('hWorkoutTypeChips');
-    // Beim Neuaufbau (nach dem Loeschen) nicht zweimal dieselben Chips.
-    chipsBox.innerHTML = '<button type="button" class="v-chip is-active" data-type="">Alle</button>';
     state.workoutFilter = '';
-    const types = [...new Set(state.workoutsAll.map(w => w.workout_type).filter(Boolean))];
-    types.forEach(t => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'v-chip';
-        btn.dataset.type = t;
-        btn.textContent = wMeta(t).de;
-        chipsBox.appendChild(btn);
-    });
-    chipsBox.querySelectorAll('.v-chip').forEach(btn => {
-        btn.addEventListener('click', () => {
-            chipsBox.querySelectorAll('.v-chip').forEach(c => c.classList.toggle('is-active', c === btn));
-            state.workoutFilter = btn.dataset.type || '';
-            renderWorkouts();
+    const alle = document.getElementById('hWoAlle');
+    if (alle && !alle.dataset.an) {
+        alle.dataset.an = '1';
+        alle.addEventListener('click', () => { state.workoutFilter = ''; renderWorkouts(); });
+    }
+    // Der Zeitraum meldet beim Einhaengen einmal und zeichnet damit zum
+    // ersten Mal. Nach dem Loeschen wird nicht neu eingehaengt.
+    if (!state.workoutRangeMounted) {
+        state.workoutRangeMounted = true;
+        VexRange.mount(document.getElementById('hWorkoutRange'), {
+            preset: 'all',
+            onChange: (r) => { state.workoutRange = r; renderWorkouts(); },
         });
-    });
-    // v1.43.1: Zeitraum -- die Kennzahlen beziehen sich auf den gewaehlten
-    // Zeitraum. Der Knopf meldet beim Einhaengen einmal und zeichnet damit
-    // die Liste zum ersten Mal.
-    VexRange.mount(document.getElementById('hWorkoutRange'), {
-        preset: 'all',
-        onChange: (r) => { state.workoutRange = r; renderWorkouts(); },
-    });
+    } else {
+        renderWorkouts();
+    }
+}
+
+function woFilter(typ) {
+    state.workoutFilter = state.workoutFilter === typ ? '' : typ;
+    renderWorkouts();
+}
+
+// Montag der Woche, Kalenderwoche nach ISO.
+function woMontag(d) {
+    const m = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    m.setDate(m.getDate() - ((m.getDay() + 6) % 7));
+    return m;
+}
+function woKw(d) {
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const tag = t.getUTCDay() || 7;
+    t.setUTCDate(t.getUTCDate() + 4 - tag);
+    const neujahr = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return Math.ceil(((t - neujahr) / 86400000 + 1) / 7);
+}
+const woKurz = (d) => d.toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' });
+const woMin = (w) => Number(w.duration_min) || 0;
+function woPulsOk(v) { const n = Number(v); return Number.isFinite(n) && n >= 30 && n <= 240; }
+
+/* Die Trainingszeit als Heldenzahl: Stunden groß, Minuten daneben. */
+function woZeitHeld(min) {
+    const h = Math.floor(min / 60), m = Math.round(min % 60);
+    return h > 0
+        ? `${h}<span class="v-held-rest">h</span><span class="gw-held-min">${m}</span><span class="v-held-rest">min</span>`
+        : `${m}<span class="v-held-rest">min</span>`;
 }
 
 function renderWorkouts() {
     const range = state.workoutRange || VexRange.resolve('all');
-    const byType = state.workoutsAll.filter(
-        w => !state.workoutFilter || w.workout_type === state.workoutFilter);
     // Workouts liegen vollstaendig im Browser -- das Fenster wird hier
     // geschnitten und nicht nachgeladen.
-    const rows = VexRange.clip(byType, 'start_at', range)
+    const imZeitraum = VexRange.clip(state.workoutsAll, 'start_at', range);
+    const typen = new Set(imZeitraum.map(w => w.workout_type));
+    if (state.workoutFilter && !typen.has(state.workoutFilter)) state.workoutFilter = '';
+    const rows = imZeitraum
+        .filter(w => !state.workoutFilter || w.workout_type === state.workoutFilter)
         .slice().sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
-    const kpiBox = document.getElementById('hWorkoutKpis');
-    const rangeEl = document.getElementById('hWorkoutRangeLbl');
+    const zeitraum = range.preset === 'all' ? 'gesamt' : range.label;
+
+    document.getElementById('hWoInfo').textContent =
+        `${fmt0(rows.length)} ${rows.length === 1 ? 'Workout' : 'Workouts'} · ${range.preset === 'all' ? 'Gesamter Zeitraum' : range.label}`;
+    document.getElementById('hWorkoutRangeLbl').textContent =
+        state.workoutFilter ? wMeta(state.workoutFilter).de : '';
+    zeichneWoBuehne(rows, range, zeitraum);
+    zeichneWoArten(imZeitraum);
+    zeichneWoListe(rows);
+}
+
+function zeichneWoBuehne(rows, range, zeitraum) {
+    const summe = rows.reduce((s, w) => s + woMin(w), 0);
+    const kcal = rows.reduce((s, w) => s + (Number(w.active_energy_kcal) || 0), 0);
+    const meter = rows.reduce((s, w) => s + (Number(w.distance_m) || 0), 0);
+    const puls = rows.map(w => Number(w.avg_heart_rate)).filter(woPulsOk);
+    const pulsSchnitt = puls.length ? puls.reduce((s, v) => s + v, 0) / puls.length : null;
+
+    document.getElementById('hWoMarke').textContent = 'Training · ' + zeitraum;
+    document.getElementById('hWoFilterLbl').textContent =
+        state.workoutFilter ? 'nur ' + wMeta(state.workoutFilter).de : '';
+    document.getElementById('hWoZeit').innerHTML = woZeitHeld(summe);
+    document.getElementById('hWoUnter').textContent = rows.length
+        ? `in ${fmt0(rows.length)} ${rows.length === 1 ? 'Workout' : 'Workouts'} · Ø ${fmtDuration(summe / rows.length)}`
+        : 'Kein Workout in diesem Zeitraum';
+    const fakt = (dt, dd) => `<div><dt>${dt}</dt><dd>${dd}</dd></div>`;
+    document.getElementById('hWoFakten').innerHTML =
+        fakt('Workouts', fmt0(rows.length))
+        + fakt('Energie', kcal > 0 ? fmt0(kcal) + '<small>kcal</small>' : '–')
+        + fakt('Distanz', meter > 0 ? fmt1(meter / 1000) + '<small>km</small>' : '–')
+        + fakt('Ø Puls', pulsSchnitt != null ? fmt0(pulsSchnitt) + '<small>bpm</small>' : '–');
+    zeichneWoRhythmus(rows, range);
+}
+
+/* Der Rhythmus: Trainingszeit je Tag, Woche oder Monat -- je nachdem, wie
+   lang der Zeitraum ist. Ein Monat in Tagen, ein Jahr in Wochen, alles
+   darüber in Monaten; so stehen nie mehr als gut fünfzig Balken da. */
+async function zeichneWoRhythmus(rows, range) {
+    const heute = new Date(); heute.setHours(0, 0, 0, 0);
+    const bis = range.to ? new Date(range.to + 'T00:00:00') : heute;
+    let von = range.from ? new Date(range.from + 'T00:00:00') : null;
+    if (!von) {
+        const erstes = rows.reduce((m, w) => Math.min(m, new Date(w.start_at).getTime()), bis.getTime());
+        von = new Date(erstes); von.setHours(0, 0, 0, 0);
+    }
+    const tage = Math.round((bis - von) / 86400000) + 1;
+    const art = tage <= 31 ? 'tag' : tage <= 371 ? 'woche' : 'monat';
+    const schluessel = (d) => art === 'tag' ? isoTag(d)
+        : art === 'woche' ? isoTag(woMontag(d))
+        : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const eimer = [];
+    const lauf = art === 'woche' ? woMontag(von) : art === 'monat' ? new Date(von.getFullYear(), von.getMonth(), 1) : new Date(von);
+    while (lauf <= bis) {
+        const d = new Date(lauf);
+        eimer.push({ key: schluessel(d), d: d, min: 0 });
+        if (art === 'tag') lauf.setDate(lauf.getDate() + 1);
+        else if (art === 'woche') lauf.setDate(lauf.getDate() + 7);
+        else lauf.setMonth(lauf.getMonth() + 1);
+    }
+    const nachSchluessel = new Map(eimer.map(e => [e.key, e]));
+    rows.forEach(w => { const e = nachSchluessel.get(schluessel(new Date(w.start_at))); if (e) e.min += woMin(w); });
+
+    const wort = { tag: 'je Tag', woche: 'je Woche', monat: 'je Monat' }[art];
+    document.getElementById('hWoRhythmusLbl').textContent = 'Trainingszeit ' + wort;
+    const aktiv = eimer.filter(e => e.min > 0).length;
+    const einheit = { tag: ['Tag', 'Tagen'], woche: ['Woche', 'Wochen'], monat: ['Monat', 'Monaten'] }[art];
+    document.getElementById('hWoRhythmusSub').textContent = eimer.length
+        ? `in ${aktiv} von ${eimer.length} ${eimer.length === 1 ? einheit[0] : einheit[1]}` : '';
+
+    const titel = (e) => art === 'tag' ? tagName(e.key)
+        : art === 'woche' ? `KW ${woKw(e.d)} · ${woKurz(e.d)}–${woKurz(new Date(e.d.getTime() + 6 * 86400000))}`
+        : e.d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+    const achse = (e) => art === 'tag' ? woKurz(e.d)
+        : art === 'woche' ? 'KW ' + woKw(e.d)
+        : e.d.toLocaleDateString('de-DE', { month: 'short' });
+
+    try { await VexCharts.bereit(); } catch (e) { return; }
+    const hoechst = Math.max(1, ...eimer.map(e => e.min));
+    const canvas = document.getElementById('hWoRhythmus');
+    if (!canvas) return;
+    const th = chartTheme();
+    const ton = getComputedStyle(document.getElementById('hWoBuehne')).getPropertyValue('--gh-ton').trim() || cssVar('--m-health');
+    if (state.woRhythmus) state.woRhythmus.destroy();
+    state.woRhythmus = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: { labels: eimer.map(achse), datasets: [Object.assign({
+            label: 'Trainingszeit', data: eimer.map(e => Math.round(e.min)),
+            backgroundColor: ton, maxBarThickness: 28, order: VexCharts.ORDER.VALUE,
+        }, VexCharts.balken(4))] },
+        options: chartDefaults({
+            plugins: {
+                legend: { display: false },
+                tooltip: themedTooltip({ displayColors: false, callbacks: {
+                    title: (items) => items.length ? titel(eimer[items[0].dataIndex]) : '',
+                    label: (ctx) => ctx.raw ? fmtDuration(ctx.raw) : 'kein Training',
+                } }),
+            },
+            scales: {
+                x: { ticks: { color: th.muted, font: { size: 10 }, maxRotation: 0, autoSkipPadding: 10 },
+                     grid: { display: false }, border: { display: false } },
+                // Runde Stufen (30 min, 1 h, 2 h …) statt „3,3 h“.
+                y: { beginAtZero: true, ticks: { color: th.muted, font: { size: 10 },
+                         stepSize: [15, 30, 60, 120, 180, 300, 600, 1200].find(st => hoechst / st <= 4) || 1200,
+                         callback: (v) => v >= 60 ? (v / 60).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' h' : v + ' min' },
+                     grid: { color: th.grid }, border: { display: false } },
+            },
+        }),
+    });
+}
+
+/* Je Sportart eine Zeile: wie oft, wie lange, wie weit. Die Zeile ist der
+   Filter -- ein zweiter Tipp hebt ihn wieder auf. Gezählt wird über den
+   ganzen Zeitraum, auch wenn gerade gefiltert ist: sonst stünde nach dem
+   ersten Tipp nur noch eine Zeile da, und der Weg zurück wäre weg. */
+function zeichneWoArten(imZeitraum) {
+    const box = document.getElementById('hWoArten');
+    const abschnitt = document.getElementById('hWoArtenAbschnitt');
+    const gruppen = new Map();
+    imZeitraum.forEach(w => {
+        const g = gruppen.get(w.workout_type) || { typ: w.workout_type, n: 0, min: 0, m: 0 };
+        g.n += 1; g.min += woMin(w); g.m += Number(w.distance_m) || 0;
+        gruppen.set(w.workout_type, g);
+    });
+    const liste = [...gruppen.values()].sort((a, b) => b.min - a.min);
+    abschnitt.hidden = liste.length < 2 && !state.workoutFilter;
+    document.getElementById('hWoAlle').hidden = !state.workoutFilter;
+    document.getElementById('hWoArtenSub').textContent = state.workoutFilter ? '' : 'Tippen filtert';
+    const gesamt = liste.reduce((s, g) => s + g.min, 0) || 1;
+    box.innerHTML = `<div class="rec-list gh-wo gw-arten">${liste.map(g => {
+        const m = wMeta(g.typ);
+        const dist = g.m > 0 ? (isSwimWorkout(g.typ) || g.m < 1000 ? fmt0(g.m) + ' m' : fmt1(g.m / 1000) + ' km') : null;
+        const meta = [`${fmt0(g.n)}×`, dist].filter(Boolean);
+        const anteil = Math.round(g.min / gesamt * 100);
+        const aktiv = state.workoutFilter === g.typ;
+        return `<button type="button" class="rec-row gw-art${aktiv ? ' is-active' : ''}" aria-pressed="${aktiv}"
+                    onclick="woFilter(${escHtml(JSON.stringify(g.typ))})" style="--gw-anteil:${(g.min / gesamt).toFixed(3)}">
+            <span class="rec-mark" style="--tone:var(--gh-ton)"><span class="gh-sport" aria-hidden="true">${m.icon}</span></span>
+            <span class="rec-main"><span class="rec-title">${escHtml(m.de)}</span>
+                <span class="rec-meta">${meta.map(escHtml).join('<span class="sep">·</span>')}</span></span>
+            <span class="rec-side"><span class="rec-val">${escHtml(fmtDuration(g.min))}</span>
+                <span class="rec-sub">${anteil} %</span></span>
+        </button>`;
+    }).join('')}</div>`;
+}
+
+/* Die Workouts nach Wochen. Der Kopf jeder Woche trägt ihre Summe -- so
+   liest man den Rhythmus auch hier, ohne zu zählen. */
+function zeichneWoListe(rows) {
     const list = document.getElementById('hWorkoutList');
-    if (rangeEl) rangeEl.textContent = range.preset === 'all' ? 'Gesamter Zeitraum' : range.label;
     if (!rows.length) {
-        kpiBox.innerHTML = '';
         list.innerHTML = `<div class="empty"><p class="empty-text">${state.workoutsAll.length
-            ? 'Keine Workouts in diesem Zeitraum. Ein längerer Zeitraum oder eine andere Sportart zeigt mehr.'
-            : 'Noch keine Workouts synchronisiert.'}</p></div>`;
+            ? 'Keine Workouts in diesem Zeitraum. Ein längerer Zeitraum zeigt mehr.'
+            : 'Noch keine Workouts synchronisiert. Auto Health Export schickt sie mit dem täglichen Upload.'}</p></div>`;
         return;
     }
-    const totalMin = rows.reduce((s, w) => s + (Number(w.duration_min) || 0), 0);
-    // Durchschnitte nur ueber die Workouts, die den Wert wirklich mitbringen.
-    const durArr = rows.map(w => Number(w.duration_min)).filter(v => Number.isFinite(v) && v > 0);
-    const kcalArr = rows.map(w => Number(w.active_energy_kcal)).filter(Number.isFinite);
-    const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
-    const avgDur = avgOf(durArr);
-    const avgKcal = avgOf(kcalArr);
-    // Puls: nur plausible Werte mitteln (Migration 029 raeumt Altlasten weg,
-    // dieser Filter faengt ab, was trotzdem noch danebenliegt).
-    const hrArr = rows.map(w => Number(w.avg_heart_rate))
-                      .filter(v => Number.isFinite(v) && v >= 30 && v <= 240);
-    const avgHr = avgOf(hrArr);
-    const kpis = [
-        // Die Anzahl ist die Zahl, wegen der man auf diesen Reiter geht.
-        { lbl: 'Workouts', val: fmt0(rows.length), sub: fmtDuration(totalMin) + ' insgesamt' },
-        { lbl: 'Ø Dauer', val: avgDur != null ? fmtDuration(avgDur) : '–' },
-        { lbl: 'Ø Energie', val: avgKcal != null ? fmt0(avgKcal) + '<small>kcal</small>' : '–' },
-        { lbl: 'Ø Puls', val: avgHr != null ? fmt0(avgHr) + '<small>bpm</small>' : '–',
-          sub: avgHr != null
-              ? `aus ${hrArr.length} von ${rows.length} Workout${rows.length === 1 ? '' : 's'}`
-              : 'kein Pulswert importiert' },
-    ];
-    kpiBox.innerHTML = kpis.map(k => `
-        <div class="gh-kpi"><div class="gh-kpi-lbl">${k.lbl}</div>
-            <div class="gh-kpi-val">${k.val}</div>
-            ${k.sub ? `<div class="gh-kpi-sub">${k.sub}</div>` : ''}</div>`).join('');
-    list.innerHTML = `<div class="rec-list gh-wo">${rows.map(workoutZeile).join('')}</div>`;
+    const diese = woMontag(new Date()).getTime();
+    const wochen = new Map();
+    rows.forEach(w => {
+        const mo = woMontag(new Date(w.start_at));
+        const k = mo.getTime();
+        if (!wochen.has(k)) wochen.set(k, { mo: mo, rows: [] });
+        wochen.get(k).rows.push(w);
+    });
+    list.innerHTML = [...wochen.values()].map(wo => {
+        const abstand = Math.round((diese - wo.mo.getTime()) / (7 * 86400000));
+        const so = new Date(wo.mo.getTime() + 6 * 86400000);
+        const name = abstand === 0 ? 'Diese Woche' : abstand === 1 ? 'Letzte Woche'
+            : `KW ${woKw(wo.mo)} · ${woKurz(wo.mo)}–${woKurz(so)}`;
+        const min = wo.rows.reduce((s, w) => s + woMin(w), 0);
+        return `<div class="gw-woche">
+            <div class="gw-woche-kopf"><span>${escHtml(name)}</span>
+                <span>${escHtml(fmtDuration(min))} · ${wo.rows.length}×</span></div>
+            <div class="rec-list gh-wo">${wo.rows.map(workoutZeile).join('')}</div>
+        </div>`;
+    }).join('');
 }
 
 function workoutDistanz(w) {
@@ -1356,69 +1519,79 @@ function workoutZeile(w) {
     </button>`;
 }
 
-function workoutKacheln(w) {
+/* Pace nur für Distanz-Sportarten. Beim Schwimmen ist die übliche Einheit
+   min/100 m -- in min/km wäre sie als „38:00“ nicht lesbar. */
+function workoutPace(w) {
     const swim = isSwimWorkout(w.workout_type);
     const dist = Number(w.distance_m);
-    const hasDist = Number.isFinite(dist) && dist > 0;
-    const distStr = hasDist
-        ? ((dist >= 1000 && !swim) ? fmt1(dist/1000) + ' <small>km</small>'
-                                   : fmt0(dist) + ' <small>m</small>')
-        : null;
-    // Pace nur fuer Distanz-Sportarten. Beim Schwimmen ist die uebliche
-    // Einheit min/100 m -- in min/km waere sie als "38:00" nicht lesbar.
-    let paceStr = null;
-    if (hasDist && (w.duration_min > 0)) {
-        const refM = swim ? 100 : 1000;
-        const pace = w.duration_min / (dist / refM);
-        const paceMax = swim ? 20 : 60;
-        if (Number.isFinite(pace) && pace > 0 && pace < paceMax) {
-            let mm = Math.floor(pace);
-            let ss = Math.round((pace - mm) * 60);
-            if (ss === 60) { mm += 1; ss = 0; }
-            paceStr = `${mm}:${String(ss).padStart(2,'0')} <small>min/${swim ? '100 m' : 'km'}</small>`;
-        }
-    }
-    return [
-        { lbl:'Dauer', val: fmtDuration(w.duration_min) },
-        w.active_energy_kcal != null ? { lbl:'Aktive Energie', val: fmt0(w.active_energy_kcal) + ' <small>kcal</small>' } : null,
-        w.total_energy_kcal != null && w.total_energy_kcal !== w.active_energy_kcal
-            ? { lbl:'Gesamt-Energie', val: fmt0(w.total_energy_kcal) + ' <small>kcal</small>' } : null,
-        hasDist ? { lbl:'Distanz', val: distStr } : null,
-        paceStr ? { lbl:'Pace', val: paceStr } : null,
-        w.avg_heart_rate != null ? { lbl:'Ø Puls', val: fmt0(w.avg_heart_rate) + ' <small>bpm</small>' } : null,
-        w.max_heart_rate != null ? { lbl:'Max Puls', val: fmt0(w.max_heart_rate) + ' <small>bpm</small>' } : null,
-        w.min_heart_rate != null ? { lbl:'Min Puls', val: fmt0(w.min_heart_rate) + ' <small>bpm</small>' } : null,
-        w.elevation_m != null && w.elevation_m > 0
-            ? { lbl:'Aufstieg', val: fmt0(w.elevation_m) + ' <small>m</small>' } : null,
-    ].filter(Boolean);
+    if (!(Number.isFinite(dist) && dist > 0 && w.duration_min > 0)) return null;
+    const pace = w.duration_min / (dist / (swim ? 100 : 1000));
+    if (!(Number.isFinite(pace) && pace > 0 && pace < (swim ? 20 : 60))) return null;
+    let mm = Math.floor(pace), ss = Math.round((pace - mm) * 60);
+    if (ss === 60) { mm += 1; ss = 0; }
+    return { wert: `${mm}:${String(ss).padStart(2, '0')}`, einheit: swim ? 'min/100 m' : 'min/km' };
 }
 
+/* Zusatzwerte aus dem Export. Die Einheit steht hier und nicht im Namen --
+   bis v2.26.0 stand sie in beidem („Schrittfrequenz (spm) … 168,0 spm“) --,
+   und Zählwerte tragen keine Nachkommastelle („Schritte 6980,0“). */
 const EXTRA_LABELS = {
-    resting_energy_kcal: 'Ruhe-Energie (kcal)',
-    intensity_kcal_h_kg: 'Intensität (kcal/h·kg)',
-    max_speed_kmh: 'Max. Geschwindigkeit (km/h)',
-    avg_speed_kmh: 'Ø Geschwindigkeit (km/h)',
-    flights_climbed: 'Etagen gestiegen',
-    elevation_descended_m: 'Abstieg (m)',
-    step_count: 'Schritte', cadence_spm: 'Schrittfrequenz (spm)',
-    swim_stroke_count: 'Schwimmzüge', swim_cadence_spm: 'Schwimmkadenz (spm)',
-    lap_length_m: 'Rundenlänge (m)', swolf: 'SWOLF',
-    temperature_c: 'Temperatur (°C)', humidity_pct: 'Luftfeuchtigkeit (%)',
-    cycling_speed_kmh: 'Rad-Geschwindigkeit (km/h)', cycling_power_w: 'Rad-Leistung (W)',
+    resting_energy_kcal:   { name: 'Ruhe-Energie', einheit: 'kcal', ganz: true },
+    intensity_kcal_h_kg:   { name: 'Intensität', einheit: 'kcal/h·kg' },
+    max_speed_kmh:         { name: 'Max. Geschwindigkeit', einheit: 'km/h' },
+    avg_speed_kmh:         { name: 'Ø Geschwindigkeit', einheit: 'km/h' },
+    flights_climbed:       { name: 'Etagen gestiegen', ganz: true },
+    elevation_descended_m: { name: 'Abstieg', einheit: 'm', ganz: true },
+    step_count:            { name: 'Schritte', ganz: true },
+    cadence_spm:           { name: 'Schrittfrequenz', einheit: 'spm', ganz: true },
+    swim_stroke_count:     { name: 'Schwimmzüge', ganz: true },
+    swim_cadence_spm:      { name: 'Schwimmkadenz', einheit: 'spm', ganz: true },
+    lap_length_m:          { name: 'Bahnlänge', einheit: 'm', ganz: true },
+    swolf:                 { name: 'SWOLF', ganz: true },
+    temperature_c:         { name: 'Temperatur', einheit: '°C' },
+    humidity_pct:          { name: 'Luftfeuchtigkeit', einheit: '%', ganz: true },
+    cycling_speed_kmh:     { name: 'Rad-Geschwindigkeit', einheit: 'km/h' },
+    cycling_power_w:       { name: 'Rad-Leistung', einheit: 'W', ganz: true },
 };
 
-/* Alles zu einem Workout in einem Dialog: Werte, Pulsverlauf, Zusatzdaten
-   und -- einen Griff tiefer -- Loeschen. Bis v2.19.0 standen „＋“ und „✕“
-   an jeder Karte; der Papierkorb neben dem haeufigsten Griff ist die
-   Regel, gegen die DESIGN 6d steht. */
+/* Alles zu einem Workout in einem Dialog (v2.27.0): oben die drei Zahlen,
+   um die es geht, darunter der Puls mit seinem Verlauf, dann der Rest als
+   ruhige Liste -- statt neun gleich lauter Kacheln. Löschen einen Griff
+   tiefer im Fuß (DESIGN 6d). */
 async function dlgWorkout(id) {
     const w = (state.workoutsAll || []).find(x => x.id === id);
     if (!w) return;
     const m = wMeta(w.workout_type);
-    const d = dialog(m.de + ' · ' + fmtDateTime(w.start_at), `
-        <div class="h-workout-detail-grid">${workoutKacheln(w).map(t => `<div class="h-workout-detail-tile">
-            <div class="h-workout-detail-lbl">${t.lbl}</div><div class="h-workout-detail-val">${t.val}</div></div>`).join('')}</div>
-        <div id="hwxDetail"><span class="skel skel-block"></span></div>
+    const dist = workoutDistanz(w);
+    const pace = workoutPace(w);
+    const teil = (s) => { const i = s.lastIndexOf(' '); return i < 0 ? [s, ''] : [s.slice(0, i), s.slice(i + 1)]; };
+    const dm = Math.round(Number(w.duration_min) || 0);
+    const haupt = [dm >= 60
+        ? { lbl: 'Dauer', wert: `${Math.floor(dm / 60)}:${String(dm % 60).padStart(2, '0')}`, einheit: 'h' }
+        : { lbl: 'Dauer', wert: fmt0(dm), einheit: 'min' }];
+    if (dist) { const [z, e] = teil(dist); haupt.push({ lbl: 'Distanz', wert: z, einheit: e }); }
+    if (w.active_energy_kcal != null) haupt.push({ lbl: 'Aktive Energie', wert: fmt0(w.active_energy_kcal), einheit: 'kcal' });
+    if (haupt.length < 3 && pace) haupt.push({ lbl: 'Pace', wert: pace.wert, einheit: pace.einheit });
+
+    const zeile = (name, wert) => `<div class="gw-d-zeile"><span>${escHtml(name)}</span><strong>${wert}</strong></div>`;
+    const grund = [];
+    if (pace && !haupt.some(h => h.lbl === 'Pace')) grund.push(zeile('Pace', `${pace.wert} <small>${pace.einheit}</small>`));
+    if (w.total_energy_kcal != null && w.total_energy_kcal !== w.active_energy_kcal)
+        grund.push(zeile('Gesamt-Energie', `${fmt0(w.total_energy_kcal)} <small>kcal</small>`));
+    if (w.elevation_m != null && w.elevation_m > 0) grund.push(zeile('Aufstieg', `${fmt0(w.elevation_m)} <small>m</small>`));
+
+    const puls = [['Ø', w.avg_heart_rate], ['max', w.max_heart_rate], ['min', w.min_heart_rate]]
+        .filter(([, v]) => woPulsOk(v)).map(([k, v]) => `${k} <strong>${fmt0(v)}</strong>`);
+
+    const d = dialog(m.de, `
+        <p class="gw-d-wann">${escHtml(new Date(w.start_at).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}
+            · ${escHtml(fmtHM(w.start_at))}${w.end_at ? '–' + escHtml(fmtHM(w.end_at)) : ''}</p>
+        <div class="gw-d-haupt">${haupt.map(h => `<div><span class="gw-d-lbl">${h.lbl}</span>
+            <span class="gw-d-wert">${escHtml(h.wert)}<small>${escHtml(h.einheit)}</small></span></div>`).join('')}</div>
+        ${puls.length ? `<div class="gw-d-puls">
+            <div class="gw-d-puls-kopf"><span>Puls</span><span>${puls.join(' · ')} <small>bpm</small></span></div>
+            <div id="hwxPuls"><span class="skel skel-block"></span></div></div>` : '<div id="hwxPuls" hidden></div>'}
+        <div class="gw-d-liste" id="hwxListe">${grund.join('')}</div>
         <div class="modal-fuss">
             <button type="button" class="v-btn v-btn--danger" data-weg>${ikon('muell', 16)} Löschen</button>
             <button type="button" class="v-btn" data-zu>Schließen</button>
@@ -1427,77 +1600,86 @@ async function dlgWorkout(id) {
         } });
     beiKlick(d, '[data-zu]', () => d.close());
     beiKlick(d, '[data-weg]', async () => { if (await deleteWorkout(id)) d.close(); });
-    const box = document.getElementById('hwxDetail');
+    const pulsBox = document.getElementById('hwxPuls');
+    const listeBox = document.getElementById('hwxListe');
     try {
         const det = await HEALTH_API.workoutDetail(id);
-        if (!box.isConnected) return;
+        if (!listeBox.isConnected) return;
         const extras = (det.extra_metrics || []).filter(x => x.value != null && Math.abs(x.value) > 0.0001);
+        listeBox.insertAdjacentHTML('beforeend', extras.map(x => {
+            const l = EXTRA_LABELS[x.metric_key] || { name: x.metric_key, einheit: x.unit };
+            const wert = l.ganz ? fmt0(x.value) : fmt1(x.value);
+            const einheit = l.einheit || x.unit || '';
+            return zeile(l.name, `${wert}${einheit ? ` <small>${escHtml(einheit)}</small>` : ''}`);
+        }).join(''));
         const series = det.hr_series || [], recovery = det.hr_recovery || [];
-        const chartHtml = (series.length + recovery.length) >= 2
-            ? `<div class="h-workout-hr"><div class="h-workout-hr-lbl">Pulsverlauf</div>
-                   <div style="height:170px;position:relative"><canvas id="hwhr-${id}"></canvas></div></div>` : '';
-        const tableHtml = extras.length ? `<div class="h-workout-extras"><table>${extras.map(x => `
-                <tr><td>${escHtml(EXTRA_LABELS[x.metric_key] || x.metric_key)}</td>
-                    <td>${fmt1(x.value)}${x.unit ? ' ' + escHtml(x.unit) : ''}</td></tr>`).join('')}
-            </table></div>` : '';
-        box.innerHTML = (chartHtml + tableHtml) || '<p class="h-hint">Zu diesem Workout gibt es keine Zusatzdaten.</p>';
-        if (chartHtml) mountWorkoutHrChart(id, series, recovery);
+        if ((series.length + recovery.length) >= 2) {
+            pulsBox.hidden = false;
+            pulsBox.innerHTML = `<div class="gw-d-flaeche"><canvas id="hwhr-${id}" aria-label="Pulsverlauf"></canvas></div>`;
+            await VexCharts.bereit().catch(() => {});
+            if (pulsBox.isConnected) mountWorkoutHrChart(id, w, series, recovery);
+        } else {
+            pulsBox.innerHTML = '';
+        }
     } catch (e) {
-        if (box.isConnected) box.innerHTML = `<p class="h-kurve-alt">Die Zusatzdaten konnten nicht geladen werden.</p>`;
+        if (pulsBox.isConnected) pulsBox.innerHTML = '';
+        if (listeBox.isConnected) listeBox.insertAdjacentHTML('beforeend',
+            '<p class="h-kurve-alt">Pulsverlauf und Zusatzdaten konnten nicht geladen werden.</p>');
     }
 }
 
-// Puls-Minutenreihe eines Workouts. Die Erholung nach dem Trainingsende
-// bekommt eine eigene, gestrichelte Linie.
-function mountWorkoutHrChart(id, series, recovery) {
+/* Puls auf einer ECHTEN Zeitachse (v2.27.0): Minuten seit dem Start, als
+   Uhrzeit beschriftet. Auf der alten Kategorienachse lag jeder Messpunkt
+   gleich weit vom nächsten -- die Erholung nach dem Training (andere
+   Abstände) sah so lang aus wie das Training selbst, und die Achse sprang
+   von 18:58 auf 19:13. */
+function mountWorkoutHrChart(id, w, series, recovery) {
     const canvas = document.getElementById('hwhr-' + id);
     if (!canvas || typeof Chart === 'undefined') return;
-    const pts = [
-        ...series.map(r => ({ at: r.recorded_at, v: r.avg_bpm, during: true })),
-        ...recovery.map(r => ({ at: r.recorded_at, v: r.avg_bpm, during: false })),
-    ].filter(p => p.v != null && p.at)
-     .sort((a, b) => new Date(a.at) - new Date(b.at));
-    if (pts.length < 2) return;
-
-    const labels = pts.map(p => fmtHM(p.at));
-    // Achse zeigt die Uhrzeit, der Tooltip zusaetzlich den Tag mit Jahr.
-    const fullLabels = pts.map(p => (window.VexCharts ? VexCharts.fullDay(p.at) + ' · ' : '') + fmtHM(p.at));
-    const during = pts.map(p => p.during ? Number(p.v) : null);
-    const after  = pts.map(p => p.during ? null : Number(p.v));
-    // Anschluss ohne Luecke: die Erholungslinie beginnt am letzten Messpunkt.
-    const lastDuring = during.reduce((acc, v, i) => v != null ? i : acc, -1);
-    if (lastDuring >= 0 && after.some(v => v != null)) after[lastDuring] = during[lastDuring];
+    const punkte = (reihe) => reihe.filter(r => r.avg_bpm != null && r.recorded_at)
+        .map(r => ({ t: new Date(r.recorded_at).getTime(), y: Number(r.avg_bpm) }))
+        .sort((a, b) => a.t - b.t);
+    const im = punkte(series), nach = punkte(recovery);
+    const alle = im.concat(nach);
+    if (alle.length < 2) return;
+    const start = w.start_at ? new Date(w.start_at).getTime() : alle[0].t;
+    const xy = (p) => ({ x: (p.t - start) / 60000, y: p.y });
+    const imXY = im.map(xy);
+    // Anschluss ohne Lücke: die Erholung beginnt am letzten Messpunkt.
+    const nachXY = (im.length && nach.length ? [im[im.length - 1]] : []).concat(nach).map(xy);
+    const uhr = (min) => fmtHM(new Date(start + min * 60000).toISOString());
 
     const th = chartTheme();
     if (state.workoutHrChart) state.workoutHrChart.destroy();
     state.workoutHrChart = new Chart(canvas.getContext('2d'), {
         type: 'line',
-        data: {
-            labels,
-            datasets: [
-                { label: 'Puls (bpm)', data: during, borderColor: cssVar('--danger'),
-                  backgroundColor: cssVar('--danger-soft'), fill: true, tension: 0.3,
-                  pointRadius: 0, borderWidth: 2 },
-                { label: 'Erholung (bpm)', data: after, borderColor: cssVar('--warn'),
-                  borderDash: [4, 3], fill: false, tension: 0.3,
-                  pointRadius: 0, borderWidth: 2 },
-            ],
-        },
+        data: { datasets: [
+            { label: 'Training', data: imXY, borderColor: cssVar('--danger'),
+              backgroundColor: cssVar('--danger-soft'), fill: true, tension: 0.3,
+              pointRadius: 0, borderWidth: 2 },
+            { label: 'Erholung', data: nachXY, borderColor: cssVar('--warn'),
+              borderDash: [4, 3], fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+        ] },
         options: chartDefaults({
+            interaction: { mode: 'nearest', axis: 'x', intersect: false },
             plugins: {
-                legend: { labels: { color: th.muted, boxWidth: 8, boxHeight: 8, usePointStyle: true,
-                                    pointStyle: 'circle', font: { size: 10 } } },
-                tooltip: themedTooltip(),
+                legend: { display: nachXY.length > 0, labels: { color: th.muted, boxWidth: 8, boxHeight: 8,
+                    usePointStyle: true, pointStyle: 'circle', font: { size: 10 } } },
+                tooltip: themedTooltip({ callbacks: {
+                    title: (items) => items.length ? uhr(items[0].parsed.x) : '',
+                    label: (ctx) => `${ctx.dataset.label}: ${fmt0(ctx.parsed.y)} bpm`,
+                } }),
             },
             scales: {
-                x: { ticks: { color: th.muted, maxRotation: 0, autoSkipPadding: 24,
-                              font: { size: 10 } }, grid: { display: false }, border: { display: false } },
-                y: { ticks: { color: th.muted, font: { size: 10 }, maxTicksLimit: 5 },
+                x: { type: 'linear', min: 0, max: Math.max(...alle.map(p => (p.t - start) / 60000)),
+                     ticks: { color: th.muted, maxRotation: 0, font: { size: 10 }, maxTicksLimit: 6,
+                              callback: (v) => uhr(v) },
+                     grid: { display: false }, border: { display: false } },
+                y: { ticks: { color: th.muted, font: { size: 10 }, maxTicksLimit: 4 },
                      grid: { color: th.grid }, border: { display: false }, beginAtZero: false },
             },
         }),
     });
-    state.workoutHrChart.$vexFull = fullLabels;
 }
 
 // v1.28.0: einzelnes Workout loeschen

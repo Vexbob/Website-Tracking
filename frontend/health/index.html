@@ -213,14 +213,44 @@
     </div>
 
     <!-- ---------- Workouts ---------- -->
+    <!-- v2.27.0: Oben die Trainingszeit im Zeitraum mit ihrem Rhythmus, darunter
+         die Sportarten (ein Tipp filtert -- sie ersetzen die Chipreihe), dann
+         die Workouts nach Wochen. -->
     <div id="tab-workouts" hidden>
-        <div class="gh-leiste gh-leiste--chips">
-            <div class="gh-chips" id="hWorkoutTypeChips">
-                <button type="button" class="v-chip is-active" data-type="">Alle</button>
-            </div>
+        <div class="gh-leiste">
+            <span class="gh-leiste-text" id="hWoInfo">Workouts im Zeitraum</span>
             <div id="hWorkoutRange"></div>
         </div>
-        <div class="gh-kpis" id="hWorkoutKpis"><span class="skel gh-skel-kpi"></span><span class="skel gh-skel-kpi"></span><span class="skel gh-skel-kpi"></span><span class="skel gh-skel-kpi"></span></div>
+        <section class="v-buehne gh-buehne gw-buehne" id="hWoBuehne">
+            <div class="gh-b-kopf">
+                <span class="v-buehne-marke" id="hWoMarke">Training</span>
+                <span class="gh-b-stand" id="hWoFilterLbl"></span>
+            </div>
+            <div class="gw-b-inhalt">
+                <div class="gw-b-haupt">
+                    <strong class="v-held gw-held" id="hWoZeit"><span class="skel gh-held-skel"></span></strong>
+                    <span class="gw-b-unter" id="hWoUnter"><span class="skel skel-line" style="width:9rem"></span></span>
+                    <dl class="gh-b-fakten gw-fakten" id="hWoFakten">
+                        <div><dt>Workouts</dt><dd>–</dd></div>
+                        <div><dt>Energie</dt><dd>–</dd></div>
+                        <div><dt>Distanz</dt><dd>–</dd></div>
+                        <div><dt>Ø Puls</dt><dd>–</dd></div>
+                    </dl>
+                </div>
+                <div class="gw-b-rhythmus">
+                    <div class="gw-b-rhythmus-kopf"><span id="hWoRhythmusLbl">Trainingszeit</span><span id="hWoRhythmusSub"></span></div>
+                    <div class="gw-b-flaeche"><canvas id="hWoRhythmus" aria-label="Trainingszeit im Verlauf"></canvas></div>
+                </div>
+            </div>
+        </section>
+        <section class="v-abschnitt" id="hWoArtenAbschnitt">
+            <header class="v-abschnitt-kopf">
+                <h2>Sportarten</h2>
+                <span class="v-abschnitt-sub" id="hWoArtenSub">Tippen filtert</span>
+                <button type="button" class="v-btn v-btn--ghost v-btn--sm" id="hWoAlle" hidden>Alle zeigen</button>
+            </header>
+            <div id="hWoArten"><span class="skel gh-skel-zeile"></span><span class="skel gh-skel-zeile"></span></div>
+        </section>
         <section class="v-abschnitt">
             <header class="v-abschnitt-kopf">
                 <h2>Workouts</h2>
