@@ -13,6 +13,8 @@
  *      zeichnet die Datensaetze nach `order` von hinten nach vorne: der
  *      NIEDRIGSTE Wert liegt oben. Deshalb ORDER.TREND < ORDER.VALUE, und
  *      Vergleichslinien liegen mit ORDER.CONTEXT dazwischen.
+ *   4. (v2.24.0) Balken sind oben rund und unten gerade -- in einem Stapel
+ *      nur das oberste sichtbare Stueck. Siehe ``balken()``.
  *
  * Einbindung: <script src="/js/charts.js"></script> vor dem Modul-Skript,
  * nach chart.js. Idempotent, braucht Chart.js nicht zum Zeitpunkt des Ladens.
@@ -136,8 +138,50 @@
         return options;
     }
 
+    /* Die Ecken eines Balkens. Bis v2.23.0 stand ueberall
+       ``borderRadius: 6, borderSkipped: false``: rund an allen vier Ecken.
+       Am Boden sah der Balken dadurch aus, als schwebe er ueber der Achse,
+       und in einem Stapel bekam jedes Stueck seine eigenen Rundungen -- an
+       der Fuge zweier Stuecke stiessen Rund und Eckig aufeinander.
+
+       Jetzt: ``borderSkipped: 'start'`` laesst die Seite an der Grundlinie
+       gerade (auch bei negativen Werten, dort ist es die obere), und in
+       einem Stapel rundet nur das oberste Stueck mit Wert, das gerade
+       sichtbar ist. Schwebende Balken (von-bis, etwa Schlafphasen) brauchen
+       das nicht und behalten ihre eigenen Ecken.
+
+       Verwendung im Datensatz: ``Object.assign({ ... }, VexCharts.balken(6))``. */
+    function balken(radius) {
+        var r = radius == null ? 6 : radius;
+        return {
+            borderSkipped: 'start',
+            borderRadius: function (ctx) {
+                if (!ctx || ctx.type !== 'data') return r;
+                var chart = ctx.chart;
+                var skalen = (chart && chart.options && chart.options.scales) || {};
+                var gestapelt = (skalen.x && skalen.x.stacked) || (skalen.y && skalen.y.stacked);
+                if (!gestapelt) return r;
+                var reihen = chart.data.datasets;
+                var stapel = reihen[ctx.datasetIndex].stack;
+                var wert = function (j) { return Number(reihen[j].data[ctx.dataIndex]) || 0; };
+                var eigener = wert(ctx.datasetIndex);
+                if (!eigener) return 0;
+                // Liegt ueber diesem Stueck noch eines mit Wert in dieselbe
+                // Richtung, ist dieses nicht das oberste.
+                for (var j = ctx.datasetIndex + 1; j < reihen.length; j++) {
+                    if (reihen[j].stack !== stapel) continue;
+                    if ((reihen[j].type || chart.config.type) !== 'bar') continue;
+                    if (!chart.isDatasetVisible(j)) continue;
+                    if (wert(j) * eigener > 0) return 0;
+                }
+                return r;
+            },
+        };
+    }
+
     window.VexCharts = {
         ORDER: ORDER,
+        balken: balken,
         fullDay: fullDay,
         fullMonth: fullMonth,
         fullWeek: fullWeek,

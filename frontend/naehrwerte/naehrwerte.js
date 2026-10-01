@@ -1197,12 +1197,12 @@ function tagesChart(canvasId, makro, farbe, texte, titelEl, subEl, noteEl, notiz
         data: {
             labels: texte.kurz,
             datasets: [
-                {
+                Object.assign({
                     type: 'bar', label: v.macro_labels[makro],
                     data: v.days.map(t => t.entries ? t[makro].value : null),
-                    backgroundColor: farbe, borderRadius: 6, borderSkipped: false,
+                    backgroundColor: farbe,
                     maxBarThickness: 34, order: VexCharts.ORDER.VALUE,
-                },
+                }, VexCharts.balken(6)),
                 {
                     type: 'line', label: eigen ? 'Dein Ziel' : 'Richtwert',
                     data: v.days.map(() => ziel),

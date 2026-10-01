@@ -2037,8 +2037,10 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
    waeren von 100 % nicht zu unterscheiden.
 
    Ueber dem Ziel reitet ein zweiter Bogen in --warn von vorn ueber den
-   vollen Ring -- mit butt-Kappe, damit die Stelle sichtbar bleibt, an der er
-   anfaengt. Gelb und nicht rot: "mehr" ist keine Bewertung.
+   vollen Ring. Gelb und nicht rot: "mehr" ist keine Bewertung. Seit v2.24.0
+   mit denselben runden Kappen und demselben Abzug wie der Bogen darunter --
+   vorher hatte er gerade Enden, und an 12 Uhr stiessen eckig und rund
+   aufeinander, was wie ein Zeichenfehler aussah.
 
    .is-unvollstaendig macht die SPUR gestrichelt: an diesem Massstab fehlen
    Stuecke. Ein Wert, zu dem Angaben fehlen, darf nicht aussehen wie einer,
@@ -2075,11 +2077,14 @@ td .stat-empty, td.stat-empty, .stat-table .stat-empty {
 }
 .v-ring-over {
     stroke: var(--warn);
-    stroke-linecap: butt;
-    stroke-dasharray: var(--ring-c);
-    stroke-dashoffset: calc(var(--ring-c) * (1 - var(--ring-over)));
-    transition: stroke-dashoffset 0.6s var(--ease);
+    stroke-linecap: round;
+    stroke-dasharray: max(0px, calc(var(--ring-over) * var(--ring-c) - var(--ring-w))) var(--ring-c);
+    stroke-dashoffset: calc(var(--ring-w) / -2);
+    transition: stroke-dasharray 0.6s var(--ease);
 }
+/* Ohne Ueberschuss gar nicht zeichnen: die runde Kappe eines leeren Bogens
+   bliebe sonst als Punkt bei 12 Uhr stehen. */
+.v-ring:not(.is-drueber) .v-ring-over { display: none; }
 /* Bei 0 bleibt nichts stehen: eine runde Kappe ohne Bogen waere ein Punkt,
    und ein Punkt ist schon eine Aussage. */
 .v-ring.is-leer .v-ring-fill { stroke-linecap: butt; }

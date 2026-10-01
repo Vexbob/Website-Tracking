@@ -755,11 +755,11 @@ function zeichneAktivitaet() {
         + (beste && beste.partien ? ` · am meisten: ${zahl(beste.partien)} Partien` : '');
 
     const texte = achsenTexte(liste.map(p => p.eimer), s.koernung);
-    const reihe = (name, feld, farbe) => ({
+    const reihe = (name, feld, farbe) => Object.assign({
         label: name, data: liste.map(p => p[feld]),
-        backgroundColor: farbe, borderRadius: 6, borderSkipped: false,
+        backgroundColor: farbe,
         maxBarThickness: 48, order: VexCharts.ORDER.VALUE,
-    });
+    }, VexCharts.balken(6));
 
     state.charts.aktivitaet = new Chart(document.getElementById('schAktivitaetChart'), {
         type: 'bar',
@@ -833,11 +833,11 @@ function zeichneStaerke() {
     box.hidden = false;
 
     const quote = stufen.map(x => x.partien ? punktequote(x) : null);
-    const reihe = (name, feld, farbe) => ({
+    const reihe = (name, feld, farbe) => Object.assign({
         type: 'bar', label: name, data: stufen.map(x => x[feld]),
-        backgroundColor: farbe, borderRadius: 6, borderSkipped: false,
+        backgroundColor: farbe,
         maxBarThickness: 56, yAxisID: 'y', order: VexCharts.ORDER.VALUE,
-    });
+    }, VexCharts.balken(6));
 
     state.charts.staerke = new Chart(document.getElementById('schStaerkeChart'), {
         data: {

@@ -14,6 +14,10 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.24.0', date: '2026-10-01', title: 'Saubere Ecken in Diagrammen', notes: [
+        'Balken sind oben rund und unten gerade, gestapelte nur am obersten Stück.',
+        'Der Bogen über dem Ziel hat in jedem Ring runde Enden statt gerader.',
+    ]},
     { v: 'v2.23.0', date: '2026-09-28', title: 'Schärfere Bon-Fotos', notes: [
         'Bon-Fotos werden mit doppelter Auflösung gespeichert, auch Kleingedrucktes bleibt lesbar.',
         'Dafür behält Vexbob nur die Fotos der letzten 20 Bons; Betrag und Positionen älterer Bons bleiben.',

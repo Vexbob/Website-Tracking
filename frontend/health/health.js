@@ -577,12 +577,12 @@ function _aktivitaetKurve(canvasId, metrik, titelId, merker) {
         type: 'bar',
         data: {
             labels: data.map(r => fmtDate(r.sample_date || r.recorded_at)),
-            datasets: [{
+            datasets: [Object.assign({
                 label: `${meta.label} (${meta.unit || '–'})`,
                 data: data.map(r => Number(r.qty) || 0),
                 backgroundColor: tonAlpha(meta.color, 0.85),
-                borderRadius: 6, borderSkipped: false, barPercentage: 0.72,
-            }],
+                barPercentage: 0.72,
+            }, VexCharts.balken(6))],
         },
         options: chartDefaults({
             plugins: {

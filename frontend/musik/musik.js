@@ -273,24 +273,20 @@ function drawSeries(data) {
     });
 
     const datasets = stacked
-        ? byKind.map(s => ({
+        ? byKind.map(s => Object.assign({
             label: s.kind,
             data: valuesOf(s),
             backgroundColor: cssVar(vocab(s.kind).tone),
-            borderRadius: 6,
-            borderSkipped: false,
             order: VexCharts.ORDER.VALUE,
-        }))
-        : [{
+        }, VexCharts.balken(6)))
+        : [Object.assign({
             label: state.kind || 'Wiedergaben',
             data: points.map(p => p.plays),
             // Die erste Reihe trägt den Modulton, nicht den Akzent
             // (DESIGN.md 7) — hier ist das Spotify-Grün.
             backgroundColor: cssVar(vocab(state.kind).tone),
-            borderRadius: 6,
-            borderSkipped: false,
             order: VexCharts.ORDER.VALUE,
-        }];
+        }, VexCharts.balken(6))];
 
     const opts = chartBase(full);
     opts.plugins.tooltip.callbacks = {

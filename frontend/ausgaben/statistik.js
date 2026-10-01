@@ -322,9 +322,9 @@ function renderWeekday(data){
         type: 'bar',
         data: {
             labels: days,
-            datasets: [{ label: 'Ausgaben (€)', data: totals,
+            datasets: [Object.assign({ label: 'Ausgaben (€)', data: totals,
                 backgroundColor: figureColor(), hoverBackgroundColor: cssVar('--chart-2'),
-                borderRadius: 6, borderSkipped: false, barPercentage: 0.72 }],
+                barPercentage: 0.72 }, VexCharts.balken(6))],
         },
         options: (() => {
             const o = chartBase();
@@ -513,9 +513,9 @@ function renderSeriesChart(points, prevPoints, gran){
     // beantwortet die Frage, die ein Balken allein nicht beantwortet: ist das
     // viel? Ungleiche Laengen (Monate) werden hinten abgeschnitten.
     const datasets = [
-        { type: 'bar', label: 'Ausgaben', data: values,
+        Object.assign({ type: 'bar', label: 'Ausgaben', data: values,
           backgroundColor: figureColor(),
-          borderRadius: 4, borderSkipped: false, order: VexCharts.ORDER.VALUE },
+          order: VexCharts.ORDER.VALUE }, VexCharts.balken(4)),
     ];
     if(prevPoints && prevPoints.length){
         datasets.push({
