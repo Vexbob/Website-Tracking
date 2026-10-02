@@ -381,6 +381,22 @@ steht er neben Feldern, die auf einen Speichern-Knopf warten (Export-
 Voreinstellung), wartet er mit — zwei Verhaltensweisen in einer Karte
 kann man nicht auseinanderhalten.
 
+## 6g. Navigationsleiste
+
+**Am Rechner steht links die Marke, nicht der Seitenname** (v2.34.0, gebaut
+von `js/nav-switcher.js`). Der Name stand dreimal da — links, als aktiver
+Reiter und als Überschrift der Seite — und war je Seite verschieden breit:
+die Reiter fingen auf jeder Seite an einer anderen Stelle an. Die Marke ist
+immer gleich breit und führt zum Dashboard; am Handy bleibt der Seitenname,
+weil es dort oben keine Reiter gibt.
+
+Die Module stehen in einer **Kapsel**, derselben Sprache wie `.tabs`: das
+aktive liegt erhaben darin (`--surface-3`, Haarlinie, Lichtkante) und färbt
+sein Zeichen im Modulton (`--nav-ton`, aus `tone` in `MODULES`). Der Akzent
+als Fläche war in der Milchglas-Leiste zu laut. Das Konto ist ein Kreis mit
+dem Anfangsbuchstaben; der Name steht oben in seinem Menü. Das Punkte-Menü
+zeigt dieselben gezeichneten Zeichen wie Leiste und Tab-Leiste, keine Emoji.
+
 ## 7. Diagramme
 
 Reduziert, ruhig, dieselbe Farbwelt.

@@ -160,12 +160,14 @@
         const gruppe = (titel, liste) => !liste.length ? '' :
             `<div class="nav-switcher-head">${titel}</div>` + liste.map(m => {
                 const cls = isActive(m.href) ? 'active' : '';
-                // Label ist "<Emoji> Text" -- wir splitten in Icon + Text
+                // Label ist "<Emoji> Text". v2.34.0: das Zeichen kommt als SVG
+                // aus TAB_ICONS -- dasselbe wie in Leiste und Tab-Leiste --,
+                // nicht mehr als Emoji (Emoji sind keine Bedienelemente).
                 const parts = m.label.split(' ');
-                const icon = parts.shift() || '';
+                parts.shift();
                 const text = parts.join(' ');
-                return `<a href="${m.href}" class="nav-switcher-item ${cls}" role="menuitem">
-                    <span class="nsi-icon">${icon}</span>
+                return `<a href="${m.href}" class="nav-switcher-item ${cls}" role="menuitem"${tonStil(m)}>
+                    <span class="nsi-icon">${moduleIconSvg(m)}</span>
                     <span class="nsi-text">${text}</span>
                     ${cls ? '<span class="nsi-dot" aria-hidden="true"></span>' : ''}
                 </a>`;
@@ -174,7 +176,7 @@
         menu.innerHTML = gruppe('Module', visible.filter(m => !istNeu(m)))
             + gruppe('In Arbeit', visible.filter(istNeu))
             + `<button type="button" class="nav-switcher-item nav-switcher-cfg" role="menuitem">
-                <span class="nsi-icon">⚙️</span>
+                <span class="nsi-icon">${ZAHNRAD_SVG}</span>
                 <span class="nsi-text">Tab-Leiste anpassen</span>
             </button>`;
 
@@ -188,6 +190,7 @@
         // Abruf der Einstellungen ausserdem eine 401 ausgeloest -- und die
         // schickt in api.js jeden Besucher zum Login.
         if (loggedIn) {
+            buildMarke(navbar);
             await buildModuleRow(navbar, visible);
             // Zuerst das Konto-Menue: es nimmt Zahnrad und Logout auf, und
             // buildSettingsLink haelt sich danach heraus.
@@ -285,6 +288,36 @@
         return out.filter(m => !skip.has(m.href));
     }
 
+    /* Der Modulton als Variable am Eintrag -- das aktive Modul faerbt damit
+       sein Zeichen (v2.34.0). Module ohne eigenen Ton nehmen den Akzent. */
+    function tonStil(m) {
+        return m.tone ? ' style="--nav-ton: var(' + m.tone + ')"' : '';
+    }
+
+    const ZAHNRAD_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" ' +
+        'stroke="currentColor" stroke-width="1.7" stroke-linecap="round" ' +
+        'stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/>' +
+        '<path d="M12 3.6v2M12 18.4v2M3.6 12h2M18.4 12h2' +
+        'M6.05 6.05l1.45 1.45M16.5 16.5l1.45 1.45' +
+        'M17.95 6.05L16.5 7.5M7.5 16.5l-1.45 1.45"/></svg>';
+
+    /* v2.34.0 -- links steht am Rechner die Marke statt des Seitennamens.
+       Der Name stand dreimal da (links, als aktiver Reiter, als Ueberschrift)
+       und war je Seite verschieden breit: die Reiter fingen auf jeder Seite an
+       einer anderen Stelle an. Die Marke ist immer gleich breit und fuehrt
+       zum Dashboard. Am Handy bleibt der Seitenname -- dort gibt es keine
+       Reiter oben und keine Ueberschrift auf der Seite. */
+    function buildMarke(navbar) {
+        if (navbar.querySelector('.nav-marke')) return;
+        const a = document.createElement('a');
+        a.className = 'nav-marke';
+        a.href = '/';
+        a.setAttribute('aria-label', 'Vexbob – zum Dashboard');
+        a.innerHTML = '<span class="nav-marke-zeichen" aria-hidden="true"></span>Vexbob';
+        navbar.insertBefore(a, navbar.firstChild);
+        navbar.classList.add('navbar--marke');
+    }
+
     function moduleIconSvg(m) {
         const path = TAB_ICONS[m.icon];
         if (!path) return '';
@@ -308,7 +341,7 @@
             const text = parts.join(' ');
             const active = isActive(m.href) ? ' active' : '';
             return '<a href="' + m.href + '" class="nav-mod' + active + '"' +
-                   (active ? ' aria-current="page"' : '') + '>' +
+                   (active ? ' aria-current="page"' : '') + tonStil(m) + '>' +
                    moduleIconSvg(m) + '<span>' + text + '</span></a>';
         }).join('');
         fitModuleRow();
@@ -445,11 +478,28 @@
         // v2.29.0: ein gezeichnetes Zeichen statt „👤“ im Namen. Am Handy ist
         // es das Einzige, was der Knopf zeigt -- vorher war er dort 21 px
         // breit und leer, weil der Name ausgeblendet ist.
-        btn.insertAdjacentHTML('beforeend', '<svg class="nav-acct-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4"/></svg>');
+        // v2.34.0: ein runder Kreis mit dem Anfangsbuchstaben statt Zeichen
+        // und Name. Der Name nahm am Rechner sechzig Pixel der Leiste fuer
+        // etwas, das man weiss; er steht jetzt oben im Menue. Bis der Name da
+        // ist (jede Seite setzt ihn nach ihrem eigenen Abruf), steht das
+        // Personenzeichen im Kreis.
+        btn.insertAdjacentHTML('beforeend', '<span class="nav-acct-avatar" aria-hidden="true"><svg class="nav-acct-ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4"/></svg></span>');
         btn.setAttribute('aria-label', 'Konto und Darstellung');
-        // Der Name wandert IN den Knopf.
+        // Der Name wandert IN den Knopf -- als derselbe Knoten, denn jede
+        // Seite schreibt hinein. Sichtbar ist er dort nicht mehr.
         btn.appendChild(label);
         label.style.cursor = '';
+        const avatar = btn.querySelector('.nav-acct-avatar');
+        const kopfName = document.createElement('div');
+        kopfName.className = 'nav-acct-name';
+        const nameZeigen = () => {
+            const name = (label.textContent || '').trim();
+            kopfName.textContent = name;
+            kopfName.hidden = !name;
+            if (name) avatar.textContent = name.charAt(0).toUpperCase();
+        };
+        new MutationObserver(nameZeigen).observe(label,
+            { childList: true, characterData: true, subtree: true });
 
         const themeBox = document.createElement('div');
         themeBox.className = 'nav-acct-themes';
@@ -469,7 +519,10 @@
             actions.appendChild(logout);
         }
 
-        menu.innerHTML = '<div class="nav-acct-head">Darstellung</div>';
+        menu.innerHTML = '';
+        menu.appendChild(kopfName);
+        nameZeigen();
+        menu.insertAdjacentHTML('beforeend', '<div class="nav-acct-head">Darstellung</div>');
         menu.appendChild(themeBox);
         menu.appendChild(actions);
 

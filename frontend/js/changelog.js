@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.34.0', date: '2026-10-02', title: 'Navigationsleiste aufgeräumt', notes: [
+        'Am Rechner steht links „Vexbob“ statt des Seitennamens, die Reiter stehen damit auf jeder Seite an derselben Stelle.',
+        'Die Module stehen in einer Kapsel; das aktive liegt erhaben darin, sein Zeichen im Modulton.',
+        'Das Konto ist ein Kreis mit dem Anfangsbuchstaben, der Name steht im Menü.',
+        'Das Punkte-Menü zeigt gezeichnete Zeichen statt Emoji.',
+    ]},
     { v: 'v2.33.0', date: '2026-10-02', title: 'Schnellwahl nach Uhrzeit', notes: [
         'Was du mindestens fünfmal um diese Uhrzeit eingetragen hast, steht in der Schnellwahl vorn.',
         'Ein angetippter Vorschlag macht Platz, der nächste rückt an dieselbe Stelle nach.',
