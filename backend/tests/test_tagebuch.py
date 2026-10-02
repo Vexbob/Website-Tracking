@@ -71,7 +71,8 @@ class AttrappeDB:
     async def fetch(self, sql, *args):
         self._pruefe(sql, args)
         self.gelesen.append(sql)
-        if "GROUP BY lower(label)" in sql:
+        # Die Schnellwahl liest Rohzeilen ueber zwei Monate (v2.33.0).
+        if "ORDER BY day DESC" in sql:
             return self.schnell
         return self.zeilen
 
@@ -292,24 +293,103 @@ def test_der_tag_zaehlt_nach_stufen_und_kennt_die_mahlzeiten():
     assert tag["meal_hours"] == {"fruehstueck": 11, "mittag": 15, "abend": 21}
 
 
+def _roh(label, tage_her=0, meal="mittag", uhr=None):
+    """Eine Rohzeile, wie die Schnellwahl sie liest."""
+    return {"label": label, "day": HEUTE - timedelta(days=tage_her),
+            "meal": meal, "logged_time": uhr}
+
+
 def test_die_schnellwahl_fasst_schreibweisen_zusammen():
-    db, tag = _tag([], schnell=[{"label": "Müsli", "anzahl": 43,
-                                 "zuletzt": HEUTE}])
-    assert tag["quick"] == [{"label": "Müsli", "count": 43, "last": HEUTE}]
-
-
-def test_die_schnellwahl_gruppiert_kleingeschrieben():
     """Sonst stuenden „Müsli“ und „müsli“ als zwei Knoepfe nebeneinander.
+    Herausgegeben wird die juengste Schreibweise."""
+    zeilen = [_roh("Müsli", 0), _roh("müsli", 1), _roh("Müsli", 2)]
+    assert tb.schnellwahl_rang(zeilen, 6) == [
+        {"label": "Müsli", "count": 3, "last": HEUTE}]
 
-    Ohne echte Datenbank ist die Abfrage selbst die pruefbare Zusicherung:
-    gruppiert wird kleingeschrieben, herausgegeben die juengste Schreibweise.
-    """
-    db = AttrappeDB()
-    asyncio.run(tb._schnellwahl(db, 1, 60, 6))
-    sql = db.gelesen[0]
-    assert "GROUP BY lower(label)" in sql
-    assert "ARRAY_AGG(label ORDER BY day DESC)" in sql
-    assert "FROM food_diary" in sql
+
+def test_die_schnellwahl_liest_rohzeilen_neueste_zuerst():
+    db = AttrappeDB(schnell=[_roh("Kaffee", 0), _roh("Kaffee", 1), _roh("Apfel", 3)])
+    tag = asyncio.run(tb._tag(db, NUTZER["id"], HEUTE))
+    assert [q["label"] for q in tag["quick"]] == ["Kaffee", "Apfel"]
+    sql = next(s for s in db.gelesen if "ORDER BY day DESC" in s)
+    assert "FROM food_diary" in sql and "user_id=$1" in sql
+
+
+def _gewohnheit():
+    """Zwanzig Tage: Kaffee jeden Morgen, Pasta jeden Mittag (seltener)."""
+    zeilen = []
+    for t in range(20):
+        zeilen.append(_roh("Kaffee", t, "fruehstueck", time(8, 10)))
+        zeilen.append(_roh("Kaffee", t, "fruehstueck", time(8, 40)))
+        zeilen.append(_roh("Pasta", t, "mittag", time(12, 30)))
+    return zeilen
+
+
+def test_mittags_kommt_zuerst_was_man_mittags_isst():
+    rang = tb.schnellwahl_rang(_gewohnheit(), 6, jetzt=(12, 45))
+    assert [q["label"] for q in rang] == ["Pasta", "Kaffee"]
+    # Morgens ist es umgekehrt -- und ohne Uhr zaehlt nur die Haeufigkeit.
+    assert [q["label"] for q in tb.schnellwahl_rang(_gewohnheit(), 6, jetzt=(8, 0))] == [
+        "Kaffee", "Pasta"]
+    assert [q["label"] for q in tb.schnellwahl_rang(_gewohnheit(), 6)] == [
+        "Kaffee", "Pasta"]
+
+
+def test_ab_der_fuenften_nennung_um_diese_zeit_rueckt_es_vor():
+    """Vier Mittage sind keine Gewohnheit, der fuenfte macht eine: bis dahin
+    bleibt es bei der Rangfolge nach Haeufigkeit."""
+    def mittag(n):
+        return ([_roh("Pasta", t, "mittag", time(12, 30)) for t in range(n)]
+                + [_roh("Kaffee", t, "fruehstueck", time(8, 10)) for t in range(40)])
+    assert tb.ZEIT_AB == 5
+    assert tb.schnellwahl_rang(mittag(4), 6, jetzt=(12, 45))[0]["label"] == "Kaffee"
+    assert tb.schnellwahl_rang(mittag(5), 6, jetzt=(12, 45))[0]["label"] == "Pasta"
+
+
+def test_gewohntes_steht_nach_der_zahl_um_diese_zeit_geordnet():
+    zeilen = ([_roh("Salat", t, "mittag", time(12, 0)) for t in range(6)]
+              + [_roh("Pasta", t, "mittag", time(13, 0)) for t in range(9)]
+              + [_roh("Kaffee", t, "fruehstueck", time(8, 0)) for t in range(40)]
+              + [_roh("Apfel", t, "snack", time(16, 0)) for t in range(12)])
+    assert [q["label"] for q in tb.schnellwahl_rang(zeilen, 6, jetzt=(12, 30))] == [
+        "Pasta", "Salat", "Kaffee", "Apfel"]
+
+
+def test_das_zeitfenster_reicht_ueber_mitternacht():
+    zeilen = [_roh("Tee", t, "snack", time(23, 40)) for t in range(25)]
+    zeilen += [_roh("Kaffee", t, "fruehstueck", time(8, 0)) for t in range(30)]
+    assert tb.schnellwahl_rang(zeilen, 6, jetzt=(0, 30))[0]["label"] == "Tee"
+
+
+def test_ohne_uhrzeit_zaehlt_die_mahlzeit():
+    """Nachgetragene Tage haben keine Uhrzeit -- dort entscheidet die Mahlzeit."""
+    zeilen = [_roh("Suppe", t, "abend") for t in range(25)]
+    zeilen += [_roh("Kaffee", t, "fruehstueck") for t in range(40)]
+    assert tb.schnellwahl_rang(zeilen, 6, jetzt=(19, 0))[0]["label"] == "Suppe"
+
+
+def test_was_in_dieser_mahlzeit_schon_steht_macht_platz():
+    """Ein angetippter Vorschlag verschwindet, der naechste rueckt nach --
+    aber nur fuer die Mahlzeit von jetzt: der Morgenkaffee kommt am
+    Nachmittag wieder."""
+    db = AttrappeDB(
+        zeilen=[_zeile(id=1, label="Pasta", meal="mittag", logged_time=time(12, 30)),
+                _zeile(id=2, label="Kaffee", meal="fruehstueck")],
+        schnell=_gewohnheit() + [_roh("Apfel", 1, "snack", time(16, 0))])
+    tag = asyncio.run(tb._tag(db, NUTZER["id"], HEUTE, (12, 45)))
+    namen = [q["label"] for q in tag["quick"]]
+    assert "Pasta" not in namen
+    assert "Kaffee" in namen and "Apfel" in namen
+
+
+def test_an_einem_vergangenen_tag_zaehlt_die_uhr_nicht():
+    gestern = HEUTE - timedelta(days=1)
+    db = AttrappeDB(zeilen=[_zeile(id=1, day=gestern, label="Kaffee")],
+                    schnell=_gewohnheit())
+    tag = asyncio.run(tb._tag(db, NUTZER["id"], gestern, (12, 45)))
+    # Kein Uhrzeit-Rang (sonst stuende Pasta vorn), und was an dem Tag
+    # schon steht, faellt weg.
+    assert [q["label"] for q in tag["quick"]] == ["Pasta"]
 
 
 def test_migration_046_wirft_kein_schema_weg():

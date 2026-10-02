@@ -22,11 +22,15 @@
  *      entscheidet, und die Zeile weiss, dass sie eine Vermutung ist.
  */
 
+/* Die Ortszeit geht ueberall mit (v2.33.0): der Server ordnet die
+   Schnellwahl danach, was man um diese Uhrzeit isst, und laesst weg, was in
+   der Mahlzeit von jetzt schon steht. Er selbst laeuft in UTC und kann die
+   Uhrzeit nicht wissen. */
 const API = {
-    tag:       (d)     => apiCall('/api/food/diary/day' + (d ? '?date=' + d : '')),
+    tag:       (d)     => apiCall('/api/food/diary/day?at=' + jetzt() + (d ? '&date=' + d : '')),
     eintragen: (d)     => apiCall('/api/food/diary/log', { method: 'POST', body: d }),
-    aendern:   (id, d) => apiCall('/api/food/diary/log/' + id, { method: 'PATCH', body: d }),
-    weg:       (id)    => apiCall('/api/food/diary/log/' + id, { method: 'DELETE' }),
+    aendern:   (id, d) => apiCall('/api/food/diary/log/' + id + '?at=' + jetzt(), { method: 'PATCH', body: d }),
+    weg:       (id)    => apiCall('/api/food/diary/log/' + id + '?at=' + jetzt(), { method: 'DELETE' }),
     haeufig:   ()      => apiCall('/api/food/diary/frequent'),
 };
 
@@ -41,6 +45,10 @@ const ICON = {
 const state = {
     tag: null, datum: null, haeufig: [],
     dialog: null, dlg: null,
+    // Die Reihenfolge der Kacheln, wie sie gerade dasteht -- damit ein
+    // nachrueckender Vorschlag den frei gewordenen Platz nimmt, statt alle
+    // anderen zu verschieben.
+    schnell: [], schnellTakt: null,
 };
 
 /* ------------------------------------------------------------- Werkzeug */
@@ -189,27 +197,49 @@ function zeichneKopf() {
    steht hier genau das, was man wirklich isst, und ein Tipp genuegt. Bewusst
    immer "normal" -- ein Knopf, der mal das eine und mal das andere tut, waere
    schneller und unbrauchbar. Wer "uebermaessig" meint, tippt die Stufe in der
-   Zeile darunter an. */
-function zeichneSchnell() {
+   Zeile darunter an.
+
+   Seit v2.33.0 ordnet der Server nach Uhrzeit (was ab der fuenften Nennung
+   um diese Zeit gegessen wird, steht vorn) und laesst weg, was in der
+   Mahlzeit von jetzt schon steht. ``nachruecken`` haelt dabei die Plaetze:
+   was bleibt, bleibt stehen, und das Neue nimmt den frei gewordenen Platz. */
+function schnellReihe(nachruecken) {
+    // Höchstens vier. Bei sieben Vorschlägen füllte die Abkürzung die ganze
+    // erste Ansicht — der Tag, wegen dem man die Seite öffnet, fing erst
+    // darunter an.
+    const server = ((state.tag && state.tag.quick) || []).slice(0, 4);
+    if (!nachruecken || !state.schnell.length) return server.map(q => ({ q, neu: false }));
+    const da = new Map(server.map(q => [q.label.toLowerCase(), q]));
+    const vorher = new Set(state.schnell);
+    const frei = server.filter(q => !vorher.has(q.label.toLowerCase()));
+    const reihe = [];
+    state.schnell.forEach(key => {
+        if (da.has(key)) reihe.push({ q: da.get(key), neu: false });
+        else if (frei.length) reihe.push({ q: frei.shift(), neu: true });
+    });
+    frei.forEach(q => reihe.push({ q, neu: true }));
+    return reihe.slice(0, 4);
+}
+
+function zeichneSchnell(nachruecken) {
     const ziel = document.getElementById('esSchnell');
-    // Höchstens vier. Der Server schickt alles, was oft vorkommt, und bei
-    // sieben Vorschlägen füllte die Abkürzung fünf Reihen und damit die
-    // ganze erste Ansicht — der Tag, wegen dem man die Seite öffnet, fing
-    // erst darunter an. Vier passen in zwei Reihen und bleiben eine
-    // Abkürzung. Wer etwas anderes sucht, tippt es im Fenster.
-    const liste = ((state.tag && state.tag.quick) || []).slice(0, 4);
-    ziel.hidden = !liste.length;
-    if (!liste.length) return;
-    // v2.32.0: ein Raster gleich grosser Kacheln statt Pillen. Die Pillen
-    // waren so breit wie ihr Name und brachen am Handy in drei ungleiche
-    // Reihen um -- „Haferflocken mit Banane“ allein in einer Zeile. Bei
-    // ungerader Zahl nimmt die letzte Kachel am Handy die ganze Breite,
-    // damit keine allein neben einem Loch steht.
-    ziel.innerHTML = '<span class="es-schnell-titel">Schnell eintragen</span>'
-        + `<div class="es-schnell-raster${liste.length % 2 ? ' is-ungerade' : ''}"
-               style="--n:${liste.length}">`
-        + liste.map((q, i) =>
-        `<button type="button" class="es-kachel" data-schnell="${i}"
+    const reihe = schnellReihe(nachruecken);
+    state.schnell = reihe.map(r => r.q.label.toLowerCase());
+    ziel.hidden = !reihe.length;
+    if (!reihe.length) return;
+    // Wohin ein Tipp eintraegt, steht dabei -- heute ist das die Mahlzeit
+    // zur Uhrzeit.
+    const mz = mahlzeitJetzt();
+    const mzName = mz && ((state.tag.meals || []).find(m => m.key === mz) || {}).label;
+    // v2.32.0: ein Raster gleich grosser Kacheln statt Pillen. Bei ungerader
+    // Zahl nimmt die letzte Kachel am Handy die ganze Breite.
+    ziel.innerHTML = '<span class="es-schnell-titel">Schnell eintragen'
+            + (mzName ? ' <span class="es-schnell-wohin">· ' + esc(mzName) + '</span>' : '')
+            + '</span>'
+        + `<div class="es-schnell-raster${reihe.length % 2 ? ' is-ungerade' : ''}"
+               style="--n:${reihe.length}">`
+        + reihe.map(({ q, neu }, i) =>
+        `<button type="button" class="es-kachel${neu ? ' is-neu' : ''}" data-schnell="${i}"
             data-label="${esc(q.label.toLowerCase())}"
             title="${esc(q.label)} eintragen — ${q.count}× notiert">
             <span class="es-kachel-zeichen" aria-hidden="true"><span class="es-kachel-plus">${ICON.plus}</span><span class="es-kachel-ok">${ICON.haken}</span></span>
@@ -218,17 +248,28 @@ function zeichneSchnell() {
     ).join('') + '</div>';
     ziel.querySelectorAll('[data-schnell]').forEach(b =>
         b.addEventListener('click', () => {
-            const q = liste[Number(b.dataset.schnell)];
-            if (q) eintragen({ label: q.label, level: 'normal' }, b);
+            const r = reihe[Number(b.dataset.schnell)];
+            if (r) eintragen({ label: r.q.label, level: 'normal' }, b);
         }));
 }
 
-/* Ein Knopf, der eingetragen hat, sagt das kurz selbst -- an der Stelle, auf
-   die man gerade schaut, nicht nur in einer Meldung am Rand. */
-function bestaetige(el) {
-    if (!el || !el.isConnected) return;
-    el.classList.add('is-ok');
-    setTimeout(() => el.classList.remove('is-ok'), 1400);
+/* Die angetippte Kachel: erst der Haken, dann raeumt sie ihren Platz, und
+   der naechste Vorschlag rueckt genau dorthin nach. Ohne die Pause saehe man
+   nicht, dass der Tipp gegriffen hat -- die Kachel waere einfach weg. */
+function kachelRaeumt(label) {
+    const kachel = document.querySelector(
+        '#esSchnell [data-label="' + CSS.escape(label.toLowerCase()) + '"]');
+    if (kachel) { kachel.classList.add('is-ok'); kachel.disabled = true; }
+    const ruhig = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    clearTimeout(state.schnellTakt);
+    state.schnellTakt = setTimeout(() => {
+        document.querySelectorAll('#esSchnell .es-kachel.is-ok')
+            .forEach(k => k.classList.add('is-weg'));
+        state.schnellTakt = setTimeout(() => {
+            state.schnellTakt = null;
+            zeichneSchnell(true);
+        }, ruhig ? 0 : 180);
+    }, 700);
 }
 
 /* Der Tag nach Mahlzeiten, jede mit ihrem eigenen Plus. Wo man tippt, sagt
@@ -330,9 +371,13 @@ function zeichneFuss() {
             c.entries === 1 ? 'Eintrag' : 'Einträge'}</span>`;
 }
 
-function zeichneTag() {
+/* ``nachruecken``: nach einer Aenderung am Tag behalten die Kacheln der
+   Schnellwahl ihre Plaetze. Beim Laden und beim Tageswechsel gilt die
+   Reihenfolge des Servers. ``ohneSchnell`` laesst die Schnellwahl stehen --
+   die angetippte Kachel zeigt erst ihren Haken und raeumt dann selbst. */
+function zeichneTag(nachruecken, ohneSchnell) {
     zeichneKopf();
-    zeichneSchnell();
+    if (!ohneSchnell) zeichneSchnell(nachruecken);
     zeichneMahlzeiten();
     zeichneFuss();
 }
@@ -570,7 +615,7 @@ async function eintragen(daten, knopf, opts) {
     try {
         state.tag = await API.eintragen(body);
         const neu = state.tag.entries.filter(e => !vorher.has(e.id)).pop() || null;
-        zeichneTag();
+        zeichneTag(true, !state.dlg);
         if (state.dlg) {
             // Das Feld leeren: der naechste Eintrag faengt bei null an, und
             // ein stehengebliebener Text sieht aus, als waere nichts
@@ -601,10 +646,7 @@ async function eintragen(daten, knopf, opts) {
             zeichneDlgListe();
             zeichneDlgFuss();
         } else {
-            // zeichneTag() hat die Schnellwahl neu gebaut -- der Knopf von
-            // eben haengt nicht mehr im Dokument.
-            bestaetige(document.querySelector(
-                '#esSchnell [data-label="' + CSS.escape(daten.label.toLowerCase()) + '"]'));
+            kachelRaeumt(daten.label);
             // Die Schnellwahl traegt mit einem Tipp ein -- ein Fehltipp muss
             // genauso schnell wieder weg sein.
             if (window.Toast && neu) {
@@ -627,7 +669,7 @@ async function eintragen(daten, knopf, opts) {
 async function stufeUmschalten(id, neu) {
     try {
         state.tag = await API.aendern(id, { level: neu });
-        zeichneTag();
+        zeichneTag(true);
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
     }
@@ -636,7 +678,7 @@ async function stufeUmschalten(id, neu) {
 async function entfernen(id) {
     try {
         state.tag = await API.weg(id);
-        zeichneTag();
+        zeichneTag(true);
         ladeHaeufig();
         return true;
     } catch (err) {
@@ -714,7 +756,7 @@ function eintragDialogAendern(id) {
                 note: document.getElementById('esEdNote').value,
             });
             dlg.close();
-            zeichneTag();
+            zeichneTag(true);
             ladeHaeufig();
         } catch (err) {
             melde(err.message || 'Das ging nicht.', 'error');

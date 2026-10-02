@@ -122,6 +122,23 @@
 .es-kachel.is-ok .es-kachel-plus { display: none; }
 .es-kachel.is-ok .es-kachel-ok { display: inline-flex; }
 .es-kachel.is-ok .es-kachel-zeichen { background: var(--es-figur); color: var(--accent-ink); }
+/* Raeumen und Nachruecken (v2.33.0): die angetippte Kachel blendet aus, die
+   nachrueckende blendet an derselben Stelle ein. */
+.es-kachel.is-weg {
+    opacity: 0;
+    transform: scale(0.96);
+    transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+}
+.es-kachel.is-neu { animation: es-kachel-rein 260ms var(--ease) both; }
+@keyframes es-kachel-rein {
+    from { opacity: 0; transform: translateY(6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .es-kachel.is-weg { transition: none; }
+    .es-kachel.is-neu { animation: none; }
+}
+/* Wohin ein Tipp eintraegt, steht leiser hinter der Ueberschrift. */
+.es-schnell-wohin { font-weight: 600; letter-spacing: 0.04em; color: var(--text-3); }
 
 /* Der geteilte Mahlzeitenblock (.v-mahlzeit in css/style.css) bekommt hier
    seinen Ton -- Blattgruen, die Identitaet dieses Moduls. */

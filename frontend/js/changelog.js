@@ -14,6 +14,12 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.33.0', date: '2026-10-02', title: 'Schnellwahl nach Uhrzeit', notes: [
+        'Was du mindestens fünfmal um diese Uhrzeit eingetragen hast, steht in der Schnellwahl vorn.',
+        'Ein angetippter Vorschlag macht Platz, der nächste rückt an dieselbe Stelle nach.',
+        'Rückgängig bringt die Kachel an ihren alten Platz zurück.',
+        'Hinter „Schnell eintragen“ steht, in welche Mahlzeit ein Tipp einträgt.',
+    ]},
     { v: 'v2.32.0', date: '2026-10-02', title: 'Essenstagebuch: schneller eintragen', notes: [
         'Die Schnellwahl ist ein Raster gleich großer Kacheln statt ungleich umbrechender Pillen.',
         'Nach einem Eintrag gibt es „Rückgängig“, im Fenster und in der Meldung der Schnellwahl.',

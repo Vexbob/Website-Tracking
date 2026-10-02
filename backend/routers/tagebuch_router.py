@@ -1,7 +1,7 @@
 """Essenstagebuch — hinschreiben, was es gab. Mehr nicht.
 
 Endpoints:
-  GET    /api/food/diary/day        — ein Tag samt Schnellwahl
+  GET    /api/food/diary/day        — ein Tag samt Schnellwahl (?at=HH:MM: nach Uhrzeit)
   POST   /api/food/diary/log        — eintragen
   PATCH  /api/food/diary/log/{id}   — Stufe, Mahlzeit, Name, Notiz richtigstellen
   DELETE /api/food/diary/log/{id}   — Eintrag entfernen
@@ -58,6 +58,13 @@ SPALTEN = ("id, day, label, level, meal, note, logged_time, meal_auto, created_a
 # Gewohnheit und kurz genug, dass Vergangenes wieder verschwindet.
 SCHNELL_TAGE = 60
 SCHNELL_ZAHL = 6
+# v2.33.0: die Schnellwahl richtet sich nach der Uhrzeit. Als „um diese Zeit“
+# zaehlt, was hoechstens anderthalb Stunden neben jetzt eingetragen wurde.
+# Ein Essen rueckt nach vorn, sobald es mindestens fuenfmal um diese Zeit
+# dastand -- vorher ist es keine Gewohnheit, sondern Zufall, und die
+# Rangfolge nach Haeufigkeit ist die bessere Antwort.
+ZEIT_FENSTER_MIN = 90
+ZEIT_AB = 5
 # Die Vorschlagsliste im Dialog darf weiter zurueckreichen: dort sucht man.
 HAEUFIG_TAGE = 120
 
@@ -130,30 +137,99 @@ def _zeile_raus(z) -> dict:
     }
 
 
-async def _schnellwahl(db, user_id: int, tage: int, zahl: int) -> list:
-    """Was oft eingetragen wird — je Schreibweise EINE Zeile.
+def _passt_zur_zeit(z, minute_jetzt: int, mahlzeit_jetzt: str) -> bool:
+    """Wurde diese Zeile „um diese Zeit“ eingetragen?
 
-    Gruppiert wird ueber ``lower(label)``; herausgegeben wird die haeufigste
-    Schreibweise. Sonst stuenden „Müsli“ und „müsli“ zweimal nebeneinander,
-    und die Schnellwahl waere genau dort unbrauchbar, wo sie gebraucht wird.
+    Mit Uhrzeit zaehlt der Abstand auf der Uhr (rund um Mitternacht herum,
+    23:30 liegt neben 00:15). Nachgetragene Tage haben keine Uhrzeit -- dort
+    zaehlt die Mahlzeit.
     """
-    rows = await db.fetch(
-        "SELECT (ARRAY_AGG(label ORDER BY day DESC))[1] AS label, "
-        "       COUNT(*)::int AS anzahl, MAX(day) AS zuletzt "
-        "  FROM food_diary "
+    zeit = z.get("logged_time")
+    if zeit is not None:
+        abstand = abs(zeit.hour * 60 + zeit.minute - minute_jetzt)
+        return min(abstand, 1440 - abstand) <= ZEIT_FENSTER_MIN
+    return z.get("meal") == mahlzeit_jetzt
+
+
+def schnellwahl_rang(zeilen, zahl: int, jetzt=None, schon=()) -> list:
+    """Die Schnellwahl aus Rohzeilen -- eine reine Funktion, ohne Datenbank.
+
+    ``zeilen`` kommen neueste zuerst (label, day, meal, logged_time).
+    Zusammengefasst wird je Schreibweise klein geschrieben; herausgegeben wird
+    die juengste. Sonst stuenden „Müsli“ und „müsli“ zweimal nebeneinander.
+
+    ``jetzt`` ist (stunde, minute) in Ortszeit oder None. Was mindestens
+    ``ZEIT_AB``-mal um diese Uhrzeit eingetragen wurde, steht vorn -- unter
+    sich danach geordnet, wie oft es um diese Zeit vorkam. Den Rest fuellt
+    die Rangfolge nach Haeufigkeit auf.
+
+    ``schon`` sind die klein geschriebenen Namen, die gerade nicht vorgeschlagen
+    werden sollen, weil sie in dieser Mahlzeit schon drinstehen -- ein
+    angetippter Vorschlag macht so Platz fuer den naechsten.
+    """
+    minute_jetzt = jetzt[0] * 60 + jetzt[1] if jetzt else None
+    mahlzeit_jetzt = mz.mahlzeit_fuer_uhrzeit(jetzt[0]) if jetzt else None
+    toepfe: dict = {}
+    for z in zeilen:
+        name = (z["label"] or "").strip()
+        if not name:
+            continue
+        t = toepfe.setdefault(name.lower(), {
+            "label": name, "count": 0, "last": z["day"], "passend": 0})
+        t["count"] += 1
+        if z["day"] > t["last"]:
+            t["last"] = z["day"]
+        if jetzt and _passt_zur_zeit(z, minute_jetzt, mahlzeit_jetzt):
+            t["passend"] += 1
+
+    kandidaten = [t for k, t in toepfe.items() if k not in schon]
+
+    def rang(t):
+        gewohnt = t["passend"] >= ZEIT_AB
+        return (0 if gewohnt else 1,
+                -t["passend"] if gewohnt else 0,
+                -t["count"], -t["last"].toordinal())
+    kandidaten.sort(key=rang)
+    return [{"label": t["label"], "count": t["count"], "last": t["last"]}
+            for t in kandidaten[:zahl]]
+
+
+async def _schnellwahl(db, user_id: int, tage: int, zahl: int,
+                       jetzt=None, schon=()) -> list:
+    """Was oft eingetragen wird -- je Schreibweise EINE Zeile.
+
+    Seit v2.33.0 rechnet ``schnellwahl_rang`` in Python statt eine
+    GROUP-BY-Abfrage: die Uhrzeit-Rangfolge braucht die einzelnen Zeilen, und
+    zwei Monate Tagebuch sind ein paar hundert davon.
+    """
+    zeilen = await db.fetch(
+        "SELECT label, day, meal, logged_time FROM food_diary "
         " WHERE user_id=$1 AND day >= CURRENT_DATE - $2::int "
-        " GROUP BY lower(label) "
-        " ORDER BY 2 DESC, 3 DESC LIMIT $3", user_id, tage, zahl)
-    return [{"label": r["label"], "count": r["anzahl"], "last": r["zuletzt"]}
-            for r in rows]
+        " ORDER BY day DESC, created_at DESC", user_id, tage)
+    return schnellwahl_rang(zeilen, zahl, jetzt, schon)
 
 
-async def _tag(db, user_id: int, tag: date) -> dict:
-    """Ein Tag. Was hier NICHT drinsteht, ist die halbe Zusicherung."""
+async def _tag(db, user_id: int, tag: date, jetzt=None) -> dict:
+    """Ein Tag. Was hier NICHT drinsteht, ist die halbe Zusicherung.
+
+    ``jetzt`` ist die Ortszeit des Browsers als (stunde, minute). Sie zaehlt
+    nur fuer heute: an einem vergangenen Tag sagt die Uhr nichts darueber,
+    was damals um diese Zeit gegessen wurde.
+    """
     zeilen = await db.fetch(
         f"SELECT {SPALTEN} FROM food_diary "
         " WHERE user_id=$1 AND day=$2 ORDER BY created_at", user_id, tag)
     eintraege = [_zeile_raus(z) for z in zeilen]
+    if tag != date.today():
+        jetzt = None
+    # Was in der Mahlzeit von jetzt schon steht, wird nicht noch einmal
+    # vorgeschlagen -- der Kaffee am Morgen kommt nachmittags wieder. An einem
+    # nachgetragenen Tag faellt alles weg, was an dem Tag schon steht.
+    if jetzt:
+        mahlzeit_jetzt = mz.mahlzeit_fuer_uhrzeit(jetzt[0])
+        schon = {e["label"].lower() for e in eintraege if e["meal"] == mahlzeit_jetzt}
+    else:
+        schon = {e["label"].lower() for e in eintraege}
     return {
         "day": str(tag),
         "entries": eintraege,
@@ -165,7 +241,8 @@ async def _tag(db, user_id: int, tag: date) -> dict:
         "meals": mz.liste_raus(),
         "meal_hours": mz.grenzen_raus(),
         "levels": [{"key": s, "label": STUFEN_LABEL[s]} for s in STUFEN],
-        "quick": await _schnellwahl(db, user_id, SCHNELL_TAGE, SCHNELL_ZAHL),
+        "quick": await _schnellwahl(db, user_id, SCHNELL_TAGE, SCHNELL_ZAHL,
+                                    jetzt, schon),
     }
 
 
@@ -174,8 +251,9 @@ async def _tag(db, user_id: int, tag: date) -> dict:
 # ---------------------------------------------------------------------------
 @router.get("/api/food/diary/day")
 async def tag_lesen(date_: Optional[str] = Query(None, alias="date"),
+                    at: Optional[str] = Query(None),
                     db=Depends(get_db), user=Depends(get_current_user)):
-    return await _tag(db, user["id"], _tag_sauber(date_))
+    return await _tag(db, user["id"], _tag_sauber(date_), mz.uhrzeit_sauber(at))
 
 
 @router.get("/api/food/diary/frequent")
@@ -222,12 +300,13 @@ async def eintragen(request: Request, daten: EintragEingabe,
         user["id"], tag, name, stufe, mahlzeit,
         (daten.note or "").strip() or None,
         mz.uhrzeit_fuer_spalte(zeit), geraten)
-    return await _tag(db, user["id"], tag)
+    return await _tag(db, user["id"], tag, zeit)
 
 
 @router.patch("/api/food/diary/log/{eintrag_id}")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def aendern(request: Request, eintrag_id: int, daten: EintragAendern,
+                  at: Optional[str] = Query(None),
                   db=Depends(get_db), user=Depends(get_current_user)):
     """Richtigstellen, ohne loeschen und neu eintragen zu muessen.
 
@@ -261,16 +340,17 @@ async def aendern(request: Request, eintrag_id: int, daten: EintragAendern,
     await db.execute(
         f"UPDATE food_diary SET {', '.join(setzen)} WHERE id=$1 AND user_id=$2",
         *werte)
-    return await _tag(db, user["id"], zeile["day"])
+    return await _tag(db, user["id"], zeile["day"], mz.uhrzeit_sauber(at))
 
 
 @router.delete("/api/food/diary/log/{eintrag_id}")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def entfernen(request: Request, eintrag_id: int,
+                    at: Optional[str] = Query(None),
                     db=Depends(get_db), user=Depends(get_current_user)):
     zeile = await db.fetchrow(
         "DELETE FROM food_diary WHERE id=$1 AND user_id=$2 RETURNING day",
         eintrag_id, user["id"])
     if not zeile:
         raise HTTPException(404, "Diesen Eintrag gibt es nicht.")
-    return await _tag(db, user["id"], zeile["day"])
+    return await _tag(db, user["id"], zeile["day"], mz.uhrzeit_sauber(at))
