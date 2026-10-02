@@ -111,6 +111,18 @@ def test_tagebuch_zaehlt_eintraege_stufen_und_tage():
     assert felder[kopf.index("uebermaessig")] == "1"
 
 
+def test_der_vorspann_sagt_was_das_tagebuch_nicht_ist():
+    """v2.32.0: „Pizza;normal“ las eine Auswertung als eine Portion Pizza
+    und rechnete daraus Kalorien. Ist das Tagebuch in der Datei, sagt der
+    Vorspann, dass es nur Namen kennt -- und sonst schweigt er davon."""
+    mit = " ".join(fx._export_header({"username": "x"}, ["diary_log"], None, None, {}))
+    assert "ESSENSTAGEBUCH" in mit
+    for wort in ("KEINE Portionen", "KEINE Zutaten", "KEINE Nährwerte"):
+        assert wort in mit
+    ohne = " ".join(fx._export_header({"username": "x"}, ["track_log"], None, None, {}))
+    assert "ESSENSTAGEBUCH" not in ohne
+
+
 # --------------------------------------------------------------- Naehrwerte
 
 def _log(tag, gramm, kcal, gericht=None):

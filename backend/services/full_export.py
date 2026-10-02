@@ -264,7 +264,7 @@ EXPORT_SECTIONS: list[dict] = [
     # Sektion zu werfen hiesse, "Pizza, uebermaessig" und "180 g Brot" in
     # dieselbe Spalte zu schreiben.
     {"key": "diary_log", "group": "ernaehrung", "aggregatable": True, "dated": True,
-     "label": "Essenstagebuch (Tag, Mahlzeit, Was, Stufe)"},
+     "label": "Essenstagebuch (nur was es gab: keine Portionen, Zutaten oder Nährwerte)"},
     {"key": "track_log", "group": "ernaehrung", "aggregatable": True, "dated": True,
      "label": "Nährwerte-Einträge (Menge, kcal, Makros)"},
     {"key": "food_stock", "group": "ernaehrung", "aggregatable": False, "dated": False,
@@ -712,6 +712,21 @@ def _export_header(user, picked: list[str], date_from, date_to, agg_map: dict,
         "Perioden-Zusammenfassung und die Bon-Positionen sind Sichten auf "
         "dieselben Belege und duerfen nicht dazugezaehlt werden. Jede "
         "betroffene Sektion sagt das noch einmal in ihrer eigenen Zeile.")
+    if "diary_log" in picked:
+        # v2.32.0: Wer die Datei auswertet (oft eine KI), liest „Pizza;normal“
+        # sonst als eine Portion Pizza in normaler Groesse und rechnet daraus
+        # Kalorien. Das Tagebuch sagt nur, WAS es gab -- und das steht hier,
+        # bevor jemand anfaengt zu rechnen.
+        lines.append(
+            "# ESSENSTAGEBUCH: Diese Sektion hält nur fest, WAS gegessen "
+            "wurde - als frei getippter Name ('Pizza', 'Müsli'). Sie enthält "
+            "KEINE Portionen oder Mengen, KEINE Zutaten und KEINE Nährwerte "
+            "oder Kalorien. Eine Zeile ist eine Nennung, keine Portion: "
+            "'Pizza' heißt 'es gab Pizza', nicht 'eine Pizza'. Die Spalte "
+            "'Einschätzung' ist ein Bauchgefühl (normal oder übermäßig viel), "
+            "keine Mengenangabe. Aus diesen Zeilen lassen sich weder Mengen "
+            "noch Nährwerte ableiten; gemessene Mengen und Nährwerte stehen "
+            "ausschließlich in der Sektion 'Nährwerte-Einträge'.")
     if backlog:
         # Ohne diesen Absatz sieht der Rueckblick aus wie schlecht erfasste
         # Bons: hunderte Eintraege ohne eine einzige Position.
@@ -779,8 +794,13 @@ async def _sec_diary(db, user_id: int, date_from, date_to,
     if _agg_on(aggregate):
         return _diary_aggregiert(rows, aggregate)
 
-    out = ["# SEKTION: Essenstagebuch - was gab es (ohne Mengen, ohne Naehrwerte)",
-           "Datum;Mahlzeit;Was;Stufe;Uhrzeit;Mahlzeit geraten;Notiz"]
+    # Die Erklaerung steht in der Klammer: ``_block_titel`` schneidet dort ab,
+    # und der Titel davor wird im Archiv zum Dateinamen.
+    out = ["# SEKTION: Essenstagebuch - nur was es gab (frei getippter Name; "
+           "eine Zeile ist eine Nennung, keine Portion; keine Mengen, keine "
+           "Zutaten, keine Nährwerte; 'Einschätzung' ist ein Bauchgefühl - "
+           "normal oder übermäßig viel -, keine Portionszahl)",
+           "Datum;Mahlzeit;Was;Einschätzung;Uhrzeit;Mahlzeit geraten;Notiz"]
     for r in rows:
         mahlzeit = (mahlzeiten.MAHLZEIT_LABEL.get(r["meal"])
                     or mahlzeiten.OHNE_MAHLZEIT_LABEL)
@@ -810,8 +830,10 @@ def _diary_aggregiert(rows, aggregate: str) -> list[str]:
         b["tage"].add(tag)
 
     out = [f"# SEKTION: Essenstagebuch - {_period_prefix(aggregate)}-Bilanz "
-           f"({_period_adverb(aggregate)} aggregiert). Was es gab, steht nur "
-           "ohne Zusammenfassung in der Datei.",
+           f"({_period_adverb(aggregate)} aggregiert). Gezählt werden "
+           "Nennungen, keine Portionen; 'übermäßig' ist ein Bauchgefühl, "
+           "keine Menge. Was es gab, steht nur ohne Zusammenfassung in der "
+           "Datei.",
            f"{label};Von;Bis;Tage mit Eintrag;Eintraege;normal;uebermaessig"]
     for key in sorted(toepfe.keys()):
         b = toepfe[key]

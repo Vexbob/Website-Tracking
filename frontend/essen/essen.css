@@ -26,63 +26,102 @@
 }
 
 /* ---------- Schnellwahl ----------
-   Der kuerzeste Weg von "Seite offen" bis "steht drin". Grosse Tippflaechen,
-   kein Menue davor, keine Nachfrage danach. */
-.es-schnell {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-    margin-bottom: var(--space-5);
-}
-/* Ein Tipp, ein Eintrag. Das ist der kuerzeste Weg, den diese Seite kennt,
-   also traegt er den Modulton als Toenung und eine Flaeche, die man nicht
-   verfehlt -- nicht die Zurueckhaltung eines Filterchips. */
-.es-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    width: auto;
-    margin: 0;
-    padding: 0.625rem 1rem;
-    background: color-mix(in srgb, var(--es-figur) 12%, var(--surface-2));
-    border: 1px solid color-mix(in srgb, var(--es-figur) 32%, transparent);
-    border-radius: 999px;
-    color: var(--text-1);
-    font-size: 0.9375rem;
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background var(--dur-1) var(--ease),
-                border-color var(--dur-1) var(--ease),
-                transform var(--dur-1) var(--ease);
-}
-/* Das Pluszeichen sagt, dass ein Tipp eintraegt und nicht filtert. Es ist
-   Teil des Knopfes, kein eigenes Bedienelement. */
-.es-chip::before {
-    content: '＋';
-    color: var(--es-figur);
-    font-size: 0.8125rem;
-    line-height: 1;
-}
-.es-chip:hover {
-    opacity: 1;
-    background: color-mix(in srgb, var(--es-figur) 22%, var(--surface-2));
-    border-color: var(--es-figur);
-}
-.es-chip:active { transform: scale(0.96); }
-.es-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-/* Die Ueberschrift der Schnellwahl. Ohne sie steht eine Reihe Knoepfe da,
-   von der man nicht weiss, ob sie filtert oder eintraegt. */
+   Der kuerzeste Weg von "Seite offen" bis "steht drin": ein Tipp traegt ein.
+   Seit v2.32.0 ein Raster gleich grosser Kacheln -- die Pillen davor waren so
+   breit wie ihr Name, getoent und gerahmt, und brachen am Handy in drei
+   ungleiche Reihen um. Der Modulton steht nur noch im Plus. */
+.es-schnell { margin-bottom: var(--space-5); }
 .es-schnell-titel {
-    flex-basis: 100%;
     display: block;
     margin: 0 0 var(--space-2);
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.09em;
     text-transform: uppercase;
-    color: var(--text-4);
+    color: var(--text-3);
 }
+.es-schnell-raster {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+.es-schnell-raster.is-ungerade > :last-child { grid-column: 1 / -1; }
+@media (min-width: 720px) {
+    .es-schnell-raster { grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); }
+    .es-schnell-raster.is-ungerade > :last-child { grid-column: auto; }
+}
+.es-kachel {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: auto;
+    min-width: 0;
+    min-height: 52px;
+    margin: 0;
+    padding: 0.5rem 0.75rem 0.5rem 0.625rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text-1);
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--dur-1) var(--ease),
+                border-color var(--dur-1) var(--ease),
+                transform var(--dur-1) var(--ease);
+}
+.es-kachel:hover {
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--es-figur) 45%, transparent);
+    background: color-mix(in srgb, var(--es-figur) 6%, var(--surface-2));
+}
+.es-kachel:active { transform: scale(0.98); }
+.es-kachel:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Das Zeichen sagt, dass ein Tipp eintraegt und nicht filtert. */
+.es-kachel-zeichen {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--es-figur) 16%, transparent);
+    color: var(--es-figur);
+}
+.es-kachel-zeichen > span { display: inline-flex; }
+.es-kachel .es-kachel-ok { display: none; }
+/* Lange Namen duerfen in eine zweite Zeile; danach wird gekuerzt. */
+.es-kachel-name {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    /* Getrennt wird nach Silben, nicht an beliebiger Stelle: „Haferflocke|n“
+       stand sonst in zwei Zeilen. */
+    hyphens: auto;
+    -webkit-hyphens: auto;
+    overflow-wrap: break-word;
+}
+/* Am Handy sind zwei Kacheln je knapp 160 px breit -- Kreis, Abstand und
+   Schrift werden eine Stufe kleiner, damit ein langes Wort ganz hineinpasst. */
+@media (max-width: 720px) {
+    .es-kachel { gap: 0.5rem; padding: 0.5rem 0.625rem 0.5rem 0.5rem; font-size: 0.875rem; }
+    .es-kachel-zeichen { width: 24px; height: 24px; }
+}
+/* Eingetragen: aus dem Plus wird kurz ein Haken. */
+.es-kachel.is-ok {
+    border-color: color-mix(in srgb, var(--es-figur) 60%, transparent);
+    background: color-mix(in srgb, var(--es-figur) 12%, var(--surface-2));
+}
+.es-kachel.is-ok .es-kachel-plus { display: none; }
+.es-kachel.is-ok .es-kachel-ok { display: inline-flex; }
+.es-kachel.is-ok .es-kachel-zeichen { background: var(--es-figur); color: var(--accent-ink); }
 
 /* Der geteilte Mahlzeitenblock (.v-mahlzeit in css/style.css) bekommt hier
    seinen Ton -- Blattgruen, die Identitaet dieses Moduls. */
@@ -188,11 +227,11 @@
 .es-suche {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
     background: var(--surface-2);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 0.5rem 0.7rem;
+    padding: 0.125rem 0.75rem;
 }
 .es-suche-ico {
     display: inline-flex;
@@ -203,12 +242,20 @@
 .es-suche input {
     flex: 1;
     min-width: 0;
+    min-height: 44px;
+    /* Die globale Eingabe-Basis bringt Innenabstand, margin-bottom und einen
+       eigenen Fokusring mit -- im Rahmen machte das ein 72 px hohes Feld mit
+       schief sitzender Lupe und zwei Ringen beim Tippen. Der Rahmen ist hier
+       das Feld. */
+    margin: 0;
+    padding: 0;
     background: none;
     border: 0;
+    border-radius: 0;
     color: var(--text-1);
     font-size: var(--es-eingabe);
 }
-.es-suche input:focus { outline: none; }
+.es-suche input:focus { outline: none; border: 0; box-shadow: none; }
 .es-suche:focus-within { box-shadow: var(--focus-ring); }
 
 .es-dlg-fuss {
@@ -245,64 +292,113 @@
 .modal-box--voll .es-dlg-fuss { margin-top: auto; }
 
 /* Eine Zeile, eine Hauptsache: die ganze Zeile ist der Knopf fuer "normal",
-   "uebermaessig" steht klein daneben. */
-.es-w {
-    display: flex;
-    align-items: stretch;
-    gap: 0.375rem;
-    margin-top: 0.375rem;
+   "uebermaessig" steht klein daneben. Seit v2.32.0 eine Liste mit Haarlinien
+   (wie .rec-list) statt einzelner gerahmter Kaesten -- so passen mehr
+   Vorschlaege ueber die Tastatur. */
+.es-wl {
+    margin-top: 0.75rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
 }
+.es-w { display: flex; align-items: stretch; }
+.es-w + .es-w { border-top: 1px solid var(--line); }
 .es-w-haupt {
     flex: 1;
     min-width: 0;
     width: auto;
     display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-    align-items: flex-start;
-    text-align: left;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 48px;
     margin: 0;
-    padding: 0.55rem 0.75rem;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
+    padding: 0.5rem 0.875rem;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    text-align: left;
     cursor: pointer;
+    transition: background var(--dur-1) var(--ease);
 }
 .es-w-haupt:hover {
     opacity: 1;
-    border-color: var(--es-figur);
-    background: color-mix(in srgb, var(--es-figur) 8%, var(--surface-2));
+    background: color-mix(in srgb, var(--es-figur) 8%, transparent);
 }
-.es-w-haupt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.es-w-name { font-size: 0.9375rem; font-weight: 600; color: var(--text-1); }
-.es-w-sub { font-size: 0.75rem; color: var(--text-3); }
+.es-w-haupt:active { background: color-mix(in srgb, var(--es-figur) 14%, transparent); }
+.es-w-haupt:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
+.es-w-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 /* Der frei getippte Text ist der Weg, der ohne alles auskommt -- er steht
-   deshalb abgesetzt, nicht als eine Zeile unter vielen. */
-.es-w.is-neu .es-w-haupt {
-    border-color: var(--es-figur);
-    background: color-mix(in srgb, var(--es-figur) 10%, var(--surface-2));
+   deshalb getoent oben, mit „neu“ am Rand. */
+.es-w-sub {
+    flex: none;
+    font-size: 0.75rem;
+    font-weight: 650;
+    color: var(--es-figur);
 }
+.es-w.is-neu .es-w-haupt { background: color-mix(in srgb, var(--es-figur) 10%, transparent); }
+/* Eingetragen: ein Haken in der Zeile, die man gerade angetippt hat. */
+.es-w-ok {
+    display: none;
+    flex: none;
+    align-items: center;
+    color: var(--es-figur);
+}
+.es-w.is-ok .es-w-ok { display: inline-flex; }
+.es-w.is-ok .es-w-sub { display: none; }
+.es-w.is-ok .es-w-haupt { background: color-mix(in srgb, var(--es-figur) 14%, transparent); }
 .es-w-viel {
     flex: none;
     width: auto;
     margin: 0;
-    padding: 0 0.7rem;
+    padding: 0 0.875rem;
     background: transparent;
-    /* Ohne Rahmen. Bei acht Vorschlägen standen hier acht gleich große
-       Kästen für den Fall, der seltener eintritt als der andere — die
-       Liste sah aus, als müsse man sich jedes Mal entscheiden. Der Name
-       ist die Hauptsache, das hier ein Angebot am Rand. */
-    border: 1px solid transparent;
-    border-radius: var(--radius);
-    color: var(--text-4);
+    /* Ohne Rahmen: der Name ist die Hauptsache, das hier ein Angebot am Rand. */
+    border: 0;
+    border-left: 1px solid var(--line);
+    border-radius: 0;
+    color: var(--text-3);
     font-size: 0.75rem;
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
-    transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+    transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
-.es-w-viel:hover { opacity: 1; color: var(--es-viel); border-color: var(--es-viel); }
-.es-w-viel:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.es-w-viel:hover {
+    opacity: 1;
+    color: var(--es-viel);
+    background: color-mix(in srgb, var(--es-viel) 10%, transparent);
+}
+.es-w-viel:focus-visible { outline: none; box-shadow: inset var(--focus-ring); }
+.es-mehr { margin-top: var(--space-2); }
+
+/* „Rückgängig“ im Fuss: ein Wort, das man trifft, kein zweiter Knopf neben
+   „Fertig“. */
+.es-zurueck {
+    display: inline;
+    width: auto;
+    min-height: 0;
+    margin: 0 0 0 0.25rem;
+    padding: 0.5rem 0.25rem;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+}
+.es-zurueck:hover { opacity: 1; text-decoration: underline; }
+.es-zurueck:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* ---------- Eintrag ändern ---------- */
 .es-feld {
@@ -353,7 +449,7 @@
        ist 44 px hoch (v2.29.0). */
     .es-stufe { min-height: 32px; padding-inline: 0.7rem; position: relative; }
     .es-stufe::after { content: ""; position: absolute; inset: -6px -2px; }
-    .es-chip { min-height: 44px; }
+    .es-zurueck { display: inline-flex; align-items: center; min-height: 44px; }
 }
 
 /* Am Handy steht der Modulname schon in der Leiste ganz oben. Ein zweites

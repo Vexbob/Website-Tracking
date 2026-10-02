@@ -34,7 +34,8 @@ const API = {
    nicht mehr als Emoji -- siehe den Kopf jener Datei. */
 const ICON = {
     lupe:  VexIkon.svg('lupe', 17),
-    muell: VexIkon.svg('muell', 17),
+    haken: VexIkon.svg('haken', 15),
+    plus:  VexIkon.svg('plus', 15),
 };
 
 const state = {
@@ -199,16 +200,35 @@ function zeichneSchnell() {
     const liste = ((state.tag && state.tag.quick) || []).slice(0, 4);
     ziel.hidden = !liste.length;
     if (!liste.length) return;
-    ziel.innerHTML = '<span class="es-schnell-titel">Ein Tipp trägt ein</span>'
+    // v2.32.0: ein Raster gleich grosser Kacheln statt Pillen. Die Pillen
+    // waren so breit wie ihr Name und brachen am Handy in drei ungleiche
+    // Reihen um -- „Haferflocken mit Banane“ allein in einer Zeile. Bei
+    // ungerader Zahl nimmt die letzte Kachel am Handy die ganze Breite,
+    // damit keine allein neben einem Loch steht.
+    ziel.innerHTML = '<span class="es-schnell-titel">Schnell eintragen</span>'
+        + `<div class="es-schnell-raster${liste.length % 2 ? ' is-ungerade' : ''}"
+               style="--n:${liste.length}">`
         + liste.map((q, i) =>
-        `<button type="button" class="es-chip" data-schnell="${i}"
-            title="${esc(q.label)} eintragen — ${q.count}× notiert">${esc(q.label)}</button>`
-    ).join('');
+        `<button type="button" class="es-kachel" data-schnell="${i}"
+            data-label="${esc(q.label.toLowerCase())}"
+            title="${esc(q.label)} eintragen — ${q.count}× notiert">
+            <span class="es-kachel-zeichen" aria-hidden="true"><span class="es-kachel-plus">${ICON.plus}</span><span class="es-kachel-ok">${ICON.haken}</span></span>
+            <span class="es-kachel-name">${esc(q.label)}</span>
+        </button>`
+    ).join('') + '</div>';
     ziel.querySelectorAll('[data-schnell]').forEach(b =>
         b.addEventListener('click', () => {
             const q = liste[Number(b.dataset.schnell)];
             if (q) eintragen({ label: q.label, level: 'normal' }, b);
         }));
+}
+
+/* Ein Knopf, der eingetragen hat, sagt das kurz selbst -- an der Stelle, auf
+   die man gerade schaut, nicht nur in einer Meldung am Rand. */
+function bestaetige(el) {
+    if (!el || !el.isConnected) return;
+    el.classList.add('is-ok');
+    setTimeout(() => el.classList.remove('is-ok'), 1400);
 }
 
 /* Der Tag nach Mahlzeiten, jede mit ihrem eigenen Plus. Wo man tippt, sagt
@@ -352,27 +372,31 @@ async function ladeHaeufig() {
 function eintragDialog(mahlzeit) {
     if (!state.tag) return;
     state.dlg = { mahlzeit: mahlzeit || mahlzeitJetzt(), eingabe: '',
-                  zuletzt: [], liste: [] };
+                  zuletzt: [], liste: [], ok: null };
 
     const titel = (state.datum || heute()) === heute()
         ? 'Eintragen · heute' : 'Eintragen · ' + datumKurz(state.datum);
     // Mahlzeit und Suchfeld kleben oben: sie sind der Kopf des Vorgangs und
     // duerfen nicht unter dem Daumen wegwandern, waehrend die Liste darunter
     // waechst und schrumpft.
+    // Die Taste rechts unten auf der Handy-Tastatur trägt ein (sie drückt den
+    // ersten Vorschlag) -- „Suchen“ hätte dort etwas Falsches versprochen.
+    // Großer Anfang, weil „pizza“ und „Pizza“ sonst zwei Schreibweisen sind.
     const inhalt = `
         <div class="es-dlg-kopf">
             <div class="v-mzwahl" id="esDlgMahlzeiten"></div>
             <label class="es-suche">
                 <span class="es-suche-ico" aria-hidden="true">${ICON.lupe}</span>
                 <input type="search" id="esDlgSuche" autocomplete="off"
+                       enterkeyhint="done" autocapitalize="sentences"
                        aria-label="Was gab es?"
                        placeholder="Was gab es?">
             </label>
         </div>
         <div id="esDlgListe"></div>
         <div class="es-dlg-fuss">
-            <span class="es-note" id="esDlgZuletzt"></span>
-            <button type="button" class="v-btn" id="esDlgFertig">Fertig</button>
+            <span class="es-note" id="esDlgZuletzt" aria-live="polite"></span>
+            <button type="button" class="v-btn v-btn--primary" id="esDlgFertig">Fertig</button>
         </div>`;
 
     state.dialog = openModal(titel, inhalt, {
@@ -407,8 +431,11 @@ function eintragDialog(mahlzeit) {
         e.preventDefault();
         state.dlg.eingabe = e.target.value;
         zeichneDlgListe();
-        const erste = document.querySelector('#esDlgListe [data-normal]');
-        if (erste) erste.click();
+        const erste = state.dlg.liste[0];
+        // Wer mit der Tastatur einträgt, tippt gleich den nächsten -- nur
+        // hier bleibt das Feld danach im Fokus.
+        if (erste) eintragen({ label: erste.label, level: 'normal' },
+                             document.querySelector('#esDlgListe .es-w'), { tastatur: true });
     });
     document.getElementById('esDlgFertig')
         .addEventListener('click', () => state.dialog && state.dialog.close());
@@ -440,14 +467,18 @@ function zeichneDlgMahlzeiten() {
 function dlgVorschlaege() {
     const text = (state.dlg.eingabe || '').trim();
     const suche = text.toLowerCase();
-    const frei = !text ? [] : [{ label: text, neu: true,
-                                 sub: 'so hinschreiben' }];
+    // Steht das Getippte schon so in der Liste, ist es nicht „neu“ -- dann
+    // reicht die bekannte Zeile.
+    const bekanntGenau = state.haeufig.some(h => h.label.toLowerCase() === suche);
+    const frei = !text || bekanntGenau ? [] : [{ label: text, neu: true }];
+    // Bekannt steht nur der Name da. „61× notiert · zuletzt 02.10.2026“ an
+    // jeder Zeile beantwortete keine Frage, die man beim Eintragen hat --
+    // die Reihenfolge sagt schon, was oft vorkommt.
     const bekannt = state.haeufig
         .filter(h => !suche || h.label.toLowerCase().includes(suche))
-        // Was man gerade tippt, steht schon oben -- nicht zweimal.
-        .filter(h => h.label.toLowerCase() !== suche)
-        .map(h => ({ label: h.label,
-                     sub: `${h.count}× notiert · zuletzt ${datumKurz(h.last)}` }));
+        .map(h => ({ label: h.label }));
+    // Was genau so heißt, wie getippt, steht oben.
+    bekannt.sort((a, b) => (b.label.toLowerCase() === suche) - (a.label.toLowerCase() === suche));
     return frei.concat(bekannt);
 }
 
@@ -469,40 +500,76 @@ function zeichneDlgListe() {
         return;
     }
 
+    // Eine Liste mit Haarlinien statt einzelner Kästen: bei acht Vorschlägen
+    // waren das acht gerahmte Flächen à 58 px, jetzt passen mehr davon über
+    // die Tastatur.
     const MAX = 12;
-    ziel.innerHTML = liste.slice(0, MAX).map((v, i) => `
-        <div class="es-w${v.neu ? ' is-neu' : ''}">
+    ziel.innerHTML = `<div class="es-wl">${liste.slice(0, MAX).map((v, i) => `
+        <div class="es-w${v.neu ? ' is-neu' : ''}" data-label="${esc(v.label.toLowerCase())}">
             <button type="button" class="es-w-haupt" data-normal="${i}">
                 <span class="es-w-name">${esc(v.label)}</span>
-                <span class="es-w-sub">${esc(v.sub || '')}</span>
+                ${v.neu ? '<span class="es-w-sub">neu</span>' : ''}
+                <span class="es-w-ok" aria-hidden="true">${ICON.haken}</span>
             </button>
             <button type="button" class="es-w-viel" data-viel="${i}"
                     title="Als übermäßig eintragen">übermäßig</button>
-        </div>`).join('')
+        </div>`).join('')}</div>`
         + (liste.length > MAX
-            ? `<p class="es-note">… und ${liste.length - MAX} weitere — tipp oben weiter.</p>`
+            ? `<p class="es-note es-mehr">… und ${liste.length - MAX} weitere — tipp oben weiter.</p>`
             : '');
+
+    const ok = state.dlg.ok;
+    if (ok && ok.bis > Date.now()) {
+        const zeile = ziel.querySelector('.es-w[data-label="' + CSS.escape(ok.label) + '"]');
+        if (zeile) zeile.classList.add('is-ok');
+    }
 
     const nimm = (i) => state.dlg.liste[Number(i)];
     ziel.querySelectorAll('[data-normal]').forEach(b => b.addEventListener('click', () => {
         const v = nimm(b.dataset.normal);
-        if (v) eintragen({ label: v.label, level: 'normal' }, b);
+        if (v) eintragen({ label: v.label, level: 'normal' }, b.closest('.es-w'));
     }));
     ziel.querySelectorAll('[data-viel]').forEach(b => b.addEventListener('click', () => {
         const v = nimm(b.dataset.viel);
-        if (v) eintragen({ label: v.label, level: 'viel' }, b);
+        if (v) eintragen({ label: v.label, level: 'viel' }, b.closest('.es-w'));
     }));
 }
 
-async function eintragen(daten, knopf) {
+/* Der Fuß im Eintragen-Fenster: was in dieser Runde eingetragen wurde, und
+   der Weg zurück für das letzte. Ein Fehltipp kostete vorher drei Schritte
+   (Fenster zu, Zeile suchen, im Dialog entfernen). */
+function zeichneDlgFuss() {
+    const fuss = document.getElementById('esDlgZuletzt');
+    if (!fuss || !state.dlg) return;
+    const z = state.dlg.zuletzt;
+    if (!z.length) { fuss.innerHTML = ''; return; }
+    fuss.innerHTML = 'Eingetragen: ' + z.map(e => esc(e.label)).join(', ')
+        + ' <button type="button" class="es-zurueck" id="esDlgZurueck">Rückgängig</button>';
+    document.getElementById('esDlgZurueck').addEventListener('click', async (ev) => {
+        const letzter = state.dlg && state.dlg.zuletzt[state.dlg.zuletzt.length - 1];
+        if (!letzter) return;
+        ev.currentTarget.disabled = true;
+        if (await entfernen(letzter.id) && state.dlg) {
+            state.dlg.zuletzt.pop();
+            zeichneDlgFuss();
+        }
+    });
+}
+
+async function eintragen(daten, knopf, opts) {
+    const o = opts || {};
     if (knopf) knopf.classList.add('is-loading');
     const body = Object.assign({
         day: state.datum || heute(),
         at: jetzt(),
         meal: state.dlg ? state.dlg.mahlzeit : null,
     }, daten);
+    // Der Server gibt den ganzen Tag zurueck, nicht die neue Zeile. Welche es
+    // ist, sagt der Vergleich mit vorher -- das braucht „Rückgängig“.
+    const vorher = new Set(((state.tag && state.tag.entries) || []).map(e => e.id));
     try {
         state.tag = await API.eintragen(body);
+        const neu = state.tag.entries.filter(e => !vorher.has(e.id)).pop() || null;
         zeichneTag();
         if (state.dlg) {
             // Das Feld leeren: der naechste Eintrag faengt bei null an, und
@@ -510,13 +577,44 @@ async function eintragen(daten, knopf) {
             // passiert.
             state.dlg.eingabe = '';
             const feld = document.getElementById('esDlgSuche');
-            if (feld) { feld.value = ''; feld.focus(); }
-            state.dlg.zuletzt.push(daten.label);
-            const fuss = document.getElementById('esDlgZuletzt');
-            if (fuss) fuss.textContent = 'Eingetragen: ' + state.dlg.zuletzt.join(', ');
+            if (feld) {
+                feld.value = '';
+                // Nur nach Enter oder am Rechner zurueck ins Feld. Am Handy
+                // riss der Fokus nach JEDEM Tipp auf einen Vorschlag die
+                // Tastatur hoch und verdeckte die Liste, aus der man gerade
+                // waehlt.
+                if (o.tastatur || window.matchMedia('(min-width: 720px)').matches) feld.focus();
+                else feld.blur();
+            }
+            if (neu) state.dlg.zuletzt.push({ id: neu.id, label: daten.label });
+            // Das Haekchen steht im Zustand, nicht nur am Knoten: gleich
+            // danach zeichnet ladeHaeufig() die Liste neu und haette es
+            // sonst sofort wieder weggewischt.
+            const bis = Date.now() + 1400;
+            state.dlg.ok = { label: daten.label.toLowerCase(), bis: bis };
+            setTimeout(() => {
+                if (!state.dlg || !state.dlg.ok || state.dlg.ok.bis !== bis) return;
+                state.dlg.ok = null;
+                document.querySelectorAll('#esDlgListe .es-w.is-ok')
+                    .forEach(el => el.classList.remove('is-ok'));
+            }, 1400);
             zeichneDlgListe();
+            zeichneDlgFuss();
         } else {
-            melde('Eingetragen.', 'success');
+            // zeichneTag() hat die Schnellwahl neu gebaut -- der Knopf von
+            // eben haengt nicht mehr im Dokument.
+            bestaetige(document.querySelector(
+                '#esSchnell [data-label="' + CSS.escape(daten.label.toLowerCase()) + '"]'));
+            // Die Schnellwahl traegt mit einem Tipp ein -- ein Fehltipp muss
+            // genauso schnell wieder weg sein.
+            if (window.Toast && neu) {
+                Toast.success('„' + daten.label + '“ eingetragen', {
+                    timeout: 5000,
+                    action: { label: 'Rückgängig', onClick: () => entfernen(neu.id) },
+                });
+            } else {
+                melde('Eingetragen.', 'success');
+            }
         }
         ladeHaeufig();
     } catch (err) {
@@ -540,8 +638,10 @@ async function entfernen(id) {
         state.tag = await API.weg(id);
         zeichneTag();
         ladeHaeufig();
+        return true;
     } catch (err) {
         melde(err.message || 'Das ging nicht.', 'error');
+        return false;
     }
 }
 

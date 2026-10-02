@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.32.0', date: '2026-10-02', title: 'Essenstagebuch: schneller eintragen', notes: [
+        'Die Schnellwahl ist ein Raster gleich großer Kacheln statt ungleich umbrechender Pillen.',
+        'Nach einem Eintrag gibt es „Rückgängig“, im Fenster und in der Meldung der Schnellwahl.',
+        'Ein Tipp auf einen Vorschlag reißt am Handy nicht mehr die Tastatur hoch.',
+        'Die Vorschläge stehen als ruhige Liste da, nur mit Namen.',
+        'Der Export sagt klar: Das Tagebuch kennt nur, was es gab, keine Portionen, Zutaten oder Nährwerte.',
+    ]},
     { v: 'v2.31.0', date: '2026-10-01', title: 'Export neu gebaut', notes: [
         'Größe und Zeilenzahl stehen im Fuß neben „Exportieren“ und bleiben beim Scrollen stehen.',
         'Jedes Modul hat einen Schalter, darunter seine Tabellen mit der Zahl ihrer Zeilen.',
