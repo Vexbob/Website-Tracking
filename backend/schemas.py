@@ -30,6 +30,12 @@ class SavGoalTransfer(BaseModel):
     note: Optional[str] = None
 
 
+class SavGoalGiveUp(BaseModel):
+    """v2.35.0: Sparziel aufgeben -- das Angesparte zieht in den Puffer.
+    ``note`` sagt, warum; sie steht am Vermerk im Verlauf."""
+    note: Optional[str] = None
+
+
 # ---------- Achievements ----------
 class AchCreate(BaseModel):
     title: str

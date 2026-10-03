@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.35.0', date: '2026-10-03', title: 'Sparziel aufgeben, Geld behalten', notes: [
+        'Ein Sparziel lässt sich aufgeben: Das Angesparte bleibt und liegt danach im Puffer.',
+        'Beim Aufgeben kannst du notieren, warum.',
+        'Im Verlauf steht „Sparziel aufgegeben“ mit Betrag und Grund, ohne doppelt zu zählen.',
+    ]},
     { v: 'v2.34.0', date: '2026-10-02', title: 'Navigationsleiste aufgeräumt', notes: [
         'Am Rechner steht links „Vexbob“ statt des Seitennamens, die Reiter stehen damit auf jeder Seite an derselben Stelle.',
         'Die Module stehen in einer Kapsel; das aktive liegt erhaben darin, sein Zeichen im Modulton.',

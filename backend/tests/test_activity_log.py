@@ -44,10 +44,11 @@ class FakeDB:
     nicht, denn jede der sechs Quellen hat ihre eigene Tabelle.
     """
 
-    def __init__(self, checkins=(), meilensteine=(), start=()):
+    def __init__(self, checkins=(), meilensteine=(), start=(), aufgegeben=()):
         self.checkins = list(checkins)
         self.meilensteine = list(meilensteine)
         self.start = list(start)
+        self.aufgegeben = list(aufgegeben)
 
     async def fetch(self, sql, *args):
         if "progress_logs pl JOIN progress_goals" in sql:
@@ -60,6 +61,8 @@ class FakeDB:
             return self.start
         if "source_type='transfer'" in sql:
             return []
+        if "source_type='aufgegeben'" in sql:
+            return self.aufgegeben
         if "source_type='progress'" in sql:
             return []
         raise AssertionError("unerwartete Abfrage: " + sql[:80])
@@ -160,3 +163,18 @@ def test_die_obergrenze_der_liste_bleibt_gedeckelt():
     db = FakeDB(checkins=[_checkin(t, 1) for t in range(1, 6)])
     assert len(_run(main.activity_log(limit=99999, db=db, user=NUTZER))) == 5
     assert len(_run(main.activity_log(limit=0, db=db, user=NUTZER))) == 1
+
+
+def test_ein_aufgegebenes_ziel_zaehlt_in_keiner_summe_mit():
+    """v2.35.0: Der Vermerk steht im Log, mit Grund -- aber ueber 0 €. Das
+    Geld ist mit seinen eigenen Buchungen in den Puffer umgezogen und waere
+    sonst doppelt gezaehlt."""
+    vermerk = {"id": 9, "amount": 0, "description": "„Rennrad“ – 1.465,50 € in den Puffer",
+               "note": "doch lieber ein Gravelbike", "created_at": _zeit(6)}
+    db = FakeDB(meilensteine=[_meilenstein(4, 25.0)], aufgegeben=[vermerk])
+    liste = _run(main.activity_log(limit=50, db=db, user=NUTZER))
+    eintrag = next(e for e in liste if e["type"] == "aufgegeben")
+    assert eintrag["note"] == "doch lieber ein Gravelbike"
+    assert eintrag["deletable"] is False
+    auskunft = _run(main.activity_log_summary(db=db, user=NUTZER))
+    assert auskunft["all"]["amount"] == pytest.approx(25.0)

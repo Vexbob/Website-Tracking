@@ -37,7 +37,7 @@ from deps import (
 
 # Ausgelagerte Pydantic-Models (v1.15.1)
 from schemas import (
-    SavGoalUpd, SavGoalCreate, SavGoalTransfer, AchCreate, AchUpd, AchEdit,
+    SavGoalUpd, SavGoalCreate, SavGoalTransfer, SavGoalGiveUp, AchCreate, AchUpd, AchEdit,
     PGCreate, PGUpd, CheckinBody, NoteBody,
     PotCreate, FICreate, ReorderBody, RestoreBody,
     UserCreate, UserPasswordReset, UserCreateInvite, ActivateBody, TrophyCreate,
@@ -792,6 +792,77 @@ async def del_sg(request: Request, gid: int, db=Depends(get_db), user=Depends(ge
             user["id"], gid)
         await db.execute("DELETE FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
     return {"status": "deleted", "removed_sum": removed_sum}
+
+def _eur_de(betrag: float) -> str:
+    """1465.5 -> "1.465,50 €" -- fuer Texte, die im Verlauf stehen."""
+    return f"{betrag:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
+
+
+@app.post("/api/savings-goals/{gid}/give-up")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def give_up_sg(request: Request, gid: int, b: SavGoalGiveUp,
+                     db=Depends(get_db), user=Depends(get_current_user)):
+    """v2.35.0: Sparziel aufgeben -- das Geld bleibt, es zieht in den Puffer.
+
+    Loeschen nimmt das Angesparte mit; Abschliessen macht eine Trophaee
+    daraus. Fuer „doch keine Lust mehr auf das Ding“ passte beides nicht:
+    das Geld war gespart und soll es bleiben. Einen freien Uebertrag
+    zwischen Zielen gibt es bewusst nicht -- nur diesen einen Weg zurueck.
+
+    Die Buchungen des Ziels ziehen UM statt geloescht und durch eine
+    Sammelbuchung ersetzt zu werden: so bleibt der Verlauf, wie er war, und
+    am Tag des Aufgebens steht keine scheinbare neue Einnahme. Uebertraege
+    zwischen Puffer und diesem Ziel heben sich danach auf und fallen samt
+    Gegenseite weg. Was bleibt, ist ein Vermerk ueber 0 € mit Grund und
+    Betrag -- er zaehlt in keiner Summe mit.
+    """
+    row = await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1 AND user_id=$2",
+                            gid, user["id"])
+    if not row:
+        raise HTTPException(404, "Sparziel nicht gefunden")
+    if bool(row["is_general"]):
+        raise HTTPException(400, "Den Puffer kann man nicht aufgeben")
+    puffer = await _general_goal_id(db, user["id"])
+    if puffer is None:
+        raise HTTPException(500, "Kein Puffer-Konto vorhanden")
+    summe = round(float(await db.fetchval(
+        "SELECT COALESCE(SUM(amount),0) FROM savings_transactions "
+        "WHERE user_id=$1 AND savings_goal_id=$2", user["id"], gid) or 0), 2)
+    note = (b.note or "").strip() or None
+    vermerk = (f"„{row['name']}“ – {_eur_de(summe)} in den Puffer" if summe
+               else f"„{row['name']}“ – es lag nichts darauf")
+    async with db.transaction():
+        # 1) Uebertraege Puffer -> dieses Ziel: beide Seiten weg. Die
+        #    Puffer-Zeile traegt ihre eigene id als source_id, die Ziel-Zeile
+        #    dieselbe -- ein Filter auf source_id trifft also beide.
+        paare = [r["source_id"] for r in await db.fetch(
+            "SELECT source_id FROM savings_transactions "
+            "WHERE user_id=$1 AND savings_goal_id=$2 AND source_type='transfer' "
+            "  AND source_id IS NOT NULL", user["id"], gid)]
+        if paare:
+            await db.execute(
+                "DELETE FROM savings_transactions "
+                "WHERE user_id=$1 AND source_type='transfer' AND source_id = ANY($2::int[])",
+                user["id"], paare)
+        # 2) Alles andere zieht in den Puffer um.
+        await db.execute(
+            "UPDATE savings_transactions SET savings_goal_id=$1 "
+            "WHERE user_id=$2 AND savings_goal_id=$3", puffer, user["id"], gid)
+        # 3) Der Vermerk -- ueber 0 €, damit er in keiner Summe doppelt zaehlt.
+        await db.execute(
+            "INSERT INTO savings_transactions "
+            "(user_id, amount, source_type, source_id, description, note, savings_goal_id) "
+            "VALUES ($1, 0, 'aufgegeben', NULL, $2, $3, $4)",
+            user["id"], vermerk, note, puffer)
+        # 4) Das Ziel selbst. Achievements und Wochenziele, die ausdruecklich
+        #    hierher zahlten, fallen per ON DELETE SET NULL auf die
+        #    Standardregel zurueck (aktives Ziel, sonst Puffer).
+        await db.execute("DELETE FROM savings_goals WHERE id=$1 AND user_id=$2",
+                         gid, user["id"])
+    logger.info("User %s gave up savings_goal %s, %.2f moved to buffer %s",
+                user["id"], gid, summe, puffer)
+    return {"status": "ok", "moved": summe, "buffer_id": puffer}
+
 
 @app.put("/api/savings-goal/{gid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
@@ -1975,6 +2046,17 @@ async def _aktivitaets_ereignisse(db, user_id: int) -> list:
             "log_id": r["id"], "source_id": r["source_id"],
             "note": r["note"] or "", "deletable": True,
         })
+
+    # v2.35.0: aufgegebene Sparziele. Der Vermerk steht ueber 0 € im Puffer
+    # (das Geld selbst ist mit seinen eigenen Buchungen umgezogen) und laesst
+    # sich nicht loeschen: das Ziel, auf das er sich bezieht, gibt es nicht mehr.
+    for r in await db.fetch(
+        "SELECT * FROM savings_transactions WHERE user_id=$1 AND source_type='aufgegeben' "
+        "ORDER BY created_at DESC", user_id):
+        events.append({"type": "aufgegeben", "date": r["created_at"].isoformat(),
+            "title": "Sparziel aufgegeben", "description": r["description"] or "",
+            "amount": 0.0, "log_id": r["id"], "note": r["note"] or "",
+            "deletable": False})
 
     sb_rows = await db.fetch(
         """SELECT st.id, st.amount, st.description, st.created_at, st.source_id, st.period_key, st.note, pg.title

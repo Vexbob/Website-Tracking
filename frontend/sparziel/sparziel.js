@@ -427,6 +427,7 @@ function dlgSparzielBearbeiten(){
         <input id="sgName" value="${esc(document.getElementById('goalName').textContent||'')}">
         <label for="sgTarget">Zielbetrag (€)</label>
         <input id="sgTarget" type="number" step="0.01" inputmode="decimal" value="${glTarget||''}">
+        ${aufgebenZeile(glGoalId)}
         <div class="modal-fuss">
             <button type="button" class="v-btn" data-abschluss>${ikon('pokal',16)} Abschließen</button>
             <button type="submit" class="v-btn v-btn--primary">Speichern</button>
@@ -434,6 +435,7 @@ function dlgSparzielBearbeiten(){
     </form>`);
     formular(d,()=>saveSparziel(d));
     beiKlick(d,'[data-abschluss]',()=>{d.close();openCompleteModal();});
+    beiKlick(d,'[data-aufgeben]',()=>{d.close();dlgAufgeben(glGoalId);});
     fokusAmRechner('sgName');
 }
 
@@ -1407,6 +1409,7 @@ function dlgZiel(id){
     const d=dialog(g.name,`<form data-form>
         <label for="zlName">Name</label><input id="zlName" value="${esc(g.name||'')}">
         <label for="zlTarget">Zielbetrag (€)</label><input id="zlTarget" type="number" step="0.01" inputmode="decimal" value="${g.target_amount!=null?esc(g.target_amount):''}">
+        ${aufgebenZeile(id)}
         <div class="modal-fuss">
             <button type="button" class="v-btn v-btn--danger" data-weg>${ikon('muell',16)} Löschen</button>
             <button type="submit" class="v-btn v-btn--primary">Speichern</button>
@@ -1423,6 +1426,50 @@ function dlgZiel(id){
         }catch(e){haptic('error');showToast(e.message||'Speichern fehlgeschlagen',true);}
     });
     beiKlick(d,'[data-weg]',async()=>{if(await deleteSavingsGoal(id)) d.close();});
+    beiKlick(d,'[data-aufgeben]',()=>{d.close();dlgAufgeben(id);});
+}
+
+/* v2.35.0 -- Sparziel aufgeben. Fuer „ich will das Ding nicht mehr“:
+   Loeschen naehme das Angesparte mit, Abschliessen machte eine Trophaee
+   daraus. Hier bleibt das Geld gespart und zieht in den Puffer; von dort
+   geht es per Uebertrag an ein neues Ziel. Einen freien Uebertrag zwischen
+   Zielen gibt es bewusst nicht. */
+function aufgebenZeile(id){
+    const g=(savingsGoalsCache||[]).find(x=>x.id===id);
+    if(!g) return '';
+    const saved=Number(g.saved_amount||0);
+    return `<div class="sz-aufgeben">
+        <span class="sz-aufgeben-text"><strong>Keine Lust mehr darauf?</strong>
+            <span>${saved>0.005?`Die ${fmtEur(saved)} kommen in den Puffer.`:'Auf dem Ziel liegt nichts.'}</span></span>
+        <button type="button" class="v-btn" data-aufgeben>${ikon('archiv',16)} Aufgeben</button>
+    </div>`;
+}
+function dlgAufgeben(id){
+    const g=(savingsGoalsCache||[]).find(x=>x.id===id); if(!g) return;
+    const saved=Number(g.saved_amount||0);
+    const d=dialog(`„${g.name}“ aufgeben`,`<form data-form>
+        <p class="sz-aufgeben-satz">${saved>0.005
+            ?`Die <strong>${fmtEur(saved)}</strong> bleiben gespart und kommen in den Puffer. Von dort kannst du sie später einem neuen Ziel geben.`
+            :'Auf dem Ziel liegt nichts.'} Das Ziel verschwindet, eine Trophäe gibt es nicht.</p>
+        <label for="agGrund">Warum? <span class="sz-freiwillig">freiwillig</span></label>
+        <textarea id="agGrund" rows="3" maxlength="500" placeholder="z. B. Doch lieber ein Gravelbike"></textarea>
+        <div class="modal-fuss">
+            <button type="submit" class="v-btn v-btn--primary">${ikon('archiv',16)} Aufgeben</button>
+        </div>
+    </form>`);
+    formular(d,async()=>{
+        const knopf=d.root.querySelector('[type=submit]');
+        knopf.disabled=true;
+        try{
+            const r=await apiCall('/api/savings-goals/'+id+'/give-up',{method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({note:document.getElementById('agGrund').value.trim()||null})});
+            d.close();haptic('success');
+            showToast(r&&r.moved?`Aufgegeben – ${fmtEur(r.moved)} im Puffer`:'Aufgegeben');
+            await Promise.all([loadSavingsGoals(),loadSparziel(),loadAchievements(),loadProgressGoals(),loadLog()]);
+        }catch(e){knopf.disabled=false;haptic('error');showToast(e.message||'Aufgeben fehlgeschlagen',true);}
+    });
+    fokusAmRechner('agGrund');
 }
 
 // Neues Sparziel, optional vorbefüllt (aus der Wunschliste)
@@ -1759,9 +1806,10 @@ function renderLog(){
     }
     if(logView==='weekly') renderLogWeekly(rows,body,filtered); else renderLogFlat(rows,body);
 }
-const LOG_LABELS={initial:'Start',milestone:'Meilenstein',checkin:'Check-in',streak_bonus:'Bonus',transfer:'Übertrag',progress:'Fortschritt'};
+const LOG_LABELS={initial:'Start',milestone:'Meilenstein',checkin:'Check-in',streak_bonus:'Bonus',transfer:'Übertrag',progress:'Fortschritt',aufgegeben:'Aufgegeben'};
 const LOG_ZEICHEN={initial:['muenze','var(--text-2)'],milestone:['ziel','var(--sz-ton)'],checkin:['haken','var(--sz-ton)'],
-    streak_bonus:['flamme','var(--warn)'],transfer:['tauschen','var(--info)'],progress:['pfeil','var(--text-3)']};
+    streak_bonus:['flamme','var(--warn)'],transfer:['tauschen','var(--info)'],progress:['pfeil','var(--text-3)'],
+    aufgegeben:['archiv','var(--text-2)']};
 function logRowHtml(r){
     const t=r.type||'initial';
     const z=LOG_ZEICHEN[t]||['uhr','var(--text-3)'];
