@@ -2624,6 +2624,10 @@ app.include_router(health_router)
 from routers.health_manuell_router import router as health_manuell_router  # noqa: E402
 app.include_router(health_manuell_router)
 
+# v2.38.0: Depot (im Bau) -- Ablage fuer den Trade-Republic-Export
+from routers.depot_router import router as depot_router  # noqa: E402
+app.include_router(depot_router)
+
 # ==========================================================================
 # Musik-Modul (v1.67.0) — Hoerregister aus dem Spotify-Datenexport (CSV)
 # --------------------------------------------------------------------------

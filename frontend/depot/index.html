@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0c10">
+<meta name="description" content="Depot: der Trade-Republic-Kontoauszug, gelesen und geprüft – Bestand, Verkauftes und jede Buchung.">
+<title>Depot — Vexbob</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/statistics.css">
+<link rel="stylesheet" href="/depot/depot.css">
+<script src="/js/config.js"></script>
+<script src="/js/version.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav-switcher.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/ikon.js"></script>
+<script src="/js/reiter.js"></script>
+<script src="/js/sw-update.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="/js/charts.js"></script>
+<script src="/js/range-filter.js"></script>
+</head>
+<body>
+<nav class="navbar">
+    <span class="nav-title">Depot</span>
+    <div class="nav-right">
+        <span class="nav-btn" id="userLabel" style="cursor:default"></span>
+        <button class="nav-btn" id="logoutBtn">Logout</button>
+    </div>
+</nav>
+<main class="wide">
+    <header class="page-head">
+        <h1>📈 Depot</h1>
+    </header>
+
+    <input type="file" id="dpDatei" accept=".pdf,application/pdf" hidden>
+    <div id="dpFehler" hidden></div>
+
+    <!-- Noch kein Auszug: nur die Ablage. -->
+    <section class="v-card dp-karte" id="dpLeer" hidden>
+        <div class="v-card-head">
+            <h3>Trade-Republic-Kontoauszug</h3>
+            <span class="v-card-sub">Im Aufbau</span>
+        </div>
+        <p class="dp-satz">Leg den Kontoauszug als PDF ab – am besten über den ganzen Zeitraum. Jede Buchung wird gelesen und gegen Saldo und Kontoübersicht geprüft; erst danach wird übernommen.</p>
+        <label class="dropzone" id="dpDrop" tabindex="0">
+            <div class="dropzone-icon" aria-hidden="true"><span data-ikon="ablage" data-ikon-gross="26"></span></div>
+            <div class="dropzone-title">PDF hier ablegen oder tippen</div>
+            <div class="dropzone-sub">Der Kontoauszug aus der App, bis 15 MB</div>
+        </label>
+    </section>
+
+    <div id="dpInhalt" hidden>
+        <div class="tabs" role="tablist">
+            <button class="tab-btn active" data-tab="ueberblick" role="tab">Überblick</button>
+            <button class="tab-btn" data-tab="statistik" role="tab">Statistik</button>
+            <button class="tab-btn" data-tab="buchungen" role="tab">Buchungen</button>
+        </div>
+
+        <!-- ================= Überblick ================= -->
+        <div id="tab-ueberblick">
+            <section class="v-buehne dp-buehne">
+                <div class="dp-b-haupt">
+                    <span class="v-buehne-marke" id="dpMarke">Realisiert</span>
+                    <strong class="v-held" id="dpHeld">–</strong>
+                    <span class="dp-b-unter" id="dpUnter"></span>
+                </div>
+                <div class="dp-b-verlauf">
+                    <div class="dp-b-verlauf-kopf">
+                        <span class="dp-b-verlauf-titel">Verlauf seit dem Anfang</span>
+                        <span class="dp-legende" id="dpVerlaufLegende"></span>
+                    </div>
+                    <div class="dp-b-flaeche"><canvas id="dpChartVerlauf" aria-label="Eingezahlt und in Wertpapieren über die Zeit"></canvas></div>
+                </div>
+                <dl class="dp-zahlen" id="dpZahlen"></dl>
+            </section>
+
+            <section class="v-abschnitt">
+                <header class="v-abschnitt-kopf">
+                    <h2>Im Bestand</h2>
+                    <span class="v-abschnitt-sub" id="dpBestandSub"></span>
+                </header>
+                <div id="dpBestand"></div>
+            </section>
+
+            <section class="v-abschnitt">
+                <header class="v-abschnitt-kopf">
+                    <h2>Verkauft</h2>
+                    <span class="v-abschnitt-sub" id="dpVerkauftSub"></span>
+                </header>
+                <div id="dpVerkauft"></div>
+            </section>
+        </div>
+
+        <!-- ================= Statistik ================= -->
+        <div id="tab-statistik" hidden>
+            <div class="dp-leiste">
+                <span class="dp-leiste-text" id="dpStatInfo"></span>
+                <div id="dpRange"></div>
+            </div>
+            <div class="dp-kz" id="dpKennzahlen"></div>
+            <div class="dp-raster">
+                <section class="v-card dp-karte-diagramm dp-breit">
+                    <div class="v-card-head"><h3>Gekauft und verkauft je Monat</h3><span class="dp-legende" id="dpMonateLegende"></span></div>
+                    <div class="dp-flaeche"><canvas id="dpChartMonate"></canvas></div>
+                </section>
+                <section class="v-card dp-karte-diagramm">
+                    <div class="v-card-head"><h3>Wohin der Sparplan geht</h3><span class="v-card-sub" id="dpSparSub"></span></div>
+                    <div class="dp-ring-reihe">
+                        <div class="dp-ring"><canvas id="dpChartSparplan"></canvas></div>
+                        <div class="rank-list dp-ring-legende" id="dpSparListe"></div>
+                    </div>
+                </section>
+                <section class="v-card dp-karte-diagramm">
+                    <div class="v-card-head"><h3>Zinsen und Erträge je Monat</h3><span class="dp-legende" id="dpZinsLegende"></span></div>
+                    <div class="dp-flaeche dp-flaeche--klein"><canvas id="dpChartZinsen"></canvas></div>
+                </section>
+                <section class="v-card dp-karte-diagramm dp-breit">
+                    <div class="v-card-head"><h3>Ergebnis je verkauftem Wertpapier</h3><span class="v-card-sub" id="dpErgSub"></span></div>
+                    <div class="rank-list" id="dpErgebnisse"></div>
+                </section>
+            </div>
+        </div>
+
+        <!-- ================= Buchungen ================= -->
+        <div id="tab-buchungen" hidden>
+            <section class="v-abschnitt dp-erster">
+                <header class="v-abschnitt-kopf">
+                    <h2>Buchungen</h2>
+                    <span class="v-abschnitt-sub" id="dpBuchSub"></span>
+                </header>
+                <div class="dp-chips" id="dpFilter">
+                    <button type="button" class="v-chip is-active" data-art="">Alle</button>
+                    <button type="button" class="v-chip" data-art="kauf,sparplan">Käufe</button>
+                    <button type="button" class="v-chip" data-art="verkauf">Verkäufe</button>
+                    <button type="button" class="v-chip" data-art="einzahlung,auszahlung">Ein- und Auszahlungen</button>
+                    <button type="button" class="v-chip" data-art="ertrag,zinsen,praemie,geschenk,steuer">Erträge und Zinsen</button>
+                </div>
+                <div id="dpBuchungen"></div>
+                <button type="button" class="v-btn v-btn--ghost dp-mehr" id="dpMehr" hidden>Ältere laden</button>
+            </section>
+
+            <section class="v-abschnitt">
+                <header class="v-abschnitt-kopf">
+                    <h2>Auszüge</h2>
+                    <button type="button" class="v-btn v-btn--ghost v-btn--sm" id="dpNeu"><span data-ikon="plus" data-ikon-gross="16"></span>Neuer Auszug</button>
+                </header>
+                <div id="dpAuszuege"></div>
+            </section>
+        </div>
+    </div>
+
+    <div class="dp-skel-rahmen" id="dpLaden"><span class="skel dp-skel-buehne"></span><span class="skel dp-skel"></span><span class="skel dp-skel"></span></div>
+    <div class="version-tag"></div>
+</main>
+<script src="/depot/depot.js"></script>
+</body>
+</html>

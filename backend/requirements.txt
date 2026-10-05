@@ -19,6 +19,9 @@ Pillow==10.2.0
 # oeffnen; services/expenses.py faengt das Fehlen ab, dann sind HEIC-
 # Uploads eben nicht moeglich.
 pillow-heif==0.15.0
+# PDF-Text mit Lage (Depot: Trade-Republic-Kontoauszug, v2.38.0). Rein in
+# Python, ohne Binaerteile -- das Railway-Image braucht nichts dazu.
+pdfminer.six==20231228
 # Zeitzonen: python:3.11-slim bringt keine tzdata mit, und die Automatik im
 # Schach-Modul rechnet in Ortszeit (Europe/Vienna). Ohne das Paket faellt sie
 # auf UTC zurueck -- die eingestellte Stunde waere dann ein bis zwei Stunden

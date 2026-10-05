@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.38.0', date: '2026-10-06', title: 'Depot: Trade-Republic-Kontoauszug lesen', notes: [
+        'Neues Modul „Depot“ (in Arbeit): Es liest den Kontoauszug von Trade Republic als PDF.',
+        'Jede Buchung wird gegen Saldo und Kontoübersicht geprüft; was nicht aufgeht, wird nicht übernommen.',
+        'Überblick: Verlauf von Eingezahltem und Investiertem, Bestand und was Verkauftes gebracht hat.',
+        'Statistik über einen wählbaren Zeitraum: Käufe und Verkäufe je Monat, Sparplan-Aufteilung, Zinsen und Ergebnisse.',
+        'Ein neuer Auszug zeigt vorher, was er ersetzen würde.',
+    ]},
     { v: 'v2.37.0', date: '2026-10-05', title: 'Gesundheit: Werte von Hand', notes: [
         'Bei den Vitalwerten lassen sich Werte von Hand eintragen, auch für Gewicht, Blutdruck und Co.',
         'Eigene Messgrößen wie „Rückenschmerzen 1–10“ oder „Gläser Wasser“ bekommen eine eigene Karte mit Verlauf.',

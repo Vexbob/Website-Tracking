@@ -79,6 +79,11 @@
     --m-cs2-soft: rgba(232, 121, 249, 0.16);
     --m-naehrwerte: #38bdf8;
     --m-naehrwerte-soft: rgba(56,189,248,0.16);
+    /* Das Depot (v2.38.0) traegt Gold: der einzige freie Bereich zwischen
+       --m-schach (Orange, 27 Grad) und --m-essen (Lime, 82 Grad) -- und am
+       hellsten von beiden, damit es neben Schach nicht verschwimmt. */
+    --m-depot: #fcd34d;
+    --m-depot-soft: rgba(252,211,77,0.16);
 
     /* Die Messgrößen des Gesundheitsmoduls (v1.59.0). Dreizehn Größen
        brauchen dreizehn unterscheidbare Töne -- Identitätsfarben wie die

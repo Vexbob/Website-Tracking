@@ -593,6 +593,90 @@ STRECKE_REIHE = _g_reihe(lambda i: _welle(i, 6.1, 1.0, 0.9, 0.7), rund=1,
                          luecken={23, 51}, einheit="km")
 SAUERSTOFF_REIHE = _g_reihe(lambda i: _welle(i, 96.5, 0.6, 0.3, 0.5), rund=1, einheit="%")
 
+# v2.38.0: ein gelesener Kontoauszug im Depot. Alle Zahlen ERFUNDEN --
+# geformt wie die Antwort von /api/depot/uebersicht, nicht wie ein echtes Konto.
+def _wp(isin, name, gekauft, verkauft, n, stueck, bestand, letzte, ertraege=0.0):
+    return {"isin": isin, "name": name, "gekauft": gekauft, "verkauft": verkauft,
+            "ertraege": ertraege, "ausfuehrungen": n, "stueck": stueck,
+            "stueck_bekannt": stueck is not None, "im_bestand": bestand,
+            "ergebnis": round(verkauft - gekauft + ertraege, 2), "letzte": letzte,
+            "letzte_art": "sparplan" if bestand else "verkauf"}
+DEPOT_UEBERSICHT = {
+    "leer": False, "von": "2022-03-01", "bis": "2026-10-04", "anzahl": 412, "saldo": 23.18,
+    "arten": {
+        "einzahlung": {"anzahl": 60, "summe": 9200.0, "label": "Einzahlung"},
+        "auszahlung": {"anzahl": 12, "summe": -3100.0, "label": "Auszahlung"},
+        "kauf": {"anzahl": 40, "summe": -7400.0, "label": "Kauf"},
+        "sparplan": {"anzahl": 230, "summe": -4600.0, "label": "Sparplan"},
+        "verkauf": {"anzahl": 28, "summe": 5850.0, "label": "Verkauf"},
+        "ertrag": {"anzahl": 6, "summe": 41.2, "label": "Ertrag"},
+        "zinsen": {"anzahl": 36, "summe": 31.98, "label": "Zinsen"},
+    },
+    "wertpapiere": [
+        _wp("IE00TEST0001", "Welt-ETF Acc", 6100.0, 900.0, 180, 52.4183, True, "2026-10-02"),
+        _wp("IE00TEST0002", "Schwellenländer-ETF Acc", 1400.0, 0.0, 64, None, True, "2026-10-02"),
+        _wp("LU00TEST0003", "Europa-ETF 1C", 2300.0, 2610.5, 31, 0.0, False, "2025-04-11"),
+        _wp("XF000BTC0017", "Bitcoin", 600.0, 420.75, 9, None, False, "2026-05-17"),
+        _wp("US00TEST0005", "Einzelaktie Inc.", 1600.0, 1918.75, 6, 0.0, False, "2025-11-22", ertraege=41.2),
+    ],
+}
+def _dp_monate():
+    """Erfundene Monate von 03/2022 bis 10/2026 fuer Verlauf und Statistik."""
+    raus, j, m, ein, inv = [], 2022, 3, 0.0, 0.0
+    i = 0
+    while (j, m) <= (2026, 10):
+        spar = 0.0 if i < 8 else 150.0 + (i % 5) * 20
+        kauf = 600.0 if i % 9 == 2 else 0.0
+        verk = 900.0 if i % 13 == 7 else 0.0
+        ein += 300.0 - (800.0 if i % 11 == 10 else 0.0)
+        inv += spar + kauf - verk
+        raus.append({"monat": f"{j:04d}-{m:02d}", "sparplan": spar, "kauf": kauf, "verkauf": verk,
+                     "zinsen": round(0.0 if i < 18 else 1.5 + (i % 4) * 0.8, 2),
+                     "ertraege": 6.4 if i % 12 == 5 else 0.0,
+                     "eingezahlt": round(ein, 2), "investiert": round(inv, 2)})
+        i += 1; m += 1
+        if m > 12: j, m = j + 1, 1
+    return raus
+_DPM = _dp_monate()
+DEPOT_UEBERSICHT["verlauf"] = [{"monat": x["monat"], "eingezahlt": x["eingezahlt"],
+                                "investiert": x["investiert"]} for x in _DPM]
+# Die Kennzahlen werden aus denselben Monaten gerechnet wie die Balken --
+# sonst nennt die Kachel eine andere Summe als die Legende darunter.
+_DPS = _DPM[-13:]
+_DP_SPAR = [x["sparplan"] for x in _DPS if x["sparplan"] > 0]
+_DP_SPAR_SUMME = sum(_DP_SPAR)
+DEPOT_STATISTIK = {
+    "leer": False, "von": "2025-10-06", "bis": "2026-10-04",
+    "monate": [{k: x[k] for k in ("monat", "kauf", "sparplan", "verkauf", "zinsen", "ertraege")} for x in _DPS],
+    "verlauf": DEPOT_UEBERSICHT["verlauf"][-13:],
+    "sparplan": [{"isin": "IE00TEST0001", "name": "Welt-ETF Acc", "summe": round(_DP_SPAR_SUMME * 0.66, 2)},
+                 {"isin": "IE00TEST0002", "name": "Schwellenländer-ETF Acc", "summe": round(_DP_SPAR_SUMME * 0.24, 2)},
+                 {"isin": "LU00TEST0006", "name": "Europa 600 ETF", "summe": round(_DP_SPAR_SUMME * 0.10, 2)}],
+    # Nur, was im Zeitraum zuletzt verkauft wurde -- Europa-ETF 1C (04/2025) nicht.
+    "ergebnisse": [{"isin": "US00TEST0005", "name": "Einzelaktie Inc.", "ergebnis": 359.95, "letzte": "2025-11-22"},
+                   {"isin": "XF000BTC0017", "name": "Bitcoin", "ergebnis": -179.25, "letzte": "2026-05-17"}],
+    "kennzahlen": {"sparplan_schnitt": round(_DP_SPAR_SUMME / len(_DP_SPAR), 2),
+                   "sparplan_monate": len(_DP_SPAR), "ausfuehrungen": 74,
+                   "ertraege_zinsen": round(sum(x["zinsen"] + x["ertraege"] for x in _DPS), 2),
+                   "eingezahlt_netto": round(_DPS[-1]["eingezahlt"] - _DPM[-14]["eingezahlt"], 2),
+                   "realisiert": 180.7},
+}
+DEPOT_STATISTIK["ergebnisse"].sort(key=lambda x: -x["ergebnis"])
+
+DEPOT_BUCHUNGEN = {"gesamt": 412, "buchungen": [
+    {"id": 1, "datum": "2026-10-02", "art": "sparplan", "art_label": "Sparplan", "typ": "Handel",
+     "beschreibung": "", "isin": "IE00TEST0001", "name": "Welt-ETF Acc", "stueck": 0.4129, "betrag": -50.0, "saldo": 23.18},
+    {"id": 2, "datum": "2026-10-02", "art": "sparplan", "art_label": "Sparplan", "typ": "Handel",
+     "beschreibung": "", "isin": "IE00TEST0002", "name": "Schwellenländer-ETF Acc", "stueck": 1.2011, "betrag": -25.0, "saldo": 73.18},
+    {"id": 3, "datum": "2026-10-01", "art": "einzahlung", "art_label": "Einzahlung", "typ": "Überweisung",
+     "beschreibung": "Einzahlung akzeptiert", "isin": None, "name": None, "stueck": None, "betrag": 75.0, "saldo": 98.18},
+    {"id": 4, "datum": "2026-09-30", "art": "zinsen", "art_label": "Zinsen", "typ": "Zinsen",
+     "beschreibung": "Your interest payment", "isin": None, "name": None, "stueck": None, "betrag": 0.07, "saldo": 23.18},
+]}
+DEPOT_AUSZUEGE = [{"id": 1, "dateiname": "Kontoauszug.pdf", "hochgeladen_at": "2026-10-05T21:48:00+00:00",
+                   "groesse": 145515, "zeitraum_von": "2022-03-01", "zeitraum_bis": "2026-10-04",
+                   "buchungen": 412, "endsaldo": 23.18, "ersetzt": 0}]
+
 # v2.37.0: eine eigene Messgroesse (Messwert) und eine Tagessumme, dazu die
 # Liste der letzten Handeintraege -- der Dialog zeigt sie unter dem Formular.
 SCHMERZ_REIHE = _g_reihe(lambda i: 3 + ((i * 5) % 4), rund=0,
@@ -934,6 +1018,10 @@ ANTWORTEN = {
     "/api/health/metrics/eigen_1": SCHMERZ_REIHE,
     "/api/health/metrics/eigen_2": WASSER_REIHE,
     "/api/health/eigene": EIGENE_GROESSEN,
+    "/api/depot/uebersicht": DEPOT_UEBERSICHT,
+    "/api/depot/buchungen": DEPOT_BUCHUNGEN,
+    "/api/depot/statistik": DEPOT_STATISTIK,
+    "/api/depot/imports": DEPOT_AUSZUEGE,
     "/api/health/manuell": VON_HAND,
     "/api/health/metrics/*": [],
     "/api/health/sleep": SCHLAF_NAECHTE,

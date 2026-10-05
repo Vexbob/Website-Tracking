@@ -116,6 +116,11 @@ TABLES_ORDERED = [
     "cs2_price_history",
     "cs2_snapshots",
     "cs2_snapshot_categories",
+    # Depot (v2.38.0). Das Protokoll vor PDF und Buchungen: beide zeigen
+    # per import_id darauf.
+    "depot_imports",
+    "depot_import_dateien",
+    "depot_buchungen",
     "user_prefs",
 ]
 
@@ -123,6 +128,9 @@ TABLES_ORDERED = [
 BYTEA_COLUMNS = {
     "receipt_images": ["image_data", "thumbnail_data"],
     "food_dish_images": ["image_data", "thumbnail_data"],
+    # Das Original-PDF eines Kontoauszugs (v2.38.0). Die Buchungen daraus
+    # stehen in depot_buchungen und sind im Backup.
+    "depot_import_dateien": ["daten"],
 }
 
 # Tabellen, die eine user_id haben (users selber nicht)
