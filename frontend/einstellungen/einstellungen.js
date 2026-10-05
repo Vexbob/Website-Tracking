@@ -279,6 +279,34 @@ async function saveRange(preset) {
     }
 }
 
+/* ---------- Sparziel: Hoechstzahl an Wochenzielen (v2.36.0) ----------
+ * Der Server prueft sie beim Anlegen selbst; hier wird sie nur gesetzt. */
+const MAX_WZ_PREF = 'ui_sparziel_max_wochenziele';
+
+function renderMaxWochenziele() {
+    const el = document.getElementById('maxWochenziele');
+    if (el) el.value = String(VexPrefs.get(MAX_WZ_PREF, 0) || 0);
+}
+
+async function saveMaxWochenziele(btn) {
+    const el = document.getElementById('maxWochenziele');
+    const n = el.value === '' ? 0 : Number(el.value);
+    if (!Number.isInteger(n) || n < 0 || n > 50) {
+        if (window.Toast) Toast.error('Eine ganze Zahl von 0 bis 50');
+        return;
+    }
+    btn.classList.add('is-loading');
+    try {
+        await VexPrefs.set(MAX_WZ_PREF, n);
+        if (window.Toast) Toast.success(n ? 'Höchstens ' + n + ' Wochenziele' : 'Keine Grenze für Wochenziele');
+    } catch (e) {
+        renderMaxWochenziele();
+        if (window.Toast) Toast.error(e.message || String(e));
+    } finally {
+        btn.classList.remove('is-loading');
+    }
+}
+
 /* ---------- Export-Voreinstellung (v2.8.0) ----------
  * Der Export-Dialog machte jedes Mal mit „Einzeln“ auf, obwohl die Antwort
  * auf „wie haettest du es gern“ bei einem persoenlichen Tracker immer
@@ -462,6 +490,8 @@ async function ladeExportCfg() {
         const b = e.target.closest('.rf-opt');
         if (b) saveRange(b.dataset.preset);
     });
+    renderMaxWochenziele();
+    document.getElementById('maxWochenzieleSave').onclick = (e) => saveMaxWochenziele(e.currentTarget);
     renderGradients();
     renderThemes();
     document.getElementById('gradList').addEventListener('click', (e) => {

@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import logging
 import asyncio
 from contextlib import asynccontextmanager
@@ -27,6 +28,7 @@ from auth import (
 )
 from services.backup import create_snapshot, restore_snapshot, prune_snapshots
 from services import achievement_sources as ach_quellen
+from services import sparziel_aenderungen as aenderungen
 
 # Zentrale Utilities & Konstanten (auch von routers/* genutzt)
 from deps import (
@@ -39,7 +41,7 @@ from deps import (
 from schemas import (
     SavGoalUpd, SavGoalCreate, SavGoalTransfer, SavGoalGiveUp, AchCreate, AchUpd, AchEdit,
     PGCreate, PGUpd, CheckinBody, NoteBody,
-    PotCreate, FICreate, ReorderBody, RestoreBody,
+    PotCreate, PotUpd, FICreate, FIUpd, ReorderBody, RestoreBody,
     UserCreate, UserPasswordReset, UserCreateInvite, ActivateBody, TrophyCreate,
     AchAutoConfirm,
 )
@@ -587,6 +589,28 @@ async def invite_activate(request: Request, b: ActivateBody, db=Depends(get_db))
     return {"access_token": create_token(user["username"]), "token_type": "bearer"}
 
 # ---------- Savings Goal ----------
+
+def _link_sauber(wert) -> Optional[str]:
+    """Ein Link an Sparziel oder Wunsch (v2.36.0): leer heisst keiner.
+
+    Nur http(s): ein ``javascript:``-Link in einem Feld, das die Seite als
+    <a href> ausgibt, waere ein Loch. Fehlt das Schema („amazon.de/…“), wird
+    https davorgesetzt -- so tippt man Adressen am Handy.
+    """
+    link = (wert or "").strip()
+    if not link:
+        return None
+    if len(link) > 2000:
+        raise HTTPException(400, "Der Link ist zu lang.")
+    schema = re.match(r"^([a-zA-Z][a-zA-Z0-9+.-]*):", link)
+    if schema and schema.group(1).lower() not in ("http", "https"):
+        raise HTTPException(400, "Ein Link muss mit http:// oder https:// beginnen.")
+    if "://" not in link:
+        link = "https://" + link
+    if not (link.lower().startswith("http://") or link.lower().startswith("https://")):
+        raise HTTPException(400, "Ein Link muss mit http:// oder https:// beginnen.")
+    return link
+
 # ``_active_goal_id`` lebt in ``helpers.py`` (ausgelagert v1.15.1)
 
 @app.get("/api/savings-goal")
@@ -648,9 +672,13 @@ async def create_sg(request: Request, b: SavGoalCreate, db=Depends(get_db), user
                 "UPDATE savings_goals SET is_active=FALSE WHERE user_id=$1 AND is_active=TRUE",
                 user["id"])
         row = await db.fetchrow(
-            "INSERT INTO savings_goals (user_id, name, target_amount, is_active) "
-            "VALUES ($1, $2, $3, $4) RETURNING *",
-            user["id"], name, float(b.target_amount), bool(b.activate))
+            "INSERT INTO savings_goals (user_id, name, target_amount, is_active, link) "
+            "VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            user["id"], name, float(b.target_amount), bool(b.activate),
+            _link_sauber(b.link))
+        await aenderungen.vermerken(
+            db, user["id"], "angelegt", "sparziel", row["id"], name,
+            "Zielbetrag " + aenderungen.eur(b.target_amount) + (" · aktiv" if b.activate else ""))
     return ser(row)
 
 @app.post("/api/savings-goals/{gid}/activate")
@@ -669,7 +697,9 @@ async def activate_sg(request: Request, gid: int, db=Depends(get_db), user=Depen
             "UPDATE savings_goals SET is_active=TRUE WHERE id=$1 AND user_id=$2",
             gid, user["id"])
     logger.info(f"User {user['id']} activated savings_goal {gid}")
-    return ser(await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid))
+    neu = await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid)
+    await aenderungen.vermerken(db, user["id"], "aktiviert", "sparziel", gid, neu["name"])
+    return ser(neu)
 
 @app.post("/api/savings-goals/{gid}/deactivate")
 @limiter.limit(LIMIT_WRITE_STANDARD)
@@ -688,7 +718,9 @@ async def deactivate_sg(request: Request, gid: int, db=Depends(get_db), user=Dep
         "UPDATE savings_goals SET is_active=FALSE WHERE id=$1 AND user_id=$2",
         gid, user["id"])
     logger.info(f"User {user['id']} paused savings_goal {gid}")
-    return ser(await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid))
+    neu = await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid)
+    await aenderungen.vermerken(db, user["id"], "pausiert", "sparziel", gid, neu["name"])
+    return ser(neu)
 
 @app.post("/api/savings-goals/{gid}/transfer-from-buffer")
 @limiter.limit(LIMIT_WRITE_STANDARD)
@@ -791,6 +823,9 @@ async def del_sg(request: Request, gid: int, db=Depends(get_db), user=Depends(ge
             "DELETE FROM savings_transactions WHERE user_id=$1 AND savings_goal_id=$2",
             user["id"], gid)
         await db.execute("DELETE FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+        await aenderungen.vermerken(
+            db, user["id"], "geloescht", "sparziel", gid, row["name"],
+            aenderungen.eur(removed_sum) + " entfernt" if removed_sum else None)
     return {"status": "deleted", "removed_sum": removed_sum}
 
 def _eur_de(betrag: float) -> str:
@@ -867,15 +902,23 @@ async def give_up_sg(request: Request, gid: int, b: SavGoalGiveUp,
 @app.put("/api/savings-goal/{gid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def upd_sg(request: Request, gid: int, b: SavGoalUpd, db=Depends(get_db), user=Depends(get_current_user)):
-    owned = await db.fetchval("SELECT 1 FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
-    if not owned:
+    alt = await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+    if not alt:
         raise HTTPException(404, "Not found")
     if b.name:
         await db.execute("UPDATE savings_goals SET name=$1 WHERE id=$2 AND user_id=$3", b.name, gid, user["id"])
     if b.target_amount is not None:
         await db.execute("UPDATE savings_goals SET target_amount=$1 WHERE id=$2 AND user_id=$3",
                          b.target_amount, gid, user["id"])
-    return ser(await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid))
+    # Der Link wird nur angefasst, wenn er mitgeschickt wurde -- "" entfernt ihn.
+    if "link" in b.model_fields_set:
+        await db.execute("UPDATE savings_goals SET link=$1 WHERE id=$2 AND user_id=$3",
+                         _link_sauber(b.link), gid, user["id"])
+    neu = await db.fetchrow("SELECT * FROM savings_goals WHERE id=$1", gid)
+    was = aenderungen.unterschiede("sparziel", alt, neu)
+    if was:
+        await aenderungen.vermerken(db, user["id"], "bearbeitet", "sparziel", gid, neu["name"], was)
+    return ser(neu)
 
 # ---------- Achievements ----------
 # ``_milestones_at`` lebt in ``helpers.py`` (ausgelagert v1.15.1)
@@ -919,6 +962,13 @@ async def list_ach(db=Depends(get_db), user=Depends(get_current_user)):
 @app.post("/api/achievements")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def create_ach(request: Request, b: AchCreate, db=Depends(get_db), user=Depends(get_current_user)):
+    return _ach_out(await _achievement_anlegen(db, user["id"], b))
+
+
+async def _achievement_anlegen(db, user_id: int, b: AchCreate):
+    """Ein Achievement anlegen -- aus dem Dialog und beim Aktivieren einer
+    Idee (v2.36.0). Eine Stelle, damit beide Wege dieselben Regeln haben."""
+    user = {"id": user_id}
     if b.threshold_increment <= 0:
         raise HTTPException(400, "Meilenstein-Schwelle muss > 0 sein")
     step = float(b.step_amount) if b.step_amount is not None else float(b.threshold_increment)
@@ -934,13 +984,17 @@ async def create_ach(request: Request, b: AchCreate, db=Depends(get_db), user=De
             raise HTTPException(400, "reward_goal_id gehört nicht zum User")
         rgid = b.reward_goal_id
     quelle, quell_params = _auto_quelle_pruefen(b.auto_source, b.auto_params)
-    return _ach_out(await db.fetchrow(
+    row = await db.fetchrow(
         "INSERT INTO achievements "
         "(user_id,title,reward_amount,unit,current_value,start_value,threshold_increment,step_amount,target_value,direction,reward_goal_id,auto_source,auto_params) "
         "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *",
         user["id"], b.title, b.reward_amount, b.unit, b.start_value, b.start_value,
         b.threshold_increment, step, b.target_value, b.direction, rgid,
-        quelle, quell_params))
+        quelle, quell_params)
+    await aenderungen.vermerken(
+        db, user["id"], "angelegt", "achievement", row["id"], b.title,
+        f"{aenderungen.eur(b.reward_amount)} alle {aenderungen.zahl(b.threshold_increment)} {b.unit}".strip())
+    return row
 
 def _achieved_at_parsen(roh: Optional[str]):
     """``achieved_at`` aus dem Body zu einem Zeitpunkt -- oder ``None``."""
@@ -1117,7 +1171,11 @@ async def edit_ach(request: Request, aid: int, b: AchEdit, db=Depends(get_db), u
             user["id"], aid))
         new_cred = max(paid, new_tm)
         await db.execute("UPDATE achievements SET credited_milestones=$1 WHERE id=$2", new_cred, aid)
-    return _ach_out(await db.fetchrow("SELECT * FROM achievements WHERE id=$1", aid))
+    neu = await db.fetchrow("SELECT * FROM achievements WHERE id=$1", aid)
+    was = aenderungen.unterschiede("achievement", old, neu)
+    if was:
+        await aenderungen.vermerken(db, user["id"], "bearbeitet", "achievement", aid, neu["title"], was)
+    return _ach_out(neu)
 
 # ---------- Meilensteine aus anderen Modulen (v2.9.0) ----------
 # Das Register steht in ``services/achievement_sources.py`` und beschreibt
@@ -1240,13 +1298,16 @@ async def reset_ach(request: Request, aid: int, db=Depends(get_db), user=Depends
         "UPDATE achievements SET current_value=start_value, credited_milestones=0, is_completed=FALSE WHERE id=$1",
         aid)
     logger.info(f"Reset achievement {aid} (user {user['id']}): removed {removed} tx, {removed_sum}€")
+    await aenderungen.vermerken(
+        db, user["id"], "zurueckgesetzt", "achievement", aid, a["title"],
+        f"{removed} Meilensteine, {aenderungen.eur(removed_sum)} entfernt" if removed else None)
     return {"removed_count": removed, "removed_sum": removed_sum,
             "achievement": _ach_out(await db.fetchrow("SELECT * FROM achievements WHERE id=$1", aid))}
 
 @app.delete("/api/achievements/{aid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def del_ach(request: Request, aid: int, db=Depends(get_db), user=Depends(get_current_user)):
-    owned = await db.fetchval("SELECT 1 FROM achievements WHERE id=$1 AND user_id=$2", aid, user["id"])
+    owned = await db.fetchrow("SELECT title FROM achievements WHERE id=$1 AND user_id=$2", aid, user["id"])
     if not owned:
         raise HTTPException(404, "Not found")
     removed = int(await db.fetchval(
@@ -1259,6 +1320,9 @@ async def del_ach(request: Request, aid: int, db=Depends(get_db), user=Depends(g
         "DELETE FROM savings_transactions WHERE user_id=$1 AND source_type='achievement' AND source_id=$2",
         user["id"], aid)
     await db.execute("DELETE FROM achievements WHERE id=$1 AND user_id=$2", aid, user["id"])
+    await aenderungen.vermerken(
+        db, user["id"], "geloescht", "achievement", aid, owned["title"],
+        aenderungen.eur(removed_sum) + " entfernt" if removed_sum else None)
     return {"status": "deleted", "removed_count": removed, "removed_sum": removed_sum}
 
 @app.delete("/api/achievement-progress-logs/{log_id}")
@@ -1297,6 +1361,11 @@ async def del_ach_progress_log(request: Request, log_id: int, db=Depends(get_db)
             old_value, comp, log["achievement_id"], user["id"])
     await db.execute("DELETE FROM achievement_progress_logs WHERE id=$1 AND user_id=$2",
                      log_id, user["id"])
+    await aenderungen.vermerken(
+        db, user["id"], "zurueckgenommen", "fortschritt", log["achievement_id"],
+        a["title"] if a else "Achievement",
+        f"{aenderungen.zahl(log['new_value'])} → {aenderungen.zahl(old_value)}"
+        + (f" {a['unit']}" if a and a["unit"] else ""))
     logger.info(f"Deleted achievement_progress_log {log_id} (user {user['id']}, "
                 f"achievement {log['achievement_id']}) → current_value={old_value}")
     return {"status": "deleted", "current_value": old_value,
@@ -1341,6 +1410,9 @@ async def del_achievement_log(request: Request, log_id: int, db=Depends(get_db),
             "UPDATE achievements SET credited_milestones=$1, is_completed=$2 WHERE id=$3",
             new_cred, comp, aid)
     logger.info(f"Deleted achievement_log {log_id} (user {user['id']}, achievement {aid}), payout_removed={payout_removed}")
+    await aenderungen.vermerken(
+        db, user["id"], "geloescht", "meilenstein", aid, a["title"] if a else "Achievement",
+        aenderungen.eur(reward) + " zurückgebucht" if payout_removed else None)
     return {"status": "deleted", "payout_removed": payout_removed}
 
 # ---------- Progress Goals ----------
@@ -1466,9 +1538,42 @@ async def list_pg(db=Depends(get_db), user=Depends(get_current_user)):
         out.append(d)
     return out
 
+# Der Schluessel steht einmal, im Router der Einstellungen -- dort ist auch
+# beschrieben, was als Wert gilt.
+from routers.ui_router import MAX_WOCHENZIELE_PREF  # noqa: E402
+
+
+async def _wochenziel_platz_pruefen(db, user_id: int) -> None:
+    """Die Hoechstzahl an Wochenzielen (v2.36.0, Einstellung). 0 oder keine
+    Einstellung heisst: keine Grenze. Geprueft wird hier und nicht nur im
+    Browser -- eine Grenze, die nur die Oberflaeche kennt, umgeht die erste
+    aktivierte Idee."""
+    roh = await db.fetchval(
+        "SELECT value FROM user_prefs WHERE user_id=$1 AND key=$2",
+        user_id, MAX_WOCHENZIELE_PREF)
+    try:
+        grenze = int(json.loads(roh)) if roh else 0
+    except (TypeError, ValueError):
+        grenze = 0
+    if grenze <= 0:
+        return
+    jetzt = int(await db.fetchval(
+        "SELECT COUNT(*) FROM progress_goals WHERE user_id=$1", user_id) or 0)
+    if jetzt >= grenze:
+        raise HTTPException(
+            400, f"Du hast schon {jetzt} Wochenziele – höchstens {grenze} sind eingestellt. "
+                 "Die Grenze lässt sich in den Einstellungen ändern.")
+
+
 @app.post("/api/progress-goals")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def create_pg(request: Request, b: PGCreate, db=Depends(get_db), user=Depends(get_current_user)):
+    return ser(await _wochenziel_anlegen(db, user["id"], b))
+
+
+async def _wochenziel_anlegen(db, user_id: int, b: PGCreate):
+    """Ein Wochenziel anlegen -- aus dem Dialog und beim Aktivieren einer
+    Idee (v2.36.0). Eine Stelle, damit beide Wege dieselben Regeln haben."""
     if b.rhythm_type not in ("weekly","monthly"):
         raise HTTPException(400, "rhythm_type ungültig")
     if b.target_count <= 0:
@@ -1476,21 +1581,27 @@ async def create_pg(request: Request, b: PGCreate, db=Depends(get_db), user=Depe
     if b.streak_bonus_threshold < 0 or b.streak_bonus_amount < 0:
         raise HTTPException(400, "Streak-Bonus-Werte müssen >= 0 sein")
     _teil_pruefen(b.partial_count, b.partial_percent, b.target_count)
+    await _wochenziel_platz_pruefen(db, user_id)
     rgid = None
     if b.reward_goal_id is not None:
         ok = await db.fetchval(
             "SELECT 1 FROM savings_goals WHERE id=$1 AND user_id=$2",
-            b.reward_goal_id, user["id"])
+            b.reward_goal_id, user_id)
         if not ok:
             raise HTTPException(400, "reward_goal_id gehört nicht zum User")
         rgid = b.reward_goal_id
-    return ser(await db.fetchrow(
+    row = await db.fetchrow(
         "INSERT INTO progress_goals (user_id,title,reward_amount,rhythm_type,target_count,streak_bonus_amount,streak_bonus_threshold,reward_goal_id,partial_count,partial_percent,partial_since) "
         "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *",
-        user["id"], b.title, b.reward_amount, b.rhythm_type, b.target_count,
+        user_id, b.title, b.reward_amount, b.rhythm_type, b.target_count,
         b.streak_bonus_amount, b.streak_bonus_threshold, rgid,
         b.partial_count, b.partial_percent,
-        date.today() if b.partial_count > 0 and b.partial_percent > 0 else None))
+        date.today() if b.partial_count > 0 and b.partial_percent > 0 else None)
+    await aenderungen.vermerken(
+        db, user_id, "angelegt", "wochenziel", row["id"], b.title,
+        f"{aenderungen.zahl(b.target_count)}× {aenderungen.RHYTHMEN.get(b.rhythm_type, '')} · "
+        f"{aenderungen.eur(b.reward_amount)}")
+    return row
 
 @app.put("/api/progress-goals/{gid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
@@ -1548,7 +1659,11 @@ async def upd_pg(request: Request, gid: int, b: PGUpd, db=Depends(get_db), user=
                 raise HTTPException(400, "reward_goal_id gehört nicht zum User")
             await db.execute("UPDATE progress_goals SET reward_goal_id=$1 WHERE id=$2",
                               b.reward_goal_id, gid)
-    return ser(await db.fetchrow("SELECT * FROM progress_goals WHERE id=$1", gid))
+    neu = await db.fetchrow("SELECT * FROM progress_goals WHERE id=$1", gid)
+    was = aenderungen.unterschiede("wochenziel", owned, neu)
+    if was:
+        await aenderungen.vermerken(db, user["id"], "bearbeitet", "wochenziel", gid, neu["title"], was)
+    return ser(neu)
 
 @app.put("/api/reorder/achievements")
 @limiter.limit(LIMIT_WRITE_STANDARD)
@@ -1557,6 +1672,7 @@ async def reorder_ach(request: Request, b: ReorderBody, db=Depends(get_db), user
         await db.execute(
             "UPDATE achievements SET sort_order=$1 WHERE id=$2 AND user_id=$3",
             idx, aid, user["id"])
+    await aenderungen.vermerken(db, user["id"], "geaendert", "reihenfolge", None, "Achievements")
     return {"status": "ok", "count": len(b.order)}
 
 @app.put("/api/reorder/progress-goals")
@@ -1566,12 +1682,13 @@ async def reorder_pg(request: Request, b: ReorderBody, db=Depends(get_db), user=
         await db.execute(
             "UPDATE progress_goals SET sort_order=$1 WHERE id=$2 AND user_id=$3",
             idx, gid, user["id"])
+    await aenderungen.vermerken(db, user["id"], "geaendert", "reihenfolge", None, "Wochenziele")
     return {"status": "ok", "count": len(b.order)}
 
 @app.delete("/api/progress-goals/{gid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def del_pg(request: Request, gid: int, db=Depends(get_db), user=Depends(get_current_user)):
-    owned = await db.fetchval("SELECT 1 FROM progress_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+    owned = await db.fetchrow("SELECT title FROM progress_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
     if not owned:
         raise HTTPException(404, "Not found")
     removed = int(await db.fetchval(
@@ -1584,6 +1701,9 @@ async def del_pg(request: Request, gid: int, db=Depends(get_db), user=Depends(ge
         "DELETE FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2",
         user["id"], gid)
     await db.execute("DELETE FROM progress_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+    await aenderungen.vermerken(
+        db, user["id"], "geloescht", "wochenziel", gid, owned["title"],
+        aenderungen.eur(removed_sum) + " entfernt" if removed_sum else None)
     return {"status": "deleted", "removed_count": removed, "removed_sum": removed_sum}
 
 @app.post("/api/progress-goals/{gid}/checkin")
@@ -1680,9 +1800,18 @@ async def checkout(request: Request, gid: int, db=Depends(get_db), user=Depends(
         await db.execute(
             "DELETE FROM savings_transactions WHERE user_id=$1 AND source_type='progress' AND source_id=$2 AND period_key=$3",
             user["id"], gid, pk)
+    await aenderungen.vermerken(db, user["id"], "zurueckgenommen", "checkin", gid, pg["title"],
+                                f"jetzt {cnt} von {tgt}")
     return {"current_count": cnt, "target_count": tgt, "fulfilled": cnt >= tgt}
 
 # ---------- Notizen zu Log-Einträgen ----------
+async def _notiz_vermerken(db, user_id: int, titel, note_val) -> None:
+    """Auch eine geaenderte Notiz ist eine Aenderung (v2.36.0)."""
+    text = (note_val or "")
+    kurz = (text[:60] + "…") if len(text) > 60 else text
+    await aenderungen.vermerken(db, user_id, "geaendert", "notiz", None, titel or "Eintrag",
+                                f"„{kurz}“" if kurz else "entfernt")
+
 @app.put("/api/progress-logs/{log_id}/note")
 @limiter.limit(LIMIT_WRITE_FREQUENT)
 async def upd_progress_log_note(request: Request, log_id: int, b: NoteBody, db=Depends(get_db), user=Depends(get_current_user)):
@@ -1693,6 +1822,8 @@ async def upd_progress_log_note(request: Request, log_id: int, b: NoteBody, db=D
     await db.execute(
         "UPDATE progress_logs SET note=$1 WHERE id=$2 AND user_id=$3",
         note_val, log_id, user["id"])
+    await _notiz_vermerken(db, user["id"], await db.fetchval(
+        "SELECT pg.title FROM progress_logs pl JOIN progress_goals pg ON pg.id=pl.progress_goal_id WHERE pl.id=$1", log_id), note_val)
     return {"status": "ok", "note": note_val or ""}
 
 @app.put("/api/achievement-logs/{log_id}/note")
@@ -1705,6 +1836,8 @@ async def upd_achievement_log_note(request: Request, log_id: int, b: NoteBody, d
     await db.execute(
         "UPDATE achievement_logs SET note=$1 WHERE id=$2 AND user_id=$3",
         note_val, log_id, user["id"])
+    await _notiz_vermerken(db, user["id"], await db.fetchval(
+        "SELECT a.title FROM achievement_logs al JOIN achievements a ON a.id=al.achievement_id WHERE al.id=$1", log_id), note_val)
     return {"status": "ok", "note": note_val or ""}
 
 @app.put("/api/achievement-progress-logs/{log_id}/note")
@@ -1718,6 +1851,8 @@ async def upd_ach_progress_note(request: Request, log_id: int, b: NoteBody, db=D
     await db.execute(
         "UPDATE achievement_progress_logs SET note=$1 WHERE id=$2 AND user_id=$3",
         note_val, log_id, user["id"])
+    await _notiz_vermerken(db, user["id"], await db.fetchval(
+        "SELECT a.title FROM achievement_progress_logs pr JOIN achievements a ON a.id=pr.achievement_id WHERE pr.id=$1", log_id), note_val)
     return {"status": "ok", "note": note_val or ""}
 
 @app.put("/api/savings-transactions/{tid}/note")
@@ -1730,6 +1865,8 @@ async def upd_savings_tx_note(request: Request, tid: int, b: NoteBody, db=Depend
     await db.execute(
         "UPDATE savings_transactions SET note=$1 WHERE id=$2 AND user_id=$3",
         note_val, tid, user["id"])
+    await _notiz_vermerken(db, user["id"], await db.fetchval(
+        "SELECT description FROM savings_transactions WHERE id=$1", tid), note_val)
     return {"status": "ok", "note": note_val or ""}
 
 @app.delete("/api/progress-logs/{log_id}")
@@ -1757,6 +1894,9 @@ async def del_progress_log(request: Request, log_id: int, db=Depends(get_db), us
             user["id"], pg["id"], pk)
         payout_removed = r != "DELETE 0"
     await _teil_abrechnen(db, user["id"], pg, pk, cnt)
+    await aenderungen.vermerken(
+        db, user["id"], "geloescht", "checkin", pg["id"], pg["title"],
+        f"vom {log['log_date'].strftime('%d.%m.%Y')}" if log["log_date"] else None)
     return {"status": "deleted", "period_still_fulfilled": cnt >= tgt, "payout_removed": payout_removed}
 
 @app.get("/api/progress-goals/{gid}/history")
@@ -1817,32 +1957,173 @@ async def list_pot(db=Depends(get_db), user=Depends(get_current_user)):
 @app.post("/api/potential-goals")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def create_pot(request: Request, b: PotCreate, db=Depends(get_db), user=Depends(get_current_user)):
-    return ser(await db.fetchrow(
-        "INSERT INTO potential_goals (user_id,name,estimated_price) VALUES ($1,$2,$3) RETURNING *",
-        user["id"], b.name, b.estimated_price))
+    name = (b.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Name fehlt")
+    row = await db.fetchrow(
+        "INSERT INTO potential_goals (user_id,name,estimated_price,link) VALUES ($1,$2,$3,$4) RETURNING *",
+        user["id"], name, b.estimated_price, _link_sauber(b.link))
+    await aenderungen.vermerken(
+        db, user["id"], "angelegt", "wunsch", row["id"], name,
+        aenderungen.eur(b.estimated_price) if b.estimated_price is not None else None)
+    return ser(row)
+
+@app.put("/api/potential-goals/{pid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def upd_pot(request: Request, pid: int, b: PotUpd, db=Depends(get_db), user=Depends(get_current_user)):
+    """v2.36.0: einen Wunsch aendern -- Name, Preis, Link. Ein Feld, das nicht
+    mitkommt, bleibt; ``estimated_price`` und ``link`` lassen sich mit null
+    leeren."""
+    alt = await db.fetchrow("SELECT * FROM potential_goals WHERE id=$1 AND user_id=$2", pid, user["id"])
+    if not alt:
+        raise HTTPException(404, "Wunsch nicht gefunden")
+    gesetzt = b.model_fields_set
+    name = (b.name or "").strip() if "name" in gesetzt else alt["name"]
+    if not name:
+        raise HTTPException(400, "Name fehlt")
+    preis = b.estimated_price if "estimated_price" in gesetzt else alt["estimated_price"]
+    link = _link_sauber(b.link) if "link" in gesetzt else alt["link"]
+    neu = await db.fetchrow(
+        "UPDATE potential_goals SET name=$1, estimated_price=$2, link=$3 "
+        "WHERE id=$4 AND user_id=$5 RETURNING *", name, preis, link, pid, user["id"])
+    was = aenderungen.unterschiede("wunsch", alt, neu)
+    if was:
+        await aenderungen.vermerken(db, user["id"], "bearbeitet", "wunsch", pid, name, was)
+    return ser(neu)
 
 @app.delete("/api/potential-goals/{pid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def del_pot(request: Request, pid: int, db=Depends(get_db), user=Depends(get_current_user)):
-    await db.execute("DELETE FROM potential_goals WHERE id=$1 AND user_id=$2", pid, user["id"])
+    weg = await db.fetchrow(
+        "DELETE FROM potential_goals WHERE id=$1 AND user_id=$2 RETURNING name", pid, user["id"])
+    if weg:
+        await aenderungen.vermerken(db, user["id"], "geloescht", "wunsch", pid, weg["name"])
     return {"status": "deleted"}
+
+# Eine Idee kann seit v2.36.0 die vollstaendige Vorlage eines Wochenziels
+# oder Achievements tragen (``config``). Geprueft wird sie mit denselben
+# Modellen wie beim Anlegen -- eine Idee, die beim Aktivieren an einem
+# Pflichtfeld scheitert, waere keine fertige Idee.
+IDEEN_ARTEN = {"progress": PGCreate, "milestone": AchCreate}
+
+
+def _idee_art(kategorie) -> Optional[str]:
+    k = (kategorie or "").strip().lower()
+    if k in ("progress", "wochenziel", "weekly"):
+        return "progress"
+    if k in ("milestone", "meilenstein"):
+        return "milestone"
+    return None
+
+
+def _idee_vorlage(titel: str, kategorie, config) -> Optional[str]:
+    """Die Vorlage geprueft und als JSON-Text -- oder None, wenn es keine gibt."""
+    if not config:
+        return None
+    art = _idee_art(kategorie)
+    if art is None:
+        raise HTTPException(400, "Eine Vorlage gibt es nur für Wochenziele und Achievements.")
+    daten = dict(config)
+    daten["title"] = titel
+    try:
+        modell = IDEEN_ARTEN[art](**daten)
+    except Exception as e:                      # pydantic.ValidationError
+        raise HTTPException(400, f"Die Vorlage ist unvollständig: {e}")
+    if art == "progress":
+        if modell.rhythm_type not in ("weekly", "monthly") or modell.target_count <= 0:
+            raise HTTPException(400, "Rhythmus und Anzahl müssen gesetzt sein.")
+        _teil_pruefen(modell.partial_count, modell.partial_percent, modell.target_count)
+    else:
+        if modell.threshold_increment <= 0:
+            raise HTTPException(400, "Meilenstein-Schwelle muss > 0 sein")
+        _auto_quelle_pruefen(modell.auto_source, modell.auto_params)
+    return json.dumps(modell.model_dump(exclude={"title"}), ensure_ascii=False)
+
+
+def _idee_raus(row) -> dict:
+    d = ser(row)
+    try:
+        d["config"] = json.loads(row["config"]) if row["config"] else None
+    except (TypeError, ValueError):
+        d["config"] = None
+    return d
+
 
 @app.get("/api/future-ideas")
 async def list_fi(db=Depends(get_db), user=Depends(get_current_user)):
-    return [ser(r) for r in await db.fetch(
+    return [_idee_raus(r) for r in await db.fetch(
         "SELECT * FROM future_ideas WHERE user_id=$1 ORDER BY id", user["id"])]
 
 @app.post("/api/future-ideas")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def create_fi(request: Request, b: FICreate, db=Depends(get_db), user=Depends(get_current_user)):
-    return ser(await db.fetchrow(
-        "INSERT INTO future_ideas (user_id,title,category) VALUES ($1,$2,$3) RETURNING *",
-        user["id"], b.title, b.category))
+    titel = (b.title or "").strip()
+    if not titel:
+        raise HTTPException(400, "Titel fehlt")
+    vorlage = _idee_vorlage(titel, b.category, b.config)
+    row = await db.fetchrow(
+        "INSERT INTO future_ideas (user_id,title,category,config) VALUES ($1,$2,$3,$4) RETURNING *",
+        user["id"], titel, b.category, vorlage)
+    await aenderungen.vermerken(db, user["id"], "angelegt", "idee", row["id"], titel,
+                                "fertig zum Aktivieren" if vorlage else None)
+    return _idee_raus(row)
+
+@app.put("/api/future-ideas/{iid}")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def upd_fi(request: Request, iid: int, b: FIUpd, db=Depends(get_db), user=Depends(get_current_user)):
+    alt = await db.fetchrow("SELECT * FROM future_ideas WHERE id=$1 AND user_id=$2", iid, user["id"])
+    if not alt:
+        raise HTTPException(404, "Idee nicht gefunden")
+    gesetzt = b.model_fields_set
+    titel = (b.title or "").strip() if "title" in gesetzt else alt["title"]
+    if not titel:
+        raise HTTPException(400, "Titel fehlt")
+    kategorie = b.category if "category" in gesetzt else alt["category"]
+    vorlage = _idee_vorlage(titel, kategorie, b.config) if "config" in gesetzt else alt["config"]
+    neu = await db.fetchrow(
+        "UPDATE future_ideas SET title=$1, category=$2, config=$3 "
+        "WHERE id=$4 AND user_id=$5 RETURNING *", titel, kategorie, vorlage, iid, user["id"])
+    await aenderungen.vermerken(db, user["id"], "bearbeitet", "idee", iid, titel,
+                                "ausgearbeitet" if vorlage and not alt["config"] else None)
+    return _idee_raus(neu)
+
+@app.post("/api/future-ideas/{iid}/activate")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def activate_fi(request: Request, iid: int, db=Depends(get_db), user=Depends(get_current_user)):
+    """Eine ausgearbeitete Idee wird zum echten Wochenziel oder Achievement
+    (v2.36.0) -- mit genau den Werten, die in der Vorlage stehen, und durch
+    dieselbe Stelle wie das Anlegen im Dialog (samt Hoechstzahl). Die Idee
+    verschwindet dabei."""
+    idee = await db.fetchrow("SELECT * FROM future_ideas WHERE id=$1 AND user_id=$2", iid, user["id"])
+    if not idee:
+        raise HTTPException(404, "Idee nicht gefunden")
+    art = _idee_art(idee["category"])
+    if art is None or not idee["config"]:
+        raise HTTPException(400, "Diese Idee ist noch nicht ausgearbeitet.")
+    daten = json.loads(idee["config"])
+    daten["title"] = idee["title"]
+    # Ein Sparziel, auf das die Vorlage zahlen sollte, kann inzwischen weg
+    # sein. Dann gilt die Standardregel (aktives Ziel, sonst Puffer), statt
+    # dass die Idee nicht mehr zu aktivieren ist.
+    if daten.get("reward_goal_id") is not None and not await db.fetchval(
+            "SELECT 1 FROM savings_goals WHERE id=$1 AND user_id=$2",
+            daten["reward_goal_id"], user["id"]):
+        daten["reward_goal_id"] = None
+    async with db.transaction():
+        if art == "progress":
+            row = ser(await _wochenziel_anlegen(db, user["id"], PGCreate(**daten)))
+        else:
+            row = _ach_out(await _achievement_anlegen(db, user["id"], AchCreate(**daten)))
+        await db.execute("DELETE FROM future_ideas WHERE id=$1 AND user_id=$2", iid, user["id"])
+    return {"status": "ok", "art": art, "objekt": row}
 
 @app.delete("/api/future-ideas/{iid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def del_fi(request: Request, iid: int, db=Depends(get_db), user=Depends(get_current_user)):
-    await db.execute("DELETE FROM future_ideas WHERE id=$1 AND user_id=$2", iid, user["id"])
+    weg = await db.fetchrow(
+        "DELETE FROM future_ideas WHERE id=$1 AND user_id=$2 RETURNING title", iid, user["id"])
+    if weg:
+        await aenderungen.vermerken(db, user["id"], "geloescht", "idee", iid, weg["title"])
     return {"status": "deleted"}
 
 # ---------- Savings Transactions ----------
@@ -1876,10 +2157,11 @@ async def del_st(request: Request, tid: int, db=Depends(get_db), user=Depends(ge
     # Beide Zeilen des Paares muessen zusammen weg, sonst gibt es eine
     # unbalancierte Bewegung im Log.
     row = await db.fetchrow(
-        "SELECT id, source_type, source_id FROM savings_transactions "
+        "SELECT id, source_type, source_id, amount, description FROM savings_transactions "
         "WHERE id=$1 AND user_id=$2", tid, user["id"])
     if not row:
         return {"status": "deleted"}
+    titel = row["description"] or ("Anfangsbestand" if row["source_type"] == "initial" else "Buchung")
     if row["source_type"] == "transfer" and row["source_id"] is not None:
         pair_id = int(row["source_id"])
         # pair_id == id der Puffer-Zeile; loesche beide (Puffer + Ziel).
@@ -1888,8 +2170,12 @@ async def del_st(request: Request, tid: int, db=Depends(get_db), user=Depends(ge
                 "DELETE FROM savings_transactions "
                 "WHERE user_id=$1 AND (id=$2 OR source_id=$2)",
                 user["id"], pair_id)
+            await aenderungen.vermerken(db, user["id"], "zurueckgenommen", "buchung", tid, titel,
+                                        aenderungen.eur(abs(float(row["amount"]))) + " zurückgebucht")
         return {"status": "deleted", "pair_deleted": True}
     await db.execute("DELETE FROM savings_transactions WHERE id=$1 AND user_id=$2", tid, user["id"])
+    await aenderungen.vermerken(db, user["id"], "geloescht", "buchung", tid, titel,
+                                aenderungen.eur(row["amount"]))
     return {"status": "deleted"}
 
 # Export-Helfer leben in ``helpers.py`` (ausgelagert v1.15.1)
@@ -2047,6 +2333,12 @@ async def _aktivitaets_ereignisse(db, user_id: int) -> list:
             "note": r["note"] or "", "deletable": True,
         })
 
+    # v2.36.0: was am Modul selbst geaendert wurde -- angelegt, bearbeitet,
+    # geloescht. Ueber 0 € und nicht loeschbar, wie der Vermerk darunter.
+    for r in await db.fetch(
+        "SELECT * FROM sparziel_aenderungen WHERE user_id=$1 ORDER BY created_at DESC", user_id):
+        events.append(aenderungen.ereignis(r))
+
     # v2.35.0: aufgegebene Sparziele. Der Vermerk steht ueber 0 € im Puffer
     # (das Geld selbst ist mit seinen eigenen Buchungen umgezogen) und laesst
     # sich nicht loeschen: das Ziel, auf das er sich bezieht, gibt es nicht mehr.
@@ -2197,6 +2489,8 @@ async def create_trophy(request: Request, b: TrophyCreate, db=Depends(get_db), u
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *""",
         user["id"], b.name, b.target_amount, b.final_amount, started,
         b.icon or "🏆", b.color or "gold", b.note, b.photo_url, duration_days)
+    await aenderungen.vermerken(db, user["id"], "angelegt", "trophaee", row["id"], b.name,
+                                aenderungen.eur(b.final_amount) if b.final_amount is not None else None)
     return ser(row)
 
 @app.post("/api/savings-goal/{gid}/complete")
@@ -2235,6 +2529,8 @@ async def complete_savings_goal(request: Request, gid: int, b: TrophyCreate, db=
             user["id"], gid)
         await db.execute(
             "DELETE FROM savings_goals WHERE id=$1 AND user_id=$2", gid, user["id"])
+        await aenderungen.vermerken(db, user["id"], "abgeschlossen", "sparziel", gid,
+                                    goal["name"], aenderungen.eur(total) + " · zur Trophäe")
     logger.info(f"User {user['id']} completed goal {gid} (goal removed), "
                 f"saved trophy {trophy['id']}")
     return ser(trophy)
@@ -2242,10 +2538,11 @@ async def complete_savings_goal(request: Request, gid: int, b: TrophyCreate, db=
 @app.delete("/api/trophies/{tid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)
 async def del_trophy(request: Request, tid: int, db=Depends(get_db), user=Depends(get_current_user)):
-    r = await db.execute(
-        "DELETE FROM completed_goals WHERE id=$1 AND user_id=$2", tid, user["id"])
-    if r == "DELETE 0":
+    weg = await db.fetchrow(
+        "DELETE FROM completed_goals WHERE id=$1 AND user_id=$2 RETURNING name", tid, user["id"])
+    if not weg:
         raise HTTPException(404, "Nicht gefunden")
+    await aenderungen.vermerken(db, user["id"], "geloescht", "trophaee", tid, weg["name"])
     return {"status": "deleted"}
 
 
@@ -2260,6 +2557,8 @@ async def restore(request: Request, b: RestoreBody, db=Depends(get_db), user=Dep
     try:
         stats = await restore_snapshot(db, b.payload, user_id=user["id"], wipe=b.wipe)
         logger.info(f"Restore complete for user {user['id']}: {stats}")
+        await aenderungen.vermerken(db, user["id"], "eingespielt", "sicherung", None,
+                                    "Sicherung", "alles ersetzt" if b.wipe else "ergänzt")
         return {"status": "ok", "stats": stats}
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -2320,6 +2619,10 @@ app.include_router(blog_router)
 # --------------------------------------------------------------------------
 from routers.health_router import router as health_router
 app.include_router(health_router)
+
+# v2.37.0: eigene Messgroessen und Werte von Hand
+from routers.health_manuell_router import router as health_manuell_router  # noqa: E402
+app.include_router(health_manuell_router)
 
 # ==========================================================================
 # Musik-Modul (v1.67.0) — Hoerregister aus dem Spotify-Datenexport (CSV)

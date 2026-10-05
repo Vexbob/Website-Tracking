@@ -21,6 +21,11 @@
    .v-card, .v-btn, .navcfg-list/-row/-mini. */
 .set-actions { display: flex; gap: var(--space-2); justify-content: flex-end;
     margin-top: var(--space-4); flex-wrap: wrap; }
+/* Eine Zahl, kein Satz: das Feld so breit wie zwei Ziffern, der Knopf daneben. */
+.set-actions.set-zahl { justify-content: flex-start; align-items: center; flex-wrap: nowrap; }
+.set-zahl-lbl { margin: 0; color: var(--text-2); font-size: 0.875rem; }
+.set-actions.set-zahl input { flex: 0 0 5.5rem; width: 5.5rem; }
+.set-actions.set-zahl .v-btn { margin-left: auto; }
 .set-hint { margin: 0 0 var(--space-4); color: var(--text-3);
     font-size: 0.8125rem; line-height: 1.55; }
 .set-pos { width: 1.5rem; text-align: right; color: var(--text-4);
@@ -128,6 +133,19 @@
         </div>
         <p class="set-hint">Gilt für die Ausgaben-Statistik und die Gesundheit.</p>
         <div class="rf-presets" id="rangeList"></div>
+    </div>
+
+    <div class="v-card">
+        <div class="v-card-head">
+            <h3>Sparziel</h3>
+            <span class="v-card-sub">Wie viele Wochenziele gleichzeitig</span>
+        </div>
+        <p class="set-hint">Ist die Zahl erreicht, lässt sich kein weiteres Wochenziel anlegen oder aktivieren. 0 heißt: keine Grenze.</p>
+        <div class="set-actions set-zahl">
+            <label for="maxWochenziele" class="set-zahl-lbl">Höchstens</label>
+            <input type="number" id="maxWochenziele" min="0" max="50" step="1" inputmode="numeric" placeholder="0">
+            <button type="button" class="v-btn" id="maxWochenzieleSave">Speichern</button>
+        </div>
     </div>
 
     <div class="v-card">

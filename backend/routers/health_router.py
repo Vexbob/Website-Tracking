@@ -43,6 +43,7 @@ from deps import logger, limiter, LIMIT_HEALTH_IMPORT, LIMIT_WRITE_RARE, LIMIT_W
 from schemas import MetricOrderBody
 from services.health_ingest import ingest_payload, ingest_csv_file, SIMPLE_METRIC_MAP, merge_ingest_stats
 from services.full_export import build_health_export_csv
+from routers.health_manuell_router import eigen_id, eigene_reihe, eigene_schluessel
 
 router = APIRouter(tags=["health"])
 
@@ -781,6 +782,8 @@ async def get_metric_order(db=Depends(get_db), user=Depends(get_current_user)):
         "SELECT value FROM user_prefs WHERE user_id=$1 AND key=$2",
         user["id"], METRIC_ORDER_PREF)
     order: List[str] = []
+    # v2.37.0: eigene Messgroessen stehen als ``eigen_<id>`` dazwischen.
+    erlaubt = set(ALLOWED_METRIC_TYPES) | await eigene_schluessel(db, user["id"])
     if raw:
         try:
             parsed = json.loads(raw)
@@ -788,7 +791,7 @@ async def get_metric_order(db=Depends(get_db), user=Depends(get_current_user)):
                 seen = set()
                 for x in parsed:
                     k = str(x)
-                    if k in ALLOWED_METRIC_TYPES and k not in seen:
+                    if k in erlaubt and k not in seen:
                         seen.add(k)
                         order.append(k)
         except (ValueError, TypeError):
@@ -802,9 +805,10 @@ async def set_metric_order(request: Request, b: MetricOrderBody,
                             db=Depends(get_db), user=Depends(get_current_user)):
     seen = set()
     order = []
+    erlaubt = set(ALLOWED_METRIC_TYPES) | await eigene_schluessel(db, user["id"])
     for x in b.order:
         k = str(x)
-        if k not in ALLOWED_METRIC_TYPES:
+        if k not in erlaubt:
             raise HTTPException(400, f"Unbekannter metric_type: {k}")
         if k not in seen:
             seen.add(k)
@@ -834,6 +838,11 @@ def _series_since(days: Optional[int]):
 @router.get("/api/health/metrics/{metric_type}")
 async def get_metric_series(metric_type: str, days: Optional[int] = 30,
                              db=Depends(get_db), user=Depends(get_current_user)):
+    # v2.37.0: eigene Messgroessen kommen aus ihrer eigenen Tabelle, aber in
+    # derselben Form -- das Diagramm braucht keinen zweiten Weg.
+    gid = eigen_id(metric_type)
+    if gid is not None:
+        return await eigene_reihe(db, user["id"], gid, _series_since(days))
     if metric_type not in ALLOWED_METRIC_TYPES:
         raise HTTPException(404, "Unbekannter Metric-Typ")
     since = _series_since(days)

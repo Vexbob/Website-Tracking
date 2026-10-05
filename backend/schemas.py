@@ -16,12 +16,15 @@ from pydantic import BaseModel
 class SavGoalUpd(BaseModel):
     name: Optional[str] = None
     target_amount: Optional[float] = None
+    # v2.36.0: wo es das Ding gibt. "" oder null entfernt den Link.
+    link: Optional[str] = None
 
 
 class SavGoalCreate(BaseModel):
     name: str
     target_amount: float
     activate: bool = True
+    link: Optional[str] = None
 
 
 class SavGoalTransfer(BaseModel):
@@ -126,11 +129,29 @@ class NoteBody(BaseModel):
 class PotCreate(BaseModel):
     name: str
     estimated_price: Optional[float] = None
+    link: Optional[str] = None
+
+
+class PotUpd(BaseModel):
+    """v2.36.0: ein Wunsch laesst sich nachtraeglich aendern (vorher nur
+    anlegen und loeschen) -- sonst liesse sich ein Link nie nachtragen."""
+    name: Optional[str] = None
+    estimated_price: Optional[float] = None
+    link: Optional[str] = None
 
 
 class FICreate(BaseModel):
     title: str
     category: Optional[str] = None
+    # v2.36.0: die vollstaendige Vorlage (dieselben Felder wie beim Anlegen
+    # eines Wochenziels oder Achievements). Ohne sie ist die Idee ein Titel.
+    config: Optional[dict] = None
+
+
+class FIUpd(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    config: Optional[dict] = None
 
 
 # ---------- Reorder / Backup ----------

@@ -44,11 +44,12 @@ class FakeDB:
     nicht, denn jede der sechs Quellen hat ihre eigene Tabelle.
     """
 
-    def __init__(self, checkins=(), meilensteine=(), start=(), aufgegeben=()):
+    def __init__(self, checkins=(), meilensteine=(), start=(), aufgegeben=(), aenderungen=()):
         self.checkins = list(checkins)
         self.meilensteine = list(meilensteine)
         self.start = list(start)
         self.aufgegeben = list(aufgegeben)
+        self.aenderungen = list(aenderungen)
 
     async def fetch(self, sql, *args):
         if "progress_logs pl JOIN progress_goals" in sql:
@@ -63,6 +64,8 @@ class FakeDB:
             return []
         if "source_type='aufgegeben'" in sql:
             return self.aufgegeben
+        if "FROM sparziel_aenderungen" in sql:
+            return self.aenderungen
         if "source_type='progress'" in sql:
             return []
         raise AssertionError("unerwartete Abfrage: " + sql[:80])
@@ -178,3 +181,19 @@ def test_ein_aufgegebenes_ziel_zaehlt_in_keiner_summe_mit():
     assert eintrag["deletable"] is False
     auskunft = _run(main.activity_log_summary(db=db, user=NUTZER))
     assert auskunft["all"]["amount"] == pytest.approx(25.0)
+
+
+def test_aenderungen_stehen_im_log_und_zaehlen_nicht_mit():
+    """v2.36.0: „Wochenziel bearbeitet · Belohnung 5,00 € → 8,00 €“ steht im
+    Verlauf, bewegt aber kein Geld."""
+    zeile = {"id": 3, "created_at": _zeit(7), "aktion": "bearbeitet", "objekt": "wochenziel",
+             "objekt_id": 1, "titel": "Sport", "details": "Belohnung 5,00 € → 8,00 €"}
+    db = FakeDB(meilensteine=[_meilenstein(4, 25.0)], aenderungen=[zeile])
+    liste = _run(main.activity_log(limit=50, db=db, user=NUTZER))
+    eintrag = next(e for e in liste if e["type"] == "aenderung")
+    assert eintrag["title"] == "Wochenziel bearbeitet"
+    assert "„Sport“" in eintrag["description"] and "5,00 € → 8,00 €" in eintrag["description"]
+    assert eintrag["deletable"] is False
+    auskunft = _run(main.activity_log_summary(db=db, user=NUTZER))
+    assert auskunft["all"]["amount"] == pytest.approx(25.0)
+    assert auskunft["by_type"]["aenderung"]["count"] == 1

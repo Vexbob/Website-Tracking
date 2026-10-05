@@ -322,3 +322,29 @@ body{visibility:hidden}body.ready{visibility:visible}
     .gh .v-abschnitt-kopf .v-btn, .gh-zeile-aktion .v-btn, .gh-reihe .v-btn, .gh-kopier .v-btn { min-height: 44px; }
     .gh-zeile-aktion .v-btn--icon { width: 44px; }
 }
+
+/* ---------- Werte von Hand (v2.37.0) ---------- */
+.gh-leiste-rechts { display: flex; align-items: center; gap: var(--space-2); }
+.h-metric-name { display: flex; align-items: center; gap: 0.375rem; }
+.h-metric-mehr { margin-left: auto; width: 32px; height: 32px; color: var(--text-3); }
+.he-zeile { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.he-zeile > div { min-width: 0; }
+.he-einheit { font-weight: 500; color: var(--text-3); }
+.he-h { margin: var(--space-5) 0 var(--space-2); font-size: 0.75rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+.he-hinweis { margin: 0; font-size: 0.8125rem; color: var(--text-3); }
+.he-label { margin: var(--space-3) 0 var(--space-2); font-size: 0.875rem; color: var(--text-2); }
+.he-arten { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.he-art {
+    display: flex; align-items: flex-start; gap: 0.625rem; margin: 0;
+    padding: 0.625rem 0.75rem; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--surface-2); cursor: pointer;
+}
+.he-art:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
+.he-art input { width: 1.125rem; height: 1.125rem; margin: 0.125rem 0 0; flex: none; accent-color: var(--accent-strong); }
+.he-art span { display: flex; flex-direction: column; gap: 1px; }
+.he-art strong { font-size: 0.9375rem; color: var(--text-1); }
+.he-art small { font-size: 0.75rem; color: var(--text-3); }
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .h-metric-mehr { width: 44px; height: 44px; margin: -6px -6px -6px auto; }
+}

@@ -54,6 +54,8 @@
         herunter: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/>',
         // v2.21.0 (Ausgaben): Rueckweg, Erfassen, Verwalten, Positionen.
         links:  '<path d="M14.5 6l-6 6 6 6"/>',
+        // v2.36.0: ein Link nach draussen -- Kasten mit Pfeil nach rechts oben.
+        extern: '<path d="M13.5 4.5h6v6"/><path d="M19.5 4.5 11 13"/><path d="M17.5 13.5v4a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h4"/>',
         bild:   '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 16.5l-5-5-8.5 8.5"/>',
         ablage: '<rect x="8" y="3" width="8" height="4" rx="1.2"/>'
               + '<path d="M8 5H6.5A1.5 1.5 0 0 0 5 6.5v13A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 17.5 5H16"/>',

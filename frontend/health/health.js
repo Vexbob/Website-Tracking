@@ -58,6 +58,14 @@ const HEALTH_API = {
     deleteSleep:   (id) => apiCall(`/api/health/sleep/${id}`, { method: 'DELETE' }),
     deleteBp:      (id) => apiCall(`/api/health/blood-pressure/${id}`, { method: 'DELETE' }),
     deleteGlucose: (id) => apiCall(`/api/health/blood-glucose/${id}`, { method: 'DELETE' }),
+    // v2.37.0: eigene Messgroessen und Werte von Hand
+    eigene:        () => apiCall('/api/health/eigene'),
+    eigeneAnlegen: (b) => apiCall('/api/health/eigene', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
+    eigeneAendern: (id, b) => apiCall(`/api/health/eigene/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
+    eigeneLoeschen: (id) => apiCall(`/api/health/eigene/${id}`, { method: 'DELETE' }),
+    eintragen:     (b) => apiCall('/api/health/manuell', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b) }),
+    vonHand:       () => apiCall('/api/health/manuell?limit=15'),
+    vonHandLoeschen: (art, id) => apiCall(`/api/health/manuell/${art}/${id}`, { method: 'DELETE' }),
     bulkDelete:    (body) => apiCall('/api/health/delete', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
@@ -639,6 +647,13 @@ async function datenStand() {
 // ---------- Vitalwerte ----------
 function initVitalwerte() {
     state.vitalInit = true;
+    document.getElementById('hEintragen').addEventListener('click', () => dlgEintragen());
+    // Der Knopf an einer eigenen Messgroesse sitzt in einer Karte, die neu
+    // gebaut werden kann -- also am Raster lauschen, nicht an der Karte.
+    document.getElementById('hMetricCharts').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-eigen]');
+        if (b) dlgGroesse(Number(b.dataset.eigen));
+    });
     // Nach dem Loeschen von Daten wird neu aufgebaut -- auf derselben
     // Leinwand darf dann nicht noch das alte Diagramm haengen.
     if (state.chartBp) state.chartBp.destroy();
@@ -684,6 +699,7 @@ async function loadMetricCharts() {
     if (!box) return;
 
     if (!state.metricCards) {
+        await ladeEigene();
         try {
             const r = await HEALTH_API.metricOrder();
             state.metricOrder = (r && r.order) || [];
@@ -726,6 +742,209 @@ async function loadMetricCharts() {
         `${mit} ${mit === 1 ? 'Messgröße' : 'Messgrößen'} mit Werten · ${range.label || 'Zeitraum'}`;
 }
 
+/* ---------- Werte von Hand (v2.37.0) ----------
+ *
+ * Zwei Dinge, ein Dialog: einen Wert fuer eine Groesse eintragen, die es
+ * schon gibt (Gewicht, Ruhepuls, Blutdruck ...), oder fuer eine eigene
+ * („Rueckenschmerzen 1-10“, „Glaeser Wasser“). Eigene Groessen werden zu
+ * Karten im selben Raster -- METRIC_LABELS bekommt sie als ``eigen_<id>``,
+ * und der Rest des Tabs merkt keinen Unterschied.
+ */
+const EIGEN_TOENE = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5', '--chart-6'];
+
+async function ladeEigene() {
+    let liste = [];
+    try { liste = await HEALTH_API.eigene() || []; } catch (e) { liste = state.eigene || []; }
+    state.eigene = liste;
+    Object.keys(METRIC_LABELS).filter(k => k.startsWith('eigen_')).forEach(k => { delete METRIC_LABELS[k]; });
+    liste.forEach((g, i) => {
+        const ton = EIGEN_TOENE[i % EIGEN_TOENE.length];
+        METRIC_LABELS[g.key] = { label: g.name, unit: g.einheit || '', ton, color: cssVar(ton),
+                                 cumulative: !!g.kumulativ, eigen: g.id };
+    });
+    return liste;
+}
+
+/* Nach einer neuen oder geloeschten eigenen Groesse stimmt das Raster nicht
+   mehr: Karten und Diagramme neu, die Reihenfolge bleibt. */
+async function vitalNeuAufbauen() {
+    Object.values(state.metricChartMap || {}).forEach(ch => { try { ch.destroy(); } catch (e) {} });
+    state.metricChartMap = {};
+    const box = document.getElementById('hMetricCharts');
+    box.querySelectorAll('.h-metric-card').forEach(el => el.remove());
+    state.metricCards = null;
+    await loadMetricCharts();
+}
+
+// Was es zum Eintragen gibt: eigene zuerst, dann die bekannten, dazu
+// Blutdruck und Blutzucker -- die haben eigene Diagramme und eigene Tabellen.
+function eintragArten() {
+    const eigene = (state.eigene || []).map(g => ({ key: g.key, label: g.name, unit: g.einheit || '' }));
+    const bekannt = Object.keys(METRIC_LABELS).filter(k => !k.startsWith('eigen_'))
+        .map(k => ({ key: k, label: METRIC_LABELS[k].label, unit: METRIC_LABELS[k].unit }))
+        .concat([{ key: 'blood_pressure', label: 'Blutdruck', unit: 'mmHg' },
+                 { key: 'blood_glucose', label: 'Blutzucker', unit: 'mg/dL' }])
+        .sort((a, b) => a.label.localeCompare(b.label, 'de'));
+    return { eigene, bekannt };
+}
+function artLabel(key) {
+    const { eigene, bekannt } = eintragArten();
+    return eigene.concat(bekannt).find(a => a.key === key) || { key, label: key, unit: '' };
+}
+
+const heuteIso = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const jetztHm = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+
+function dlgEintragen(vorwahl) {
+    const { eigene, bekannt } = eintragArten();
+    const wahl = vorwahl || (eigene[0] && eigene[0].key) || 'weight';
+    const opt = (a) => `<option value="${escHtml(a.key)}"${a.key === wahl ? ' selected' : ''}>${escHtml(a.label)}</option>`;
+    const d = dialog('Wert eintragen', `<form data-form class="he-form">
+        <label for="heMetrik">Messgröße</label>
+        <select id="heMetrik">
+            ${eigene.length ? `<optgroup label="Eigene">${eigene.map(opt).join('')}</optgroup>` : ''}
+            <optgroup label="Vorhanden">${bekannt.map(opt).join('')}</optgroup>
+            <option value="__neu">Neue Messgröße anlegen …</option>
+        </select>
+        <div class="he-zeile">
+            <div><label for="heDatum">Tag</label><input type="date" id="heDatum" value="${heuteIso()}" max="${heuteIso()}"></div>
+            <div><label for="heZeit">Uhrzeit</label><input type="time" id="heZeit" value="${jetztHm()}"></div>
+        </div>
+        <div id="heWerte"></div>
+        <h4 class="he-h">Zuletzt von Hand</h4>
+        <div id="heZuletzt"><span class="skel skel-line long"></span></div>
+        <div class="modal-fuss"><button type="submit" class="v-btn v-btn--primary">${ikon('plus', 16)} Eintragen</button></div>
+    </form>`, { voll: true });
+
+    const sel = d.root.querySelector('#heMetrik');
+    const zeichneWerte = () => {
+        const a = artLabel(sel.value);
+        const box = d.root.querySelector('#heWerte');
+        const einheit = a.unit ? ` <span class="he-einheit">${escHtml(a.unit)}</span>` : '';
+        box.innerHTML = sel.value === 'blood_pressure'
+            ? `<div class="he-zeile">
+                   <div><label for="heSys">Oben (systolisch)</label><input type="number" id="heSys" inputmode="numeric" step="1" placeholder="120"></div>
+                   <div><label for="heDia">Unten (diastolisch)</label><input type="number" id="heDia" inputmode="numeric" step="1" placeholder="80"></div>
+               </div>`
+            : `<label for="heWert">Wert${einheit}</label><input type="number" id="heWert" inputmode="decimal" step="any">`;
+    };
+    sel.addEventListener('change', () => {
+        if (sel.value === '__neu') { d.close(); dlgGroesse(null); return; }
+        zeichneWerte();
+    });
+    zeichneWerte();
+    ladeZuletzt(d);
+
+    d.root.querySelector('[data-form]').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const metrik = sel.value;
+        const datum = d.root.querySelector('#heDatum').value;
+        const zeit = d.root.querySelector('#heZeit').value || '12:00';
+        if (!datum) { showToast('Der Tag fehlt', true); return; }
+        const zp = new Date(datum + 'T' + zeit);
+        const body = { metrik, datum, zeitpunkt: zp.toISOString() };
+        const zahl = (id) => { const v = (d.root.querySelector(id).value || '').replace(',', '.'); return v === '' ? null : Number(v); };
+        if (metrik === 'blood_pressure') { body.systolisch = zahl('#heSys'); body.diastolisch = zahl('#heDia'); }
+        else body.wert = zahl('#heWert');
+        const knopf = d.root.querySelector('[type=submit]');
+        knopf.disabled = true;
+        try {
+            await HEALTH_API.eintragen(body);
+            showToast(artLabel(metrik).label + ' eingetragen');
+            // Fuer den naechsten Wert: das Feld leer, Groesse und Tag bleiben.
+            zeichneWerte();
+            ladeZuletzt(d);
+            loadMetricCharts();
+            if (metrik === 'blood_pressure' || metrik === 'blood_glucose') loadBpGlucoseCharts();
+        } catch (err) {
+            showToast(err.message || 'Eintragen fehlgeschlagen', true);
+        } finally { knopf.disabled = false; }
+    });
+}
+
+async function ladeZuletzt(d) {
+    const box = d.root.querySelector('#heZuletzt');
+    if (!box) return;
+    let liste;
+    try { liste = await HEALTH_API.vonHand() || []; }
+    catch (e) { box.innerHTML = '<p class="he-hinweis">Konnte nicht geladen werden.</p>'; return; }
+    if (!box.isConnected) return;
+    if (!liste.length) { box.innerHTML = '<p class="he-hinweis">Noch nichts von Hand eingetragen.</p>'; return; }
+    box.innerHTML = '<div class="rec-list">' + liste.map((e, i) => {
+        const a = artLabel(e.metrik);
+        // Ganze Zahlen mit Tausenderpunkt (8.536 Schritte), sonst eine
+        // Nachkommastelle (141,4 kg) -- so, wie man es eingetragen hat.
+        const wert = e.art === 'blutdruck' ? `${fmt0(e.systolisch)}/${fmt0(e.diastolisch)}`
+                   : (Number.isInteger(Number(e.wert)) ? fmt0(e.wert) : fmt1(e.wert));
+        return `<button type="button" class="rec-row" data-i="${i}">
+            <span class="rec-main"><span class="rec-title">${escHtml(a.label)}</span><span class="rec-meta">${escHtml(fmtDateTime(e.recorded_at))}</span></span>
+            <span class="rec-side"><span class="rec-val">${escHtml(wert)}${a.unit ? ' ' + escHtml(a.unit) : ''}</span></span>
+        </button>`;
+    }).join('') + '</div>';
+    // Loeschen einen Griff tiefer: ein Tipp fragt nach, statt eines
+    // Papierkorbs an jeder Zeile.
+    box.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', async () => {
+        const e = liste[Number(b.dataset.i)];
+        if (!await askConfirm({ title: 'Eintrag löschen?', text: `${artLabel(e.metrik).label} vom ${fmtDateTime(e.recorded_at)}`,
+                                ok: 'Löschen', danger: true })) return;
+        try {
+            await HEALTH_API.vonHandLoeschen(e.art, e.id);
+            showToast('Gelöscht');
+            ladeZuletzt(d);
+            loadMetricCharts();
+            if (e.art === 'blutdruck' || e.art === 'blutzucker') loadBpGlucoseCharts();
+        } catch (err) { showToast(err.message || 'Löschen fehlgeschlagen', true); }
+    }));
+}
+
+/* Eine eigene Messgroesse anlegen (gid null) oder aendern. */
+function dlgGroesse(gid) {
+    const g = gid ? (state.eigene || []).find(x => x.id === gid) : null;
+    if (gid && !g) return;
+    const d = dialog(g ? g.name : 'Neue Messgröße', `<form data-form>
+        <label for="hgName">Name</label><input id="hgName" maxlength="60" placeholder="z. B. Rückenschmerzen" value="${g ? escHtml(g.name) : ''}">
+        <label for="hgEinheit">Einheit <span class="he-einheit">freiwillig</span></label><input id="hgEinheit" maxlength="20" placeholder="z. B. 1–10, Gläser, kg" value="${g && g.einheit ? escHtml(g.einheit) : ''}">
+        <p class="he-label">Was zählt an einem Tag?</p>
+        <div class="he-arten" role="radiogroup">
+            <label class="he-art"><input type="radio" name="hgArt" value="wert"${g && g.kumulativ ? '' : ' checked'}><span><strong>Ein Messwert</strong><small>Gewicht, Schmerz 1–10 – der Durchschnitt zählt</small></span></label>
+            <label class="he-art"><input type="radio" name="hgArt" value="summe"${g && g.kumulativ ? ' checked' : ''}><span><strong>Eine Tagessumme</strong><small>Gläser Wasser, Zigaretten – alles am Tag zusammen</small></span></label>
+        </div>
+        ${g ? `<p class="he-hinweis">${g.anzahl} ${g.anzahl === 1 ? 'Wert' : 'Werte'} eingetragen.</p>` : ''}
+        <div class="modal-fuss">
+            ${g ? `<button type="button" class="v-btn v-btn--danger" data-weg>${ikon('muell', 16)} Löschen</button>` : ''}
+            <button type="submit" class="v-btn v-btn--primary">${g ? 'Speichern' : 'Anlegen'}</button>
+        </div>
+    </form>`);
+    d.root.querySelector('[data-form]').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = { name: d.root.querySelector('#hgName').value.trim(),
+                       einheit: d.root.querySelector('#hgEinheit').value.trim() || null,
+                       kumulativ: d.root.querySelector('input[name=hgArt]:checked').value === 'summe' };
+        if (!body.name) { showToast('Der Name fehlt', true); return; }
+        try {
+            const neu = g ? await HEALTH_API.eigeneAendern(g.id, body) : await HEALTH_API.eigeneAnlegen(body);
+            d.close();
+            showToast(g ? 'Gespeichert' : `„${body.name}“ angelegt`);
+            await ladeEigene();
+            await vitalNeuAufbauen();
+            // Wer eine Groesse anlegt, will gleich einen Wert eintragen.
+            if (!g && neu && neu.key) dlgEintragen(neu.key);
+        } catch (err) { showToast(err.message || 'Speichern fehlgeschlagen', true); }
+    });
+    beiKlick(d, '[data-weg]', async () => {
+        if (!await askConfirm({ title: `„${g.name}“ löschen?`,
+                                text: `Mit ${g.anzahl} ${g.anzahl === 1 ? 'Wert' : 'Werten'}. Das lässt sich nicht zurücknehmen.`,
+                                ok: 'Löschen', danger: true })) return;
+        try {
+            await HEALTH_API.eigeneLoeschen(g.id);
+            d.close();
+            showToast('Gelöscht');
+            await ladeEigene();
+            await vitalNeuAufbauen();
+        } catch (err) { showToast(err.message || 'Löschen fehlgeschlagen', true); }
+    });
+}
+
 // Gleiche Wert-Ermittlung wie fuer die Chart-Linie (qty, sonst avg_value).
 function metricValueOf(r) {
     const v = Number(r.qty);
@@ -740,7 +959,8 @@ function buildMetricShell(key) {
     card.innerHTML = `
         <span class="drag-handle" title="Ziehen zum Sortieren" aria-hidden="true">${ikon('griff', 16)}</span>
         <div class="h-metric-head">
-            <div class="h-metric-name"><span class="gh-punkt" style="--ton:var(${meta.ton})"></span>${escHtml(meta.label)}</div>
+            <div class="h-metric-name"><span class="gh-punkt" style="--ton:var(${meta.ton})"></span>${escHtml(meta.label)}${meta.eigen
+                ? `<button type="button" class="v-btn v-btn--ghost v-btn--icon h-metric-mehr" data-eigen="${meta.eigen}" aria-label="„${escHtml(meta.label)}“ bearbeiten">${ikon('mehr', 16)}</button>` : ''}</div>
             <div class="h-metric-big" data-role="big">–</div>
         </div>
         <div class="h-metric-stats" data-role="stats"></div>

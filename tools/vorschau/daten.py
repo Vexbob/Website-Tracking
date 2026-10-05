@@ -277,7 +277,7 @@ SPARZIEL = {
 
 SPARZIELE = [
     {"id": 1, "name": "Neues Rennrad", "target_amount": 2400, "saved_amount": 1465.5,
-     "is_active": True, "is_general": False},
+     "is_active": True, "is_general": False, "link": "https://www.example.com/rennrad"},
     {"id": 2, "name": "Städtereise", "target_amount": 900, "saved_amount": 340.0,
      "is_active": False, "is_general": False},
     {"id": 9, "name": "Allgemein", "target_amount": None, "saved_amount": 212.0,
@@ -403,11 +403,17 @@ TROPHAEEN = [
      "completed_at": "2026-02-02T10:00:00", "duration_days": 61, "note": None},
 ]
 WUENSCHE = [
-    {"id": 1, "name": "Kopfhörer mit Geräuschunterdrückung", "estimated_price": 249.0},
+    {"id": 1, "name": "Kopfhörer mit Geräuschunterdrückung", "estimated_price": 249.0,
+     "link": "https://www.example.com/kopfhoerer"},
     {"id": 2, "name": "Kletterschuhe", "estimated_price": None},
 ]
 IDEEN = [
     {"id": 1, "title": "Sprachkurs Spanisch", "category": "milestone"},
+    # v2.36.0: eine fertig ausgearbeitete Idee -- mit einem Tipp aktiv.
+    {"id": 4, "title": "Dreimal die Woche lesen", "category": "progress",
+     "config": {"reward_amount": 4, "rhythm_type": "weekly", "target_count": 3,
+                "streak_bonus_amount": 0, "streak_bonus_threshold": 0,
+                "partial_count": 2, "partial_percent": 50, "reward_goal_id": None}},
     {"id": 2, "title": "Jeden Morgen zehn Minuten dehnen", "category": "progress"},
     {"id": 3, "title": "Wochenende in Wien", "category": None},
 ]
@@ -586,6 +592,27 @@ VO2_REIHE = _g_reihe(lambda i: 37.6 + i * 0.009, rund=1,
 STRECKE_REIHE = _g_reihe(lambda i: _welle(i, 6.1, 1.0, 0.9, 0.7), rund=1,
                          luecken={23, 51}, einheit="km")
 SAUERSTOFF_REIHE = _g_reihe(lambda i: _welle(i, 96.5, 0.6, 0.3, 0.5), rund=1, einheit="%")
+
+# v2.37.0: eine eigene Messgroesse (Messwert) und eine Tagessumme, dazu die
+# Liste der letzten Handeintraege -- der Dialog zeigt sie unter dem Formular.
+SCHMERZ_REIHE = _g_reihe(lambda i: 3 + ((i * 5) % 4), rund=0,
+                         luecken={i for i in range(_GTAGE) if i % 2}, einheit="1–10")
+WASSER_REIHE = _g_reihe(lambda i: 5 + ((i * 3) % 4), rund=0, einheit="Gläser")
+EIGENE_GROESSEN = [
+    {"id": 1, "key": "eigen_1", "name": "Rückenschmerzen", "einheit": "1–10",
+     "kumulativ": False, "anzahl": len(SCHMERZ_REIHE), "zuletzt": None},
+    {"id": 2, "key": "eigen_2", "name": "Wasser", "einheit": "Gläser",
+     "kumulativ": True, "anzahl": len(WASSER_REIHE), "zuletzt": None},
+]
+VON_HAND = [
+    {"art": "eigen", "id": 31, "metrik": "eigen_1", "wert": 4.0,
+     "recorded_at": "2026-10-05T08:10:00+00:00", "created_at": "2026-10-05T08:10:00+00:00"},
+    {"art": "wert", "id": 32, "metrik": "weight", "wert": 141.4,
+     "recorded_at": "2026-10-05T07:30:00+00:00", "created_at": "2026-10-05T07:31:00+00:00"},
+    {"art": "blutdruck", "id": 33, "metrik": "blood_pressure", "systolisch": 128.0,
+     "diastolisch": 82.0, "recorded_at": "2026-10-04T19:00:00+00:00",
+     "created_at": "2026-10-04T19:01:00+00:00"},
+]
 
 
 def _nacht(i, dauer, bett, start_min):
@@ -811,6 +838,13 @@ BLOG_BEITRAEGE = [
 # Dass die Zahl groesser sein kann als die Liste, faengt der Hinweis in
 # renderLog ab; geprueft wird das in backend/tests/test_activity_log.py.
 LOG_EREIGNISSE = [
+    # v2.36.0: Aenderungen am Modul selbst -- ueber 0 EUR.
+    {"type": "aenderung", "date": "2026-09-20T09:12:00", "title": "Wochenziel bearbeitet",
+     "description": "„Laufen“ · Belohnung 5,00 € → 8,00 €; Ziel 3 → 4", "amount": 0.0,
+     "log_id": 950, "note": "", "deletable": False},
+    {"type": "aenderung", "date": "2026-09-20T09:10:00", "title": "Achievement angelegt",
+     "description": "„Bücher gelesen“ · 3,00 € alle 1 Buch", "amount": 0.0,
+     "log_id": 951, "note": "", "deletable": False},
     {"type": "checkin", "date": "2026-09-19T18:20:00", "log_date": "2026-09-19",
      "title": "Laufen", "description": "3/3 · 2026-W38", "amount": 15.0,
      "log_id": 901, "source_id": 11, "fulfilled": True, "note": "", "deletable": True},
@@ -897,6 +931,10 @@ ANTWORTEN = {
     "/api/health/metrics/vo2_max": VO2_REIHE,
     "/api/health/metrics/walking_distance": STRECKE_REIHE,
     "/api/health/metrics/blood_oxygen": SAUERSTOFF_REIHE,
+    "/api/health/metrics/eigen_1": SCHMERZ_REIHE,
+    "/api/health/metrics/eigen_2": WASSER_REIHE,
+    "/api/health/eigene": EIGENE_GROESSEN,
+    "/api/health/manuell": VON_HAND,
     "/api/health/metrics/*": [],
     "/api/health/sleep": SCHLAF_NAECHTE,
     "/api/health/blood-pressure": BLUTDRUCK,

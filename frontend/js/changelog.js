@@ -14,6 +14,17 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.37.0', date: '2026-10-05', title: 'Gesundheit: Werte von Hand', notes: [
+        'Bei den Vitalwerten lassen sich Werte von Hand eintragen, auch für Gewicht, Blutdruck und Co.',
+        'Eigene Messgrößen wie „Rückenschmerzen 1–10“ oder „Gläser Wasser“ bekommen eine eigene Karte mit Verlauf.',
+        'Was von Hand eingetragen wurde, steht im Dialog und lässt sich dort wieder löschen.',
+    ]},
+    { v: 'v2.36.0', date: '2026-10-05', title: 'Sparziel: jede Änderung im Verlauf, fertige Ideen', notes: [
+        'Jede Änderung am Sparziel steht im Verlauf – angelegt, bearbeitet mit „5,00 € → 8,00 €“, gelöscht, pausiert.',
+        'Ideen für Wochenziele und Achievements lassen sich vollständig ausarbeiten und später mit einem Tipp aktivieren.',
+        'In den Einstellungen lässt sich festlegen, wie viele Wochenziele es höchstens gibt.',
+        'Sparziele und Wünsche haben ein Feld für einen Link; Wünsche lassen sich jetzt bearbeiten.',
+    ]},
     { v: 'v2.35.0', date: '2026-10-03', title: 'Sparziel aufgeben, Geld behalten', notes: [
         'Ein Sparziel lässt sich aufgeben: Das Angesparte bleibt und liegt danach im Puffer.',
         'Beim Aufgeben kannst du notieren, warum.',

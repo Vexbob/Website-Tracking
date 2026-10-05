@@ -255,6 +255,9 @@ EXPORT_SECTIONS: list[dict] = [
      "label": "Schlaf inkl. Phasen"},
     {"key": "health_workouts", "group": "health", "aggregatable": True, "dated": True,
      "label": "Workouts inkl. Zusatzmetriken"},
+    # v2.37.0: selbst angelegte Messgroessen samt Werten von Hand.
+    {"key": "health_custom", "group": "health", "aggregatable": False, "dated": True,
+     "label": "Eigene Messgrößen (Name, Zeitpunkt, Wert, Einheit)"},
     {"key": "music_register", "group": "musik", "aggregatable": True, "dated": True,
      "label": "Hörregister (Periode, Interpret, Titel, Wiedergaben)"},
     {"key": "music_imports", "group": "musik", "aggregatable": False, "dated": False,
@@ -1439,7 +1442,8 @@ async def _build_sections_teil(db, user, picked: list[str], date_from, date_to,
         out.append(("expense_imports", await _sec_expense_imports(db, uid)))
 
     health_keys = [k for k in ("health_summary", "health_vitals", "health_bp",
-                               "health_glucose", "health_sleep", "health_workouts")
+                               "health_glucose", "health_sleep", "health_workouts",
+                               "health_custom")
                    if k in want]
     if health_keys:
         out.extend(await _health_section(
@@ -2448,7 +2452,7 @@ async def _health_section(
     """
     want = set(sections) if sections else {
         "health_summary", "health_vitals", "health_bp",
-        "health_glucose", "health_sleep", "health_workouts"}
+        "health_glucose", "health_sleep", "health_workouts", "health_custom"}
     result: list = []
     agg_on = _agg_on(aggregate)
 
@@ -2500,6 +2504,27 @@ async def _health_section(
                 )
             out.append("")
         result.append(("health_glucose", out))
+
+    if "health_custom" in want:
+        # v2.37.0: eine Zeile je Wert. Nicht zusammengefasst: eine eigene
+        # Groesse kann ein Messwert (Schmerz 1-10) oder eine Tagessumme
+        # (Glaeser Wasser) sein, und eine Periodenzeile muesste beides
+        # verschieden rechnen -- die Spalte "Art" sagt, welches gilt.
+        out = []
+        cw_where, cw_params = _build_range_where("w.sample_date", 1, date_from, date_to)
+        cw_rows = await db.fetch(
+            f"SELECT g.name, g.einheit, g.kumulativ, w.recorded_at, w.sample_date, w.wert "
+            f"FROM health_eigene_werte w JOIN health_eigene_groessen g ON g.id = w.groesse_id "
+            f"WHERE w.user_id=$1{cw_where} ORDER BY g.name, w.recorded_at", user_id, *cw_params)
+        out.append("# SEKTION: Gesundheit - Eigene Messgrößen (von Hand eingetragen)")
+        out.append("Messgröße;Art;Tag;Zeitpunkt;Wert;Einheit")
+        for r in cw_rows:
+            out.append(
+                f'{_f(r["name"])};{"Tagessumme" if r["kumulativ"] else "Messwert"};'
+                f'{r["sample_date"].isoformat()};{r["recorded_at"].isoformat()};'
+                f'{_num(r["wert"])};{_f(r["einheit"] or "")}')
+        out.append("")
+        result.append(("health_custom", out))
 
     if "health_sleep" in want:
         out = []

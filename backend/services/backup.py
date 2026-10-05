@@ -21,6 +21,10 @@ TABLES_ORDERED = [
     "potential_goals",
     "future_ideas",
     "completed_goals",
+    # Was am Sparziel veraendert wurde (v2.36.0). Haengt nur an users; die
+    # objekt_id ist bewusst kein Fremdschluessel -- die Zeile soll auch dann
+    # noch sagen, was geloescht wurde, wenn es das Objekt nicht mehr gibt.
+    "sparziel_aenderungen",
     # Notizen (v1.14.0)
     "notes",
     # Ausgaben-Modul (Paket 9)
@@ -59,6 +63,10 @@ TABLES_ORDERED = [
     # Puls-Minutenreihe je Workout (v1.50.0) -- haengt wie die Zusatzmetriken
     # per workout_id am Workout und hat selbst keine user_id.
     "health_workout_hr_samples",
+    # Eigene Messgroessen und ihre Werte (v2.37.0). Groesse vor Wert: der
+    # Wert zeigt per Fremdschluessel darauf.
+    "health_eigene_groessen",
+    "health_eigene_werte",
     # Musik-Modul (v1.67.0). Das Protokoll steht VOR dem Register: dessen
     # import_id zeigt darauf, und beim Wiederherstellen muss das Ziel eines
     # Fremdschluessels schon existieren.

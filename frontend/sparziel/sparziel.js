@@ -279,6 +279,17 @@ function activateTab(t){
 }
 
 // ---- Dialoge ----------------------------------------------------------------
+// Ein Wert fuer ein Formularfeld: leer statt "null"/"undefined".
+const feldWert=(v)=>v==null?'':esc(v);
+// Ein Link nach draussen, sicher geoeffnet (v2.36.0).
+function linkKnopf(url,label){
+    if(!url) return '';
+    return `<a class="v-btn v-btn--ghost v-btn--sm sz-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${ikon('extern',15)} ${esc(label||'Ansehen')}</a>`;
+}
+// Die Adresse ohne Schema und Pfad: „amazon.de“ statt einer halben Zeile.
+function linkKurz(url){
+    try{ return new URL(url).hostname.replace(/^www\./,''); }catch(e){ return ''; }
+}
 function dialog(titel, html, opts){
     const d=VexModal.open(esc(titel), html, opts||{});
     if(window.VexIkon) VexIkon.einsetzen(d.root);
@@ -413,7 +424,8 @@ async function saveSparziel(d){
     const t=parseFloat(document.getElementById('sgTarget').value);
     if(!n||isNaN(t)){showToast('Name und Zielbetrag fehlen',true);haptic('error');return;}
     try{
-        await apiCall('/api/savings-goal/'+glGoalId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,target_amount:t})});
+        const lk=document.getElementById('sgLink');
+        await apiCall('/api/savings-goal/'+glGoalId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,target_amount:t,link:lk?lk.value.trim():undefined})});
         if(d) d.close();
         haptic('success');
         showToast('Gespeichert');
@@ -427,6 +439,8 @@ function dlgSparzielBearbeiten(){
         <input id="sgName" value="${esc(document.getElementById('goalName').textContent||'')}">
         <label for="sgTarget">Zielbetrag (€)</label>
         <input id="sgTarget" type="number" step="0.01" inputmode="decimal" value="${glTarget||''}">
+        <label for="sgLink">Link <span class="sz-freiwillig">wo es das gibt</span></label>
+        <input id="sgLink" type="url" inputmode="url" autocomplete="off" placeholder="https://…" value="${feldWert(((savingsGoalsCache||[]).find(x=>x.id===glGoalId)||{}).link)}">
         ${aufgebenZeile(glGoalId)}
         <div class="modal-fuss">
             <button type="button" class="v-btn" data-abschluss>${ikon('pokal',16)} Abschließen</button>
@@ -961,28 +975,38 @@ const PRESETS={
     wert:{achReward:'5',achUnit:'',achStart:'0',achIncr:'',achStep:'',achTarget:'',achDir:'increase'},
     abnehmend:{achReward:'7',achUnit:'kg',achStart:'',achIncr:'5',achStep:'1',achTarget:'',achDir:'decrease'}
 };
-function dlgNeuesAchievement(){
-    const d=dialog('Neues Achievement',`<form data-form>
-        <p class="fp-label" style="margin-bottom:0.5rem">Vorlage</p>
+/* v2.36.0: derselbe Dialog legt ein Achievement an ODER speichert es als
+   Idee (``opts.idee``: {id, title, config}). Eine Idee traegt damit alle
+   Werte und wird spaeter mit einem Tipp aktiviert. */
+function dlgNeuesAchievement(opts){
+    const o=opts||{}, idee=o.idee||null, c=(idee&&idee.config)||{};
+    const titel=idee?(idee.id?'Idee ausarbeiten: Achievement':'Neue Idee: Achievement'):'Neues Achievement';
+    const d=dialog(titel,`<form data-form>
+        ${idee?'':`<p class="fp-label" style="margin-bottom:0.5rem">Vorlage</p>
         <div class="sz-reihe" id="achVorlagen">
             <button type="button" class="v-chip" data-preset="meilenstein">Zählen (+1)</button>
             <button type="button" class="v-chip" data-preset="wert">Wert messen</button>
             <button type="button" class="v-chip" data-preset="abnehmend">Abnehmend</button>
-        </div>
-        <label for="achTitle">Titel</label><input id="achTitle" placeholder="z. B. Bücher gelesen">
+        </div>`}
+        <label for="achTitle">Titel</label><input id="achTitle" placeholder="z. B. Bücher gelesen" value="${feldWert(idee&&idee.title)}">
         <div class="sz-felder">
-            <div><label for="achReward">€ je Meilenstein</label><input id="achReward" type="number" step="0.01" inputmode="decimal" placeholder="5"></div>
-            <div><label for="achUnit">Einheit</label><input id="achUnit" placeholder="km, kg, Buch"></div>
-            <div><label for="achStart">Startwert</label><input id="achStart" type="number" step="0.01" inputmode="decimal" placeholder="0"></div>
-            <div><label for="achIncr">Meilenstein alle</label><input id="achIncr" type="number" step="0.01" inputmode="decimal" placeholder="5"></div>
-            <div><label for="achStep">Schritt je Tipp</label><input id="achStep" type="number" step="0.01" inputmode="decimal" placeholder="wie Meilenstein"></div>
-            <div><label for="achTarget">Zielwert</label><input id="achTarget" type="number" step="0.01" inputmode="decimal" placeholder="offen"></div>
-            <div><label for="achDir">Richtung</label><select id="achDir"><option value="increase">Steigend</option><option value="decrease">Fallend</option></select></div>
-            <div><label for="achRewardGoal">Belohnung geht an</label><select id="achRewardGoal">${rewardGoalOptionsHTML(null)}</select></div>
+            <div><label for="achReward">€ je Meilenstein</label><input id="achReward" type="number" step="0.01" inputmode="decimal" placeholder="5" value="${feldWert(c.reward_amount)}"></div>
+            <div><label for="achUnit">Einheit</label><input id="achUnit" placeholder="km, kg, Buch" value="${feldWert(c.unit)}"></div>
+            <div><label for="achStart">Startwert</label><input id="achStart" type="number" step="0.01" inputmode="decimal" placeholder="0" value="${feldWert(c.start_value)}"></div>
+            <div><label for="achIncr">Meilenstein alle</label><input id="achIncr" type="number" step="0.01" inputmode="decimal" placeholder="5" value="${feldWert(c.threshold_increment)}"></div>
+            <div><label for="achStep">Schritt je Tipp</label><input id="achStep" type="number" step="0.01" inputmode="decimal" placeholder="wie Meilenstein" value="${feldWert(c.step_amount)}"></div>
+            <div><label for="achTarget">Zielwert</label><input id="achTarget" type="number" step="0.01" inputmode="decimal" placeholder="offen" value="${feldWert(c.target_value)}"></div>
+            <div><label for="achDir">Richtung</label><select id="achDir"><option value="increase">Steigend</option><option value="decrease"${c.direction==='decrease'?' selected':''}>Fallend</option></select></div>
+            <div><label for="achRewardGoal">Belohnung geht an</label><select id="achRewardGoal">${rewardGoalOptionsHTML(c.reward_goal_id||null)}</select></div>
         </div>
-        <div class="modal-fuss"><button type="submit" class="v-btn v-btn--primary">Anlegen</button></div>
+        <div class="modal-fuss">
+            ${idee?`<button type="submit" class="v-btn v-btn--primary">${ikon('idee',16)} Als Idee speichern</button>`
+                  :`<button type="button" class="v-btn" data-als-idee>${ikon('idee',16)} Als Idee</button>
+                    <button type="submit" class="v-btn v-btn--primary">Anlegen</button>`}
+        </div>
     </form>`,{breit:true});
-    formular(d,()=>createAchievement(d));
+    formular(d,()=>idee?ideeSpeichern(d,'milestone',idee.id,achievementAusForm()):createAchievement(d));
+    beiKlick(d,'[data-als-idee]',()=>ideeSpeichern(d,'milestone',null,achievementAusForm()));
     d.root.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{
         d.root.querySelectorAll('[data-preset]').forEach(x=>x.classList.toggle('is-active',x===b));
         const p=PRESETS[b.dataset.preset];if(!p)return;
@@ -990,17 +1014,23 @@ function dlgNeuesAchievement(){
     }));
     fokusAmRechner('achTitle');
 }
-async function createAchievement(d){
+/* Die Werte aus dem Formular -- oder null, wenn etwas fehlt (die Meldung
+   steht dann schon da). Anlegen und Als-Idee-Speichern lesen dieselben. */
+function achievementAusForm(){
     const t=document.getElementById('achTitle').value.trim(),r=parseFloat(document.getElementById('achReward').value),u=document.getElementById('achUnit').value.trim(),s=parseFloat(document.getElementById('achStart').value)||0,inc=parseFloat(document.getElementById('achIncr').value);
     const stepRaw=document.getElementById('achStep').value;
     const stepVal=stepRaw===''?null:parseFloat(stepRaw);
     const tv=document.getElementById('achTarget').value,tg=tv===''?null:parseFloat(tv),dir=document.getElementById('achDir').value;
-    if(!t||isNaN(r)||!u||isNaN(inc)||inc<=0){showToast('Titel, Belohnung, Einheit und Meilenstein-Abstand ausfüllen',true);haptic('error');return;}
-    if(stepVal!==null && (isNaN(stepVal)||stepVal<=0)){showToast('Der Schritt je Tipp muss über 0 liegen (oder leer bleiben)',true);haptic('error');return;}
+    if(!t||isNaN(r)||!u||isNaN(inc)||inc<=0){showToast('Titel, Belohnung, Einheit und Meilenstein-Abstand ausfüllen',true);haptic('error');return null;}
+    if(stepVal!==null && (isNaN(stepVal)||stepVal<=0)){showToast('Der Schritt je Tipp muss über 0 liegen (oder leer bleiben)',true);haptic('error');return null;}
     const body={title:t,reward_amount:r,unit:u,start_value:s,threshold_increment:inc,target_value:tg,direction:dir};
     if(stepVal!==null) body.step_amount=stepVal;
     const rgEl=document.getElementById('achRewardGoal');
     if(rgEl && rgEl.value){ body.reward_goal_id = parseInt(rgEl.value,10); }
+    return body;
+}
+async function createAchievement(d){
+    const body=achievementAusForm(); if(!body) return;
     try{
         await apiCall('/api/achievements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         if(d) d.close();
@@ -1259,28 +1289,37 @@ async function savePgEdit(id,d){
     catch(e){haptic('error');showToast(e.message||'Speichern fehlgeschlagen',true);}
 }
 
-function dlgNeuesWochenziel(){
-    const d=dialog('Neues Wochenziel',`<form data-form>
-        <label for="pgTitle">Titel</label><input id="pgTitle" placeholder="z. B. Dreimal Sport">
+/* v2.36.0: wie beim Achievement -- derselbe Dialog legt an oder speichert
+   eine fertige Idee (``opts.idee``). */
+function dlgNeuesWochenziel(opts){
+    const o=opts||{}, idee=o.idee||null, c=(idee&&idee.config)||{};
+    const titel=idee?(idee.id?'Idee ausarbeiten: Wochenziel':'Neue Idee: Wochenziel'):'Neues Wochenziel';
+    const d=dialog(titel,`<form data-form>
+        <label for="pgTitle">Titel</label><input id="pgTitle" placeholder="z. B. Dreimal Sport" value="${feldWert(idee&&idee.title)}">
         <div class="sz-felder">
-            <div><label for="pgReward">Belohnung (€)</label><input id="pgReward" type="number" step="0.01" inputmode="decimal" placeholder="5"></div>
-            <div><label for="pgTarget">Ziel-Anzahl</label><input id="pgTarget" type="number" min="1" inputmode="numeric" placeholder="3"></div>
-            <div><label for="pgRhythm">Rhythmus</label><select id="pgRhythm"><option value="weekly">Wöchentlich</option><option value="monthly">Monatlich</option></select></div>
-            <div><label for="pgRewardGoal">Belohnung geht an</label><select id="pgRewardGoal">${rewardGoalOptionsHTML(null)}</select></div>
+            <div><label for="pgReward">Belohnung (€)</label><input id="pgReward" type="number" step="0.01" inputmode="decimal" placeholder="5" value="${feldWert(c.reward_amount)}"></div>
+            <div><label for="pgTarget">Ziel-Anzahl</label><input id="pgTarget" type="number" min="1" inputmode="numeric" placeholder="3" value="${feldWert(c.target_count)}"></div>
+            <div><label for="pgRhythm">Rhythmus</label><select id="pgRhythm"><option value="weekly">Wöchentlich</option><option value="monthly"${c.rhythm_type==='monthly'?' selected':''}>Monatlich</option></select></div>
+            <div><label for="pgRewardGoal">Belohnung geht an</label><select id="pgRewardGoal">${rewardGoalOptionsHTML(c.reward_goal_id||null)}</select></div>
         </div>
         <h4 class="sz-dlg-h">Extras</h4>
         <div class="sz-felder">
-            <div><label for="pgStreakN">Serienbonus nach (0 = aus)</label><input id="pgStreakN" type="number" min="0" inputmode="numeric" placeholder="4"></div>
-            <div><label for="pgStreakAmt">Serienbonus (€)</label><input id="pgStreakAmt" type="number" step="0.01" inputmode="decimal" placeholder="10"></div>
-            <div><label for="pgTeilN">Teilbelohnung ab (0 = aus)</label><input id="pgTeilN" type="number" min="0" inputmode="numeric" placeholder="2"></div>
-            <div><label for="pgTeilP">Davon ausgezahlt (%)</label><input id="pgTeilP" type="number" min="0" max="100" step="1" inputmode="numeric" placeholder="50"></div>
+            <div><label for="pgStreakN">Serienbonus nach (0 = aus)</label><input id="pgStreakN" type="number" min="0" inputmode="numeric" placeholder="4" value="${c.streak_bonus_threshold?feldWert(c.streak_bonus_threshold):''}"></div>
+            <div><label for="pgStreakAmt">Serienbonus (€)</label><input id="pgStreakAmt" type="number" step="0.01" inputmode="decimal" placeholder="10" value="${c.streak_bonus_amount?feldWert(c.streak_bonus_amount):''}"></div>
+            <div><label for="pgTeilN">Teilbelohnung ab (0 = aus)</label><input id="pgTeilN" type="number" min="0" inputmode="numeric" placeholder="2" value="${c.partial_count?feldWert(c.partial_count):''}"></div>
+            <div><label for="pgTeilP">Davon ausgezahlt (%)</label><input id="pgTeilP" type="number" min="0" max="100" step="1" inputmode="numeric" placeholder="50" value="${c.partial_percent?feldWert(c.partial_percent):''}"></div>
         </div>
-        <div class="modal-fuss"><button type="submit" class="v-btn v-btn--primary">Anlegen</button></div>
+        <div class="modal-fuss">
+            ${idee?`<button type="submit" class="v-btn v-btn--primary">${ikon('idee',16)} Als Idee speichern</button>`
+                  :`<button type="button" class="v-btn" data-als-idee>${ikon('idee',16)} Als Idee</button>
+                    <button type="submit" class="v-btn v-btn--primary">Anlegen</button>`}
+        </div>
     </form>`);
-    formular(d,()=>createProgressGoal(d));
+    formular(d,()=>idee?ideeSpeichern(d,'progress',idee.id,wochenzielAusForm()):createProgressGoal(d));
+    beiKlick(d,'[data-als-idee]',()=>ideeSpeichern(d,'progress',null,wochenzielAusForm()));
     fokusAmRechner('pgTitle');
 }
-async function createProgressGoal(d){
+function wochenzielAusForm(){
     const t=document.getElementById('pgTitle').value.trim();
     const r=parseFloat(document.getElementById('pgReward').value);
     const rt=document.getElementById('pgRhythm').value;
@@ -1289,10 +1328,14 @@ async function createProgressGoal(d){
     const sa=parseFloat(document.getElementById('pgStreakAmt').value)||0;
     const tn=parseInt(document.getElementById('pgTeilN').value,10)||0;
     const tp=parseFloat(document.getElementById('pgTeilP').value)||0;
-    if(!t||isNaN(r)||!tg){showToast('Titel, Belohnung und Ziel-Anzahl ausfüllen',true);haptic('error');return;}
+    if(!t||isNaN(r)||!tg){showToast('Titel, Belohnung und Ziel-Anzahl ausfüllen',true);haptic('error');return null;}
     const body={title:t,reward_amount:r,rhythm_type:rt,target_count:tg,streak_bonus_amount:sa,streak_bonus_threshold:sn,partial_count:tn,partial_percent:tp};
     const rgEl=document.getElementById('pgRewardGoal');
     if(rgEl && rgEl.value){ body.reward_goal_id = parseInt(rgEl.value,10); }
+    return body;
+}
+async function createProgressGoal(d){
+    const body=wochenzielAusForm(); if(!body) return;
     try{
         await apiCall('/api/progress-goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         if(d) d.close();
@@ -1394,6 +1437,7 @@ function renderSavingsGoalCard(g){
     }else{
         actions.push(`<button type="button" class="v-btn" onclick="activateSavingsGoal(${g.id})">Aktivieren</button>`);
     }
+    if(g.link) actions.push(`<a class="v-btn v-btn--ghost v-btn--icon" href="${esc(g.link)}" target="_blank" rel="noopener noreferrer" aria-label="„${esc(g.name)}“ ansehen (${esc(linkKurz(g.link))})" title="${esc(linkKurz(g.link))}">${ikon('extern',17)}</a>`);
     actions.push(`<button type="button" class="v-btn v-btn--ghost v-btn--icon" onclick="dlgZiel(${g.id})" aria-label="Mehr zu „${esc(g.name)}“">${ikon('mehr',18)}</button>`);
     return `<div class="sz-ziel${active?' ist-aktiv':''}" id="sgCard_${g.id}">
         <div class="sz-ziel-kopf"><span class="sz-ziel-name">${esc(g.name)}</span>${pill}</div>
@@ -1409,6 +1453,7 @@ function dlgZiel(id){
     const d=dialog(g.name,`<form data-form>
         <label for="zlName">Name</label><input id="zlName" value="${esc(g.name||'')}">
         <label for="zlTarget">Zielbetrag (€)</label><input id="zlTarget" type="number" step="0.01" inputmode="decimal" value="${g.target_amount!=null?esc(g.target_amount):''}">
+        <label for="zlLink">Link <span class="sz-freiwillig">wo es das gibt</span></label><input id="zlLink" type="url" inputmode="url" autocomplete="off" placeholder="https://…" value="${feldWert(g.link)}">
         ${aufgebenZeile(id)}
         <div class="modal-fuss">
             <button type="button" class="v-btn v-btn--danger" data-weg>${ikon('muell',16)} Löschen</button>
@@ -1420,7 +1465,7 @@ function dlgZiel(id){
         const t=parseFloat(document.getElementById('zlTarget').value);
         if(!n||isNaN(t)||t<=0){showToast('Name und Zielbetrag ausfüllen',true);haptic('error');return;}
         try{
-            await apiCall('/api/savings-goal/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,target_amount:t})});
+            await apiCall('/api/savings-goal/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,target_amount:t,link:document.getElementById('zlLink').value.trim()})});
             d.close();haptic('success');showToast('Gespeichert');
             await Promise.all([loadSavingsGoals(),loadSparziel()]);
         }catch(e){haptic('error');showToast(e.message||'Speichern fehlgeschlagen',true);}
@@ -1473,10 +1518,11 @@ function dlgAufgeben(id){
 }
 
 // Neues Sparziel, optional vorbefüllt (aus der Wunschliste)
-function startNewGoal(name, price){
+function startNewGoal(name, price, link){
     const d=dialog('Neues Sparziel',`<form data-form>
         <label for="sgNewName">Name</label><input id="sgNewName" placeholder="z. B. Neues Fahrrad" value="${esc(name||'')}">
         <label for="sgNewTarget">Zielbetrag (€)</label><input id="sgNewTarget" type="number" step="0.01" inputmode="decimal" placeholder="500" value="${price!=null&&price!==''?esc(price):''}">
+        <label for="sgNewLink">Link <span class="sz-freiwillig">wo es das gibt</span></label><input id="sgNewLink" type="url" inputmode="url" autocomplete="off" placeholder="https://…" value="${feldWert(link)}">
         <label class="sz-check"><input type="checkbox" id="sgNewActivate" checked> Gleich aktivieren (das bisherige Ziel ruht mit seinem Stand)</label>
         <div class="modal-fuss"><button type="submit" class="v-btn v-btn--primary">Anlegen</button></div>
     </form>`);
@@ -1484,14 +1530,14 @@ function startNewGoal(name, price){
     fokusAmRechner(name?'sgNewTarget':'sgNewName');
     haptic('tap');
 }
-
 async function createSavingsGoal(d){
     const name=document.getElementById('sgNewName').value.trim();
     const target=parseFloat(document.getElementById('sgNewTarget').value);
     const activate=document.getElementById('sgNewActivate').checked;
+    const link=document.getElementById('sgNewLink').value.trim()||null;
     if(!name||isNaN(target)||target<=0){showToast('Name und Zielbetrag ausfüllen',true);haptic('error');return;}
     try{
-        await apiCall('/api/savings-goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,target_amount:target,activate})});
+        await apiCall('/api/savings-goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,target_amount:target,activate,link})});
         if(d) d.close();
         haptic('success');showToast(activate?'Sparziel angelegt und aktiv':'Sparziel angelegt');
         await Promise.all([loadSavingsGoals(),loadSparziel()]);
@@ -1611,9 +1657,10 @@ async function loadPotentialGoals(){
         potentialCache=d;
         box.innerHTML = d.length ? '<div class="rec-list">'+d.map(p=>{
             const price=(p.estimated_price!=null&&p.estimated_price!=='')?Number(p.estimated_price):null;
+            const meta=[price!=null?'':'Preis offen', p.link?linkKurz(p.link):''].filter(Boolean).join(' · ');
             return `<button type="button" class="rec-row" id="potLi_${p.id}" onclick="dlgWunsch(${p.id})">
                 <span class="rec-mark" style="--tone:var(--sz-ton)">${ikon('einkauf',16)}</span>
-                <span class="rec-main"><span class="rec-title">${esc(p.name)}</span>${price!=null?'':'<span class="rec-meta">Preis offen</span>'}</span>
+                <span class="rec-main"><span class="rec-title">${esc(p.name)}</span>${meta?`<span class="rec-meta">${esc(meta)}</span>`:''}</span>
                 ${price!=null?`<span class="rec-side"><span class="rec-val">${fmtEur(price)}</span></span>`:''}
                 <span class="rec-go">${ikon('pfeil',16)}</span>
             </button>`;
@@ -1623,14 +1670,31 @@ async function loadPotentialGoals(){
         box.innerHTML=fehlerHTML('Die Wunschliste konnte nicht geladen werden.','loadPotentialGoals()');
     }
 }
+/* v2.36.0: ein Wunsch laesst sich aendern (vorher nur ansehen und loeschen)
+   -- sonst kaeme ein Link nie nachtraeglich hinein. */
 function dlgWunsch(id){
     const w=(potentialCache||[]).find(x=>x.id===id); if(!w) return;
-    const price=w.estimated_price!=null&&w.estimated_price!==''?Number(w.estimated_price):null;
-    const d=dialog(w.name,`<dl class="sz-details"><dt>Preis</dt><dd>${price!=null?fmtEur(price):'offen'}</dd></dl>
+    const d=dialog(w.name,`<form data-form>
+        <label for="wuName">Name</label><input id="wuName" value="${feldWert(w.name)}">
+        <label for="wuPrice">Preis (€)</label><input id="wuPrice" type="number" step="0.01" inputmode="decimal" placeholder="offen" value="${feldWert(w.estimated_price)}">
+        <label for="wuLink">Link <span class="sz-freiwillig">wo es das gibt</span></label><input id="wuLink" type="url" inputmode="url" autocomplete="off" placeholder="https://…" value="${feldWert(w.link)}">
+        ${w.link?`<p class="sz-link-zeile">${linkKnopf(w.link,linkKurz(w.link)||'Ansehen')}</p>`:''}
         <div class="modal-fuss">
-            <button type="button" class="v-btn v-btn--danger" data-weg>${ikon('muell',16)} Löschen</button>
-            <button type="button" class="v-btn v-btn--primary" data-ziel>${ikon('ziel',16)} Als Sparziel anlegen</button>
-        </div>`);
+            <button type="button" class="v-btn v-btn--danger v-btn--icon" data-weg aria-label="Wunsch löschen" title="Löschen">${ikon('muell',17)}</button>
+            <button type="button" class="v-btn" data-ziel>${ikon('ziel',16)} Als Sparziel</button>
+            <button type="submit" class="v-btn v-btn--primary">Speichern</button>
+        </div>
+    </form>`);
+    formular(d,async()=>{
+        const n=document.getElementById('wuName').value.trim();
+        const pv=document.getElementById('wuPrice').value;
+        if(!n){showToast('Name fehlt',true);haptic('error');return;}
+        try{
+            await apiCall('/api/potential-goals/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({name:n,estimated_price:pv===''?null:parseFloat(pv),link:document.getElementById('wuLink').value.trim()})});
+            d.close();haptic('success');showToast('Gespeichert');await loadPotentialGoals();
+        }catch(e){haptic('error');showToast(e.message||'Speichern fehlgeschlagen',true);}
+    });
     beiKlick(d,'[data-ziel]',()=>{d.close();startWishGoal(id);});
     beiKlick(d,'[data-weg]',()=>{d.close();deletePotential(id);});
 }
@@ -1639,12 +1703,13 @@ function dlgWunsch(id){
 function startWishGoal(id){
     const w=(potentialCache||[]).find(x=>x.id===id);
     if(!w)return;
-    startNewGoal(w.name, w.estimated_price!=null?Number(w.estimated_price):'');
+    startNewGoal(w.name, w.estimated_price!=null?Number(w.estimated_price):'', w.link||'');
 }
 function dlgNeuerWunsch(){
     const d=dialog('Neuer Wunsch',`<form data-form>
         <label for="potName">Name</label><input id="potName" placeholder="z. B. Fahrrad">
         <label for="potPrice">Preis (€)</label><input id="potPrice" type="number" step="0.01" inputmode="decimal" placeholder="optional">
+        <label for="potLink">Link <span class="sz-freiwillig">wo es das gibt</span></label><input id="potLink" type="url" inputmode="url" autocomplete="off" placeholder="https://…">
         <div class="modal-fuss"><button type="submit" class="v-btn v-btn--primary">Hinzufügen</button></div>
     </form>`);
     formular(d,()=>createPotential(d));
@@ -1653,8 +1718,9 @@ function dlgNeuerWunsch(){
 async function createPotential(d){
     const n=document.getElementById('potName').value.trim(),pv=document.getElementById('potPrice').value,pr=pv===''?null:parseFloat(pv);
     if(!n){showToast('Name fehlt',true);haptic('error');return;}
-    try{await apiCall('/api/potential-goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,estimated_price:pr})});if(d)d.close();haptic('success');await loadPotentialGoals();}
-    catch(e){haptic('error');showToast('Hinzufügen fehlgeschlagen',true);}
+    const lk=document.getElementById('potLink').value.trim()||null;
+    try{await apiCall('/api/potential-goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,estimated_price:pr,link:lk})});if(d)d.close();haptic('success');await loadPotentialGoals();}
+    catch(e){haptic('error');showToast(e.message||'Hinzufügen fehlgeschlagen',true);}
 }
 function deletePotential(id){
     const li=document.getElementById('potLi_'+id);
@@ -1677,6 +1743,35 @@ function ideaKind(cat){
     if(k==='progress'||k==='wochenziel'||k==='weekly') return 'progress';
     return null;
 }
+// Was eine ausgearbeitete Idee verspricht, in einer Zeile.
+function ideeZusammenfassung(i){
+    const c=i.config; if(!c) return '';
+    if(ideaKind(i.category)==='progress')
+        return `${c.target_count}× ${c.rhythm_type==='monthly'?'pro Monat':'pro Woche'} · ${fmtEur(c.reward_amount)}`;
+    return `${fmtEur(c.reward_amount)} alle ${fmtNum(c.threshold_increment)} ${c.unit||''}`.trim();
+}
+/* Eine Idee speichern -- neu (id null) oder ausgearbeitet. Die Vorlage ist
+   genau das, was beim Anlegen ginge, ohne den Titel (der steht an der Idee). */
+async function ideeSpeichern(d, art, id, body){
+    if(!body) return;
+    const config=Object.assign({},body); delete config.title;
+    try{
+        await apiCall(id?'/api/future-ideas/'+id:'/api/future-ideas',{method:id?'PUT':'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({title:body.title,category:art,config:config})});
+        if(d) d.close();
+        haptic('success');showToast(id?'Idee gespeichert':'Als Idee gespeichert – aktivieren unter „Ziele“');
+        await loadFutureIdeas();
+    }catch(e){haptic('error');showToast(e.message||'Speichern fehlgeschlagen',true);}
+}
+async function ideeAktivieren(id,d){
+    try{
+        const r=await apiCall('/api/future-ideas/'+id+'/activate',{method:'POST'});
+        if(d) d.close();
+        haptic('success');showToast(r&&r.art==='progress'?'Wochenziel aktiviert':'Achievement aktiviert');
+        await Promise.all([loadFutureIdeas(),loadProgressGoals(),loadAchievements()]);
+    }catch(e){haptic('error');showToast(e.message||'Aktivieren fehlgeschlagen',true);}
+}
 
 async function loadFutureIdeas(){
     const box=document.getElementById('ideaList'); if(!box)return;
@@ -1685,13 +1780,15 @@ async function loadFutureIdeas(){
         ideaCache=d;
         box.innerHTML = d.length ? '<div class="rec-list">'+d.map(i=>{
             const kind=ideaKind(i.category);
+            const bereit=!!(kind&&i.config);
+            const meta=bereit?'bereit · '+ideeZusammenfassung(i):(kind?'noch nicht ausgearbeitet':'');
             return `<button type="button" class="rec-row" id="ideaLi_${i.id}" onclick="dlgIdee(${i.id})">
-                <span class="rec-mark" style="--tone:var(--warn)">${ikon('idee',16)}</span>
-                <span class="rec-main"><span class="rec-title">${esc(i.title)}</span></span>
+                <span class="rec-mark" style="--tone:${bereit?'var(--sz-ton)':'var(--warn)'}">${ikon('idee',16)}</span>
+                <span class="rec-main"><span class="rec-title">${esc(i.title)}</span>${meta?`<span class="rec-meta">${esc(meta)}</span>`:''}</span>
                 ${kind?`<span class="sz-art">${IDEA_KINDS[kind].label}</span>`:''}
                 <span class="rec-go">${ikon('pfeil',16)}</span>
             </button>`;
-        }).join('')+'</div>' : leerHTML('Noch keine Idee gesammelt: alles ohne Preisschild, ein Kurs, eine Reise, ein neues Wochenziel.','','','idee');
+        }).join('')+'</div>' : leerHTML('Noch keine Idee gesammelt: ein Wochenziel oder Achievement fertig vorbereiten und später mit einem Tipp aktivieren – oder einfach etwas ohne Preisschild notieren.','','','idee');
     }catch(e){
         console.error(e);
         box.innerHTML=fehlerHTML('Die Ideen konnten nicht geladen werden.','loadFutureIdeas()');
@@ -1700,29 +1797,46 @@ async function loadFutureIdeas(){
 function dlgIdee(id){
     const i=(ideaCache||[]).find(x=>x.id===id); if(!i) return;
     const kind=ideaKind(i.category);
-    const d=dialog(i.title,`<dl class="sz-details"><dt>Art</dt><dd>${kind?IDEA_KINDS[kind].label:'ohne'}</dd></dl>
+    const bereit=!!(kind&&i.config);
+    const d=dialog(i.title,`<dl class="sz-details"><dt>Art</dt><dd>${kind?IDEA_KINDS[kind].label:'offen'}</dd>
+            ${bereit?`<dt>Vorlage</dt><dd>${esc(ideeZusammenfassung(i))}</dd>`:''}</dl>
+        <p class="sz-dlg-hinweis">${bereit?'Fertig ausgearbeitet – „Aktivieren“ legt es genau so an.'
+            :kind?'Noch nicht ausgearbeitet. Mit Belohnung und allem Übrigen lässt sie sich später mit einem Tipp aktivieren.'
+            :'Eine Notiz ohne Art – etwas ohne Preisschild.'}</p>
         <div class="modal-fuss">
-            <button type="button" class="v-btn v-btn--danger" data-weg>${ikon('muell',16)} Löschen</button>
-            ${kind==='progress'?`<button type="button" class="v-btn v-btn--primary" data-anlegen>Als Wochenziel anlegen</button>`
-              :kind==='milestone'?`<button type="button" class="v-btn v-btn--primary" data-anlegen>Als Achievement anlegen</button>`
-              :`<button type="button" class="v-btn" data-zu>Schließen</button>`}
+            <button type="button" class="v-btn v-btn--danger v-btn--icon" data-weg aria-label="Idee löschen" title="Löschen">${ikon('muell',17)}</button>
+            ${kind?`<button type="button" class="v-btn${bereit?'':' v-btn--primary'}" data-ausarbeiten>${bereit?'Bearbeiten':'Ausarbeiten'}</button>`:''}
+            ${bereit?`<button type="button" class="v-btn v-btn--primary" data-aktivieren>${ikon('haken',16)} Aktivieren</button>`:''}
+            ${kind?'':'<button type="button" class="v-btn" data-zu>Schließen</button>'}
         </div>`);
     beiKlick(d,'[data-weg]',()=>{d.close();deleteIdea(id);});
     beiKlick(d,'[data-zu]',()=>d.close());
-    beiKlick(d,'[data-anlegen]',()=>{
+    beiKlick(d,'[data-ausarbeiten]',()=>{
         d.close();
-        if(kind==='progress'){dlgNeuesWochenziel();const f=document.getElementById('pgTitle');if(f)f.value=i.title;}
-        else{dlgNeuesAchievement();const f=document.getElementById('achTitle');if(f)f.value=i.title;}
+        if(kind==='progress') dlgNeuesWochenziel({idee:i}); else dlgNeuesAchievement({idee:i});
     });
+    beiKlick(d,'[data-aktivieren]',()=>ideeAktivieren(id,d));
 }
 function dlgNeueIdee(){
     const d=dialog('Neue Idee',`<form data-form>
         <label for="ideaTitle">Titel</label><input id="ideaTitle" placeholder="z. B. Sprachkurs">
         <label for="ideaKind">Wird vielleicht</label>
         <select id="ideaKind"><option value="">— offen —</option><option value="milestone">ein Achievement</option><option value="progress">ein Wochenziel</option></select>
-        <div class="modal-fuss"><button type="submit" class="v-btn v-btn--primary">Hinzufügen</button></div>
+        <p class="sz-dlg-hinweis">„Ausarbeiten“ legt Belohnung und alles Übrige gleich fest – dann ist die Idee später mit einem Tipp aktiv.</p>
+        <div class="modal-fuss">
+            <button type="submit" class="v-btn">Nur notieren</button>
+            <button type="button" class="v-btn v-btn--primary" data-ausarbeiten>Ausarbeiten</button>
+        </div>
     </form>`);
     formular(d,()=>createIdea(d));
+    beiKlick(d,'[data-ausarbeiten]',()=>{
+        const titel=document.getElementById('ideaTitle').value.trim();
+        const art=document.getElementById('ideaKind').value;
+        if(!art){showToast('Erst wählen, was es werden soll',true);haptic('error');return;}
+        d.close();
+        const idee={id:null,title:titel,config:null};
+        if(art==='progress') dlgNeuesWochenziel({idee}); else dlgNeuesAchievement({idee});
+    });
     fokusAmRechner('ideaTitle');
 }
 async function createIdea(d){
@@ -1806,10 +1920,10 @@ function renderLog(){
     }
     if(logView==='weekly') renderLogWeekly(rows,body,filtered); else renderLogFlat(rows,body);
 }
-const LOG_LABELS={initial:'Start',milestone:'Meilenstein',checkin:'Check-in',streak_bonus:'Bonus',transfer:'Übertrag',progress:'Fortschritt',aufgegeben:'Aufgegeben'};
+const LOG_LABELS={initial:'Start',milestone:'Meilenstein',checkin:'Check-in',streak_bonus:'Bonus',transfer:'Übertrag',progress:'Fortschritt',aufgegeben:'Aufgegeben',aenderung:'Änderung'};
 const LOG_ZEICHEN={initial:['muenze','var(--text-2)'],milestone:['ziel','var(--sz-ton)'],checkin:['haken','var(--sz-ton)'],
     streak_bonus:['flamme','var(--warn)'],transfer:['tauschen','var(--info)'],progress:['pfeil','var(--text-3)'],
-    aufgegeben:['archiv','var(--text-2)']};
+    aufgegeben:['archiv','var(--text-2)'],aenderung:['stift','var(--text-3)']};
 function logRowHtml(r){
     const t=r.type||'initial';
     const z=LOG_ZEICHEN[t]||['uhr','var(--text-3)'];
@@ -1925,13 +2039,17 @@ function dlgLogEintrag(type, logId){
             ${row.description?`<dt>Was</dt><dd>${esc(row.description)}</dd>`:''}
             ${amt?`<dt>Betrag</dt><dd>${amt>0?'+':''}${fmtEur(amt)}</dd>`:''}
         </dl>
-        <label for="noteText">Notiz</label>
+        ${type==='aenderung'?`<div class="modal-fuss"><button type="button" class="v-btn" data-zu>Schließen</button></div>`
+        :`<label for="noteText">Notiz</label>
         <textarea id="noteText" rows="3" placeholder="Freie Notiz …">${esc(row.note||'')}</textarea>
         <div class="modal-fuss">
             ${row.deletable?`<button type="button" class="v-btn v-btn--danger" data-weg>${ikon('muell',16)} Löschen</button>`:''}
             <button type="submit" class="v-btn v-btn--primary">Notiz speichern</button>
-        </div>
+        </div>`}
     </form>`);
+    // Eine Aenderung ist ein Protokolleintrag, keine Notizstelle.
+    beiKlick(d,'[data-zu]',()=>d.close());
+    if(type==='aenderung'){ const f=d.root.querySelector('[data-form]'); if(f) f.addEventListener('submit',e=>e.preventDefault()); return; }
     formular(d,()=>submitNote(type,logId,d));
     beiKlick(d,'[data-weg]',()=>{d.close();deleteLogEntry(type,logId);});
 }

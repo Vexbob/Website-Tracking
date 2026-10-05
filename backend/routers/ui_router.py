@@ -227,6 +227,24 @@ def _check_default_range(value: Any) -> str:
     return v
 
 
+# ---------- Sparziel: Hoechstzahl an Wochenzielen (v2.36.0) ----------
+# Der Server liest sie beim Anlegen selbst (main._wochenziel_platz_pruefen);
+# hier steht nur, was als Wert gilt. 0 heisst: keine Grenze.
+MAX_WOCHENZIELE_PREF = "ui_sparziel_max_wochenziele"
+
+
+def _check_max_wochenziele(value: Any) -> int:
+    if isinstance(value, bool):
+        raise ValueError("eine Zahl von 0 bis 50")
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("eine Zahl von 0 bis 50")
+    if n < 0 or n > 50 or n != float(value):
+        raise ValueError("eine Zahl von 0 bis 50")
+    return n
+
+
 # ---------- Verlaufs-Presets (v1.74.0) ----------
 # Verlaeufe gibt es an genau vier Stellen (docs/DESIGN.md 3); drei davon sind
 # einstellbar. WIE ein Preset aussieht, steht ausschliesslich in
@@ -362,6 +380,7 @@ UI_PREFS = {
     GRAD_BACKDROP_PREF: _one_of(ALLOWED_BACKDROPS),
     THEMES_PREF: _check_themes,
     EXPORT_PREF: _check_export,
+    MAX_WOCHENZIELE_PREF: _check_max_wochenziele,
 }
 
 

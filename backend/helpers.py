@@ -284,6 +284,16 @@ async def _sparziel_protocol_lines(db, user_id: int) -> list[str]:
         title = "Anfangsbestand" if st == "initial" else (desc[:40] or st)
         log_body.append(f'{d};{row_type};{_export_csv_field(title)};{_export_csv_field(desc)};{pk};{float(r["amount"]):.2f};{_export_csv_field(r["note"] or "")}')
 
+    # v2.36.0: was am Modul geaendert wurde. Ueber 0 EUR -- es bewegt kein
+    # Geld, sagt aber, warum ein Wochenziel ab einem Tag anders zahlt.
+    ae_rows = await db.fetch(
+        "SELECT created_at, aktion, objekt, titel, details FROM sparziel_aenderungen "
+        "WHERE user_id=$1 ORDER BY created_at", user_id)
+    for r in ae_rows:
+        d = r["created_at"].isoformat() if r["created_at"] else ""
+        art = f'{r["objekt"]} {r["aktion"]}'
+        log_body.append(f'{d};aenderung;{_export_csv_field(r["titel"])};{_export_csv_field(art + (" - " + r["details"] if r["details"] else ""))};;0.00;')
+
     return sorted(log_body)
 
 
