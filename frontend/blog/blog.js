@@ -31,34 +31,6 @@ function readingTime(html) {
     return Math.max(1, Math.round(words / 200));
 }
 
-function sanitizeHtml(html) {
-    const allowed = new Set(['P','H1','H2','H3','H4','H5','H6','UL','OL','LI','BLOCKQUOTE','PRE','CODE','STRONG','B','EM','I','U','S','A','BR','HR','IMG','DIV','SPAN']);
-    const doc = new DOMParser().parseFromString(html || '', 'text/html');
-    const walk = (node) => {
-        Array.from(node.children).forEach(child => {
-            if (!allowed.has(child.tagName)) {
-                const parent = child.parentNode;
-                while (child.firstChild) parent.insertBefore(child.firstChild, child);
-                parent.removeChild(child);
-                return;
-            }
-            const keep = child.tagName === 'A' ? ['href','target','rel']
-                : child.tagName === 'IMG' ? ['src','alt','title']
-                : child.tagName === 'DIV' ? ['class','data-done']
-                : child.tagName === 'SPAN' ? ['class','contenteditable']
-                : [];
-            Array.from(child.attributes).forEach(attr => {
-                if (!keep.includes(attr.name.toLowerCase())) child.removeAttribute(attr.name);
-                else if (attr.name.toLowerCase() === 'href' && !/^https?:\/\/|^mailto:|^\//.test(attr.value)) child.removeAttribute('href');
-            });
-            if (child.tagName === 'A') { child.setAttribute('target', '_blank'); child.setAttribute('rel', 'noopener'); }
-            walk(child);
-        });
-    };
-    walk(doc.body);
-    return doc.body.innerHTML;
-}
-
 // ==========================================================
 // Routing
 // ==========================================================
@@ -197,7 +169,7 @@ async function renderDetail(slug) {
                 <span class="dot"></span>
                 <span>⏱ ${rt} min Lesezeit</span>
             </div>
-            <div class="content">${sanitizeHtml(absolutizeMedia(p.content_html || ''))}</div>
+            <div class="content">${VexHtml.sauber(absolutizeMedia(p.content_html || ''))}</div>
             ${p.tags && p.tags.length ? `<div class="tags-inline">${p.tags.map(t => `<span class="t">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
         `;
     } catch (e) {

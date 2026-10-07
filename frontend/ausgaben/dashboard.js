@@ -31,10 +31,11 @@ function populateFilters() {
     // Typ-Filter: eingebaute + eigene Typen, wie sie der Server kennt.
     const t = document.getElementById('filterType');
     if (t) t.innerHTML = '<option value="">Alle Typen</option>' + expenseTypeOptions('');
+    // Namen kommen auch aus dem Bank-Import (Empfaenger) -- maskiert, nicht roh (v2.40.0).
     const s = document.getElementById('filterStore');
-    stores.forEach(x => s.insertAdjacentHTML('beforeend', `<option value="${x.id}">${x.icon || ''} ${x.name}</option>`));
+    stores.forEach(x => s.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(x.id)}">${escapeHtml((x.icon || '') + ' ' + x.name)}</option>`));
     const c = document.getElementById('filterCategory');
-    categories.forEach(x => c.insertAdjacentHTML('beforeend', `<option value="${x.id}">${x.icon || ''} ${x.name}</option>`));
+    categories.forEach(x => c.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(x.id)}">${escapeHtml((x.icon || '') + ' ' + x.name)}</option>`));
 }
 
 /* Eine Hauptzahl, der Rest ordnet sich unter. Der laufende Monat ist die

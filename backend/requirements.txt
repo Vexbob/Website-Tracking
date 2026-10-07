@@ -1,34 +1,38 @@
-fastapi==0.109.0
+# v2.40.0: alle Pakete mit bekannten Luecken angehoben (pip-audit gegen OSV).
+# Der wichtigste Grund: python-multipart 0.0.6 blieb an einem praeparierten
+# Content-Type haengen (CVE-2024-24762) -- eine einzige Anfrage an /token,
+# ohne Konto, legte den Server lahm. tests/test_rahmen.py prueft das.
+fastapi==0.142.2
 uvicorn[standard]==0.27.0
 asyncpg==0.29.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
-python-jose[cryptography]==3.3.0
-python-multipart==0.0.6
-pydantic==2.5.3
-slowapi==0.1.9
-pytest==8.0.0
-pytest-asyncio==0.23.5
+python-jose[cryptography]==3.5.0
+python-multipart==0.0.32
+pydantic==2.13.5
+slowapi==0.1.10
+pytest==9.1.1
+pytest-asyncio==1.4.0
 # JavaScript-Parser fuer test_navigation.py. Ohne ihn faellt ein Syntaxfehler
 # im Frontend erst im Browser auf -- und dort still: eine Datei, die nicht
 # geparst werden kann, wird gar nicht ausgefuehrt. Genau so lag der
 # Blog-Editor acht Versionen lang leer da.
 esprima==4.0.1
-Pillow==10.2.0
+Pillow==12.3.0
 # HEIC/HEIF (iPhone-Fotos). Ohne dieses Paket kann Pillow HEIC nicht
 # oeffnen; services/expenses.py faengt das Fehlen ab, dann sind HEIC-
 # Uploads eben nicht moeglich.
-pillow-heif==0.15.0
+pillow-heif==1.8.0
 # PDF-Text mit Lage (Depot: Trade-Republic-Kontoauszug, v2.38.0). Rein in
 # Python, ohne Binaerteile -- das Railway-Image braucht nichts dazu.
-pdfminer.six==20231228
+pdfminer.six==20251230
 # Zeitzonen: python:3.11-slim bringt keine tzdata mit, und die Automatik im
 # Schach-Modul rechnet in Ortszeit (Europe/Vienna). Ohne das Paket faellt sie
 # auf UTC zurueck -- die eingestellte Stunde waere dann ein bis zwei Stunden
 # daneben.
 tzdata==2024.1
 google-cloud-vision==3.7.4
-google-genai>=1.0.0
+google-genai==2.28.0
 # v1.35.0: optional -- nur ziehen, wenn SENTRY_DSN gesetzt werden soll.
 # Ohne installiertes sentry_sdk laeuft alles weiter, main.py fangt den
 # ImportError still ab.

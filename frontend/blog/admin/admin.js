@@ -182,7 +182,8 @@ function renderDetail() {
     document.getElementById('baTags').value = (p.tags || []).join(', ');
     document.getElementById('baIsPublic').checked = !!p.is_public;
     document.getElementById('baShowOnLogin').checked = !!p.show_on_login;
-    document.getElementById('baContent').innerHTML = absolutizeMedia(p.content_html || '');
+    // Gespeichertes HTML geht durch denselben Bereiniger wie im Blog (v2.40.0).
+    document.getElementById('baContent').innerHTML = VexHtml.sauber(absolutizeMedia(p.content_html || ''));
     normalizeTasks(document.getElementById('baContent'));
     renderState();
     setStatus('idle');

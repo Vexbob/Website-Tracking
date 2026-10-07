@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0a0c10">
-<meta name="description" content="Depot: der Trade-Republic-Kontoauszug, gelesen und geprüft – Bestand, Verkauftes und jede Buchung.">
+<meta name="description" content="Depot: der Trade-Republic-Kontoauszug mit Kursen – Depotwert, Ergebnis, Bestand und jede Buchung.">
 <title>Depot — Vexbob</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -19,7 +19,7 @@
 <script src="/js/ikon.js"></script>
 <script src="/js/reiter.js"></script>
 <script src="/js/sw-update.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" defer></script>
 <script src="/js/charts.js"></script>
 <script src="/js/range-filter.js"></script>
 </head>
@@ -64,16 +64,18 @@
         <div id="tab-ueberblick">
             <section class="v-buehne dp-buehne">
                 <div class="dp-b-haupt">
-                    <span class="v-buehne-marke" id="dpMarke">Realisiert</span>
+                    <span class="v-buehne-marke" id="dpMarke">Depotwert</span>
                     <strong class="v-held" id="dpHeld">–</strong>
                     <span class="dp-b-unter" id="dpUnter"></span>
+                    <span class="dp-b-stand" id="dpStand"></span>
+                    <div class="dp-b-hinweise" id="dpHinweise"></div>
                 </div>
                 <div class="dp-b-verlauf">
                     <div class="dp-b-verlauf-kopf">
-                        <span class="dp-b-verlauf-titel">Verlauf seit dem Anfang</span>
+                        <span class="dp-b-verlauf-titel" id="dpVerlaufTitel">Depotwert</span>
                         <span class="dp-legende" id="dpVerlaufLegende"></span>
                     </div>
-                    <div class="dp-b-flaeche"><canvas id="dpChartVerlauf" aria-label="Eingezahlt und in Wertpapieren über die Zeit"></canvas></div>
+                    <div class="dp-b-flaeche"><canvas id="dpChartVerlauf" aria-label="Depotwert und Einstand über die Zeit"></canvas></div>
                 </div>
                 <dl class="dp-zahlen" id="dpZahlen"></dl>
             </section>
@@ -83,14 +85,24 @@
                     <h2>Im Bestand</h2>
                     <span class="v-abschnitt-sub" id="dpBestandSub"></span>
                 </header>
-                <div id="dpBestand"></div>
+                <div class="v-card dp-bestand-karte">
+                    <div class="dp-ring-reihe" id="dpAufteilung">
+                        <div class="dp-ring" id="dpRingBestand"><canvas id="dpChartBestand" aria-label="Aufteilung des Bestands nach Wert"></canvas></div>
+                        <div id="dpBestand" class="dp-bestand-liste"></div>
+                    </div>
+                </div>
             </section>
 
             <section class="v-abschnitt">
                 <header class="v-abschnitt-kopf">
-                    <h2>Verkauft</h2>
-                    <span class="v-abschnitt-sub" id="dpVerkauftSub"></span>
+                    <h2>Realisiert</h2>
+                    <span class="v-abschnitt-sub" id="dpRealSub"></span>
                 </header>
+                <div class="v-card dp-karte-diagramm">
+                    <div class="v-card-head"><h3>Je Jahr</h3><span class="v-card-sub" id="dpJahreSub"></span></div>
+                    <div class="dp-flaeche dp-flaeche--klein"><canvas id="dpChartJahre" aria-label="Realisierte Gewinne und Verluste je Jahr"></canvas></div>
+                </div>
+                <h3 class="dp-unterkopf">Ganz verkauft <span id="dpVerkauftSub"></span></h3>
                 <div id="dpVerkauft"></div>
             </section>
         </div>
@@ -103,6 +115,10 @@
             </div>
             <div class="dp-kz" id="dpKennzahlen"></div>
             <div class="dp-raster">
+                <section class="v-card dp-karte-diagramm dp-breit">
+                    <div class="v-card-head"><h3>Ergebnis je Monat</h3><span class="v-card-sub" id="dpErgMonSub"></span></div>
+                    <div class="dp-flaeche"><canvas id="dpChartErgebnis" aria-label="Gewinn oder Verlust des ganzen Depots je Monat"></canvas></div>
+                </section>
                 <section class="v-card dp-karte-diagramm dp-breit">
                     <div class="v-card-head"><h3>Gekauft und verkauft je Monat</h3><span class="dp-legende" id="dpMonateLegende"></span></div>
                     <div class="dp-flaeche"><canvas id="dpChartMonate"></canvas></div>
@@ -119,7 +135,7 @@
                     <div class="dp-flaeche dp-flaeche--klein"><canvas id="dpChartZinsen"></canvas></div>
                 </section>
                 <section class="v-card dp-karte-diagramm dp-breit">
-                    <div class="v-card-head"><h3>Ergebnis je verkauftem Wertpapier</h3><span class="v-card-sub" id="dpErgSub"></span></div>
+                    <div class="v-card-head"><h3>Realisiert je Wertpapier</h3><span class="v-card-sub" id="dpErgSub"></span></div>
                     <div class="rank-list" id="dpErgebnisse"></div>
                 </section>
             </div>

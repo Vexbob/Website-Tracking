@@ -14,6 +14,20 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.40.0', date: '2026-10-07', title: 'Sicherheit: bekannte Lücken geschlossen', notes: [
+        'Server-Pakete angehoben: Eine präparierte Anfrage an den Login konnte den Server ohne Konto lahmlegen.',
+        'Der Blog bereinigt Beiträge jetzt lückenlos; vorher kam ein Bild mit Skript in einem Formular durch.',
+        'Chart.js und die anderen fremden Skripte laden in fester Fassung und mit Prüfsumme.',
+        'Die Login-Sperre zählt je Besucher statt für alle zusammen.',
+        'Laden- und Kategorienamen in den Ausgaben-Filtern werden maskiert.',
+    ]},
+    { v: 'v2.39.0', date: '2026-10-07', title: 'Depot: Depotwert aus Kursen', notes: [
+        'Der Depotwert kommt aus Tageskursen (onvista, bevorzugt LS Exchange) und den Stückzahlen des Auszugs.',
+        'Fehlt in alten Zeilen die Stückzahl, wird sie aus Betrag und Kurs am Kauftag gerechnet; eine Zahl aus der App geht vor.',
+        'Die Kurve zeigt Depotwert und Einstand statt der Geldflüsse, die bei Entnahmen ins Minus liefen.',
+        'Realisiert zählt auch Teilverkäufe nach Durchschnittskurs, dazu ein Diagramm je Jahr.',
+        'Neu: Aufteilung des Bestands, Ergebnis je Monat und je Wertpapier der Kurs mit den eigenen Käufen.',
+    ]},
     { v: 'v2.38.0', date: '2026-10-06', title: 'Depot: Trade-Republic-Kontoauszug lesen', notes: [
         'Neues Modul „Depot“ (in Arbeit): Es liest den Kontoauszug von Trade Republic als PDF.',
         'Jede Buchung wird gegen Saldo und Kontoübersicht geprüft; was nicht aufgeht, wird nicht übernommen.',

@@ -18,6 +18,7 @@ os.environ.setdefault("DATABASE_URL", "postgres://test:test@localhost/test")
 
 from services import depot_import as leser                    # noqa: E402
 from routers import depot_router                               # noqa: E402
+from services import depot_rechnung as rechnung                # noqa: E402
 
 # Spalten wie im echten Auszug (x-Lage in pt).
 X = {"datum": 74, "typ": 101, "besch": 145, "ein": 373, "aus": 427, "saldo": 494}
@@ -147,9 +148,10 @@ def test_der_lesbarste_name_gewinnt():
     assert leser.bester_name(["US00TEST0066", "BEISPIEL INC. DL-,00001"]) == "BEISPIEL INC. DL-,00001"
 
 
-def _b(datum_, art, betrag, isin="IE0000000001", stueck=None, name="Welt-ETF"):
+def _b(datum_, art, betrag, isin="IE0000000001", stueck=None, name="Welt-ETF", saldo=None):
     return {"datum": datum_, "art": art, "betrag": Decimal(betrag), "isin": isin,
-            "stueck": None if stueck is None else Decimal(stueck), "name": name}
+            "stueck": None if stueck is None else Decimal(stueck), "name": name,
+            "saldo": None if saldo is None else Decimal(saldo)}
 
 
 def test_bestand_und_ergebnis():
@@ -174,20 +176,6 @@ def test_ein_wertpapier_heisst_ueberall_gleich():
     assert depot_router.namen(rows) == {"IE0000000001": "Welt-ETF Acc"}
 
 
-def test_der_verlauf_ist_lueckenlos_und_laeuft_auf():
-    rows = [_b(date(2024, 1, 5), "einzahlung", "500", isin=None),
-            _b(date(2024, 1, 6), "sparplan", "-200"),
-            # Februar ohne Buchung: der Stand vom Januar bleibt stehen.
-            _b(date(2024, 3, 2), "auszahlung", "-100", isin=None),
-            _b(date(2024, 3, 9), "verkauf", "50")]
-    assert depot_router.verlauf(rows) == [
-        {"monat": "2024-01", "eingezahlt": 500.0, "investiert": 200.0},
-        {"monat": "2024-02", "eingezahlt": 500.0, "investiert": 200.0},
-        {"monat": "2024-03", "eingezahlt": 400.0, "investiert": 150.0},
-    ]
-    assert depot_router.verlauf([]) == []
-
-
 def test_statistik_rechnet_ueber_einen_zeitraum():
     rows = [_b(date(2023, 6, 1), "kauf", "-100", isin="DE0000000003", name="Alt"),
             _b(date(2024, 1, 3), "einzahlung", "300", isin=None),
@@ -199,7 +187,8 @@ def test_statistik_rechnet_ueber_einen_zeitraum():
             _b(date(2024, 3, 11), "ertrag", "1.2"),
             # Ausserhalb des Zeitraums: zaehlt fuer nichts ausser das Ergebnis.
             _b(date(2024, 5, 1), "sparplan", "-999")]
-    s = depot_router.statistik(rows, date(2024, 1, 1), date(2024, 3, 31))
+    aw = rechnung.auswerten(rows, {}, {}, heute=date(2024, 5, 1))
+    s = depot_router.statistik(rows, date(2024, 1, 1), date(2024, 3, 31), aw)
     assert [m["monat"] for m in s["monate"]] == ["2024-01", "2024-02", "2024-03"]
     assert s["monate"][0]["sparplan"] == 150.0 and s["monate"][1]["zinsen"] == 2.5
     assert s["monate"][2]["verkauf"] == 130.0 and s["monate"][2]["ertraege"] == 1.2
@@ -207,13 +196,14 @@ def test_statistik_rechnet_ueber_einen_zeitraum():
                              {"isin": "IE0000000002", "name": "Schwellen", "summe": 30.0}]
     # Der Kauf von 2023 gehoert zum Ergebnis, obwohl er vor dem Zeitraum liegt.
     assert s["ergebnisse"] == [{"isin": "DE0000000003", "name": "Alt", "ergebnis": 30.0,
-                                "letzte": "2024-03-10"}]
+                                "letzte": "2024-03-10", "im_bestand": False}]
     k = s["kennzahlen"]
     # Ø nur ueber die zwei Monate mit Sparplan, nicht ueber drei.
     assert k["sparplan_schnitt"] == 150.0 and k["sparplan_monate"] == 2
     assert k["ausfuehrungen"] == 4 and k["ertraege_zinsen"] == 3.7
     assert k["eingezahlt_netto"] == 300.0 and k["realisiert"] == 30.0
-    assert [v["monat"] for v in s["verlauf"]] == ["2024-01", "2024-02", "2024-03"]
+    # Der Verlauf beginnt erst, wo jeder rechenbare Bestand bekannt ist.
+    assert k["ergebnis_ab"] == "2024-03-10" and s["monate"][0]["ergebnis"] is None
 
 
 # ------------------------------------------------- Uebernehmen (Router)

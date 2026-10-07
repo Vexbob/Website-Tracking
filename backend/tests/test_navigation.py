@@ -213,6 +213,8 @@ def test_wer_einen_geteilten_baustein_benutzt_laedt_ihn_auch():
     bausteine = {"VexModal": "/js/modal.js",
                  "VexRing": "/js/ring.js",
                  "VexBild": "/js/bild.js",
+                 # v2.40.0: der Bereiniger fuer gespeichertes HTML (Blog).
+                 "VexHtml": "/js/html-sauber.js",
                  "VexIkon": "/js/ikon.js"}
     front = WURZEL / "frontend"
     seiten = [(h, h.read_text(encoding="utf-8")) for h in front.rglob("*.html")]

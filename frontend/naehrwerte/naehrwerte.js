@@ -1931,6 +1931,9 @@ async function ladeGerichte() {
  */
 
 const ZXING_CDN = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+// Pruefsumme der Datei (v2.40.0): liefert das CDN etwas anderes, laedt der
+// Browser sie nicht -- statt fremden Code mit Zugriff auf das Anmelde-Token.
+const ZXING_SRI = 'sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB';
 const FORMATE = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
 
 const kamera = { stream: null, leser: null, laeuft: false };
@@ -1991,6 +1994,8 @@ function ladeZXing() {
     return new Promise((fertig, fehler) => {
         const skript = document.createElement('script');
         skript.src = ZXING_CDN;
+        skript.integrity = ZXING_SRI;
+        skript.crossOrigin = 'anonymous';
         skript.onload = () => fertig(window.ZXing);
         skript.onerror = () => fehler(new Error('Die Scanner-Bibliothek ließ sich nicht laden.'));
         document.head.appendChild(skript);

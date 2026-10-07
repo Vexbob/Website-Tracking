@@ -121,6 +121,10 @@ TABLES_ORDERED = [
     "depot_imports",
     "depot_import_dateien",
     "depot_buchungen",
+    # v2.39.0: die Stueckzahl laut App. Die Kurse (depot_kurse,
+    # depot_kursquellen) gehoeren allen und sind ein Zwischenspeicher --
+    # ohne user_id und bewusst nicht gesichert.
+    "depot_stueck",
     "user_prefs",
 ]
 

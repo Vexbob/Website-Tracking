@@ -37,8 +37,27 @@ class RequestIdFilter(logging.Filter):
 
 logger = logging.getLogger("vexbob")
 
+def besucher_adresse(request) -> str:
+    """Wer eine Anfrage schickt -- der Schluessel fuer die Rate-Limits.
+
+    Bis v2.39.0 stand hier ``get_remote_address``: die Adresse der
+    Verbindung. Auf Railway ist das der vorgeschaltete Proxy, nicht der
+    Besucher -- uvicorn traut ``X-Forwarded-For`` nur von 127.0.0.1. Damit
+    teilten sich ALLE dieselben fuenf Login-Versuche je Minute, und wer
+    fuenfmal falsch tippte, sperrte auch den Besitzer aus.
+
+    Genommen wird der LETZTE Eintrag von ``X-Forwarded-For``: den haengt der
+    Proxy selbst an. Die Eintraege davor kommen vom Besucher und lassen sich
+    beliebig faelschen -- wer den ersten naehme, koennte mit jeder Anfrage
+    eine neue Adresse behaupten und die Sperre umgehen. Ohne den Kopf (lokal,
+    Tests) gilt wie bisher die Adresse der Verbindung."""
+    weiter = request.headers.get("x-forwarded-for", "")
+    letzte = weiter.split(",")[-1].strip() if weiter else ""
+    return letzte or get_remote_address(request)
+
+
 # Ein einziger Limiter für die gesamte App (in main.py an app.state gebunden).
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=besucher_adresse)
 
 # Rate-Limit-Konstanten (Slowapi-Syntax)
 LIMIT_LOGIN = "5/minute"

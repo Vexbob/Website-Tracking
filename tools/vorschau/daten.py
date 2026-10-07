@@ -593,75 +593,134 @@ STRECKE_REIHE = _g_reihe(lambda i: _welle(i, 6.1, 1.0, 0.9, 0.7), rund=1,
                          luecken={23, 51}, einheit="km")
 SAUERSTOFF_REIHE = _g_reihe(lambda i: _welle(i, 96.5, 0.6, 0.3, 0.5), rund=1, einheit="%")
 
-# v2.38.0: ein gelesener Kontoauszug im Depot. Alle Zahlen ERFUNDEN --
-# geformt wie die Antwort von /api/depot/uebersicht, nicht wie ein echtes Konto.
-def _wp(isin, name, gekauft, verkauft, n, stueck, bestand, letzte, ertraege=0.0):
-    return {"isin": isin, "name": name, "gekauft": gekauft, "verkauft": verkauft,
-            "ertraege": ertraege, "ausfuehrungen": n, "stueck": stueck,
-            "stueck_bekannt": stueck is not None, "im_bestand": bestand,
-            "ergebnis": round(verkauft - gekauft + ertraege, 2), "letzte": letzte,
-            "letzte_art": "sparplan" if bestand else "verkauf"}
-DEPOT_UEBERSICHT = {
-    "leer": False, "von": "2022-03-01", "bis": "2026-10-04", "anzahl": 412, "saldo": 23.18,
-    "arten": {
-        "einzahlung": {"anzahl": 60, "summe": 9200.0, "label": "Einzahlung"},
-        "auszahlung": {"anzahl": 12, "summe": -3100.0, "label": "Auszahlung"},
-        "kauf": {"anzahl": 40, "summe": -7400.0, "label": "Kauf"},
-        "sparplan": {"anzahl": 230, "summe": -4600.0, "label": "Sparplan"},
-        "verkauf": {"anzahl": 28, "summe": 5850.0, "label": "Verkauf"},
-        "ertrag": {"anzahl": 6, "summe": 41.2, "label": "Ertrag"},
-        "zinsen": {"anzahl": 36, "summe": 31.98, "label": "Zinsen"},
-    },
-    "wertpapiere": [
-        _wp("IE00TEST0001", "Welt-ETF Acc", 6100.0, 900.0, 180, 52.4183, True, "2026-10-02"),
-        _wp("IE00TEST0002", "Schwellenländer-ETF Acc", 1400.0, 0.0, 64, None, True, "2026-10-02"),
-        _wp("LU00TEST0003", "Europa-ETF 1C", 2300.0, 2610.5, 31, 0.0, False, "2025-04-11"),
-        _wp("XF000BTC0017", "Bitcoin", 600.0, 420.75, 9, None, False, "2026-05-17"),
-        _wp("US00TEST0005", "Einzelaktie Inc.", 1600.0, 1918.75, 6, 0.0, False, "2025-11-22", ertraege=41.2),
-    ],
-}
-def _dp_monate():
-    """Erfundene Monate von 03/2022 bis 10/2026 fuer Verlauf und Statistik."""
-    raus, j, m, ein, inv = [], 2022, 3, 0.0, 0.0
+# v2.38.0/v2.39.0: ein gelesener Kontoauszug im Depot. Alle Zahlen ERFUNDEN.
+# Die Antworten entstehen aus erfundenen Buchungen und Kursen ueber DIESELBE
+# Rechnung wie im Server (``depot_rechnung`` und ``depot_router.statistik``)
+# -- von Hand gesetzte Zahlen hatten sich in v2.38.0 widersprochen (Kachel
+# 31,20 €, Legende darunter 42,70 €). Wie beim echten Auszug nennen die
+# Zeilen vor dem 10.06.2024 keine Stueckzahl; beim Schwellenlaender-ETF wird
+# sie deshalb aus den Kursen gerechnet, beim Welt-ETF steht die Zahl der App.
+def _dp_daten():
+    import math
+    import os
+    from decimal import Decimal as D
+    os.environ.setdefault("SECRET_KEY", "nur-vorschau")
+    os.environ.setdefault("DATABASE_URL", "postgres://vorschau@localhost/vorschau")
+    from services import depot_rechnung as rc
+    from routers import depot_router as dr
+
+    namen = {"IE00TEST0001": "Welt-ETF Acc", "IE00TEST0002": "Schwellenländer-ETF Acc",
+             "LU00TEST0003": "Europa-ETF 1C", "XF000BTC0017": "Bitcoin",
+             "US00TEST0005": "Einzelaktie Inc.", "LU00TEST0006": "Europa 600 ETF"}
+    def kurs_am(isin, t):
+        n = (t - datetime.date(2022, 1, 1)).days
+        basis = {"IE00TEST0001": 80, "IE00TEST0002": 30, "LU00TEST0003": 70, "XF000BTC0017": 26000,
+                 "US00TEST0005": 300, "LU00TEST0006": 50}[isin]
+        trend = {"IE00TEST0001": 0.00045, "IE00TEST0002": 0.0002, "LU00TEST0003": 0.0003,
+                 "XF000BTC0017": 0.0009, "US00TEST0005": 0.0004, "LU00TEST0006": 0.00025}[isin]
+        return D(str(round(basis * math.exp(trend * n) * (1 + 0.05 * math.sin(n / 47) + 0.02 * math.sin(n / 9)), 4)))
+
+    rows, saldo = [], D(0)
+    def buche(t, art, betrag, isin=None, stueck=None):
+        nonlocal saldo
+        saldo += D(str(betrag))
+        rows.append({"datum": t, "art": art, "betrag": D(str(betrag)), "isin": isin,
+                     "name": namen.get(isin), "stueck": stueck, "saldo": saldo})
+    def handel(t, art, betrag, isin):
+        k = kurs_am(isin, t)
+        mit = t >= datetime.date(2024, 6, 10)
+        q = (D(str(abs(betrag))) / k).quantize(D("0.000001")) if mit else None
+        buche(t, art, betrag, isin, q)
+        return q
+    t = datetime.date(2022, 3, 1)
     i = 0
-    while (j, m) <= (2026, 10):
-        spar = 0.0 if i < 8 else 150.0 + (i % 5) * 20
-        kauf = 600.0 if i % 9 == 2 else 0.0
-        verk = 900.0 if i % 13 == 7 else 0.0
-        ein += 300.0 - (800.0 if i % 11 == 10 else 0.0)
-        inv += spar + kauf - verk
-        raus.append({"monat": f"{j:04d}-{m:02d}", "sparplan": spar, "kauf": kauf, "verkauf": verk,
-                     "zinsen": round(0.0 if i < 18 else 1.5 + (i % 4) * 0.8, 2),
-                     "ertraege": 6.4 if i % 12 == 5 else 0.0,
-                     "eingezahlt": round(ein, 2), "investiert": round(inv, 2)})
-        i += 1; m += 1
-        if m > 12: j, m = j + 1, 1
-    return raus
-_DPM = _dp_monate()
-DEPOT_UEBERSICHT["verlauf"] = [{"monat": x["monat"], "eingezahlt": x["eingezahlt"],
-                                "investiert": x["investiert"]} for x in _DPM]
-# Die Kennzahlen werden aus denselben Monaten gerechnet wie die Balken --
-# sonst nennt die Kachel eine andere Summe als die Legende darunter.
-_DPS = _DPM[-13:]
-_DP_SPAR = [x["sparplan"] for x in _DPS if x["sparplan"] > 0]
-_DP_SPAR_SUMME = sum(_DP_SPAR)
-DEPOT_STATISTIK = {
-    "leer": False, "von": "2025-10-06", "bis": "2026-10-04",
-    "monate": [{k: x[k] for k in ("monat", "kauf", "sparplan", "verkauf", "zinsen", "ertraege")} for x in _DPS],
-    "verlauf": DEPOT_UEBERSICHT["verlauf"][-13:],
-    "sparplan": [{"isin": "IE00TEST0001", "name": "Welt-ETF Acc", "summe": round(_DP_SPAR_SUMME * 0.66, 2)},
-                 {"isin": "IE00TEST0002", "name": "Schwellenländer-ETF Acc", "summe": round(_DP_SPAR_SUMME * 0.24, 2)},
-                 {"isin": "LU00TEST0006", "name": "Europa 600 ETF", "summe": round(_DP_SPAR_SUMME * 0.10, 2)}],
-    # Nur, was im Zeitraum zuletzt verkauft wurde -- Europa-ETF 1C (04/2025) nicht.
-    "ergebnisse": [{"isin": "US00TEST0005", "name": "Einzelaktie Inc.", "ergebnis": 359.95, "letzte": "2025-11-22"},
-                   {"isin": "XF000BTC0017", "name": "Bitcoin", "ergebnis": -179.25, "letzte": "2026-05-17"}],
-    "kennzahlen": {"sparplan_schnitt": round(_DP_SPAR_SUMME / len(_DP_SPAR), 2),
-                   "sparplan_monate": len(_DP_SPAR), "ausfuehrungen": 74,
-                   "ertraege_zinsen": round(sum(x["zinsen"] + x["ertraege"] for x in _DPS), 2),
-                   "eingezahlt_netto": round(_DPS[-1]["eingezahlt"] - _DPM[-14]["eingezahlt"], 2),
-                   "realisiert": 180.7},
-}
-DEPOT_STATISTIK["ergebnisse"].sort(key=lambda x: -x["ergebnis"])
+    bestand_eu = D(0)
+    while t <= datetime.date(2026, 10, 1):
+        buche(t, "einzahlung", 300 if i % 11 != 10 else 300)
+        if i % 11 == 10:
+            buche(t + datetime.timedelta(days=3), "auszahlung", -800)
+        if i >= 6:
+            handel(t + datetime.timedelta(days=1), "sparplan", -(100 + (i % 4) * 10), "IE00TEST0001")
+            handel(t + datetime.timedelta(days=1), "sparplan", -40, "IE00TEST0002")
+        if i >= 40:
+            handel(t + datetime.timedelta(days=1), "sparplan", -20, "LU00TEST0006")
+        if i >= 27 and t + datetime.timedelta(days=27) <= datetime.date(2026, 10, 4):
+            buche(t + datetime.timedelta(days=27), "zinsen", round(0.6 + (i % 5) * 0.35, 2))
+        i += 1
+        t = datetime.date(t.year + (t.month == 12), t.month % 12 + 1, 1)
+    # Einzelkaeufe und -verkaeufe: zwei ganz verkauft, einer mit Verlust.
+    handel(datetime.date(2022, 5, 10), "kauf", -900, "LU00TEST0003")
+    handel(datetime.date(2023, 9, 4), "kauf", -600, "LU00TEST0003")
+    q = handel(datetime.date(2024, 8, 6), "kauf", -400, "LU00TEST0003")
+    buche(datetime.date(2025, 4, 11), "verkauf", 2310.5, "LU00TEST0003", None)
+    handel(datetime.date(2023, 2, 2), "kauf", -600, "XF000BTC0017")
+    buche(datetime.date(2023, 5, 17), "verkauf", 420.75, "XF000BTC0017", None)
+    handel(datetime.date(2024, 11, 4), "kauf", -1200, "US00TEST0005")
+    buche(datetime.date(2025, 3, 3), "ertrag", 6.4, "US00TEST0005")
+    buche(datetime.date(2025, 11, 22), "verkauf", 1418.75, "US00TEST0005",
+          sum((r["stueck"] for r in rows if r["isin"] == "US00TEST0005" and r["stueck"]), D(0)))
+    # Ein Teilverkauf des Welt-ETF: realisiert, obwohl er im Bestand bleibt.
+    k = kurs_am("IE00TEST0001", datetime.date(2026, 2, 12))
+    buche(datetime.date(2026, 2, 12), "verkauf", 900, "IE00TEST0001", (D(900) / k).quantize(D("0.000001")))
+    rows.sort(key=lambda r: r["datum"])
+    # Den Saldo nach dem Sortieren neu aufbauen: die Kette muss aufgehen.
+    s_ = D(0)
+    for r in rows:
+        s_ += r["betrag"]; r["saldo"] = s_
+    # Europa-ETF wurde ganz verkauft: der Verkauf nennt ALLE Stuecke, auch die
+    # aus den alten Zeilen ohne Stueckzahl -- wie im echten Auszug.
+    for r in rows:
+        if r["isin"] == "LU00TEST0003" and r["art"] == "verkauf":
+            r["stueck"] = sum((-x["betrag"] / kurs_am("LU00TEST0003", x["datum"]) for x in rows
+                               if x["isin"] == "LU00TEST0003" and x["art"] != "verkauf"), D(0)).quantize(D("0.000001"))
+
+    kurse = {}
+    for isin in namen:
+        t, liste = datetime.date(2022, 1, 3), []
+        while t <= datetime.date(2026, 10, 5):
+            if t.weekday() < 5:
+                liste.append((t, kurs_am(isin, t)))
+            t += datetime.timedelta(days=1)
+        kurse[isin] = liste
+    # Welt-ETF: Stueck laut App, ausgerechnet aus den eigenen Zeilen (alte geschaetzt).
+    welt = sum((-r["betrag"] / kurs_am("IE00TEST0001", r["datum"])
+                for r in rows if r["isin"] == "IE00TEST0001"), D(0)).quantize(D("0.000001"))
+    anker = {"IE00TEST0001": (welt, datetime.date(2026, 10, 5))}
+    heute = datetime.date(2026, 10, 6)
+    aw = rc.auswerten(rows, kurse, anker, heute=heute)
+    papiere = []
+    for w in dr.wertpapiere(rows):
+        x = aw["positionen"].get(w["isin"], {})
+        w.update(x)
+        w["ergebnis"] = round((x.get("realisiert") or 0) + w["ertraege"], 2)
+        w["stueck_bekannt"] = x.get("stueck") is not None or not x.get("im_bestand")
+        papiere.append(w)
+    papiere.sort(key=lambda w: w["letzte"] or "", reverse=True)
+    papiere.sort(key=lambda w: (not w["im_bestand"], -(w.get("wert") or w.get("einstand") or 0)))
+    uebersicht = {
+        "leer": False, "von": rows[0]["datum"].isoformat(), "bis": rows[-1]["datum"].isoformat(),
+        "anzahl": len(rows), "saldo": float(rows[-1]["saldo"]),
+        "arten": dr._summen_je_art(rows), "wertpapiere": papiere,
+        "depot": dict(aw["jetzt"], verlauf_ab=aw["beginn"].isoformat()),
+        "verlauf": [{k: p[k] for k in ("datum", "wert", "einstand", "ergebnis")} for p in aw["verlauf"]],
+        "realisiert_jahre": rc.realisiert_jahre(aw["realisiert"], rows[0]["datum"].year, aw["ende"].year),
+        "kurse_offen": 0,
+    }
+    statistik = dict(dr.statistik(rows, datetime.date(2025, 10, 6), datetime.date(2026, 10, 4), aw), leer=False)
+    einzeln = {}
+    for isin in namen:
+        einzeln["/api/depot/wertpapier/" + isin] = {
+            "kurse": [{"datum": t.isoformat(), "kurs": float(k)} for t, k in kurse[isin]],
+            "ausfuehrungen": [{"datum": r["datum"].isoformat(), "art": r["art"],
+                               "kurs": round(abs(float(r["betrag"])) / float(r["stueck"]), 4)}
+                              for r in rows if r["isin"] == isin and r["stueck"] and r["art"] in dr.HANDEL],
+            "markt": "LS Exchange", "fehler": None}
+    return uebersicht, statistik, einzeln
+try:
+    DEPOT_UEBERSICHT, DEPOT_STATISTIK, DEPOT_EINZELN = _dp_daten()
+except ImportError as e:      # ohne Backend-Pakete: das Depot bleibt leer, der Rest laeuft
+    print("Depot-Vorschau ohne Daten:", e)
+    DEPOT_UEBERSICHT, DEPOT_STATISTIK, DEPOT_EINZELN = {"leer": True}, {"leer": True}, {}
 
 DEPOT_BUCHUNGEN = {"gesamt": 412, "buchungen": [
     {"id": 1, "datum": "2026-10-02", "art": "sparplan", "art_label": "Sparplan", "typ": "Handel",
@@ -1022,6 +1081,7 @@ ANTWORTEN = {
     "/api/depot/buchungen": DEPOT_BUCHUNGEN,
     "/api/depot/statistik": DEPOT_STATISTIK,
     "/api/depot/imports": DEPOT_AUSZUEGE,
+    **DEPOT_EINZELN,
     "/api/health/manuell": VON_HAND,
     "/api/health/metrics/*": [],
     "/api/health/sleep": SCHLAF_NAECHTE,
