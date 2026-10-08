@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.45.0', date: '2026-10-08', title: 'CS2: fertig, gleicher Preis zählt als Bestätigung', notes: [
+        'Enter in einem Preisfeld bestätigt den Preis auch dann, wenn er gleich geblieben ist.',
+        'Wer denselben Preis neu eintippt, bestätigt ihn ebenfalls; bloßes Durchtabben nicht.',
+        'CS2 steht nicht mehr unter „In Arbeit“, sondern bei den fertigen Modulen.',
+    ]},
     { v: 'v2.44.0', date: '2026-10-08', title: 'Musik: Hördiagramm in Stunden', notes: [
         'Der Verlauf zeigt Hörzeit in Stunden statt Wiedergaben – eine Podcast-Folge wiegt jetzt ihre Länge.',
         'Angefangene Overcast-Folgen zählen mit ihrer gehörten Zeit.',

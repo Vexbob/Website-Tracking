@@ -69,7 +69,7 @@
         // Mengen gibt es dort nicht einmal als Spalte.
         { href: '/cs2/',        label: '🎯 CS2',             public: false, icon: 'cs2',   short: 'CS2',
           tone: '--m-cs2',
-          sub: 'Bestand an Spielgegenständen und sein Zeitwert', status: 'neu' },
+          sub: 'Bestand an Spielgegenständen und sein Zeitwert' },
         { href: '/essen/',      label: '🍽️ Essenstagebuch', public: false, icon: 'meal',  short: 'Essen',
           tone: '--m-essen',
           sub: 'Hinschreiben, was es gab — mehr nicht' },

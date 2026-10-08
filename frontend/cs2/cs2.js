@@ -502,11 +502,18 @@ function zurueck(feld, satz) {
     return false;
 }
 
-async function feldSpeichern(feld) {
+/* ``bestaetigen``: auch ein unveraenderter Preis geht an den Server (v2.45.0).
+   Bis dahin brach diese Funktion bei gleichem Wert ab -- „nachgesehen, kostet
+   noch dasselbe“ kam nie an, und die Zeile blieb faellig. Bestaetigt wird
+   nur auf einen Handgriff hin: Enter im Feld, oder derselbe Preis neu
+   eingetippt. Wer bloss durchtabbt, bestaetigt nichts. */
+async function feldSpeichern(feld, bestaetigen) {
     const roh = feld.value.trim();
-    if (roh === feld.dataset.wert) return false;
-    const id = Number(feld.dataset.id);
     const menge = feld.dataset.feld === 'menge';
+    const getippt = feld.dataset.getippt === '1';
+    delete feld.dataset.getippt;
+    if (roh === feld.dataset.wert && (menge || !(bestaetigen || getippt))) return false;
+    const id = Number(feld.dataset.id);
 
     // Leeren ist kein Loeschen: beide Endpunkte lesen "nichts" als "nichts
     // aendern". Das stillschweigend zurueckzusetzen waere eine Aenderung, die
@@ -1141,7 +1148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!f) return;
         if (ev.key === 'Enter') {
             ev.preventDefault();
-            feldSpeichern(f).then(() => naechstesFeld(f, 1));
+            feldSpeichern(f, true).then(() => naechstesFeld(f, 1));
         } else if (ev.key === 'Escape') {
             ev.preventDefault();
             f.value = f.dataset.wert;
@@ -1151,6 +1158,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     liste.addEventListener('change', (ev) => {
         const f = ev.target.closest('.cs-feld');
         if (f) feldSpeichern(f);
+    });
+    // Derselbe Preis neu eingetippt: ``change`` feuert dann nicht (der Wert
+    // ist ja gleich), also merkt sich das Feld, DASS getippt wurde, und
+    // bestaetigt beim Verlassen.
+    liste.addEventListener('input', (ev) => {
+        const f = ev.target.closest('.cs-feld[data-feld="preis"]');
+        if (f) f.dataset.getippt = '1';
+    });
+    liste.addEventListener('focusout', (ev) => {
+        const f = ev.target.closest('.cs-feld[data-feld="preis"]');
+        if (f && f.dataset.getippt === '1' && f.value.trim() === f.dataset.wert) feldSpeichern(f);
     });
     liste.addEventListener('focusin', (ev) => {
         const f = ev.target.closest('.cs-feld');
