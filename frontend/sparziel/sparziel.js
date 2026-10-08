@@ -2148,17 +2148,39 @@ function renderTrophies(){
     const total=trophyData.reduce((a,t)=>a+Number(t.final_amount||0),0);
     const withDur=trophyData.filter(t=>t.duration_days);
     const avgDays=withDur.length?Math.round(withDur.reduce((a,t)=>a+t.duration_days,0)/withDur.length):null;
-    stats.textContent=`${trophyData.length} · ${fmtEur(total)} gespart${avgDays!=null?' · Ø '+avgDays+' Tage':''}`;
+    const gekauft=trophyData.filter(t=>t.gekauft_am).length;
+    stats.textContent=`${trophyData.length} · ${gekauft} gekauft · ${fmtEur(total)} gespart${avgDays!=null?' · Ø '+avgDays+' Tage':''}`;
+    // v2.43.0: der Haken „gekauft“ sitzt in der Ecke der Kachel -- ein Tipp
+    // darauf setzt ihn, die Kachel selbst oeffnet weiter den Dialog.
     grid.innerHTML=trophyData.map(t=>{
         const farbe=TROPHAEEN_FARBEN.indexOf(t.color)>=0?t.color:'gold';
         const date=t.completed_at?new Date(t.completed_at).toLocaleDateString('de-DE',{month:'short',year:'numeric'}):'';
-        return `<button type="button" class="sz-trophae ${farbe}" onclick="dlgTrophae(${t.id})">
-            <span class="sz-trophae-icon" aria-hidden="true">${esc(t.icon||'🏆')}</span>
-            <span class="sz-trophae-name">${esc(t.name)}</span>
-            <span class="sz-trophae-betrag">${fmtEur(t.final_amount)}</span>
-            <span class="sz-trophae-meta">${esc(date)}${t.duration_days?' · '+t.duration_days+' Tage':''}</span>
-        </button>`;
+        const an=!!t.gekauft_am;
+        const hakenText=an?'Gekauft – Haken entfernen':'Als gekauft markieren';
+        return `<div class="sz-trophae ${farbe}${an?' ist-gekauft':''}">
+            <button type="button" class="sz-trophae-haupt" onclick="dlgTrophae(${t.id})">
+                <span class="sz-trophae-icon" aria-hidden="true">${esc(t.icon||'🏆')}</span>
+                <span class="sz-trophae-name">${esc(t.name)}</span>
+                <span class="sz-trophae-betrag">${fmtEur(t.final_amount)}</span>
+                <span class="sz-trophae-meta">${an?'gekauft':esc(date)}${!an&&t.duration_days?' · '+t.duration_days+' Tage':''}</span>
+            </button>
+            <button type="button" class="sz-trophae-haken" aria-pressed="${an}" aria-label="${hakenText}" title="${hakenText}"
+                onclick="trophaeGekauft(${t.id},${!an})">${ikon('haken',15)}</button>
+        </div>`;
     }).join('');
+}
+/* Haken „gekauft“ setzen oder wegnehmen. Der Tag kommt aus dem Browser --
+   abends um elf ist in UTC schon morgen. */
+async function trophaeGekauft(id,gekauft){
+    const heute=new Date();
+    const tag=heute.getFullYear()+'-'+String(heute.getMonth()+1).padStart(2,'0')+'-'+String(heute.getDate()).padStart(2,'0');
+    try{
+        await apiCall('/api/trophies/'+id+'/gekauft',{method:'PUT',body:{gekauft,datum:tag}});
+        haptic('success');
+        showToast(gekauft?'Als gekauft markiert':'Haken entfernt');
+        await loadTrophies();
+        return true;
+    }catch(e){haptic('error');showToast('Das ging nicht: '+(e.message||e),true);return false;}
 }
 function dlgTrophae(id){
     const t=trophyData.find(x=>x.id===id); if(!t) return;
@@ -2169,12 +2191,18 @@ function dlgTrophae(id){
             ${t.duration_days?`<dt>Dauer</dt><dd>${t.duration_days} Tage</dd>`:''}
             ${t.note?`<dt>Notiz</dt><dd>„${esc(t.note)}“</dd>`:''}
         </dl>
+        <button type="button" class="v-schalt-zeile sz-gekauft-zeile" role="switch" aria-checked="${!!t.gekauft_am}" data-gekauft>
+            <span class="sz-gekauft-text"><strong>Gekauft</strong>
+                <small>${t.gekauft_am?'am '+esc(new Date(t.gekauft_am+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'long',year:'numeric'})):'noch nicht angeschafft'}</small></span>
+            <span class="v-schalter" aria-hidden="true"></span>
+        </button>
         <div class="modal-fuss">
             <button type="button" class="v-btn v-btn--danger" data-weg>${ikon('muell',16)} Löschen</button>
             <button type="button" class="v-btn" data-zu>Schließen</button>
         </div>`);
     beiKlick(d,'[data-zu]',()=>d.close());
     beiKlick(d,'[data-weg]',async()=>{if(await deleteTrophy(id)) d.close();});
+    beiKlick(d,'[data-gekauft]',async()=>{if(await trophaeGekauft(id,!t.gekauft_am)){d.close();dlgTrophae(id);}});
 }
 async function deleteTrophy(id){
     if(!await askConfirm({title:'Trophäe löschen?',

@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.43.0', date: '2026-10-08', title: 'Sparziel: Trophäen mit Haken „gekauft“', notes: [
+        'Rechts oben auf jeder Trophäe setzt ein Tipp den Haken „gekauft“, noch einer nimmt ihn zurück.',
+        'Im Dialog steht, wann gekauft wurde; über den Kacheln, wie viele es sind.',
+        'Jedes Setzen und Entfernen kommt ins Log.',
+    ]},
     { v: 'v2.42.0', date: '2026-10-08', title: 'Overcast, Erinnerungen und Tagebuch', notes: [
         'Musik: Overcast-Export (OPML) importieren; fertige Folgen zählen mit ihrer Länge aus dem Feed der Sendung.',
         'Startseite: Erinnerungen wie „CS2-Bestand aktualisieren“, einstellbar unter Einstellungen.',

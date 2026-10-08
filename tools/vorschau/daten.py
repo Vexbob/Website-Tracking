@@ -397,10 +397,14 @@ def _sparkurve():
 TROPHAEEN = [
     {"id": 1, "name": "Kamera gekauft", "icon": "🏆", "color": "gold",
      "final_amount": 850.0, "target_amount": 850.0,
-     "completed_at": "2026-05-14T18:20:00", "duration_days": 142, "note": "Endlich!"},
+     "completed_at": "2026-05-14T18:20:00", "duration_days": 142, "note": "Endlich!",
+     "gekauft_am": "2026-05-16"},
     {"id": 2, "name": "Konzertreise", "icon": "🎉", "color": "purple",
      "final_amount": 420.0, "target_amount": 400.0,
-     "completed_at": "2026-02-02T10:00:00", "duration_days": 61, "note": None},
+     "completed_at": "2026-02-02T10:00:00", "duration_days": 61, "note": None, "gekauft_am": None},
+    {"id": 3, "name": "Neues Rennrad", "icon": "🚀", "color": "blue",
+     "final_amount": 2400.0, "target_amount": 2400.0,
+     "completed_at": "2026-09-30T19:00:00", "duration_days": 210, "note": None, "gekauft_am": None},
 ]
 WUENSCHE = [
     {"id": 1, "name": "Kopfhörer mit Geräuschunterdrückung", "estimated_price": 249.0,

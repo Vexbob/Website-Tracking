@@ -42,7 +42,7 @@ from schemas import (
     SavGoalUpd, SavGoalCreate, SavGoalTransfer, SavGoalGiveUp, AchCreate, AchUpd, AchEdit,
     PGCreate, PGUpd, CheckinBody, NoteBody,
     PotCreate, PotUpd, FICreate, FIUpd, ReorderBody, RestoreBody,
-    UserCreate, UserPasswordReset, UserCreateInvite, ActivateBody, TrophyCreate,
+    UserCreate, UserPasswordReset, UserCreateInvite, ActivateBody, TrophyCreate, TrophaeGekauft,
     AchAutoConfirm,
 )
 
@@ -2548,6 +2548,30 @@ async def complete_savings_goal(request: Request, gid: int, b: TrophyCreate, db=
     logger.info(f"User {user['id']} completed goal {gid} (goal removed), "
                 f"saved trophy {trophy['id']}")
     return ser(trophy)
+
+@app.put("/api/trophies/{tid}/gekauft")
+@limiter.limit(LIMIT_WRITE_STANDARD)
+async def trophae_gekauft(request: Request, tid: int, b: TrophaeGekauft,
+                          db=Depends(get_db), user=Depends(get_current_user)):
+    """Haken „gekauft“ setzen oder wegnehmen (v2.43.0). Wie jede Aenderung am
+    Sparziel kommt das ins Log."""
+    tag = None
+    if b.gekauft:
+        try:
+            tag = date.fromisoformat(b.datum) if b.datum else date.today()
+        except ValueError:
+            raise HTTPException(400, "Das Datum ist nicht lesbar.")
+        if tag > date.today() + timedelta(days=1):
+            raise HTTPException(400, "Das Datum liegt in der Zukunft.")
+    row = await db.fetchrow(
+        "UPDATE completed_goals SET gekauft_am=$3 WHERE id=$1 AND user_id=$2 RETURNING *",
+        tid, user["id"], tag)
+    if not row:
+        raise HTTPException(404, "Nicht gefunden")
+    await aenderungen.vermerken(db, user["id"], "geaendert", "trophaee", tid, row["name"],
+                                f"gekauft am {tag.strftime('%d.%m.%Y')}" if tag else "„gekauft“ zurückgenommen")
+    return ser(row)
+
 
 @app.delete("/api/trophies/{tid}")
 @limiter.limit(LIMIT_WRITE_STANDARD)

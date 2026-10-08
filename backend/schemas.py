@@ -193,6 +193,13 @@ class ActivateBody(BaseModel):
 
 
 # ---------- Trophaeen ----------
+class TrophaeGekauft(BaseModel):
+    """v2.43.0: Haken „gekauft“ an einer Trophaee. ``datum`` ist der Tag in
+    Ortszeit des Browsers (sonst heute nach Serveruhr)."""
+    gekauft: bool
+    datum: Optional[str] = None
+
+
 class TrophyCreate(BaseModel):
     name: str
     target_amount: float

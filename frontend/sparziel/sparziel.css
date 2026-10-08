@@ -320,9 +320,9 @@ body{visibility:hidden}body.ready{visibility:visible}
 .sz-trophaeen.ist-leer { display: block; }
 .sz-trophae {
     --t-ton: var(--warn);
-    scroll-snap-align: start;
-    display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
-    width: 100%; margin: 0; padding: 1rem 0.875rem;
+    scroll-snap-align: start; position: relative;
+    display: flex; flex-direction: column; align-items: stretch;
+    width: 100%; margin: 0; padding: 0;
     border-radius: var(--radius-lg);
     border: 1px solid color-mix(in srgb, var(--t-ton) 30%, var(--line));
     background:
@@ -333,8 +333,31 @@ body{visibility:hidden}body.ready{visibility:visible}
     transition: transform var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
 }
 .sz-trophae:hover { border-color: color-mix(in srgb, var(--t-ton) 50%, var(--line)); }
-.sz-trophae:active { transform: scale(0.98); }
-.sz-trophae:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sz-trophae:has(.sz-trophae-haupt:active) { transform: scale(0.98); }
+/* v2.43.0: die Kachel ist ein Rahmen mit zwei Knoepfen -- der grosse oeffnet
+   den Dialog, der Haken in der Ecke setzt „gekauft“. */
+.sz-trophae-haupt {
+    display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+    width: 100%; margin: 0; padding: 1rem 0.875rem; background: none; border: 0;
+    border-radius: inherit; color: inherit; font: inherit; text-align: center; cursor: pointer;
+}
+.sz-trophae-haupt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sz-trophae-haken {
+    position: absolute; top: 0; right: 0; width: 44px; height: 44px; margin: 0; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: 0; border-radius: var(--radius-lg); cursor: pointer; color: var(--text-4);
+}
+.sz-trophae-haken svg { box-sizing: content-box; padding: 4px; border-radius: 50%;
+    border: 1.5px solid var(--line-strong); transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease); }
+.sz-trophae-haken:hover svg { border-color: var(--ok); color: var(--ok); }
+.sz-trophae-haken:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Gekauft: gruener Kreis mit dunklem Haken (helle Farbe traegt dunkle Schrift). */
+.sz-trophae-haken[aria-pressed="true"] svg { background: var(--ok); border-color: var(--ok); color: var(--bg); }
+.sz-trophae.ist-gekauft .sz-trophae-meta { color: var(--ok); font-weight: 600; }
+.sz-gekauft-zeile { border: 1px solid var(--line); border-radius: var(--radius); margin: var(--space-3) 0 0; }
+.sz-gekauft-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.sz-gekauft-text strong { font-size: 0.9375rem; color: var(--text-1); }
+.sz-gekauft-text small { font-size: 0.75rem; color: var(--text-3); }
 .sz-trophae.gold { --t-ton: var(--warn); }
 .sz-trophae.silver { --t-ton: var(--text-2); }
 .sz-trophae.bronze { --t-ton: var(--m-schach); }
