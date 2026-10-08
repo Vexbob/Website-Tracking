@@ -167,8 +167,8 @@ function renderItemRow(item) {
     const qty = itemPieceCount(item);
     row.innerHTML = `
         <input type="text" class="d-desc" value="${escapeAttr(item.description || '')}" placeholder="Beschreibung" aria-label="Beschreibung">
-        <input type="number" min="1" step="1" class="d-qty" value="${qty || ''}" placeholder="1×" inputmode="numeric" aria-label="Stückzahl" title="Stückzahl — nur ausfüllen, wenn der Artikel mehrfach gekauft wurde">
-        <input type="number" step="0.01" class="d-price" value="${item.total_price != null ? escapeAttr(item.total_price) : ''}" placeholder="Preis" inputmode="decimal" aria-label="Preis">
+        <label class="az-feld az-feld--menge"><input type="number" min="1" step="1" class="d-qty" value="${qty || ''}" placeholder="1" inputmode="numeric" aria-label="Stückzahl" title="Stückzahl — nur ausfüllen, wenn der Artikel mehrfach gekauft wurde"><span aria-hidden="true">×</span></label>
+        <label class="az-feld az-feld--preis"><input type="number" step="0.01" class="d-price" value="${item.total_price != null ? escapeAttr(item.total_price) : ''}" placeholder="0,00" inputmode="decimal" aria-label="Preis in Euro"><span aria-hidden="true">€</span></label>
         <select class="d-cat" aria-label="Kategorie">${catOpts}</select>
         <button type="button" class="v-btn v-btn--ghost v-btn--icon cmp" title="${cmpTitle}" aria-label="${cmpTitle}">${ikon(comparable ? 'statistik' : 'augezu', 17)}</button>
         <button type="button" class="v-btn v-btn--ghost v-btn--icon del" title="Position löschen" aria-label="Position löschen">${ikon('muell', 17)}</button>

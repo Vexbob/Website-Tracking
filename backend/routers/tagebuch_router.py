@@ -85,6 +85,8 @@ class EintragAendern(BaseModel):
     level: Optional[str] = None
     meal: Optional[str] = None
     note: Optional[str] = None
+    # v2.42.0: die Uhrzeit, „HH:MM“; leer nimmt sie weg.
+    time: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -202,9 +204,12 @@ async def _schnellwahl(db, user_id: int, tage: int, zahl: int,
     GROUP-BY-Abfrage: die Uhrzeit-Rangfolge braucht die einzelnen Zeilen, und
     zwei Monate Tagebuch sind ein paar hundert davon.
     """
+    # Was aus „Meine Lebensmittel“ genommen wurde, schlaegt sie nicht mehr vor.
     zeilen = await db.fetch(
-        "SELECT label, day, meal, logged_time FROM food_diary "
+        "SELECT label, day, meal, logged_time FROM food_diary d "
         " WHERE user_id=$1 AND day >= CURRENT_DATE - $2::int "
+        "   AND NOT EXISTS (SELECT 1 FROM food_diary_ausgeblendet a "
+        "                    WHERE a.user_id=d.user_id AND a.schluessel=lower(btrim(d.label))) "
         " ORDER BY day DESC, created_at DESC", user_id, tage)
     return schnellwahl_rang(zeilen, zahl, jetzt, schon)
 
@@ -300,6 +305,9 @@ async def eintragen(request: Request, daten: EintragEingabe,
         user["id"], tag, name, stufe, mahlzeit,
         (daten.note or "").strip() or None,
         mz.uhrzeit_fuer_spalte(zeit), geraten)
+    # Wieder eingetragen ist wieder da (v2.42.0).
+    await db.execute("DELETE FROM food_diary_ausgeblendet WHERE user_id=$1 AND schluessel=$2",
+                     user["id"], name.strip().lower())
     return await _tag(db, user["id"], tag, zeit)
 
 
@@ -315,7 +323,7 @@ async def aendern(request: Request, eintrag_id: int, daten: EintragAendern,
     weiter als geraten markiert sein.
     """
     zeile = await db.fetchrow(
-        "SELECT id, day FROM food_diary WHERE id=$1 AND user_id=$2",
+        "SELECT id, day, meal_auto FROM food_diary WHERE id=$1 AND user_id=$2",
         eintrag_id, user["id"])
     if not zeile:
         raise HTTPException(404, "Diesen Eintrag gibt es nicht.")
@@ -334,6 +342,18 @@ async def aendern(request: Request, eintrag_id: int, daten: EintragAendern,
     if daten.note is not None:
         werte.append((daten.note or "").strip() or None)
         setzen.append(f"note=${len(werte)}")
+    # v2.42.0: die Uhrzeit richtigstellen. War die Mahlzeit aus der alten
+    # Uhrzeit nur geraten, wird sie aus der neuen neu geraten; eine von Hand
+    # gesetzte bleibt -- der Ort schlaegt die Uhr.
+    if daten.time is not None:
+        neu = mz.uhrzeit_sauber(daten.time) if daten.time.strip() else None
+        if daten.time.strip() and neu is None:
+            raise HTTPException(400, "Die Uhrzeit ist nicht lesbar (HH:MM).")
+        werte.append(mz.uhrzeit_fuer_spalte(neu))
+        setzen.append(f"logged_time=${len(werte)}")
+        if neu and daten.meal is None and zeile["meal_auto"]:
+            werte.append(mz.mahlzeit_fuer_uhrzeit(neu[0]))
+            setzen.append(f"meal=${len(werte)}")
     if not setzen:
         raise HTTPException(400, "Es steht nichts zum Ändern da.")
 
@@ -341,6 +361,50 @@ async def aendern(request: Request, eintrag_id: int, daten: EintragAendern,
         f"UPDATE food_diary SET {', '.join(setzen)} WHERE id=$1 AND user_id=$2",
         *werte)
     return await _tag(db, user["id"], zeile["day"], mz.uhrzeit_sauber(at))
+
+
+@router.get("/api/food/diary/foods")
+async def meine_lebensmittel(db=Depends(get_db), user=Depends(get_current_user)):
+    """Alles, was je eingetragen wurde -- je Schreibweise klein geschrieben
+    EINE Zeile mit der juengsten Schreibweise, wie in der Schnellwahl. Was
+    herausgenommen wurde, fehlt."""
+    zeilen = await db.fetch(
+        "SELECT lower(btrim(label)) AS schluessel, "
+        "       (array_agg(label ORDER BY day DESC, created_at DESC))[1] AS label, "
+        "       COUNT(*) AS anzahl, MAX(day) AS zuletzt, MIN(day) AS zuerst "
+        "  FROM food_diary d WHERE user_id=$1 "
+        "   AND NOT EXISTS (SELECT 1 FROM food_diary_ausgeblendet a "
+        "                    WHERE a.user_id=d.user_id AND a.schluessel=lower(btrim(d.label))) "
+        " GROUP BY lower(btrim(label)) ORDER BY COUNT(*) DESC, MAX(day) DESC", user["id"])
+    return {"foods": [{"label": z["label"], "anzahl": int(z["anzahl"]),
+                       "zuletzt": z["zuletzt"].isoformat(), "zuerst": z["zuerst"].isoformat()}
+                      for z in zeilen]}
+
+
+@router.delete("/api/food/diary/foods")
+@limiter.limit(LIMIT_WRITE_FREQUENT)
+async def lebensmittel_entfernen(request: Request, label: str = Query(..., min_length=1, max_length=200),
+                                 eintraege: bool = Query(False),
+                                 db=Depends(get_db), user=Depends(get_current_user)):
+    """Aus „Meine Lebensmittel“ und der Schnellwahl nehmen. Mit
+    ``eintraege=1`` verschwinden zusaetzlich alle Tagebuch-Eintraege mit
+    diesem Namen -- sonst bleiben die Tage, wie sie waren."""
+    schluessel = label.strip().lower()
+    weg = 0
+    async with db.transaction():
+        await db.execute(
+            "INSERT INTO food_diary_ausgeblendet (user_id, schluessel) VALUES ($1,$2) "
+            "ON CONFLICT (user_id, schluessel) DO UPDATE SET ausgeblendet_at=NOW()",
+            user["id"], schluessel)
+        if eintraege:
+            r = await db.execute(
+                "DELETE FROM food_diary WHERE user_id=$1 AND lower(btrim(label))=$2",
+                user["id"], schluessel)
+            try:
+                weg = int(str(r).rsplit(" ", 1)[-1])
+            except ValueError:
+                weg = 0
+    return {"status": "ok", "eintraege_geloescht": weg}
 
 
 @router.delete("/api/food/diary/log/{eintrag_id}")

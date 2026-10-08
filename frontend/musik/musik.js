@@ -26,6 +26,10 @@ const API = {
     imports:  ()      => apiCall('/api/music/imports?limit=50'),
     delImport:(id)    => apiCall('/api/music/imports/' + id, { method: 'DELETE' }),
     clear:    ()      => apiCall('/api/music/entries', { method: 'DELETE' }),
+    ocStand:  ()      => apiCall('/api/music/overcast'),
+    ocWeg:    ()      => apiCall('/api/music/overcast', { method: 'DELETE' }),
+    ocUpload: (file)  => { const fd = new FormData(); fd.append('file', file);
+                           return apiCall('/api/music/overcast', { method: 'POST', body: fd }); },
     upload:   (file, dry) => {
         const fd = new FormData();
         fd.append('file', file);
@@ -671,6 +675,57 @@ function importSummary(r) {
     return parts.join(' · ');
 }
 
+/* ---------- Overcast (v2.42.0) ---------- */
+function ocStandHtml(d) {
+    const st = d.stand || {};
+    if (!st.folgen) {
+        return '<p class="m-hint">Noch kein Overcast-Export übernommen. Danach steht hier, wie viele Folgen '
+            + 'aus wie vielen Podcasts im Register sind.</p>';
+    }
+    const li = d.letzter_import;
+    const teile = [fmtInt(st.folgen) + ' Folgen aus ' + fmtInt(st.podcasts) + ' Podcasts',
+                   fmtInt(st.gehoert) + ' fertig gehört', fmtInt(st.angefangen) + ' angefangen'];
+    return '<div class="m-oc-box">'
+        + '<div class="m-imp-name">' + esc(teile.join(' · ')) + '</div>'
+        + '<div class="m-imp-meta">' + (st.von ? 'zwischen ' + fmtDay(st.von) + ' und ' + fmtDay(st.bis) : '')
+        + (li ? ' · zuletzt übernommen ' + fmtDay(li.hochgeladen_at) : '') + '</div>'
+        + (st.ohne_laenge ? '<div class="m-imp-meta">' + fmtInt(st.ohne_laenge)
+            + ' fertige Folgen ohne Länge: ihr Feed nennt sie nicht, sie zählen ohne Hörzeit.</div>' : '')
+        + '<div class="m-oc-aktion"><button type="button" class="v-btn v-btn--sm v-btn--ghost" id="mOcWeg">Overcast entfernen</button></div>'
+        + '</div>';
+}
+
+async function loadOvercast() {
+    const box = document.getElementById('mOcStand');
+    try { box.innerHTML = ocStandHtml(await API.ocStand()); }
+    catch (e) {
+        box.innerHTML = '<div class="empty is-error"><p class="empty-text">Der Overcast-Stand konnte nicht geladen werden: '
+            + esc(e.message || e) + '</p></div>';
+    }
+}
+
+async function ocUebernehmen(file) {
+    if (!file) return;
+    const zone = document.getElementById('mOcZone'), sub = document.getElementById('mOcSub');
+    const box = document.getElementById('mOcStand');
+    zone.classList.add('has-files');
+    sub.textContent = file.name + ' · wird gelesen, Längen kommen aus den Feeds …';
+    box.innerHTML = '<span class="skel skel-block"></span>';
+    try {
+        const r = await API.ocUpload(file);
+        if (window.Toast) Toast.success(fmtInt(r.neu) + ' neue Folgen, ' + fmtInt(r.aktualisiert) + ' aktualisiert');
+        haptic('success');
+        box.innerHTML = ocStandHtml({ stand: r.stand, letzter_import: { hochgeladen_at: new Date().toISOString(), dateiname: file.name } });
+        await Promise.all([loadFacets(), reload()]);
+    } catch (e) {
+        box.innerHTML = '<div class="empty is-error"><p class="empty-text">' + esc(e.message || e) + '</p></div>';
+    } finally {
+        zone.classList.remove('has-files');
+        sub.textContent = 'overcast.opml, bis 10 MB';
+        document.getElementById('mOcFile').value = '';
+    }
+}
+
 async function loadImportLog() {
     const box = document.getElementById('mImportLog');
     try {
@@ -857,7 +912,7 @@ function activateTab(tab) {
     // eine Behauptung.
     document.getElementById('mFilterbar').style.display = tab === 'import' ? 'none' : '';
     document.getElementById('mActiveFilters').style.display = tab === 'import' ? 'none' : '';
-    if (tab === 'import') loadImportLog();
+    if (tab === 'import') { loadImportLog(); loadOvercast(); }
     else reload();
 }
 
@@ -1030,6 +1085,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // ---- Overcast
+    const ocZone = document.getElementById('mOcZone');
+    const ocInput = document.getElementById('mOcFile');
+    ocZone.addEventListener('click', () => ocInput.click());
+    ocZone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ocInput.click(); }
+    });
+    ocZone.addEventListener('dragover', (e) => { e.preventDefault(); ocZone.classList.add('drag'); });
+    ocZone.addEventListener('dragleave', () => ocZone.classList.remove('drag'));
+    ocZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        ocZone.classList.remove('drag');
+        ocUebernehmen(e.dataTransfer.files && e.dataTransfer.files[0]);
+    });
+    ocInput.addEventListener('change', () => ocUebernehmen(ocInput.files && ocInput.files[0]));
+    document.getElementById('mOcStand').addEventListener('click', async (e) => {
+        if (!e.target.closest('#mOcWeg')) return;
+        const ok = await askConfirm({
+            title: 'Overcast-Daten entfernen?',
+            text: 'Alle Folgen aus Overcast verschwinden aus dem Register. Spotify bleibt. Zurück holt sie ein neuer Export.',
+            ok: 'Entfernen', danger: true,
+        });
+        if (!ok) return;
+        try {
+            const r = await API.ocWeg();
+            if (window.Toast) Toast.success(fmtInt(r.deleted) + ' Folgen entfernt');
+            await Promise.all([loadFacets(), loadOvercast(), reload()]);
+        } catch (err) { if (window.Toast) Toast.error(err.message || String(err)); }
+    });
+
     document.getElementById('mClearBtn').addEventListener('click', async () => {
         const ok = await askConfirm({
             title: 'Register wirklich leeren?',
@@ -1041,7 +1126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const res = await API.clear();
             if (window.Toast) Toast.success(fmtInt(res.deleted) + ' Zeilen gelöscht');
-            await Promise.all([loadFacets(), loadImportLog(), reload()]);
+            await Promise.all([loadFacets(), loadImportLog(), loadOvercast(), reload()]);
         } catch (err) {
             if (window.Toast) Toast.error(err.message || String(err));
         }

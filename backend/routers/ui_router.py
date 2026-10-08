@@ -19,6 +19,7 @@ und eine Zeile, kein neues Endpoint-Paar. Die Tab-Leiste behaelt ihre eigenen
 Endpoints, weil das Frontend dort auch Grenzen und erlaubte Ziele abholt.
 """
 import json
+import re
 from datetime import date
 from typing import Any, Dict, List
 
@@ -245,6 +246,59 @@ def _check_max_wochenziele(value: Any) -> int:
     return n
 
 
+# ---------- Erinnerungen auf der Startseite (v2.42.0) ----------
+# Hinweise wie „CS2-Bestand aktualisieren“ zu einem festen Termin: monatlich
+# an einem Tag, quartalsweise an einem Tag in einem Monat des Quartals (14. im
+# dritten Monat = 14.3., 14.6., 14.9., 14.12.) oder jaehrlich. Wann einer
+# faellig ist, rechnet js/erinnerungen.js -- hier steht nur, was als Wert
+# gilt. ``erledigt`` ist der Tag des letzten „Erledigt“; bis zum naechsten
+# Termin bleibt der Hinweis dann weg. Tage bis 28, damit jeder Monat sie hat.
+ERINNERUNGEN_PREF = "ui_erinnerungen"
+ERINNERUNGEN_MAX = 12
+RHYTHMEN = ("monat", "quartal", "jahr")
+
+
+def _check_erinnerungen(value: Any) -> List[dict]:
+    if not isinstance(value, list):
+        raise ValueError("erwartet eine Liste von Erinnerungen")
+    if len(value) > ERINNERUNGEN_MAX:
+        raise ValueError(f"hoechstens {ERINNERUNGEN_MAX} Erinnerungen")
+    out, ids = [], set()
+    for e in value:
+        if not isinstance(e, dict):
+            raise ValueError("jede Erinnerung ist ein Objekt")
+        eid = str(e.get("id") or "")
+        if not re.fullmatch(r"[a-z0-9-]{1,24}", eid) or eid in ids:
+            raise ValueError("jede Erinnerung braucht eine eigene Kennung")
+        ids.add(eid)
+        text = str(e.get("text") or "").strip()
+        if not 1 <= len(text) <= 80:
+            raise ValueError("der Text hat 1 bis 80 Zeichen")
+        href = str(e.get("href") or "")
+        if href and href not in ALLOWED_NAV_TABS:
+            raise ValueError(f"unbekanntes Modul: {href}")
+        rhythmus = e.get("rhythmus")
+        if rhythmus not in RHYTHMEN:
+            raise ValueError("Rhythmus ist monat, quartal oder jahr")
+        try:
+            tag, monat = int(e.get("tag")), int(e.get("monat") or 1)
+        except (TypeError, ValueError):
+            raise ValueError("Tag und Monat sind Zahlen")
+        if not 1 <= tag <= 28:
+            raise ValueError("der Tag liegt zwischen 1 und 28")
+        if not 1 <= monat <= (3 if rhythmus == "quartal" else 12):
+            raise ValueError("der Monat passt nicht zum Rhythmus")
+        erledigt = e.get("erledigt")
+        if erledigt is not None:
+            try:
+                erledigt = date.fromisoformat(str(erledigt)).isoformat()
+            except ValueError:
+                raise ValueError("erledigt ist ein Datum")
+        out.append({"id": eid, "text": text, "href": href, "rhythmus": rhythmus,
+                    "tag": tag, "monat": monat, "erledigt": erledigt})
+    return out
+
+
 # ---------- Verlaufs-Presets (v1.74.0) ----------
 # Verlaeufe gibt es an genau vier Stellen (docs/DESIGN.md 3); drei davon sind
 # einstellbar. WIE ein Preset aussieht, steht ausschliesslich in
@@ -381,6 +435,7 @@ UI_PREFS = {
     THEMES_PREF: _check_themes,
     EXPORT_PREF: _check_export,
     MAX_WOCHENZIELE_PREF: _check_max_wochenziele,
+    ERINNERUNGEN_PREF: _check_erinnerungen,
 }
 
 

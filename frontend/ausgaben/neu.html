@@ -30,22 +30,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 @media(max-width:500px){.form-row{grid-template-columns:1fr}}
 label{margin-bottom:0.25rem}
 .item-list{display:flex;flex-direction:column;gap:0.375rem;margin-top:0.5rem}
-.item-row{display:grid;grid-template-columns:1.8fr 64px 80px 130px 24px;gap:0.375rem;align-items:center;padding:0.4375rem;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius)}
-.item-row input,.item-row select{margin:0;padding:0.375rem 0.5rem}
-.item-row .del{background:transparent;color:var(--danger);border:none;font-size:1rem;width:auto;padding:0;margin:0;cursor:pointer;justify-self:center}
-.item-row .d-qty{text-align:right}
-.item-row .d-orig{font-size:0.6875rem;color:var(--text-3);grid-column:1 / -1;padding:0 0.125rem;margin-top:-0.25rem}
-@media(max-width:640px){
-    /* Eine Karte je Position statt gequetschter Rasterzellen. */
-    .item-row{grid-template-columns:64px 1fr 24px;gap:0.5rem;padding:0.625rem;
-        grid-template-areas:'name name name' 'qty price del' 'cat cat cat' 'orig orig orig'}
-    .item-row .d-desc{grid-area:name}
-    .item-row .d-qty{grid-area:qty}
-    .item-row .d-price{grid-area:price}
-    .item-row .d-cat{grid-area:cat}
-    .item-row .del{grid-area:del}
-    .item-row .d-orig{grid-area:orig}
-}
+/* Die Positionszeile (.item-row) steht seit v2.41.0 nur noch in ausgaben.css. */
 /* Optik kommt aus .dropzone in css/style.css -- hier nur, was diese
    Ablegeflaeche eigen hat: sie traegt drei Knoepfe statt eines Klickziels. */
 .upload-drop{cursor:default}

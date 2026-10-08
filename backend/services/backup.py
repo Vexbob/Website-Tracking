@@ -72,6 +72,9 @@ TABLES_ORDERED = [
     # Fremdschluessels schon existieren.
     "music_imports",
     "music_entries",
+    # v2.42.0: Overcast -- das Protokoll vor den Folgen (import_id).
+    "podcast_imports",
+    "podcast_folgen",
     # Schach-Modul (v1.83.0). Konto zuerst: Wertungen, Partien und
     # Import-Protokoll zeigen alle darauf.
     "chess_accounts",
@@ -98,6 +101,8 @@ TABLES_ORDERED = [
     # Essenstagebuch (v1.97.0) -- eigene Tabelle, eigenes Modul. Sie haengt
     # an nichts ausser users: ein Tagebucheintrag ist ein Name und eine Stufe.
     "food_diary",
+    # v2.42.0: aus „Meine Lebensmittel“ genommene Namen.
+    "food_diary_ausgeblendet",
     # Welche Bruecken-Vorschlaege abgelehnt wurden (v1.99.0). Ohne sie kaeme
     # jeder einmal weggeklickte Vorschlag nach einem Restore wieder.
     "food_bridge_dismissed",
@@ -327,9 +332,15 @@ async def restore_snapshot(conn: asyncpg.Connection, payload: dict,
                 continue
 
             has_user_col = await _column_exists(conn, t, "user_id")
+            # Nicht jede Tabelle hat eine ``id``: user_prefs, depot_stueck und
+            # food_diary_ausgeblendet tragen einen zusammengesetzten Schluessel.
+            # Bis v2.41.0 fragte die Wiederherstellung dort trotzdem nach
+            # ``id`` -- ohne Leeren brach sie damit ganz ab, mit Leeren fiel
+            # jede Zeile still durch (ON CONFLICT (id) gibt es dort nicht).
+            has_id = await _column_exists(conn, t, "id")
 
             existing_ids = set()
-            if not wipe:
+            if not wipe and has_id:
                 if user_id is not None and has_user_col:
                     existing = await conn.fetch(f"SELECT id FROM {t} WHERE user_id=$1", user_id)
                 elif user_id is not None and t in PARENT_SCOPE:
@@ -368,7 +379,7 @@ async def restore_snapshot(conn: asyncpg.Connection, payload: dict,
                 if own_parent_ids is not None and row.get(PARENT_SCOPE[t][0]) not in own_parent_ids:
                     skipped += 1
                     continue
-                if not wipe and row.get("id") in existing_ids:
+                if not wipe and has_id and row.get("id") in existing_ids:
                     # v1.34.0: eigener Bucket -- Konflikt heisst hier "ID war
                     # schon belegt", nicht "Datei kaputt".
                     skipped_conflict += 1
@@ -382,7 +393,7 @@ async def restore_snapshot(conn: asyncpg.Connection, payload: dict,
                 sql = (
                     f'INSERT INTO {t} ({",".join(cols)}) '
                     f'VALUES ({",".join(placeholders)}) '
-                    f'ON CONFLICT (id) DO NOTHING'
+                    f'ON CONFLICT {"(id) " if has_id else ""}DO NOTHING'
                 )
                 try:
                     # cmd-Tag prueft, ob wirklich eingefuegt wurde. Bei
@@ -403,7 +414,7 @@ async def restore_snapshot(conn: asyncpg.Connection, payload: dict,
                     f"Restore {t}: {skipped_conflict} Zeile(n) wegen "
                     f"ID-Konflikt uebersprungen (user_id={user_id})")
 
-            if rows and any(isinstance(r, dict) and "id" in r for r in rows):
+            if has_id and rows and any(isinstance(r, dict) and "id" in r for r in rows):
                 try:
                     await conn.execute(
                         f"SELECT setval(pg_get_serial_sequence('{t}', 'id'), "

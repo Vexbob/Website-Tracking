@@ -66,38 +66,25 @@ async function init(){
     document.body.style.visibility = 'visible';
 }
 
-const VIEW_KEY = 'vexbob_stat_view';
-const VIEWS = ['kategorien', 'laeden', 'produkte', 'zeiten'];
-
-function panelOf(view){
-    return document.getElementById('view' + view.charAt(0).toUpperCase() + view.slice(1));
-}
-
-/* Chart.js kann kein Diagramm in einem ausgeblendeten Container vermessen --
- * es kaeme mit Breite 0 heraus. Das Wochentags-Diagramm wird deshalb erst
- * gezeichnet, wenn sein Feld sichtbar ist, und beim Wechsel dorthin neu. */
-function showBreakdown(view){
-    if(VIEWS.indexOf(view) === -1) view = 'kategorien';
-    STAT.view = view;
-    try { localStorage.setItem(VIEW_KEY, view); } catch(e) {}
-    document.querySelectorAll('#statBreakdown button').forEach(b => {
-        b.classList.toggle('active', b.dataset.view === view);
-    });
-    VIEWS.forEach(v => { const el = panelOf(v); if(el) el.hidden = (v !== view); });
-    if(view === 'zeiten' && STAT.insightsCache) renderWeekday(STAT.insightsCache);
-    if(view === 'produkte' && typeof initProductsPanel === 'function') initProductsPanel();
+/* v2.42.0: Kategorien, Läden, Wochentage und Produkte stehen in eigenen
+ * Karten (vorher hinter einem Umschalter). Die Produkte kosten zwei
+ * Anfragen und liegen ganz unten -- sie laden, sobald ihre Karte in Sicht
+ * kommt, nicht schon beim Öffnen der Seite. */
+function produkteBeiSicht(){
+    const karte = document.getElementById('cardProdukte');
+    if(!karte || typeof initProductsPanel !== 'function') return;
+    if(!('IntersectionObserver' in window)) { initProductsPanel(); return; }
+    const beob = new IntersectionObserver((eintraege) => {
+        if(eintraege.some(e => e.isIntersecting)) { beob.disconnect(); initProductsPanel(); }
+    }, { rootMargin: '300px 0px' });
+    beob.observe(karte);
 }
 
 function bindFilterUI(){
     // Der Zeitraum-Knopf zeichnet sich selbst und meldet den fertigen
     // Zeitraum zurück — diese Seite rechnet nichts mehr aus.
     VexRange.mount(document.getElementById('statRange'), { onChange: applyRange });
-    document.querySelectorAll('#statBreakdown button').forEach(b => {
-        b.addEventListener('click', () => showBreakdown(b.dataset.view));
-    });
-    let start = 'kategorien';
-    try { start = localStorage.getItem(VIEW_KEY) || start; } catch(e) {}
-    showBreakdown(start);
+    produkteBeiSicht();
     document.querySelectorAll('#statGranularity button').forEach(b => {
         b.addEventListener('click', () => {
             document.querySelectorAll('#statGranularity button').forEach(x => x.classList.remove('active'));
@@ -280,11 +267,6 @@ function renderInsights(data){
 function renderWeekday(data){
     const canvas = document.getElementById('chartWeekday');
     if(!canvas) return;
-    // Ausgeblendet hat der Canvas die Breite 0 -- Chart.js wuerde ein
-    // Diagramm bauen, das beim Aufklappen leer aussieht. showBreakdown()
-    // holt das Zeichnen nach, sobald das Feld offen ist.
-    const panel = panelOf('zeiten');
-    if(panel && panel.hidden) return;
     if(STAT.charts.weekday) STAT.charts.weekday.destroy();
     const days = ['Mo','Di','Mi','Do','Fr','Sa','So'];
     const totals = data.by_weekday.map(x => x.total);

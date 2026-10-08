@@ -96,16 +96,17 @@ function currentFilters() {
 }
 
 async function loadProducts() {
-    const body = document.getElementById('prodBody');
-    body.innerHTML = Array.from({ length: 6 }, () =>
-        '<tr><td colspan="7"><span class="skel skel-line long"></span></td></tr>').join('');
+    const box = document.getElementById('prodListe');
+    box.innerHTML = '<span class="skel skel-block"></span>';
     try {
         // min_count=1: auch einmal gekaufte Produkte anzeigen — die Seite
         // beantwortet "was habe ich wie oft gekauft", da gehören Einmalkäufe dazu.
         allProducts = await AUSGABEN_API.products(1, currentFilters()) || [];
+        prodSichtbar = PROD_SEITE;
         renderProducts();
     } catch (e) {
-        body.innerHTML = `<tr><td colspan="7" class="stat-empty">Fehler: ${escHtml(e.message)}</td></tr>`;
+        box.innerHTML = `<div class="empty is-error"><p class="empty-text">Die Produkte konnten nicht geladen werden: ${escHtml(e.message)}</p>
+            <button type="button" class="v-btn v-btn--sm" onclick="loadProducts()">Erneut versuchen</button></div>`;
     }
 }
 
@@ -210,23 +211,16 @@ function renderMergeSuggestions() {
     });
 }
 
-// ---------- Tabelle ----------
-
-function storesCell(p) {
-    const stores = p.stores || [];
-    if (!stores.length) return '–';
-    // Alle Läden, häufigster zuerst — ein Produkt bleibt EINE Zeile.
-    return stores.map(s =>
-        `<span class="prod-store" title="${escHtml(s.store_name)}: ${s.count}× · ${fmtEur(s.total)}">
-            <span style="color:${s.store_color}">${s.store_icon || '🏪'}</span> ${escHtml(s.store_name)}
-            ${stores.length > 1 ? `<span class="prod-store-n">${s.count}×</span>` : ''}
-        </span>`).join('');
-}
-
-/* Sortierung der Tabelle. Zahlen absteigend, Text aufsteigend -- beim ersten
- * Klick will man bei "Gesamt" das Teuerste oben und bei "Produkt" das A. */
+// ---------- Liste (v2.42.0) ----------
+/* Bis v2.41.0 eine Tabelle mit sieben Spalten, die am Handy quer scrollte --
+ * und die Seite liess sich deshalb seitlich verschieben und herauszoomen.
+ * Jetzt eine .rec-list wie im Rest der App: Name, darunter Kategorie, Läden
+ * und letzter Kauf, rechts die Summe mit Käufen und Ø-Preis. Sortiert wird
+ * über die Auswahl darüber statt über Tabellenköpfe. */
 const NUMERIC_SORT = new Set(['count', 'total_spent', 'avg_price', 'last_date']);
 let prodSort = { key: 'count', dir: 'desc' };
+const PROD_SEITE = 60;
+let prodSichtbar = PROD_SEITE;
 
 function sortValue(p, key) {
     if (key === 'title') return (p.title || p.key || '').toLowerCase();
@@ -248,80 +242,56 @@ function sortProducts(list) {
     });
 }
 
-function paintSortHeader() {
-    const head = document.getElementById('prodHead');
-    if (!head) return;
-    head.querySelectorAll('th.sort').forEach(th => {
-        const active = th.dataset.sort === prodSort.key;
-        th.classList.toggle('is-sorted', active);
-        const arrow = active ? (prodSort.dir === 'asc' ? '\u25b2' : '\u25bc') : '';
-        const label = th.dataset.label || (th.dataset.label = th.textContent.trim());
-        th.innerHTML = '<button type="button" class="sort-btn"' +
-            ' aria-label="Nach ' + escHtml(label) + ' sortieren">' +
-            escHtml(label) + '<span class="sort-arrow" aria-hidden="true">' + arrow + '</span></button>';
+function bindSortWahl() {
+    const wahl = document.getElementById('prodSortWahl');
+    if (!wahl) return;
+    wahl.value = prodSort.key;
+    wahl.addEventListener('change', () => {
+        prodSort = { key: wahl.value, dir: NUMERIC_SORT.has(wahl.value) ? 'desc' : 'asc' };
+        prodSichtbar = PROD_SEITE;
+        renderProducts();
     });
 }
 
-function bindSortHeader() {
-    const head = document.getElementById('prodHead');
-    if (!head) return;
-    head.addEventListener('click', (e) => {
-        const th = e.target.closest('th.sort');
-        if (!th) return;
-        const key = th.dataset.sort;
-        if (prodSort.key === key) {
-            prodSort.dir = prodSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-            prodSort = { key, dir: NUMERIC_SORT.has(key) ? 'desc' : 'asc' };
-        }
-        renderProducts();
-    });
-    paintSortHeader();
+function laedenText(p) {
+    const stores = p.stores || [];
+    if (!stores.length) return '';
+    const namen = stores.slice(0, 2).map(s => s.store_name);
+    return namen.join(', ') + (stores.length > 2 ? ` +${stores.length - 2}` : '');
 }
 
 function renderProducts() {
-    const body = document.getElementById('prodBody');
+    const box = document.getElementById('prodListe');
+    const mehr = document.getElementById('prodMehr');
     const filtered = allProducts.slice();
-    paintSortHeader();
-
     if (!filtered.length) {
-        body.innerHTML = '<tr><td colspan="7" class="stat-empty">Keine Produkte gefunden.</td></tr>';
+        box.innerHTML = '<p class="stat-empty">Im Zeitraum und mit diesen Filtern wurde nichts gekauft.</p>';
+        if (mehr) mehr.hidden = true;
         updateKpis([]);
         return;
     }
-
     sortProducts(filtered);
-
-    body.innerHTML = filtered.map(p => {
-        const lastBuy = p.last_date ? fmtDate(p.last_date) : '–';
-        return `<tr class="prod-row" data-key="${escHtml(p.key)}">
-            <td>
-                <div class="prod-name">${escHtml(p.title || p.key)}${p.is_merged ? ' <button type="button" class="prod-merged" title="Zusammengeführt — klicken zum Bearbeiten">🔗</button>' : ''}</div>
-                ${p.brand_name ? `<div class="prod-brand">${escHtml(p.brand_name)}</div>` : ''}
-            </td>
-            <td>${escHtml(p.category_name || '–')}</td>
-            <td class="prod-stores">${storesCell(p)}</td>
-            <td class="num">${p.count || 0}×</td>
-            <td class="num">${fmtEur(p.total_spent || 0)}</td>
-            <td class="num">${fmtEur(p.avg_price || 0)}</td>
-            <td class="num">${lastBuy}</td>
-        </tr>`;
-    }).join('');
-
+    const sichtbar = filtered.slice(0, prodSichtbar);
+    box.innerHTML = '<div class="rec-list">' + sichtbar.map(p => {
+        const meta = [p.category_name, laedenText(p),
+                      p.last_date ? 'zuletzt ' + fmtDate(p.last_date) : '',
+                      p.is_merged ? 'zusammengeführt' : ''].filter(Boolean).join(' · ');
+        return `<button type="button" class="rec-row prod-row" data-key="${escHtml(p.key)}">
+            <span class="rec-main"><span class="rec-title">${escHtml(p.title || p.key)}</span>
+                <span class="rec-meta">${escHtml(meta)}</span></span>
+            <span class="rec-side"><span class="rec-val">${fmtEur(p.total_spent || 0)}</span>
+                <span class="rec-sub">${p.count || 0}× · Ø ${fmtEur(p.avg_price || 0)}</span></span>
+        </button>`;
+    }).join('') + '</div>';
+    if (mehr) {
+        mehr.hidden = filtered.length <= prodSichtbar;
+        mehr.textContent = `Mehr zeigen (${filtered.length - sichtbar.length} weitere)`;
+    }
     updateKpis(filtered);
-
-    body.querySelectorAll('.prod-row').forEach(row => {
-        row.style.cursor = 'pointer';
-        row.onclick = (ev) => {
-            const key = row.dataset.key;
-            const product = allProducts.find(p => p.key === key);
-            if (!product) return;
-            if (ev.target.closest('.prod-merged')) {
-                ev.stopPropagation();
-                openMergeEditor(product);
-                return;
-            }
-            openProductDetail(key, product);
+    box.querySelectorAll('.prod-row').forEach(row => {
+        row.onclick = () => {
+            const product = allProducts.find(p => p.key === row.dataset.key);
+            if (product) openProductDetail(product.key, product);
         };
     });
 }
@@ -434,9 +404,11 @@ function bindFilters() {
     ['prodCategory', 'prodStore'].forEach(id => {
         document.getElementById(id).addEventListener('change', loadProducts);
     });
-    bindSortHeader();
+    bindSortWahl();
     const rp = document.getElementById('prodReparse');
     if (rp) rp.onclick = openReparseModal;
+    const mehr = document.getElementById('prodMehr');
+    if (mehr) mehr.onclick = () => { prodSichtbar += PROD_SEITE; renderProducts(); };
 }
 
 // ---------- Bulk-Reparse aller Bons mit Foto ----------
@@ -536,7 +508,7 @@ async function openProductDetail(key, product) {
     const modal = openModal(`🛒 ${escHtml(product.title || key)}`, `
         <div class="pv-toolbar">
             <button type="button" class="pv-action" id="pvMerge">
-                ${product.is_merged ? '🔗 Zusammenführung bearbeiten' : '🔗 Mit anderem Produkt zusammenführen'}
+                ${product.is_merged ? 'Zusammenführung bearbeiten' : 'Mit anderem Produkt zusammenführen'}
             </button>
         </div>
         <div id="pvStores" class="pv-stores"></div>

@@ -404,6 +404,20 @@ async def me(user=Depends(get_current_user)):
 BACKEND_VERSION = "1.35.0"
 
 
+def _endpunkte(routes) -> int:
+    """Endpunkte zaehlen, auch in eingebundenen Routern. Seit FastAPI 0.142
+    steht ein eingebundener Router als eigenes Objekt in ``app.routes``
+    (``original_router``) statt mit seinen Routen ausgebreitet -- der alte
+    Zaehler meldete deshalb 69 statt 275 (v2.42.0)."""
+    n = 0
+    for r in routes:
+        if hasattr(r, "endpoint"):
+            n += 1
+        elif hasattr(r, "original_router"):
+            n += _endpunkte(r.original_router.routes)
+    return n
+
+
 @app.get("/api/health")
 async def health():
     """Liveness-Probe: bewusst OHNE DB-Zugriff. Wird von Railway/Uptime-Robot
@@ -413,7 +427,7 @@ async def health():
     return {
         "status": "ok",
         "backend_version": BACKEND_VERSION,
-        "routes": sum(1 for r in app.routes if hasattr(r, "endpoint")),
+        "routes": _endpunkte(app.routes),
         "expenses_router": True,
         "notes_router": True,
     }

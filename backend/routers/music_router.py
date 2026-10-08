@@ -18,7 +18,9 @@ man stellt ihn ein, wechselt den Reiter und sieht andere Zahlen.
 Hinweis: bewusst OHNE ``from __future__ import annotations`` — FastAPI 0.109
 kann ``UploadFile = File(...)`` sonst nicht aufloesen (siehe health_router.py).
 """
+import asyncio
 import json
+from collections import defaultdict
 from datetime import date
 from typing import Optional
 
@@ -29,6 +31,7 @@ from database import get_db
 from deps import logger, limiter, LIMIT_WRITE_RARE, LIMIT_WRITE_STANDARD
 from helpers import ser
 from services import music_ingest as ingest
+from services import overcast
 
 router = APIRouter(tags=["music"])
 
@@ -261,11 +264,156 @@ async def clear_entries(request: Request, db=Depends(get_db),
     """Leert das Register vollständig. Das Protokoll bleibt stehen, damit
     nachvollziehbar ist, was es einmal gab."""
     result = await db.execute("DELETE FROM music_entries WHERE user_id=$1", user["id"])
+    # Die Overcast-Folgen sind die Quelle der Overcast-Zeilen -- blieben sie,
+    # stuenden die Zeilen mit dem naechsten Overcast-Import wieder da.
+    await db.execute("DELETE FROM podcast_folgen WHERE user_id=$1", user["id"])
     try:
         removed = int(str(result).rsplit(" ", 1)[-1])
     except ValueError:
         removed = 0
     return {"deleted": removed}
+
+
+# ---------------------------------------------------------------------------
+# Overcast (v2.42.0) -- Podcasts aus dem OPML-Export, siehe services/overcast.py
+# ---------------------------------------------------------------------------
+
+# Hoechstens so viele Feeds je Import nach Laengen fragen, gleichzeitig vier.
+OVERCAST_FEEDS_MAX = 40
+OVERCAST_FEEDS_GLEICHZEITIG = 4
+
+
+async def _overcast_folgen(db, uid) -> list:
+    return [dict(r) for r in await db.fetch(
+        "SELECT overcast_id, podcast, feed_url, titel, zuletzt, gehoert, fortschritt_s, "
+        "laenge_s, audio_url FROM podcast_folgen WHERE user_id=$1", uid)]
+
+
+async def _overcast_register_bauen(db, uid) -> int:
+    """Die Overcast-Zeilen im Hoerregister aus allen gespeicherten Folgen
+    neu bauen. Zwei Folgen mit gleichem Titel am selben Tag waeren dieselbe
+    Register-Zeile; die zweite faellt dann weg (ON CONFLICT)."""
+    zeilen = overcast.register_zeilen(await _overcast_folgen(db, uid))
+    await db.execute("DELETE FROM music_entries WHERE user_id=$1 AND block=$2", uid, overcast.BLOCK)
+    if zeilen:
+        await db.executemany(
+            "INSERT INTO music_entries (user_id, block, grain, period_key, period_start, period_end, "
+            "group_by, kind, artist, title, album, plays, ms_played, first_play, last_play) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) "
+            "ON CONFLICT (user_id, entry_hash) DO NOTHING",
+            [(uid, z["block"], z["grain"], z["period_key"], z["period_start"], z["period_end"],
+              z["group_by"], z["kind"], z["artist"], z["title"], z["album"], z["plays"],
+              z["ms_played"], z["first_play"], z["last_play"]) for z in zeilen])
+    return len(zeilen)
+
+
+async def _overcast_laengen(db, uid) -> dict:
+    """Laengen fertiger Folgen aus den RSS-Feeds holen -- nur, wo noch keine
+    steht. Ein Feed, der nicht antwortet, haelt nichts auf."""
+    offen = await db.fetch(
+        "SELECT feed_url, audio_url FROM podcast_folgen WHERE user_id=$1 AND gehoert "
+        "AND laenge_s IS NULL AND feed_url <> '' AND audio_url <> ''", uid)
+    je_feed = defaultdict(set)
+    for r in offen:
+        je_feed[r["feed_url"]].add(r["audio_url"])
+    feeds = list(je_feed)[:OVERCAST_FEEDS_MAX]
+    sperre = asyncio.Semaphore(OVERCAST_FEEDS_GLEICHZEITIG)
+
+    async def holen(url):
+        async with sperre:
+            roh = await asyncio.to_thread(overcast.feed_holen, url)
+        return url, overcast.laengen_aus_feed(roh) if roh else None
+
+    gefunden, fehler = 0, 0
+    for url, laengen in await asyncio.gather(*(holen(u) for u in feeds)):
+        if laengen is None:
+            fehler += 1
+            continue
+        passend = [(uid, a, laengen[a]) for a in je_feed[url] if a in laengen]
+        if passend:
+            await db.executemany(
+                "UPDATE podcast_folgen SET laenge_s=$3 WHERE user_id=$1 AND audio_url=$2 AND laenge_s IS NULL",
+                passend)
+            gefunden += len(passend)
+    return {"feeds": len(feeds), "feeds_fehler": fehler, "laengen_neu": gefunden}
+
+
+def _overcast_stand(folgen) -> dict:
+    z = overcast.zusammenfassung(folgen)
+    for k in ("von", "bis"):
+        z[k] = z[k].isoformat() if z[k] else None
+    return z
+
+
+@router.post("/api/music/overcast")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def overcast_importieren(request: Request, file: UploadFile = File(...),
+                               db=Depends(get_db), user=Depends(get_current_user)):
+    """Den Overcast-Export (OPML) uebernehmen: Folgen ergaenzen oder auf den
+    neueren Stand bringen, fehlende Laengen aus den Feeds holen, die
+    Register-Zeilen neu bauen. Geloescht wird dabei nichts -- eine Folge, die
+    in der neuen Datei fehlt, bleibt, wie sie war."""
+    uid = user["id"]
+    roh = await file.read(overcast.MAX_BYTES + 1)
+    try:
+        datei = overcast.lesen(roh)
+    except overcast.OvercastFehler as e:
+        raise HTTPException(400, str(e))
+    name = (file.filename or "").rsplit("/", 1)[-1][:200]
+    neu = aktualisiert = 0
+    async with db.transaction():
+        iid = await db.fetchval(
+            "INSERT INTO podcast_imports (user_id, dateiname, folgen) VALUES ($1,$2,$3) RETURNING id",
+            uid, name, len(datei["folgen"]))
+        for f in datei["folgen"]:
+            # Ein aelterer Export ueberschreibt keinen neueren Stand.
+            r = await db.fetchrow(
+                "INSERT INTO podcast_folgen (user_id, import_id, overcast_id, podcast, feed_url, titel, "
+                "veroeffentlicht, zuletzt, gehoert, fortschritt_s, geloescht, audio_url) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) "
+                "ON CONFLICT (user_id, overcast_id) DO UPDATE SET podcast=EXCLUDED.podcast, "
+                "feed_url=EXCLUDED.feed_url, titel=EXCLUDED.titel, veroeffentlicht=EXCLUDED.veroeffentlicht, "
+                "zuletzt=EXCLUDED.zuletzt, gehoert=EXCLUDED.gehoert, fortschritt_s=EXCLUDED.fortschritt_s, "
+                "geloescht=EXCLUDED.geloescht, audio_url=EXCLUDED.audio_url, import_id=EXCLUDED.import_id "
+                "WHERE podcast_folgen.zuletzt IS NULL OR EXCLUDED.zuletzt >= podcast_folgen.zuletzt "
+                "RETURNING (xmax = 0) AS neu",
+                uid, iid, f["overcast_id"], f["podcast"], f["feed_url"], f["titel"],
+                f["veroeffentlicht"], f["zuletzt"], f["gehoert"], f["fortschritt_s"],
+                f["geloescht"], f["audio_url"])
+            if r is not None:
+                neu += 1 if r["neu"] else 0
+                aktualisiert += 0 if r["neu"] else 1
+        await db.execute("UPDATE podcast_imports SET neu=$2, aktualisiert=$3 WHERE id=$1",
+                         iid, neu, aktualisiert)
+    laengen = await _overcast_laengen(db, uid)
+    zeilen = await _overcast_register_bauen(db, uid)
+    logger.info("overcast import user=%s folgen=%s neu=%s zeilen=%s", uid, len(datei["folgen"]), neu, zeilen)
+    return {"neu": neu, "aktualisiert": aktualisiert, "in_datei": len(datei["folgen"]),
+            "register_zeilen": zeilen, **laengen, "stand": _overcast_stand(await _overcast_folgen(db, uid))}
+
+
+@router.get("/api/music/overcast")
+async def overcast_stand(db=Depends(get_db), user=Depends(get_current_user)):
+    letzte = await db.fetchrow(
+        "SELECT dateiname, hochgeladen_at, folgen, neu, aktualisiert FROM podcast_imports "
+        "WHERE user_id=$1 ORDER BY hochgeladen_at DESC, id DESC LIMIT 1", user["id"])
+    return {"stand": _overcast_stand(await _overcast_folgen(db, user["id"])),
+            "letzter_import": ser(letzte) if letzte else None}
+
+
+@router.delete("/api/music/overcast")
+@limiter.limit(LIMIT_WRITE_RARE)
+async def overcast_entfernen(request: Request, db=Depends(get_db), user=Depends(get_current_user)):
+    """Alle Overcast-Folgen und ihre Register-Zeilen entfernen. Spotify bleibt."""
+    uid = user["id"]
+    await db.execute("DELETE FROM music_entries WHERE user_id=$1 AND block=$2", uid, overcast.BLOCK)
+    weg = await db.execute("DELETE FROM podcast_folgen WHERE user_id=$1", uid)
+    await db.execute("DELETE FROM podcast_imports WHERE user_id=$1", uid)
+    try:
+        n = int(str(weg).rsplit(" ", 1)[-1])
+    except ValueError:
+        n = 0
+    return {"deleted": n}
 
 
 # ---------------------------------------------------------------------------

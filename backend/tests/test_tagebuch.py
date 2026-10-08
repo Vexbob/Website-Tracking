@@ -264,6 +264,41 @@ def test_eine_gesetzte_mahlzeit_ist_keine_vermutung_mehr():
     assert "meal_auto=FALSE" in sql
 
 
+def test_die_uhrzeit_laesst_sich_richtigstellen():
+    """v2.42.0: war die Mahlzeit nur aus der Uhrzeit geraten, raet die neue
+    Uhrzeit sie neu; eine von Hand gesetzte bleibt."""
+    db = AttrappeDB(treffer={"id": 5, "day": HEUTE, "meal_auto": True})
+    asyncio.run(AENDERN(request=None, eintrag_id=5, daten=tb.EintragAendern(time="19:30"),
+                        db=db, user=NUTZER))
+    sql, args = db.geschrieben[0]
+    assert "logged_time=$3" in sql and args[2] == time(19, 30)
+    assert "meal=$4" in sql and args[3] == mz.mahlzeit_fuer_uhrzeit(19)
+
+    db = AttrappeDB(treffer={"id": 5, "day": HEUTE, "meal_auto": False})
+    asyncio.run(AENDERN(request=None, eintrag_id=5, daten=tb.EintragAendern(time="07:05"),
+                        db=db, user=NUTZER))
+    sql, args = db.geschrieben[0]
+    assert "logged_time=$3" in sql and "meal=" not in sql
+
+
+def test_die_uhrzeit_laesst_sich_wegnehmen_aber_nicht_verstuemmeln():
+    db = AttrappeDB(treffer={"id": 5, "day": HEUTE, "meal_auto": True})
+    asyncio.run(AENDERN(request=None, eintrag_id=5, daten=tb.EintragAendern(time=""),
+                        db=db, user=NUTZER))
+    sql, args = db.geschrieben[0]
+    assert "logged_time=$3" in sql and args[2] is None and "meal=" not in sql
+    with pytest.raises(HTTPException) as fehler:
+        asyncio.run(AENDERN(request=None, eintrag_id=5, daten=tb.EintragAendern(time="halb acht"),
+                            db=AttrappeDB(treffer={"id": 5, "day": HEUTE, "meal_auto": False}), user=NUTZER))
+    assert fehler.value.status_code == 400
+
+
+def test_herausgenommene_lebensmittel_fehlen_in_der_schnellwahl():
+    db = AttrappeDB()
+    asyncio.run(tb._schnellwahl(db, 1, 60, 6))
+    assert "food_diary_ausgeblendet" in db.gelesen[0]
+
+
 def test_fremder_eintrag_wird_nicht_gefunden():
     for aufruf in (
             lambda: AENDERN(request=None, eintrag_id=99,

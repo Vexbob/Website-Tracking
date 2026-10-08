@@ -521,7 +521,10 @@ def plan_summary(plan: dict) -> dict:
 # ihm ueberschneidet -- auch eine Jahreszeile, die nur zur Haelfte hineinragt.
 # Sie stehen zu lassen hiesse, denselben Zeitraum zweimal zu zaehlen; das
 # waere der stillere und schlimmere Fehler.
-_OVERLAP = "user_id=$1 AND period_start <= $3 AND period_end >= $2"
+# Ein Spotify-Upload ersetzt seinen Zeitraum -- aber nicht die Overcast-
+# Zeilen darin: die stammen aus podcast_folgen und kaemen sonst erst mit dem
+# naechsten Overcast-Import zurueck (v2.42.0).
+_OVERLAP = "user_id=$1 AND period_start <= $3 AND period_end >= $2 AND block <> 'Overcast'"
 
 
 async def count_replaced(db, user_id: int, blocks: list[dict]) -> int:

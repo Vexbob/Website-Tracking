@@ -74,71 +74,65 @@
         <div class="chart-wrap tall" id="chartSeriesWrap"><canvas id="chartSeries"></canvas></div>
     </div>
 
-    <!-- v1.64.0: Kategorie, Laden, Produkt und Wochentag sind vier
-         Aufschlüsselungen DERSELBEN Summe. Sie gehören deshalb unter einen
-         Umschalter und nicht auf zwei Seiten mit je eigenem Zeitraum-Filter —
-         Kopf und Verlauf darüber bleiben beim Wechsel stehen. -->
-    <div class="stat-card">
-        <div class="stat-card-head">
-            <h3>Aufschlüsselung</h3>
-            <div class="stat-mini-toggle" id="statBreakdown">
-                <button data-view="kategorien" class="active">Kategorien</button>
-                <button data-view="laeden">Läden</button>
-                <button data-view="produkte">Produkte</button>
-                <button data-view="zeiten">Zeiten</button>
+    <!-- v2.42.0: Kategorien, Läden, Wochentage und Produkte stehen in eigenen
+         Karten statt hinter einem Umschalter (DESIGN „Zeigen statt umschalten“,
+         v1.93.0). Es bleiben vier Aufschlüsselungen DERSELBEN Summe über
+         denselben Zeitraum oben -- nur sieht man sie jetzt nebeneinander. -->
+    <div class="az-stat-raster">
+        <section class="stat-card">
+            <div class="stat-card-head">
+                <h3>Kategorien</h3>
+                <span class="stat-range-lbl" id="catNote"></span>
             </div>
-        </div>
-
-        <div class="bd-panel" id="viewKategorien">
-            <div class="bd-head"><span class="stat-range-lbl" id="catNote"></span></div>
             <div id="rankCategory" class="rank-list"></div>
-        </div>
-
-        <div class="bd-panel" id="viewLaeden" hidden>
-            <div class="bd-head"><span class="stat-range-lbl" id="storeNote"></span></div>
+        </section>
+        <section class="stat-card">
+            <div class="stat-card-head">
+                <h3>Läden</h3>
+                <span class="stat-range-lbl" id="storeNote"></span>
+            </div>
             <div id="rankStore" class="rank-list"></div>
-        </div>
-
-        <div class="bd-panel" id="viewProdukte" hidden>
-            <div class="bd-tools">
-                <select id="prodCategory" class="v-select">
-                    <option value="">Alle Kategorien</option>
-                </select>
-                <select id="prodStore" class="v-select">
-                    <option value="">Alle Läden</option>
-                </select>
-                <button id="prodReparse" class="prod-reparse-btn"
-                        title="Alle Bons mit Foto neu von der KI parsen — aktualisiert Namen, Kategorien und Mengeneinheiten">Alle neu parsen</button>
-            </div>
-            <!-- Zusammenführen-Vorschläge: erscheint nur, wenn der Server
-                 Schreibvarianten desselben Artikels gefunden hat. -->
-            <div id="mergeBox" class="merge-box" style="display:none"></div>
-            <div class="bd-head"><span class="stat-range-lbl" id="prodSummary"></span></div>
-            <div style="overflow-x:auto">
-                <table class="stat-table" id="prodTable">
-                    <thead>
-                        <tr id="prodHead">
-                            <th class="sort" data-sort="title">Produkt</th>
-                            <th class="sort" data-sort="category_name">Kategorie</th>
-                            <th>Läden</th>
-                            <th class="sort num" data-sort="count">Käufe</th>
-                            <th class="sort num" data-sort="total_spent">Gesamt</th>
-                            <th class="sort num" data-sort="avg_price">Ø Preis</th>
-                            <th class="sort num" data-sort="last_date">Letzter Kauf</th>
-                        </tr>
-                    </thead>
-                    <tbody id="prodBody">
-                        <tr><td colspan="7"><span class="skel skel-block"></span></td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="bd-panel" id="viewZeiten" hidden>
-            <div class="bd-head"><span class="stat-range-lbl">Summe je Wochentag im gewählten Zeitraum</span></div>
-            <div class="chart-wrap"><canvas id="chartWeekday"></canvas></div>
-        </div>
+        </section>
     </div>
+
+    <section class="stat-card">
+        <div class="stat-card-head">
+            <h3>Wochentage</h3>
+            <span class="stat-range-lbl">Summe je Wochentag im Zeitraum</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartWeekday"></canvas></div>
+    </section>
+
+    <section class="stat-card" id="cardProdukte">
+        <div class="stat-card-head">
+            <h3>Produkte</h3>
+            <span class="stat-range-lbl" id="prodSummary"></span>
+        </div>
+        <div class="bd-tools az-prod-tools">
+            <select id="prodCategory" class="v-select" aria-label="Kategorie">
+                <option value="">Alle Kategorien</option>
+            </select>
+            <select id="prodStore" class="v-select" aria-label="Laden">
+                <option value="">Alle Läden</option>
+            </select>
+            <select id="prodSortWahl" class="v-select" aria-label="Sortieren">
+                <option value="count">Am häufigsten gekauft</option>
+                <option value="total_spent">Meiste Ausgaben</option>
+                <option value="avg_price">Höchster Ø-Preis</option>
+                <option value="last_date">Zuletzt gekauft</option>
+                <option value="title">Name A–Z</option>
+            </select>
+        </div>
+        <!-- Zusammenführen-Vorschläge: erscheint nur, wenn der Server
+             Schreibvarianten desselben Artikels gefunden hat. -->
+        <div id="mergeBox" class="merge-box" style="display:none"></div>
+        <div id="prodListe"><span class="skel skel-block"></span></div>
+        <button type="button" class="v-btn v-btn--ghost v-btn--sm az-prod-mehr" id="prodMehr" hidden>Mehr zeigen</button>
+        <div class="az-prod-fuss">
+            <button id="prodReparse" type="button" class="v-btn v-btn--ghost v-btn--sm"
+                    title="Alle Bons mit Foto neu von der KI lesen lassen – aktualisiert Namen, Kategorien und Mengeneinheiten">Alle Bons neu lesen</button>
+        </div>
+    </section>
 
     <!-- Erkenntnisse stehen bewusst hier unten: sie sind Kommentar zu den
          Zahlen, nicht der Einstieg. Oben zwischen Kennzahlen und Zeitverlauf

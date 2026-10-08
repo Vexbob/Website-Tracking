@@ -487,11 +487,11 @@ function addItemRow(containerId, item) {
         '<option value="__new__" style="font-style:italic">➕ Neue Kategorie anlegen …</option>';
 
     row.innerHTML = `
-        <input type="text" class="d-desc" placeholder="Produkt (z.B. Vollmilch)" value="${escapeAttr(parts.name)}">
-        <input type="number" min="1" step="1" class="d-qty" placeholder="1×" title="Stückzahl — nur ausfüllen, wenn du den Artikel mehrfach gekauft hast" value="${escapeAttr(parts.qty)}">
-        <input type="number" step="0.01" class="d-price" placeholder="Preis" value="${item?item.total_price||'':''}">
-        <select class="d-cat">${catOpts}</select>
-        <button class="del" title="Entfernen">✕</button>
+        <input type="text" class="d-desc" placeholder="Produkt (z. B. Vollmilch)" aria-label="Produkt" value="${escapeAttr(parts.name)}">
+        <label class="az-feld az-feld--menge"><input type="number" min="1" step="1" class="d-qty" placeholder="1" inputmode="numeric" aria-label="Stückzahl" title="Stückzahl — nur ausfüllen, wenn du den Artikel mehrfach gekauft hast" value="${escapeAttr(parts.qty)}"><span aria-hidden="true">×</span></label>
+        <label class="az-feld az-feld--preis"><input type="number" step="0.01" class="d-price" placeholder="0,00" inputmode="decimal" aria-label="Preis in Euro" value="${item?item.total_price||'':''}"><span aria-hidden="true">€</span></label>
+        <select class="d-cat" aria-label="Kategorie">${catOpts}</select>
+        <button type="button" class="v-btn v-btn--ghost v-btn--icon del" title="Position entfernen" aria-label="Position entfernen">${window.VexIkon ? VexIkon.svg('muell', 17) : '✕'}</button>
         ${parts.original ? `<div class="d-orig" title="Vom Bon">📄 ${escapeHtml(parts.original)}${item && item.is_reduced ? ' · <span style="color:var(--green-dark);font-weight:600">REDUZIERT</span>' : ''}</div>` : ''}
     `;
     c.appendChild(row);

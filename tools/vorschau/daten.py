@@ -532,6 +532,85 @@ BONS = [
      "total_amount": 61.24, "has_image": True, "is_recurring": False},
 ]
 
+# v2.41.0: ein einzelner Bon mit Positionen fuer /ausgaben/bon.html -- lange
+# Namen, eine reduzierte, eine aus dem Preisvergleich genommene und eine
+# Mehrfachmenge: genau die Zeilen, an denen das Handy-Layout bricht.
+BON_EINZELN = {
+    "id": 101, "store_id": 1, "store_name": "REWE", "store_color": "#e11d48", "store_icon": "R",
+    "expense_type": "receipt", "purchase_date": _tag(0), "total_amount": 43.87,
+    "receipt_image_id": None, "note": "", "is_recurring": False, "source": "manual",
+    "items": [
+        {"id": 1, "description": "Bio Vollmilch 3,8 % Fett 1 l", "quantity": 2, "unit_price": 1.29,
+         "total_price": 2.58, "category_id": 1, "category_name": "Lebensmittel", "category_icon": "🥦",
+         "price_comparable": True, "is_reduced": False},
+        {"id": 2, "description": "Rinderhackfleisch gemischt aus der Frischetheke", "quantity": 1,
+         "total_price": 6.49, "category_id": 1, "category_name": "Lebensmittel", "category_icon": "🥦",
+         "price_comparable": True, "is_reduced": True, "original_price": 8.99},
+        {"id": 3, "description": "Geburtstagskarte", "quantity": 1, "total_price": 3.95,
+         "category_id": 3, "category_name": "Haushalt", "category_icon": "🏠",
+         "price_comparable": False, "is_reduced": False},
+        {"id": 4, "description": "Pfand", "quantity": 1, "total_price": -0.25,
+         "category_id": None, "price_comparable": True, "is_reduced": False},
+        {"id": 5, "description": "Bananen", "quantity": 1, "total_price": 1.89,
+         "category_id": 1, "category_name": "Lebensmittel", "category_icon": "🥦",
+         "price_comparable": True, "is_reduced": False},
+    ],
+}
+
+# v2.42.0: die Statistik-Seite der Ausgaben -- Kennzahlen, Rangfolgen,
+# Wochentage, Zeitreihen und Produkte. Erfunden, aber in sich stimmig: die
+# Rangfolgen summieren sich auf den Gesamtbetrag.
+def _az_statistik():
+    import datetime as _dt
+    heute = _dt.date.today()
+    kat = [("Lebensmittel", "🛒", "#22c55e", 312.40), ("Drogerie", "🧴", "#0ea5e9", 64.15),
+           ("Haushalt", "🏠", "#a78bfa", 41.90), ("Restaurant & Café", "☕", "#f59e0b", 58.20),
+           ("Kleidung", "👕", "#f472b6", 10.25)]
+    laeden = [("REWE", "R", "#e11d48", 168.30, 7), ("Aldi Süd", "A", "#0ea5e9", 121.10, 5),
+              ("dm", "D", "#22c55e", 64.15, 4), ("Bäckerei Ströck", "B", "#f59e0b", 58.20, 9),
+              ("Ikea", "I", "#facc15", 41.90, 1), ("H&M", "H", "#f472b6", 33.25, 1)]
+    gesamt = round(sum(k[3] for k in kat), 2)
+    insights = {
+        "range": {"days": 30},
+        "kpi": {"total": gesamt, "tx_count": 27, "avg_tx": round(gesamt / 27, 2),
+                "avg_per_day": round(gesamt / 30, 2),
+                "biggest_tx": {"amount": 61.24, "store_name": "REWE", "id": 105}},
+        "top_categories": [{"name": n, "icon": i, "color": c, "total": t} for n, i, c, t in kat],
+        "top_stores": [{"name": n, "icon": i, "color": c, "total": t, "visits": v,
+                        "avg_per_visit": round(t / v, 2)} for n, i, c, t, v in laeden],
+        "by_weekday": [{"dow": d, "total": t, "count": n} for d, t, n in
+                       ((0, 48.2, 3), (1, 61.9, 4), (2, 38.4, 3), (3, 55.1, 4), (4, 92.6, 5), (5, 171.3, 6), (6, 19.4, 2))],
+    }
+    taeglich = [{"date": (heute - _dt.timedelta(days=i)).isoformat(),
+                 "total": round(8 + (i * 37 % 23) * 1.7, 2) if i % 3 else 0} for i in range(30)]
+    produkte_roh = [
+        ("Bio Vollmilch 3,8 % Fett 1 l", "Lebensmittel", 14, 18.06, ["REWE", "Aldi Süd"]),
+        ("Bananen", "Lebensmittel", 11, 20.79, ["Aldi Süd"]),
+        ("Rinderhackfleisch gemischt aus der Frischetheke", "Lebensmittel", 4, 27.96, ["REWE"]),
+        ("Laugenbrezel", "Restaurant & Café", 9, 10.80, ["Bäckerei Ströck"]),
+        ("Zahnpasta Sensitive mit Fluorid 75 ml", "Drogerie", 2, 3.90, ["dm"]),
+        ("Haferflocken kernig", "Lebensmittel", 6, 5.34, ["Aldi Süd", "REWE", "dm"]),
+        ("Kaffee Crema ganze Bohne 1 kg", "Lebensmittel", 2, 27.98, ["REWE"]),
+        ("Küchenrolle 4 Rollen", "Haushalt", 3, 8.97, ["dm", "REWE"]),
+        ("Geburtstagskarte", "Haushalt", 1, 3.95, ["REWE"]),
+        ("Duschgel Meeresbrise", "Drogerie", 3, 4.35, ["dm"]),
+    ]
+    produkte = []
+    for i, (titel, kat_n, n, summe, ls) in enumerate(produkte_roh):
+        produkte.append({
+            "key": f"p{i}", "title": titel, "category_name": kat_n, "count": n,
+            "total_spent": summe, "avg_price": round(summe / n, 2), "last_price": round(summe / n, 2),
+            "last_date": (heute - _dt.timedelta(days=i * 2)).isoformat(), "is_merged": i == 5,
+            "stores": [{"store_name": l, "store_icon": l[0], "store_color": "#888888",
+                        "count": max(1, n // len(ls)), "total": round(summe / len(ls), 2)} for l in ls]})
+    historie = {"items": [{"date": (heute - _dt.timedelta(days=d)).isoformat(), "store_name": "REWE",
+                           "store_icon": "R", "store_color": "#e11d48",
+                           "description": "Bio Vollmilch 3,8 % Fett 1 l", "total_price": p, "unit_price": p,
+                           "quantity": 1} for d, p in ((2, 1.29), (9, 1.29), (16, 1.19), (23, 1.29), (30, 1.35))],
+                "stores": [{"store_name": "REWE", "store_icon": "R", "store_color": "#e11d48", "count": 5, "total": 6.41}]}
+    return insights, taeglich, produkte, historie
+AZ_INSIGHTS, AZ_TAEGLICH, AZ_PRODUKTE, AZ_HISTORIE = _az_statistik()
+
 AUSGABEN_SUMME = {
     "today": 55.32, "this_week": 142.41, "this_month": 486.90,
     "prev_month": 531.08, "prev_month_to_date": 512.40,
@@ -1061,6 +1140,25 @@ ANTWORTEN = {
     "/api/expenses/recurring/suggestions": [],
     "/api/expenses/duplicates": [],
     "/api/expenses/ocr/status": {"available": True, "engine": "tesseract"},
+    "/api/expenses/stats/insights": AZ_INSIGHTS,
+    "/api/expenses/stats/daily": AZ_TAEGLICH,
+    "/api/expenses/stats/weekly": [],
+    "/api/expenses/stats/monthly": [],
+    "/api/expenses/products": AZ_PRODUKTE,
+    "/api/expenses/products/merge-suggestions": [],
+    "/api/expenses/products/history": AZ_HISTORIE,
+    "/api/expenses/*": BON_EINZELN,
+    # v2.42.0: Overcast-Stand im Musik-Import und „Meine Lebensmittel“ (erfunden).
+    "/api/music/overcast": {"stand": {"folgen": 84, "podcasts": 6, "gehoert": 52, "angefangen": 31,
+                                      "ohne_laenge": 2, "von": "2026-06-02T07:10:00+00:00",
+                                      "bis": "2026-10-07T21:40:00+00:00"},
+                            "letzter_import": {"dateiname": "overcast.opml", "hochgeladen_at": "2026-10-07T21:45:00+00:00",
+                                               "folgen": 84, "neu": 9, "aktualisiert": 75}},
+    "/api/food/diary/foods": {"foods": [
+        {"label": n, "anzahl": a, "zuletzt": z, "zuerst": "2026-08-02"} for n, a, z in (
+            ("Kaffee", 48, "2026-10-08"), ("Müsli mit Joghurt", 31, "2026-10-08"), ("Apfel", 22, "2026-10-07"),
+            ("Pizza Margherita", 6, "2026-10-04"), ("Döner", 4, "2026-09-28"), ("Kaffe", 1, "2026-09-12"),
+            ("Bananenbrot von Oma", 1, "2026-08-30"))]},
     "/api/receipts": [],
 
     # ---- Gesundheit ----

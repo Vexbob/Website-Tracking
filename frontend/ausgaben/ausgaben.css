@@ -168,28 +168,68 @@
 .az-felder > div { min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
 .modal-body :where(input:not([type="checkbox"]), select, textarea) { background: var(--surface-2); }
 
-/* Positionen bearbeiten: eine Zeile je Position, am Handy in drei Reihen */
+/* Positionen bearbeiten (v2.41.0): EINE Gestalt fuer „Neuer Bon“ (auch nach
+   dem Scan) und den Positionen-Dialog am Bon. Bis v2.40.0 hatte neu.html
+   eine zweite Fassung im eigenen <style>; am Handy ueberlagerten sich die
+   beiden Raster, und das Preisfeld blieb 96 px schmal neben einer leeren
+   Spalte. Geschaltet wird nach der Breite der LISTE, nicht des Bildschirms:
+   der Dialog ist auch am Rechner nur gut 600 px breit, und eine einzige
+   Zeile liess dem Namen dort kaum 140 px.
+   - ab 900 px Listenbreite (breite Seite „Neuer Bon“): alles in einer Zeile;
+   - ab 480 px: Name ueber die ganze Breite, darunter Menge, Preis,
+     Kategorie und die Knoepfe (der Dialog am Bon, auch am Rechner);
+   - darunter (Handy): Name, dann Menge, Preis und Knoepfe, dann Kategorie.
+   Den Preisvergleich-Knopf (.cmp) gibt es nur am Bon -- ohne ihn faellt
+   seine Spalte weg (:has). */
 .az-posliste { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.az-posliste, .item-list { container-type: inline-size; }
 .item-row {
-    display: grid; grid-template-columns: minmax(0, 1fr) 64px 96px minmax(0, 150px) 44px 44px;
-    gap: 0.375rem; align-items: center; padding: 0.5rem;
+    display: grid; gap: 0.375rem 0.5rem; align-items: center; padding: 0.5rem;
+    grid-template-columns: 84px 124px minmax(0, 1fr) 44px 44px;
+    grid-template-areas: 'desc desc desc desc desc' 'qty price cat cmp del';
     background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
 }
-.item-row input, .item-row select { margin: 0; min-width: 0; background: var(--surface-1); }
+.item-row:not(:has(.cmp)) {
+    grid-template-columns: 84px 124px minmax(0, 1fr) 44px;
+    grid-template-areas: 'desc desc desc desc' 'qty price cat del';
+}
+.item-row input, .item-row select { margin: 0; min-width: 0; width: 100%; background: var(--surface-1); }
+.item-row .d-desc { grid-area: desc; }
+.item-row .az-feld--menge { grid-area: qty; }
+.item-row .az-feld--preis { grid-area: price; }
+.item-row .d-cat { grid-area: cat; }
+.item-row .cmp { grid-area: cmp; }
+.item-row .del { grid-area: del; }
 .item-row .v-btn--icon { width: 44px; height: 44px; color: var(--text-3); }
 .item-row .del:hover { color: var(--danger); background: var(--danger-soft); }
-.item-row .d-red { grid-column: 1 / -1; font-size: 0.6875rem; }
+/* Hinweise unter der Zeile (reduziert, Originalzeile vom Bon) stehen nur da,
+   wenn es sie gibt -- ohne eigene Rasterzeile, sonst haette jede Position
+   unten einen leeren Abstand. */
+.item-row .d-red, .item-row .d-orig { grid-column: 1 / -1; font-size: 0.6875rem; }
+.item-row .d-orig { color: var(--text-3); padding: 0 0.125rem; }
 .item-row.not-comparable { background: var(--surface-1); border-style: dashed; }
 .item-row.not-comparable .d-desc { color: var(--text-3); }
-@media (max-width: 640px) {
-    .item-row { grid-template-columns: 64px minmax(0, 1fr) 44px 44px; grid-template-areas: 'desc desc desc desc' 'qty price cmp del' 'cat cat cat cat'; }
-    .item-row .d-desc { grid-area: desc; }
-    .item-row .d-qty { grid-area: qty; }
-    .item-row .d-price { grid-area: price; }
-    .item-row .d-cat { grid-area: cat; }
-    .item-row .cmp { grid-area: cmp; }
-    .item-row .del { grid-area: del; }
+@container (min-width: 900px) {
+    .item-row { grid-template-columns: minmax(0, 1fr) 84px 124px minmax(0, 220px) 44px 44px;
+        grid-template-areas: 'desc qty price cat cmp del'; }
+    .item-row:not(:has(.cmp)) { grid-template-columns: minmax(0, 1fr) 84px 124px minmax(0, 220px) 44px;
+        grid-template-areas: 'desc qty price cat del'; }
 }
+@container (max-width: 479px) {
+    .item-row { padding: 0.625rem; grid-template-columns: 84px minmax(0, 1fr) 44px 44px;
+        grid-template-areas: 'desc desc desc desc' 'qty price cmp del' 'cat cat cat cat'; }
+    .item-row:not(:has(.cmp)) { grid-template-columns: 84px minmax(0, 1fr) 44px;
+        grid-template-areas: 'desc desc desc' 'qty price del' 'cat cat cat'; }
+}
+/* Feld mit Einheit: „×“ und „€“ stehen im Feld, der Wert rechtsbuendig
+   davor -- der Preis liest sich wie auf dem Bon. Ohne Pfeiltasten: in
+   Firefox nehmen sie einem schmalen Zahlenfeld die halbe Breite. */
+.az-feld { position: relative; display: block; min-width: 0; }
+.az-feld input { text-align: right; padding-right: 1.75rem; font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield; appearance: textfield; }
+.az-feld input::-webkit-outer-spin-button, .az-feld input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.az-feld > span { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%);
+    font-size: 1rem; color: var(--text-3); pointer-events: none; }
 
 /* ---------- Leiste über einer Seite (Statistik) ----------
    Der Zeitraum steht als Knopf in einer Zeile, nicht in einer eigenen Karte. */

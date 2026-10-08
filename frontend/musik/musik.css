@@ -201,3 +201,10 @@
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
     #mSearch { min-height: 44px; }
 }
+
+/* v2.42.0: Overcast. Der Punkt traegt die Podcast-Farbe aus VOCAB (musik.js). */
+.m-source-dot--podcast { background: var(--chart-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--chart-2) 22%, transparent); }
+.m-oc-stand { margin-top: var(--space-4); }
+.m-oc-box { display: grid; gap: 0.25rem; padding: var(--space-3) var(--space-4);
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); }
+.m-oc-aktion { display: flex; justify-content: flex-end; margin-top: var(--space-2); }

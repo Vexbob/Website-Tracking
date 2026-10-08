@@ -476,3 +476,15 @@
 @media (max-width: 720px) {
     .page-head { display: none; }
 }
+
+/* ---------- v2.42.0: Uhrzeit im Aendern-Dialog, Meine Lebensmittel ---------- */
+.es-feld--zeit input { max-width: 9rem; font-variant-numeric: tabular-nums; }
+.es-meine-knopf { display: block; margin: var(--space-4) auto 0; }
+.es-meine-suche { margin-bottom: var(--space-2); }
+.es-meine-info { margin: 0 0 var(--space-3); font-size: 0.8125rem; color: var(--text-3); }
+#esMeineListe .rec-go { color: var(--text-3); }
+.es-meine-text { margin: 0 0 var(--space-3); color: var(--text-2); font-size: 0.9375rem; line-height: 1.5; }
+.es-meine-schalter { border: 1px solid var(--line); border-radius: var(--radius); }
+.es-meine-schalter-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.es-meine-schalter-text strong { font-size: 0.9375rem; font-weight: 600; color: var(--text-1); }
+.es-meine-schalter-text small { font-size: 0.75rem; color: var(--text-3); }

@@ -279,6 +279,107 @@ async function saveRange(preset) {
     }
 }
 
+/* ---------- Erinnerungen auf der Startseite (v2.42.0) ----------
+ * Wann eine faellig ist, rechnet js/erinnerungen.js (VexErinnerung) --
+ * dieselbe Rechnung wie auf der Startseite. Hier wird nur bearbeitet. */
+const escE = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function renderErinnerungen() {
+    const box = document.getElementById('erinListe');
+    if (!box || !window.VexErinnerung) return;
+    const E = VexErinnerung;
+    const liste = E.liste();
+    const module = window.VexNav ? VexNav.modules() : [];
+    box.innerHTML = liste.length ? liste.map(e => {
+        const m = module.find(x => x.href === e.href);
+        const naechster = E.naechsterTermin(e);
+        const status = E.faellig(e) ? 'fällig seit ' + E.datumLang(E.letzterTermin(e))
+            : (naechster ? 'nächster Termin ' + E.datumLang(naechster) : '');
+        return `<button type="button" class="rec-row" data-erin="${escE(e.id)}" style="--tone:var(${m && m.tone ? m.tone : '--accent'})">
+            <span class="rec-mark">${m && window.VexNav ? VexNav.iconSvg(m) : ''}</span>
+            <span class="rec-main"><span class="rec-title">${escE(e.text)}</span>
+                <span class="rec-meta">${escE(E.beschreibung(e))}${status ? ' · ' + escE(status) : ''}</span></span>
+            <span class="rec-go">${window.VexIkon ? VexIkon.svg('pfeil', 16) : ''}</span>
+        </button>`;
+    }).join('') : '<p class="set-hint">Keine Erinnerungen. Mit „Erinnerung hinzufügen“ kommt eine dazu.</p>';
+}
+
+/* Bearbeiten und Anlegen im selben Dialog; Löschen steht darin, nicht in
+   der Liste (DESIGN: Löschen ist kein Knopf in einer Liste). */
+function dlgErinnerung(e) {
+    const E = VexErinnerung;
+    const neu = !e;
+    const w = e || { id: '', text: '', href: '', rhythmus: 'monat', tag: 1, monat: 1, erledigt: null };
+    const module = (window.VexNav ? VexNav.modules() : []).filter(m => m.href !== '/');
+    const opt = (wert, text, an) => `<option value="${escE(wert)}"${an ? ' selected' : ''}>${escE(text)}</option>`;
+    const d = VexModal.open(neu ? 'Erinnerung hinzufügen' : 'Erinnerung bearbeiten', `
+        <div class="set-form">
+            <label class="set-feld"><span>Text</span>
+                <input type="text" id="erinText" maxlength="80" value="${escE(w.text)}" placeholder="z. B. CS2-Bestand aktualisieren"></label>
+            <label class="set-feld"><span>Modul</span>
+                <select id="erinModul">${opt('', 'Keins', !w.href)}${module.map(m => opt(m.href, m.short || m.label.replace(/^\S+\s/, ''), m.href === w.href)).join('')}</select></label>
+            <label class="set-feld"><span>Rhythmus</span>
+                <select id="erinRhythmus">${opt('monat', 'Monatlich', w.rhythmus === 'monat')}${opt('quartal', 'Quartalsweise', w.rhythmus === 'quartal')}${opt('jahr', 'Jährlich', w.rhythmus === 'jahr')}</select></label>
+            <div class="set-zeile">
+                <label class="set-feld"><span>Am Tag</span>
+                    <input type="number" id="erinTag" min="1" max="28" step="1" inputmode="numeric" value="${escE(w.tag)}"></label>
+                <label class="set-feld" id="erinMonatFeld"><span id="erinMonatLbl">Monat</span>
+                    <select id="erinMonat"></select></label>
+            </div>
+            <p class="set-hint" id="erinVorschau"></p>
+            <p class="set-fehler" id="erinFehler" hidden></p>
+        </div>
+        <div class="modal-fuss">
+            ${neu ? '' : '<button type="button" class="v-btn v-btn--danger" data-weg>Löschen</button>'}
+            <button type="button" class="v-btn" data-zu>Abbrechen</button>
+            <button type="button" class="v-btn v-btn--primary" data-ok>Speichern</button>
+        </div>`, { voll: true });
+    const $ = (id) => d.root.querySelector('#' + id);
+    const entwurf = () => ({ id: w.id || ('e' + Date.now().toString(36)), text: $('erinText').value.trim(),
+        href: $('erinModul').value, rhythmus: $('erinRhythmus').value,
+        tag: Number($('erinTag').value), monat: Number($('erinMonat').value || 1), erledigt: w.erledigt || null });
+    const monate = () => {
+        const r = $('erinRhythmus').value;
+        $('erinMonatFeld').hidden = r === 'monat';
+        $('erinMonatLbl').textContent = r === 'quartal' ? 'In den Monaten' : 'Monat';
+        const alt = Number($('erinMonat').value || w.monat || 1);
+        $('erinMonat').innerHTML = r === 'quartal'
+            ? [1, 2, 3].map(m => opt(m, [0, 1, 2, 3].map(q => E.MONATE[m - 1 + 3 * q].slice(0, 3)).join(' · '), m === Math.min(alt, 3))).join('')
+            : E.MONATE.map((n, i) => opt(i + 1, n, i + 1 === alt)).join('');
+        vorschau();
+    };
+    const vorschau = () => {
+        const x = entwurf();
+        const ok = x.tag >= 1 && x.tag <= 28;
+        const naechster = ok ? E.naechsterTermin(x) : null;
+        $('erinVorschau').textContent = ok ? E.beschreibung(x) + (naechster ? ' · nächster Termin ' + E.datumLang(naechster) : '') : 'Der Tag liegt zwischen 1 und 28.';
+    };
+    $('erinRhythmus').addEventListener('change', monate);
+    ['erinTag', 'erinMonat'].forEach(id => $(id).addEventListener('input', vorschau));
+    $('erinMonat').addEventListener('change', vorschau);
+    monate();
+    if (window.innerWidth > 720) $('erinText').focus();
+    d.root.querySelector('[data-zu]').onclick = () => d.close();
+    const fehler = (t) => { $('erinFehler').hidden = false; $('erinFehler').textContent = t; };
+    d.root.querySelector('[data-ok]').onclick = async (ev) => {
+        const x = entwurf();
+        if (!x.text) return fehler('Bitte einen Text eintragen.');
+        if (!(x.tag >= 1 && x.tag <= 28) || !Number.isInteger(x.tag)) return fehler('Der Tag liegt zwischen 1 und 28.');
+        const liste = E.liste();
+        const i = liste.findIndex(y => y.id === x.id);
+        if (i >= 0) liste[i] = x; else liste.push(x);
+        ev.currentTarget.classList.add('is-loading');
+        try { await E.speichern(liste); d.close(); renderErinnerungen(); if (window.Toast) Toast.success('Gespeichert'); }
+        catch (err) { ev.currentTarget.classList.remove('is-loading'); fehler(err.message || String(err)); }
+    };
+    const weg = d.root.querySelector('[data-weg]');
+    if (weg) weg.onclick = async () => {
+        if (!await askConfirm({ title: 'Erinnerung löschen?', text: '„' + w.text + '“ steht dann nicht mehr auf der Startseite.', ok: 'Löschen', danger: true })) return;
+        try { await E.speichern(E.liste().filter(y => y.id !== w.id)); d.close(); renderErinnerungen(); }
+        catch (err) { fehler(err.message || String(err)); }
+    };
+}
+
 /* ---------- Sparziel: Hoechstzahl an Wochenzielen (v2.36.0) ----------
  * Der Server prueft sie beim Anlegen selbst; hier wird sie nur gesetzt. */
 const MAX_WZ_PREF = 'ui_sparziel_max_wochenziele';
@@ -492,6 +593,13 @@ async function ladeExportCfg() {
     });
     renderMaxWochenziele();
     document.getElementById('maxWochenzieleSave').onclick = (e) => saveMaxWochenziele(e.currentTarget);
+    renderErinnerungen();
+    document.addEventListener('vexnav:ready', renderErinnerungen);
+    document.getElementById('erinListe').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-erin]');
+        if (b) dlgErinnerung(VexErinnerung.liste().find(x => x.id === b.dataset.erin));
+    });
+    document.getElementById('erinNeu').onclick = () => dlgErinnerung(null);
     renderGradients();
     renderThemes();
     document.getElementById('gradList').addEventListener('click', (e) => {

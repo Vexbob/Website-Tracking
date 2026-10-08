@@ -1,7 +1,4 @@
-/* Produkte — v1.42.0 */
-.prod-name{font-weight:600;color:var(--text)}
-.prod-brand{font-size:0.75rem;color:var(--text-faint);margin-top:2px}
-.prod-row:hover{background:var(--surface-2)}
+/* Produkte — v1.42.0, seit v2.42.0 eine .rec-list statt einer Tabelle */
 .pv-chart-wrap{position:relative;height:200px;margin-bottom:1rem}
 .pv-hist-list{max-height:300px;overflow-y:auto}
 .pv-hist-item{display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--line);font-size:0.8125rem}
@@ -12,16 +9,6 @@
 .pv-hist-store{font-size:0.75rem;color:var(--text-muted)}
 .pv-hist-price{font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
 .pv-empty{padding:2rem;text-align:center;color:var(--text-muted);font-size:0.875rem}
-
-/* Laeden-Spalte: ein Produkt bleibt eine Zeile, die Laeden stehen nebeneinander */
-.prod-stores{max-width:260px}
-.prod-store{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;
-    background:var(--surface-2);border-radius:10px;padding:1px 7px;margin:1px 3px 1px 0;font-size:0.75rem}
-.prod-store-n{color:var(--text-faint);font-variant-numeric:tabular-nums}
-.prod-merged{cursor:pointer;font-size:0.75rem;opacity:0.75;width:auto;margin:0;
-    padding:2px 5px;background:var(--surface-2);border:1px solid var(--line);
-    border-radius:6px;line-height:1.2;vertical-align:middle}
-.prod-merged:hover{opacity:1;border-color:var(--line-strong)}
 
 /* Vorschlaege zum Zusammenfuehren */
 .merge-box{display:flex;flex-direction:column;gap:0.75rem;margin-bottom:1rem}
@@ -74,7 +61,6 @@
     border-radius:12px;padding:2px 9px;font-size:0.75rem;color:var(--text-muted);white-space:nowrap}
 
 @media(max-width:640px){
-    .prod-stores{max-width:none}
     .merge-name{flex-basis:100%}
 }
 
@@ -91,3 +77,16 @@
     max-height:180px;overflow:auto;font-family:ui-monospace,monospace;font-size:0.75rem;color:var(--text-muted);white-space:pre-line}
 .reparse-log .ok{color:var(--green-dark)}
 .reparse-log .err{color:var(--red-dark)}
+
+/* v2.42.0: Karten statt Umschalter. Kategorien und Läden nebeneinander,
+   sobald Platz ist; Filter und Sortierung der Produkte in einer Zeile, die
+   am Handy umbricht -- keine Auswahl breiter als der Bildschirm. */
+.az-stat-raster{display:grid;grid-template-columns:minmax(0,1fr);gap:1rem;margin-bottom:1rem}
+.az-stat-raster > .stat-card{margin:0;min-width:0}
+@media(min-width:880px){.az-stat-raster{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.az-prod-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.5rem}
+.az-prod-tools select{min-width:0;width:100%;margin:0}
+@media(max-width:640px){.az-prod-tools{grid-template-columns:minmax(0,1fr)}}
+#prodListe .rec-title{white-space:normal}
+.az-prod-mehr{display:block;margin:var(--space-3) auto 0}
+.az-prod-fuss{display:flex;justify-content:flex-end;margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid var(--line)}

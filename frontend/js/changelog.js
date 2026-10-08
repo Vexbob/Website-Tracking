@@ -14,6 +14,19 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.42.0', date: '2026-10-08', title: 'Overcast, Erinnerungen und Tagebuch', notes: [
+        'Musik: Overcast-Export (OPML) importieren; fertige Folgen zählen mit ihrer Länge aus dem Feed der Sendung.',
+        'Startseite: Erinnerungen wie „CS2-Bestand aktualisieren“, einstellbar unter Einstellungen.',
+        'Essenstagebuch: Uhrzeit eines Eintrags ändern und „Meine Lebensmittel“ mit Löschen.',
+        'Ausgaben-Statistik: Kategorien, Läden, Wochentage und Produkte als eigene Karten, Produkte als Liste.',
+        'Backup: Einstellungen kommen beim Zurückspielen wieder mit.',
+    ]},
+    { v: 'v2.41.0', date: '2026-10-08', title: 'Bon-Positionen und Schlaf am Handy', notes: [
+        'Positionen im Bon und auf „Neuer Bon“ haben eine Gestalt; das Preisfeld ist am Handy nicht mehr gequetscht.',
+        'Preis und Menge tragen „€“ und „×“ im Feld, der Betrag steht rechtsbündig wie auf dem Bon.',
+        'Lange Produktnamen stehen über die ganze Breite, auch im Dialog am Rechner.',
+        'Schlaf: Ohne Messlücken-Hinweis klebt die Karte nicht mehr an den Kacheln.',
+    ]},
     { v: 'v2.40.0', date: '2026-10-07', title: 'Sicherheit: bekannte Lücken geschlossen', notes: [
         'Server-Pakete angehoben: Eine präparierte Anfrage an den Login konnte den Server ohne Konto lahmlegen.',
         'Der Blog bereinigt Beiträge jetzt lückenlos; vorher kam ein Bild mit Skript in einem Formular durch.',

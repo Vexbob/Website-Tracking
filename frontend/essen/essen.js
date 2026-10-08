@@ -32,6 +32,9 @@ const API = {
     aendern:   (id, d) => apiCall('/api/food/diary/log/' + id + '?at=' + jetzt(), { method: 'PATCH', body: d }),
     weg:       (id)    => apiCall('/api/food/diary/log/' + id + '?at=' + jetzt(), { method: 'DELETE' }),
     haeufig:   ()      => apiCall('/api/food/diary/frequent'),
+    meine:     ()      => apiCall('/api/food/diary/foods'),
+    meineWeg:  (label, mitEintraegen) => apiCall('/api/food/diary/foods?label=' + encodeURIComponent(label)
+                   + (mitEintraegen ? '&eintraege=true' : ''), { method: 'DELETE' }),
 };
 
 /* Die Zeichen an den Bedienelementen kommen aus VexIkon (js/ikon.js) und
@@ -709,6 +712,10 @@ function eintragDialogAendern(id) {
             <span>Wann?</span>
             <div class="es-dlg-mahlzeiten" id="esEdMahlzeiten"></div>
         </div>
+        <label class="es-feld es-feld--zeit">
+            <span>Uhrzeit</span>
+            <input type="time" id="esEdZeit" value="${esc(e.logged_time || '')}" step="60">
+        </label>
         <label class="es-feld">
             <span>Notiz</span>
             <input type="text" id="esEdNote" value="${esc(e.note || '')}"
@@ -719,7 +726,9 @@ function eintragDialogAendern(id) {
             <button type="button" class="v-btn v-btn--danger" id="esEdWeg">Entfernen</button>
         </div>`;
 
-    const wahl = { level: e.level, meal: e.meal === 'ohne' ? null : e.meal };
+    // Gesendet wird nur, was sich geaendert hat: stuende die Mahlzeit immer
+    // im Body, koennte der Server sie nach einer neuen Uhrzeit nie neu raten.
+    const wahl = { level: e.level, meal: e.meal === 'ohne' ? null : e.meal, mealGeaendert: false };
     const dlg = openModal('Eintrag', inhalt);
 
     const zeichneStufen = () => {
@@ -739,6 +748,7 @@ function eintragDialogAendern(id) {
                 data-mahlzeit="${esc(m.key)}">${esc(m.label)}</button>`).join('');
         ziel.querySelectorAll('[data-mahlzeit]').forEach(b => b.addEventListener('click', () => {
             wahl.meal = b.dataset.mahlzeit === 'ohne' ? null : b.dataset.mahlzeit;
+            wahl.mealGeaendert = true;
             zeichneMz();
         }));
     };
@@ -749,12 +759,15 @@ function eintragDialogAendern(id) {
         const knopf = ev.currentTarget;
         knopf.classList.add('is-loading');
         try {
-            state.tag = await API.aendern(id, {
+            const body = {
                 label: document.getElementById('esEdName').value,
                 level: wahl.level,
-                meal: wahl.meal === null ? 'ohne' : wahl.meal,
                 note: document.getElementById('esEdNote').value,
-            });
+            };
+            if (wahl.mealGeaendert) body.meal = wahl.meal === null ? 'ohne' : wahl.meal;
+            const zeit = document.getElementById('esEdZeit').value;
+            if (zeit !== (e.logged_time || '')) body.time = zeit;
+            state.tag = await API.aendern(id, body);
             dlg.close();
             zeichneTag(true);
             ladeHaeufig();
@@ -768,6 +781,80 @@ function eintragDialogAendern(id) {
         dlg.close();
         await entfernen(id);
     });
+}
+
+/* ------------------------------------------------- Meine Lebensmittel (v2.42.0)
+ * Alles, was je eingetragen wurde, je Schreibweise einmal. Herausnehmen
+ * nimmt den Namen aus Liste und Schnellwahl; die Tage bleiben, wie sie
+ * waren -- ausser man will die Eintraege ausdruecklich mitloeschen. */
+async function meineLebensmittel() {
+    const dlg = openModal('Meine Lebensmittel', `
+        <div class="es-feld es-meine-suche">
+            <input type="search" id="esMeineSuche" placeholder="Suchen …" autocomplete="off" aria-label="Lebensmittel suchen"></div>
+        <p class="es-meine-info" id="esMeineInfo"></p>
+        <div id="esMeineListe"><span class="skel skel-block"></span></div>`, { voll: true });
+    let alle = [];
+    const liste = document.getElementById('esMeineListe');
+    const zeichne = () => {
+        const q = document.getElementById('esMeineSuche').value.trim().toLowerCase();
+        const treffer = q ? alle.filter(f => f.label.toLowerCase().includes(q)) : alle;
+        document.getElementById('esMeineInfo').textContent = alle.length
+            ? (q ? `${treffer.length} von ${alle.length}` : `${alle.length} verschiedene, die häufigsten zuerst`) : '';
+        liste.innerHTML = treffer.length ? '<div class="rec-list">' + treffer.map((f, i) => `
+            <button type="button" class="rec-row" data-meine="${alle.indexOf(f)}">
+                <span class="rec-main"><span class="rec-title">${esc(f.label)}</span>
+                    <span class="rec-meta">${f.anzahl}× · zuletzt ${esc(datumKurz(f.zuletzt))}</span></span>
+                <span class="rec-go">${window.VexIkon ? VexIkon.svg('muell', 16) : ''}</span>
+            </button>`).join('') + '</div>'
+            : `<p class="es-meine-info">${alle.length ? 'Nichts passt zu dieser Suche.' : 'Noch nichts eingetragen.'}</p>`;
+    };
+    const laden = async () => {
+        try { alle = (await API.meine()).foods || []; zeichne(); }
+        catch (err) {
+            liste.innerHTML = `<div class="empty is-error"><p class="empty-text">Die Liste konnte nicht geladen werden.</p>
+                <button type="button" class="v-btn v-btn--sm" id="esMeineNochmal">Erneut versuchen</button></div>`;
+            document.getElementById('esMeineNochmal').onclick = laden;
+        }
+    };
+    document.getElementById('esMeineSuche').addEventListener('input', zeichne);
+    liste.addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-meine]');
+        if (b) lebensmittelEntfernen(alle[Number(b.dataset.meine)], async () => { await laden(); ladeTag(state.datum); });
+    });
+    await laden();
+    return dlg;
+}
+
+function lebensmittelEntfernen(f, danach) {
+    if (!f) return;
+    const wahl = { mit: false };
+    const d = openModal('Entfernen?', `
+        <p class="es-meine-text">„${esc(f.label)}“ verschwindet aus „Meine Lebensmittel“ und aus der Schnellwahl.
+            Trägst du es wieder ein, ist es zurück.</p>
+        <button type="button" class="v-schalt-zeile es-meine-schalter" role="switch" aria-checked="false" id="esMeineMit">
+            <span class="es-meine-schalter-text"><strong>${f.anzahl === 1 ? 'Auch den einen Eintrag' : `Auch die ${f.anzahl} Einträge`} im Tagebuch löschen</strong>
+                <small>Sonst bleiben die Tage, an denen es steht, wie sie sind.</small></span>
+            <span class="v-schalter" aria-hidden="true"></span>
+        </button>
+        <div class="modal-fuss">
+            <button type="button" class="v-btn" data-zu>Abbrechen</button>
+            <button type="button" class="v-btn v-btn--danger" data-ok>Entfernen</button>
+        </div>`);
+    const schalter = d.root.querySelector('#esMeineMit');
+    schalter.onclick = () => { wahl.mit = !wahl.mit; schalter.setAttribute('aria-checked', String(wahl.mit)); };
+    d.root.querySelector('[data-zu]').onclick = () => d.close();
+    d.root.querySelector('[data-ok]').onclick = async (ev) => {
+        ev.currentTarget.classList.add('is-loading');
+        try {
+            const r = await API.meineWeg(f.label, wahl.mit);
+            d.close();
+            melde(wahl.mit ? `Entfernt, ${r.eintraege_geloescht} Einträge gelöscht` : 'Aus der Liste genommen');
+            if (danach) await danach();
+        } catch (err) {
+            ev.currentTarget.classList.remove('is-loading');
+            melde(err.message || 'Das ging nicht.', 'error');
+        }
+    };
 }
 
 /* ------------------------------------------------------------------ Boot */
@@ -793,6 +880,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         else e.target.value = state.datum || heute();
     });
     document.getElementById('esZurueck').addEventListener('click', () => tagVerschieben(-1));
+    document.getElementById('esMeine').addEventListener('click', () => meineLebensmittel());
     document.getElementById('esVor').addEventListener('click', () => tagVerschieben(1));
     // Zwei Knoepfe, eine Handlung: der eine steht am Rechner im Tageskopf,
     // der andere schwebt am Handy über der Tab-Leiste. Beide rufen dasselbe.

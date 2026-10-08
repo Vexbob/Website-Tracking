@@ -143,6 +143,25 @@
             <div id="mPlan" class="m-plan"></div>
         </div>
 
+        <!-- v2.42.0: Podcasts aus Overcast. Ein Export ergaenzt nur, er ersetzt
+             nichts -- deshalb ohne Vorschau, mit dem Stand darunter. -->
+        <div class="stat-card">
+            <div class="stat-card-head">
+                <h3>Overcast übernehmen</h3>
+                <span class="m-source"><i class="m-source-dot m-source-dot--podcast" aria-hidden="true"></i>Quelle: Overcast</span>
+            </div>
+            <p class="m-hint">Den Export <strong>OPML (extended)</strong> aus Overcast ablegen. Ein neuer
+                Export ergänzt, was schon da ist; Folgen, die er nicht mehr nennt, bleiben. Fertige
+                Folgen zählen mit ihrer Länge aus dem Feed der Sendung, angefangene mit der gehörten Zeit.</p>
+            <div class="dropzone" id="mOcZone" role="button" tabindex="0" aria-label="OPML-Datei aus Overcast auswählen">
+                <div class="dropzone-icon" aria-hidden="true" data-ikon="ablage" data-ikon-gross="26"></div>
+                <div class="dropzone-title">OPML hier ablegen oder klicken</div>
+                <div class="dropzone-sub" id="mOcSub">overcast.opml, bis 10 MB</div>
+                <input type="file" id="mOcFile" accept=".opml,.xml,text/xml,application/xml,text/x-opml" hidden>
+            </div>
+            <div id="mOcStand" class="m-oc-stand"><span class="skel skel-line long"></span></div>
+        </div>
+
         <div class="stat-card">
             <div class="stat-card-head">
                 <h3>Protokoll</h3>
@@ -153,7 +172,7 @@
 
         <div class="stat-card">
             <h3>Register leeren</h3>
-            <p class="m-hint">Löscht alle Zeilen des Hörregisters; das Protokoll bleibt.</p>
+            <p class="m-hint">Löscht alle Zeilen des Hörregisters, auch die aus Overcast; das Protokoll bleibt.</p>
             <button type="button" class="v-btn v-btn--danger" id="mClearBtn">Register leeren</button>
         </div>
     </div>

@@ -131,7 +131,7 @@ body{visibility:hidden}body.ready{visibility:visible}
 .gh-leiste-text { font-size: 0.8125rem; color: var(--text-3); min-width: 0; }
 
 /* ---------- Kennzahlen (Schlaf, Workouts) ---------- */
-.gh-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+.gh-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
 @media (max-width: 900px) { .gh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .gh-kpis:empty { display: none; }
 .gh-kpi {
@@ -144,8 +144,13 @@ body{visibility:hidden}body.ready{visibility:visible}
 .gh-kpi-val small { font-size: 0.8125rem; font-weight: 600; color: var(--text-3); margin-left: 2px; letter-spacing: 0; }
 .gh-kpi-sub { margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .gh-kpi .gh-leer { color: var(--text-3); }
-.gh-notiz { margin: var(--space-2) 0 var(--space-4); font-size: 0.8125rem; color: var(--text-3); line-height: 1.5; }
-.gh-notiz:empty { display: none; margin: 0 0 var(--space-4); }
+/* Der Abstand unter den Kacheln gehoert den Kacheln (.gh-kpis), nicht dem
+   Hinweis: ein leerer Hinweis ist display:none, und mit ihm verschwand bis
+   v2.40.0 auch der Rand -- die Karte „Schlaf je Nacht“ klebte dann an den
+   Kacheln. Steht ein Hinweis da, rueckt er mit dem negativen Rand auf 8 px
+   an die Kacheln heran (die Raender fallen zusammen). */
+.gh-notiz { margin: calc(var(--space-2) - var(--space-4)) 0 var(--space-4); font-size: 0.8125rem; color: var(--text-3); line-height: 1.5; }
+.gh-notiz:empty { display: none; }
 
 /* ---------- Karten mit Diagramm ---------- */
 .gh-karte-titel { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.75rem; font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; }
