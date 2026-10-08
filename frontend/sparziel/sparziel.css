@@ -317,6 +317,13 @@ body{visibility:hidden}body.ready{visibility:visible}
     padding-bottom: 2px; scrollbar-width: none;
 }
 .sz-trophaeen::-webkit-scrollbar { display: none; }
+/* Am Rechner gibt es kein Wischen, und die Leiste hat keine sichtbare
+   Scrollleiste -- was rechts lag, war mit der Maus nicht zu erreichen
+   (v2.43.1). Dort brechen die Trophaeen deshalb in Zeilen um. */
+@media (min-width: 721px) {
+    .sz-trophaeen { grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+        overflow: visible; scroll-snap-type: none; }
+}
 .sz-trophaeen.ist-leer { display: block; }
 .sz-trophae {
     --t-ton: var(--warn);
@@ -347,12 +354,14 @@ body{visibility:hidden}body.ready{visibility:visible}
     display: flex; align-items: center; justify-content: center;
     background: none; border: 0; border-radius: var(--radius-lg); cursor: pointer; color: var(--text-4);
 }
-.sz-trophae-haken svg { box-sizing: content-box; padding: 4px; border-radius: 50%;
-    border: 1.5px solid var(--line-strong); transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease); }
-.sz-trophae-haken:hover svg { border-color: var(--ok); color: var(--ok); }
+/* Offen: ein kleiner leerer Kreis. Gekauft: nur ein kleiner gruener Haken
+   (v2.43.1 -- der gefuellte Kreis war lauter als die Trophaee selbst). */
+.sz-trophae-haken svg { box-sizing: content-box; padding: 2px; border-radius: 50%;
+    border: 1.5px solid var(--line-strong); color: transparent;
+    transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease); }
+.sz-trophae-haken:hover svg { border-color: var(--ok); color: color-mix(in srgb, var(--ok) 55%, transparent); }
 .sz-trophae-haken:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-/* Gekauft: gruener Kreis mit dunklem Haken (helle Farbe traegt dunkle Schrift). */
-.sz-trophae-haken[aria-pressed="true"] svg { background: var(--ok); border-color: var(--ok); color: var(--bg); }
+.sz-trophae-haken[aria-pressed="true"] svg { border-color: transparent; color: var(--ok); }
 .sz-trophae.ist-gekauft .sz-trophae-meta { color: var(--ok); font-weight: 600; }
 .sz-gekauft-zeile { border: 1px solid var(--line); border-radius: var(--radius); margin: var(--space-3) 0 0; }
 .sz-gekauft-text { flex: 1; min-width: 0; display: grid; gap: 2px; }

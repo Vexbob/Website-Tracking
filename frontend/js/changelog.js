@@ -14,10 +14,16 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
-    { v: 'v2.43.0', date: '2026-10-08', title: 'Sparziel: Trophäen mit Haken „gekauft“', notes: [
+    { v: 'v2.44.0', date: '2026-10-08', title: 'Musik: Hördiagramm in Stunden', notes: [
+        'Der Verlauf zeigt Hörzeit in Stunden statt Wiedergaben – eine Podcast-Folge wiegt jetzt ihre Länge.',
+        'Angefangene Overcast-Folgen zählen mit ihrer gehörten Zeit.',
+        'Fehlt den meisten Wiedergaben eine Hörzeit, bleibt es bei Wiedergaben, und das Diagramm sagt warum.',
+    ]},
+    { v: 'v2.43.1', date: '2026-10-08', title: 'Sparziel: Trophäen mit Haken „gekauft“', notes: [
         'Rechts oben auf jeder Trophäe setzt ein Tipp den Haken „gekauft“, noch einer nimmt ihn zurück.',
         'Im Dialog steht, wann gekauft wurde; über den Kacheln, wie viele es sind.',
         'Jedes Setzen und Entfernen kommt ins Log.',
+        'Nachgezogen: Die Kachel nennt das Kaufdatum, der Haken ist klein, und am Rechner brechen die Trophäen in Zeilen um.',
     ]},
     { v: 'v2.42.0', date: '2026-10-08', title: 'Overcast, Erinnerungen und Tagebuch', notes: [
         'Musik: Overcast-Export (OPML) importieren; fertige Folgen zählen mit ihrer Länge aus dem Feed der Sendung.',

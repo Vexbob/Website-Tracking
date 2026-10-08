@@ -493,7 +493,8 @@ async def series(step: str = Query("auto", description="auto | tag | woche | mon
         f"       SUM(plays) AS plays, SUM(ms_played) AS ms, "
         f"       COUNT(DISTINCT NULLIF(title,'')) AS titles, "
         f"       COUNT(DISTINCT NULLIF(artist,'')) AS artists, "
-        f"       SUM(CASE WHEN grain = ANY(${n_coarser}::text[]) THEN 1 ELSE 0 END) AS coarse "
+        f"       SUM(CASE WHEN grain = ANY(${n_coarser}::text[]) THEN 1 ELSE 0 END) AS coarse, "
+        f"       SUM(CASE WHEN ms_played IS NULL THEN plays ELSE 0 END) AS ohne_zeit "
         f"  FROM music_entries WHERE {flt.where} "
         f" GROUP BY 1 ORDER BY 2",
         *flt.params, coarser)
@@ -503,11 +504,19 @@ async def series(step: str = Query("auto", description="auto | tag | woche | mon
                "titles": int(r["titles"] or 0),
                "artists": int(r["artists"] or 0),
                "coarser": int(r["coarse"] or 0)} for r in rows]
+    # v2.44.0: Fuer welchen Anteil der Wiedergaben eine Hoerzeit vorliegt.
+    # Das Diagramm zeigt Stunden nur, wenn fast alles eine hat -- sonst stuende
+    # ein Spotify-Export ohne Spalte „Minuten“ mit 0 Stunden da. Angefangene
+    # Overcast-Folgen haben Zeit, aber keine Wiedergabe; sie zaehlen hier nicht.
+    plays_gesamt = sum(p["plays"] for p in points)
+    ohne_zeit = sum(int(r["ohne_zeit"] or 0) for r in rows)
     out = {
         "grain": target,
         "grain_label": GRAIN_LABEL[target],
         "auto": step not in GRAIN_BUCKET,
         "points": points,
+        "zeit_abdeckung": round(1 - ohne_zeit / plays_gesamt, 4) if plays_gesamt else
+                          (1.0 if any(p["ms_played"] for p in points) else None),
     }
 
     if split == "kind":
@@ -522,6 +531,7 @@ async def series(step: str = Query("auto", description="auto | tag | woche | mon
             f" GROUP BY 1, 2", *flt.params)
         index = {p["period"]: i for i, p in enumerate(points)}
         buckets: dict[str, list] = {}
+        zeiten: dict[str, list] = {}
         for r in per:
             # Ohne Spalte "Art" in der CSV steht hier ein leerer Wert. Er
             # bekommt einen Namen, statt als namenlose Reihe zu erscheinen.
@@ -531,10 +541,13 @@ async def series(step: str = Query("auto", description="auto | tag | woche | mon
                 continue
             values = buckets.setdefault(key, [0] * len(points))
             values[i] += int(r["plays"] or 0)
+            zeit = zeiten.setdefault(key, [0] * len(points))
+            zeit[i] += int(r["ms"] or 0)
         out["split"] = "kind"
         out["series"] = [
-            {"kind": k, "plays": sum(v), "values": v}
-            for k, v in sorted(buckets.items(), key=lambda kv: -sum(kv[1]))
+            {"kind": k, "plays": sum(v), "values": v,
+             "ms": sum(zeiten.get(k, [])), "ms_values": zeiten.get(k, [0] * len(points))}
+            for k, v in sorted(buckets.items(), key=lambda kv: -sum(zeiten.get(kv[0], [0])) - sum(kv[1]))
         ]
     return out
 

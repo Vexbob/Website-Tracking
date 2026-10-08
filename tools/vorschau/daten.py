@@ -405,6 +405,13 @@ TROPHAEEN = [
     {"id": 3, "name": "Neues Rennrad", "icon": "🚀", "color": "blue",
      "final_amount": 2400.0, "target_amount": 2400.0,
      "completed_at": "2026-09-30T19:00:00", "duration_days": 210, "note": None, "gekauft_am": None},
+] + [
+    {"id": 10 + i, "name": n, "icon": "🏆", "color": "gold", "final_amount": b, "target_amount": b,
+     "completed_at": f"2026-0{9 - i}-1{i}T12:00:00", "duration_days": 5 + i, "note": None,
+     "gekauft_am": g}
+    for i, (n, b, g) in enumerate((("Handtrainer", 13.0, "2026-09-02"), ("USB-C-Kabel", 8.0, "2026-08-21"),
+                                   ("Ladestecker 60 W", 11.0, None), ("Sonnenbrille", 21.0, "2026-07-30"),
+                                   ("Netzwerkkabel 1,5 m", 6.0, "2026-06-11")))
 ]
 WUENSCHE = [
     {"id": 1, "name": "Kopfhörer mit Geräuschunterdrückung", "estimated_price": 249.0,
@@ -972,6 +979,49 @@ MUSIK_SUMME = {
                {"grain": "monat", "rows": 2039, "from": "2024-01-01", "to": "2025-12-31"}],
 }
 
+# v2.44.0: der Verlauf -- dreizehn Wochen, je Art Wiedergaben UND Hoerzeit.
+# Kopfzahlen und Balken kommen aus denselben Wochen, damit die Hoerzeit oben
+# die Summe der Balken ist. Podcasts: wenige Folgen, aber viele Stunden.
+def _musik_verlauf():
+    import datetime as _dt
+    heute = _dt.date.today()
+    montag = heute - _dt.timedelta(days=heute.weekday())
+    wochen = [montag - _dt.timedelta(weeks=12 - i) for i in range(13)]
+    arten = {"Musik": [], "Podcast": [], "Hörbuch": []}
+    for i, w in enumerate(wochen):
+        lieder = 180 + (i * 37) % 140
+        arten["Musik"].append((lieder, int(lieder * 3.4 * 60000)))
+        folgen = 2 + (i * 5) % 5
+        arten["Podcast"].append((folgen, int((folgen * 58 + 25 + (i % 3) * 20) * 60000)))
+        hb = 3 if i in (4, 5, 9) else 0
+        arten["Hörbuch"].append((hb, hb * 42 * 60000))
+    punkte = []
+    for i, w in enumerate(wochen):
+        jahr, kw, _ = w.isocalendar()
+        punkte.append({"period": f"{jahr}-KW{kw:02d}", "start": w.isoformat(),
+                       "plays": sum(arten[a][i][0] for a in arten),
+                       "ms_played": sum(arten[a][i][1] for a in arten),
+                       "titles": arten["Musik"][i][0] // 2, "artists": 60 + i, "coarser": 0})
+    reihen = [{"kind": a, "plays": sum(x[0] for x in v), "values": [x[0] for x in v],
+               "ms": sum(x[1] for x in v), "ms_values": [x[1] for x in v]} for a, v in arten.items()]
+    reihen.sort(key=lambda r: -r["ms"])
+    verlauf = {"grain": "woche", "grain_label": "wöchentlich", "auto": True, "points": punkte,
+               "zeit_abdeckung": 1.0, "split": "kind", "series": reihen}
+    je = {r["kind"]: r for r in reihen}
+    summe = {
+        "by_kind": [{"kind": a, "plays": je[a]["plays"], "ms_played": je[a]["ms"],
+                     "titles": {"Musik": 1310, "Podcast": je["Podcast"]["plays"], "Hörbuch": 9}[a],
+                     "artists": {"Musik": 402, "Podcast": 7, "Hörbuch": 2}[a],
+                     "rows": je[a]["plays"]} for a in ("Musik", "Podcast", "Hörbuch")],
+        "plays": sum(r["plays"] for r in reihen), "rows": sum(r["plays"] for r in reihen),
+        "ms_played": sum(r["ms"] for r in reihen), "titles": 1310, "artists": 402,
+        "from": wochen[0].isoformat(), "to": heute.isoformat(),
+        "grains": [{"grain": "tag", "rows": 140, "from": wochen[0].isoformat(), "to": heute.isoformat()},
+                   {"grain": "woche", "rows": 3200, "from": wochen[0].isoformat(), "to": heute.isoformat()}],
+    }
+    return verlauf, summe
+MUSIK_VERLAUF, MUSIK_SUMME = _musik_verlauf()
+
 MUSIK_TOP = {
     "by": "interpret", "metric": "plays",
     "items": [
@@ -1217,7 +1267,7 @@ ANTWORTEN = {
     # ---- Musik ----
     "/api/music/facets": MUSIK_FACETTEN,
     "/api/music/summary": MUSIK_SUMME,
-    "/api/music/series": [],
+    "/api/music/series": MUSIK_VERLAUF,
     "/api/music/top": MUSIK_TOP,
     "/api/music/entries": MUSIK_EINTRAEGE,
     "/api/music/imports": [],

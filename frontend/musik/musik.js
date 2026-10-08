@@ -265,7 +265,12 @@ function drawSeries(data) {
     const points = fillGaps(data.points || [], data.grain);
     const labels = points.map(p => shortPeriod(p.period, data.grain));
     const full = points.map(p => fullPeriod(p.period, data.grain));
-    const byKind = (data.series || []).filter(s => s.plays > 0);
+    // v2.44.0: nach Hörzeit, sobald (fast) alles eine hat -- eine Stunde
+    // Podcast wiegt dann so viel wie eine Stunde Musik. Vorher zählten die
+    // Balken Wiedergaben, und eine Folge von zwei Stunden war ein Song.
+    const nachZeit = data.zeit_abdeckung != null && data.zeit_abdeckung >= 0.95;
+    const stunden = (ms) => ms ? Math.round(ms / 360000) / 10 : 0;
+    const byKind = (data.series || []).filter(s => nachZeit ? s.ms > 0 : s.plays > 0);
     const stacked = !state.kind && byKind.length > 1;
 
     // Die aufgeteilten Reihen sind an denselben Perioden ausgerichtet wie
@@ -273,7 +278,8 @@ function drawSeries(data) {
     const at = new Map((data.points || []).map((p, i) => [p.period, i]));
     const valuesOf = (s) => points.map(p => {
         const i = at.get(p.period);
-        return i == null ? 0 : (s.values[i] || 0);
+        if (i == null) return 0;
+        return nachZeit ? stunden((s.ms_values || [])[i]) : (s.values[i] || 0);
     });
 
     const datasets = stacked
@@ -284,8 +290,8 @@ function drawSeries(data) {
             order: VexCharts.ORDER.VALUE,
         }, VexCharts.balken(6)))
         : [Object.assign({
-            label: state.kind || 'Wiedergaben',
-            data: points.map(p => p.plays),
+            label: state.kind || (nachZeit ? 'Hörzeit' : 'Wiedergaben'),
+            data: points.map(p => nachZeit ? stunden(p.ms_played) : p.plays),
             // Die erste Reihe trägt den Modulton, nicht den Akzent
             // (DESIGN.md 7) — hier ist das Spotify-Grün.
             backgroundColor: cssVar(vocab(state.kind).tone),
@@ -298,17 +304,24 @@ function drawSeries(data) {
         label: (item) => {
             if (stacked) {
                 const v = vocab(item.dataset.label);
+                if (nachZeit) {
+                    const s = byKind.find(x => x.kind === item.dataset.label);
+                    const i = at.get(points[item.dataIndex].period);
+                    const ms = s && i != null ? (s.ms_values || [])[i] : 0;
+                    return item.dataset.label + ': ' + (fmtDuration(ms) || '0 min');
+                }
                 return item.dataset.label + ': ' + fmtInt(item.parsed.y) + ' ' + v.unit;
             }
             const p = points[item.dataIndex];
             const v = vocab(state.kind);
-            const parts = [fmtInt(p.plays) + ' ' + v.unit];
-            if (p.titles) parts.push(fmtInt(p.titles) + ' ' + v.whats);
             const dur = fmtDuration(p.ms_played);
-            if (dur) parts.push(dur);
+            const parts = nachZeit ? [dur || '0 min', fmtInt(p.plays) + ' ' + v.unit] : [fmtInt(p.plays) + ' ' + v.unit];
+            if (p.titles) parts.push(fmtInt(p.titles) + ' ' + v.whats);
+            if (!nachZeit && dur) parts.push(dur);
             return parts;
         },
     };
+    if (nachZeit) opts.scales.y.ticks.callback = (val) => val.toLocaleString('de-DE') + ' h';
     if (stacked) {
         opts.scales.x.stacked = true;
         opts.scales.y.stacked = true;
@@ -437,15 +450,20 @@ async function loadOverview() {
         zeichneBuehne(sum);
         const ser = await API.series(qs({ step: state.step, split: 'kind' }));
 
+        const nachZeit = ser.zeit_abdeckung != null && ser.zeit_abdeckung >= 0.95;
         document.getElementById('mSeriesLbl').textContent =
-            '· ' + (ser.grain_label || '');
+            '· ' + (ser.grain_label || '') + ' · ' + (nachZeit ? 'in Stunden' : 'Wiedergaben');
         drawSeries(ser);
         const coarser = (ser.points || []).reduce((n, p) => n + (p.coarser || 0), 0);
-        document.getElementById('mSeriesNote').textContent = coarser
-            ? coarser.toLocaleString('de-DE') + ' Zeilen liegen gröber vor als ' +
+        const notizen = [];
+        if (coarser) notizen.push(coarser.toLocaleString('de-DE') + ' Zeilen liegen gröber vor als ' +
               (ser.grain_label || 'diese Stufe') + ' und zählen in die Periode ihres ' +
-              'ersten Tages. Feiner als importiert lässt sich nicht aufteilen.'
-            : '';
+              'ersten Tages. Feiner als importiert lässt sich nicht aufteilen.');
+        // Warum es Wiedergaben sind, wenn es keine Stunden sind.
+        if (!nachZeit && ser.zeit_abdeckung) notizen.push('Nur ' + Math.round(ser.zeit_abdeckung * 100) +
+              ' % der Wiedergaben haben eine Hörzeit (Spotify-Export ohne Spalte „Minuten“?) – ' +
+              'das Diagramm zählt deshalb Wiedergaben.');
+        document.getElementById('mSeriesNote').textContent = notizen.join(' ');
 
         // Welche Bloecke: die gefilterte Art allein, sonst jede vorhandene.
         // Ohne Spalte "Art" bleibt es bei einem Block ohne Kopfzeile.
