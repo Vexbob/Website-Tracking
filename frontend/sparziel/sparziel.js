@@ -2162,10 +2162,10 @@ function renderTrophies(){
                 <span class="sz-trophae-icon" aria-hidden="true">${esc(t.icon||'🏆')}</span>
                 <span class="sz-trophae-name">${esc(t.name)}</span>
                 <span class="sz-trophae-betrag">${fmtEur(t.final_amount)}</span>
-                <span class="sz-trophae-meta">${an?'gekauft am '+esc(new Date(t.gekauft_am+'T12:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'})):esc(date)+(t.duration_days?' · '+t.duration_days+' Tage':'')}</span>
+                <span class="sz-trophae-meta">${esc(date)}${t.duration_days?' · '+t.duration_days+' Tage':''}</span>
             </button>
             <button type="button" class="sz-trophae-haken" aria-pressed="${an}" aria-label="${hakenText}" title="${hakenText}"
-                onclick="trophaeGekauft(${t.id},${!an})">${ikon('haken',13)}</button>
+                onclick="trophaeGekauft(${t.id},${!an})">${ikon('haken',15)}</button>
         </div>`;
     }).join('');
 }
