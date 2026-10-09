@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.47.0', date: '2026-10-09', title: 'Datum überall als TT.MM.JJJJ', notes: [
+        'Jedes Datumsfeld zeigt und nimmt Tag.Monat.Jahr – unabhängig von der Sprache des Browsers.',
+        'Getippt wird mit oder ohne Punkte („09102026“, „9.10.26“), der Kalenderknopf daneben bleibt.',
+        'Der Zeitraum-Filter passt am Handy ins Bild, Von und Bis sind breit genug fürs ganze Datum.',
+    ]},
     { v: 'v2.46.0', date: '2026-10-09', title: 'Gesundheit: Eintragen leichter, Jahresstriche; Ausgaben: Laden-Suche', notes: [
         'Wert eintragen: Wert oben und groß, „Heute“/„Gestern“ mit einem Tipp, die letzte Messgröße vorgewählt.',
         '„Zuletzt von Hand“ nennt das Datum mit Jahr; Datums- und Zeitfelder laufen auf dem iPhone nicht mehr über den Rand.',

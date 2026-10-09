@@ -637,6 +637,28 @@ textarea { min-height: 100px; resize: vertical; }
     }
     ::-webkit-date-and-time-value { text-align: left; }
 }
+/* v2.47.0: Datumsfelder lesen und schreiben „TT.MM.JJJJ“ (js/datum.js).
+   Das native Feld liegt unsichtbar unter dem Textfeld -- dort oeffnet der
+   Kalenderknopf den Kalender des Browsers, an der richtigen Stelle. */
+.v-datum { position: relative; display: block; min-width: 0; }
+.v-datum > .v-datum-feld { margin: 0; padding-right: 2.75rem; font-variant-numeric: tabular-nums; }
+.v-datum > .v-datum-nativ {
+    position: absolute; left: 0; bottom: 0; width: 100%; height: 100%;
+    margin: 0; padding: 0; border: 0; opacity: 0; pointer-events: none;
+}
+.v-datum-kal {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 2.75rem; margin: 0; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 0; border-radius: 0 8px 8px 0; color: var(--text-3); cursor: pointer;
+}
+.v-datum-kal:hover { color: var(--text-1); }
+.v-datum-kal[disabled] { opacity: 0.45; cursor: default; }
+.v-datum-feld.is-falsch { border-color: var(--danger); }
+/* Eng nebeneinander (Von/Bis im Filterfenster): schmalerer Kalenderknopf,
+   damit „10.09.2026“ ganz hineinpasst. */
+.fp-row .v-datum > .v-datum-feld { padding-right: 2rem; }
+.fp-row .v-datum-kal { width: 2rem; }
+.filter-popover.rf-pop { min-width: min(320px, calc(100vw - 1.5rem)); }
 /* v1.38.4: [hidden] muss immer wirken. Die :where(input, select, textarea)-Base
    oben setzt display:block und ueberschreibt den UA-Default fuer [hidden]. */
 [hidden] { display: none !important; }

@@ -125,7 +125,20 @@
             toEl.value = state.to || '';
         }
         const close = () => { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
-        const open = () => { pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); };
+        // v2.47.0: rechtsbuendig am Knopf -- steht der Knopf nicht am rechten
+        // Rand (am Handy neben „Eintragen“), lief das Feld links aus dem Bild.
+        // Nach dem Oeffnen messen und so weit schieben, dass es hineinpasst.
+        const open = () => {
+            pop.style.right = '';
+            pop.hidden = false;
+            btn.setAttribute('aria-expanded', 'true');
+            // Gemessen ohne die Einblend-Animation (sie skaliert): rechte Kante
+            // der Huelle minus Breite des Feldes.
+            const rand = 12, kante = wrap.getBoundingClientRect().right;
+            const links = rand - (kante - pop.offsetWidth), rechts = kante - (document.documentElement.clientWidth - rand);
+            if (links > 0) pop.style.right = (-links) + 'px';
+            else if (rechts > 0) pop.style.right = rechts + 'px';
+        };
 
         function emit() {
             paint();

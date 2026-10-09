@@ -262,6 +262,15 @@ Handy zwei Zeilen.
   `change` funktionieren wie vorher, das Modul ändert nur den einen Aufruf.
   Gedacht für Listen, die man nicht mehr überblickt (Läden nach dem
   Bank-Import); für fünf Einträge bleibt es beim `<select>`.
+- **Ein Datum wird als „TT.MM.JJJJ“ eingegeben, überall** (v2.47.0). Ein
+  natives `<input type="date">` ordnet nach der Sprache des Browsers, nicht
+  nach `lang="de"` — ein englischer Firefox zeigt `10/09/2026`. `js/datum.js`
+  findet jedes Datumsfeld selbst (auch in später geöffneten Dialogen) und
+  setzt ein Textfeld mit Kalenderknopf davor; das native Feld bleibt
+  unsichtbar die Quelle von `value`, `min`/`max` und `change`. Eine Seite mit
+  Datumsfeld lädt die Datei, `test_jedes_datumsfeld_liest_tag_monat_jahr`
+  prüft das. Ausnahme ist `data-datum="nativ"` (das unsichtbare Feld über dem
+  Tageskopf).
 
 ## 6c Listen von Datensätzen
 

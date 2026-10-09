@@ -499,3 +499,25 @@ def test_jede_javascript_datei_laesst_sich_lesen():
             kaputt.append("%s: %s" % (js.name, str(e)[:120]))
     assert not kaputt, (
         "Diese Dateien fuehrt der Browser gar nicht aus:\n" + "\n".join(kaputt))
+
+
+def test_jedes_datumsfeld_liest_tag_monat_jahr():
+    """Ein natives Datumsfeld ordnet nach der Sprache des Browsers (v2.47.0).
+
+    Ein englischer Firefox zeigt 10/09/2026 fuer den 9. Oktober. ``/js/datum.js``
+    stellt jedes ``type="date"`` auf „TT.MM.JJJJ“ um -- aber nur auf Seiten,
+    die es laden. Ausgenommen ist ``data-datum="nativ"``: das unsichtbare
+    Feld ueber dem Tageskopf, dessen Anzeige der Kopf selbst ist.
+    """
+    fehler = []
+    for root, _, files in os.walk(FRONTEND):
+        for f in files:
+            if not f.endswith(".html"):
+                continue
+            pfad = os.path.join(root, f)
+            text = open(pfad, encoding="utf-8").read()
+            code = _geladener_code(pfad, text)
+            felder = re.findall(r'type="date"[^>]*', code)
+            if any('data-datum="nativ"' not in x for x in felder) and "/js/datum.js" not in text:
+                fehler.append(os.path.relpath(pfad, FRONTEND))
+    assert not fehler, "Datumsfeld ohne /js/datum.js: " + ", ".join(sorted(fehler))
