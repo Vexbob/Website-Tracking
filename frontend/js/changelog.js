@@ -14,6 +14,13 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.46.0', date: '2026-10-09', title: 'Gesundheit: Eintragen leichter, Jahresstriche; Ausgaben: Laden-Suche', notes: [
+        'Wert eintragen: Wert oben und groß, „Heute“/„Gestern“ mit einem Tipp, die letzte Messgröße vorgewählt.',
+        '„Zuletzt von Hand“ nennt das Datum mit Jahr; Datums- und Zeitfelder laufen auf dem iPhone nicht mehr über den Rand.',
+        'Vitalwerte: ein senkrechter Strich mit Jahreszahl markiert jeden Jahreswechsel im Diagramm.',
+        'Ausgaben: jede Laden-Auswahl hat oben ein Suchfeld; am Handy öffnet sie oben am Bildschirm.',
+        'Ausgaben: das Filterfenster ragt am Handy nicht mehr links aus dem Bild.',
+    ]},
     { v: 'v2.45.0', date: '2026-10-08', title: 'CS2: fertig, gleicher Preis zählt als Bestätigung', notes: [
         'Enter in einem Preisfeld bestätigt den Preis auch dann, wenn er gleich geblieben ist.',
         'Wer denselben Preis neu eintippt, bestätigt ihn ebenfalls; bloßes Durchtabben nicht.',

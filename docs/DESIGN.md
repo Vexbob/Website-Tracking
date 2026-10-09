@@ -256,6 +256,12 @@ Handy zwei Zeilen.
   jede Ladung falsch.
 - Ist etwas anderes als der Standard gewählt, trägt der Knopf den Akzent
   (`.has-active`). Ein Filter, den man nicht sieht, ist eine Falle.
+- **Eine lange Auswahl bekommt ein Suchfeld oben** (v2.46.0):
+  `VexAuswahl.suchbar(select)` aus `js/auswahl.js`. Das `<select>` bleibt
+  unsichtbar darunter und die Quelle des Werts — Optionen, `value` und
+  `change` funktionieren wie vorher, das Modul ändert nur den einen Aufruf.
+  Gedacht für Listen, die man nicht mehr überblickt (Läden nach dem
+  Bank-Import); für fünf Einträge bleibt es beim `<select>`.
 
 ## 6c Listen von Datensätzen
 
@@ -413,7 +419,11 @@ Reduziert, ruhig, dieselbe Farbwelt.
   Lücken sind unsichtbar, und ein gleitender Durchschnitt mittelt über
   Einträge statt über Tage. Auffüllen ist Aufgabe der Seite.
 - Kein Gitter außer waagerechten Linien in `--chart-grid` (8 % Weiß).
-  Keine senkrechten Linien, keine Rahmen, keine Achsentitel.
+  Keine senkrechten Linien, keine Rahmen, keine Achsentitel. **Eine Ausnahme**
+  (v2.46.0): der Jahreswechsel. Die Achse nennt nur Tag und Monat, über ein
+  Jahr steht dort zweimal „05.01.“ — `VexCharts.jahresStriche(c => c.$vexIso)`
+  zieht an jedem Wechsel einen gestrichelten Strich in `--chart-axis` mit der
+  Jahreszahl klein daneben, hinter den Kurven.
 - Achsenbeschriftung `--text-3`, 11 px, tabellarische Ziffern.
 - Flächen unter Linien: Verlauf von 18 % auf 0 % derselben Farbe.
 - Balken bekommen `borderRadius: 6`, keine Trennlinien zwischen Segmenten.

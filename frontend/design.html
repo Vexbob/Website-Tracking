@@ -12,6 +12,7 @@
 <script src="/js/charts.js"></script>
 <script src="/js/range-filter.js"></script>
 <script src="/js/ikon.js"></script>
+<script src="/js/auswahl.js"></script>
 <script src="/js/reiter.js"></script>
 <script src="/js/modal.js"></script>
 <style>
@@ -508,6 +509,21 @@
             <select class="v-select"><option>Alle Läden</option></select>
             <select class="v-select" disabled><option>Deaktiviert</option></select>
         </div>
+        <p class="sg-note">Eine lange Liste bekommt ein Suchfeld oben:
+        <code>VexAuswahl.suchbar(select)</code> aus <code>js/auswahl.js</code>. Das
+        <code>&lt;select&gt;</code> bleibt darunter und trägt den Wert.</p>
+        <div class="v-card" style="max-width:22rem">
+            <label for="sgSuchLaden">Laden</label>
+            <select id="sgSuchLaden">
+                <option value="">– Kein Laden –</option>
+                <option value="1">Aldi Süd</option><option value="2">Apotheke am Markt</option>
+                <option value="3">Bäckerei Müller</option><option value="4">dm</option>
+                <option value="5">Edeka</option><option value="6">Kaufland</option>
+                <option value="7">Lidl</option><option value="8">REWE</option>
+                <option value="__neu">Neuen Laden anlegen …</option>
+            </select>
+        </div>
+        <script>document.addEventListener('DOMContentLoaded', () => VexAuswahl.suchbar(document.getElementById('sgSuchLaden'), { platzhalter: 'Laden suchen …' }));</script>
     </section>
 
     <section class="sg-sec">

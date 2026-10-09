@@ -334,6 +334,25 @@ body{visibility:hidden}body.ready{visibility:visible}
 .h-metric-mehr { margin-left: auto; width: 32px; height: 32px; color: var(--text-3); }
 .he-zeile { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 .he-zeile > div { min-width: 0; }
+.he-zeile input { width: 100%; min-width: 0; }
+/* Der Wert ist die Hauptsache des Dialogs: gross, die Einheit im Feld. */
+.he-wert { position: relative; }
+.he-wert input {
+    width: 100%; min-width: 0; padding-right: 4.5rem;
+    font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+.he-wert .he-einheit {
+    position: absolute; right: 0.875rem; top: 50%; transform: translateY(-50%);
+    font-size: 0.9375rem; pointer-events: none;
+}
+.he-zeile .he-wert input { font-size: 1.375rem; padding-right: 3.75rem; }
+.he-zeile .he-wert .he-einheit { font-size: 0.8125rem; right: 0.625rem; }
+.he-letzter { margin: var(--space-2) 0 0; font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.he-tage { display: flex; gap: var(--space-2); margin-bottom: var(--space-2); }
+.he-form .modal-fuss { margin-top: auto; padding-top: var(--space-4); }
+/* Der volle Dialog am Handy: der Fuss steht unten, nicht hinter der Liste. */
+.modal-box--voll .modal-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.modal-box--voll .he-form { flex: 1 0 auto; display: flex; flex-direction: column; }
 .he-einheit { font-weight: 500; color: var(--text-3); }
 .he-h { margin: var(--space-5) 0 var(--space-2); font-size: 0.75rem; font-weight: 700;
     letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
@@ -352,4 +371,5 @@ body{visibility:hidden}body.ready{visibility:visible}
 .he-art small { font-size: 0.75rem; color: var(--text-3); }
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
     .h-metric-mehr { width: 44px; height: 44px; margin: -6px -6px -6px auto; }
+    .he-tage .v-chip { min-height: 44px; padding-inline: 1.125rem; }
 }

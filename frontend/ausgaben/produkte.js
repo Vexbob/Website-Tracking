@@ -76,6 +76,7 @@ async function loadStores() {
         const sel = document.getElementById('prodStore');
         sel.innerHTML = '<option value="">Alle Läden</option>' +
             allStores.map(s => `<option value="${s.id}">${escHtml(s.icon || '')} ${escHtml(s.name)}</option>`).join('');
+        VexAuswahl.suchbar(sel, { platzhalter: 'Laden suchen …' });
     } catch (e) { console.error(e); }
 }
 

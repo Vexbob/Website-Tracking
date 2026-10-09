@@ -87,6 +87,7 @@ function fillStoreSelects() {
             sel.addEventListener('change', () => handleStoreSelectChange(sel));
             sel.dataset.inlineHooked = '1';
         }
+        VexAuswahl.suchbar(sel, { platzhalter: 'Laden suchen …' });
     });
 }
 

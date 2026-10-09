@@ -274,7 +274,10 @@ function vexFullTitle(items) {
 function setChartDates(chart, isoList) {
     if (!chart || !window.VexCharts) return;
     chart.$vexFull = (isoList || []).map(v => VexCharts.fullDay(v));
+    chart.$vexIso = isoList || [];
 }
+// Jahreswechsel als Strich in den Vitalwert-Diagrammen (v2.46.0).
+const jahresStriche = () => VexCharts.jahresStriche(c => c.$vexIso);
 
 // ---------- Dialoge ----------
 function dialog(titel, html, opts) {
@@ -665,6 +668,7 @@ function initVitalwerte() {
             { label: 'Diastolisch', data: [], borderColor: cssVar('--info'), backgroundColor: cssVar('--info-soft'), tension: 0.3, pointRadius: 2, fill: false },
         ] },
         options: chartDefaults(),
+        plugins: [jahresStriche()],
     });
     state.chartGlucose = new Chart(document.getElementById('hChartGlucose').getContext('2d'), {
         type: 'line',
@@ -672,6 +676,7 @@ function initVitalwerte() {
             label: 'Blutzucker', data: [], borderColor: cssVar('--warn'),
             backgroundColor: cssVar('--warn-soft'), tension: 0.3, pointRadius: 2, fill: true,
         }] },
+        plugins: [jahresStriche()],
         options: chartDefaults({
             plugins: { legend: { display: false }, tooltip: themedTooltip() },
         }),
@@ -793,8 +798,20 @@ function artLabel(key) {
 }
 
 const heuteIso = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const tagIso = (vor) => { const d = new Date(); d.setDate(d.getDate() - vor); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const jetztHm = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+// Mit Jahr: die Liste reicht weiter zurueck als ein paar Tage (v2.46.0).
+const fmtDateTimeJahr = (iso) => iso ? new Date(iso).toLocaleString('de-DE',
+    { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–';
+// Ganze Zahlen mit Tausenderpunkt (8.536 Schritte), sonst eine
+// Nachkommastelle (141,4 kg) -- so, wie man es eingetragen hat.
+const vonHandWert = (e) => e.art === 'blutdruck' ? `${fmt0(e.systolisch)}/${fmt0(e.diastolisch)}`
+    : (Number.isInteger(Number(e.wert)) ? fmt0(e.wert) : fmt1(e.wert));
 
+/* v2.46.0: Der Wert steht oben -- er ist, weswegen man den Dialog oeffnet.
+   Vorgewaehlt ist die Groesse, die man zuletzt von Hand eingetragen hat,
+   der Zeitpunkt ist „jetzt“ und mit einem Tipp „gestern“. Ein anderer Tag
+   bleibt das Datumsfeld daneben. */
 function dlgEintragen(vorwahl) {
     const { eigene, bekannt } = eintragArten();
     const wahl = vorwahl || (eigene[0] && eigene[0].key) || 'weight';
@@ -806,43 +823,87 @@ function dlgEintragen(vorwahl) {
             <optgroup label="Vorhanden">${bekannt.map(opt).join('')}</optgroup>
             <option value="__neu">Neue Messgröße anlegen …</option>
         </select>
-        <div class="he-zeile">
-            <div><label for="heDatum">Tag</label><input type="date" id="heDatum" value="${heuteIso()}" max="${heuteIso()}"></div>
-            <div><label for="heZeit">Uhrzeit</label><input type="time" id="heZeit" value="${jetztHm()}"></div>
-        </div>
         <div id="heWerte"></div>
+        <p class="he-letzter" id="heLetzter" hidden></p>
+        <p class="he-label">Wann</p>
+        <div class="he-tage" role="group" aria-label="Tag">
+            <button type="button" class="v-chip is-active" data-tag="0">Heute</button>
+            <button type="button" class="v-chip" data-tag="1">Gestern</button>
+        </div>
+        <div class="he-zeile">
+            <div><input type="date" id="heDatum" aria-label="Tag" value="${heuteIso()}" max="${heuteIso()}"></div>
+            <div><input type="time" id="heZeit" aria-label="Uhrzeit" value="${jetztHm()}"></div>
+        </div>
         <h4 class="he-h">Zuletzt von Hand</h4>
         <div id="heZuletzt"><span class="skel skel-line long"></span></div>
         <div class="modal-fuss"><button type="submit" class="v-btn v-btn--primary">${ikon('plus', 16)} Eintragen</button></div>
     </form>`, { voll: true });
 
     const sel = d.root.querySelector('#heMetrik');
+    const datum = d.root.querySelector('#heDatum');
+    const tage = d.root.querySelectorAll('[data-tag]');
+    // Die Tages-Chips folgen dem Datumsfeld, nicht umgekehrt: wer dort
+    // einen anderen Tag waehlt, sieht keinen Chip mehr leuchten.
+    const tagMarkieren = () => tage.forEach(b => b.classList.toggle('is-active', tagIso(Number(b.dataset.tag)) === datum.value));
+    tage.forEach(b => b.addEventListener('click', () => { datum.value = tagIso(Number(b.dataset.tag)); tagMarkieren(); }));
+    datum.addEventListener('input', tagMarkieren);
+    datum.addEventListener('change', tagMarkieren);
+
+    const ersteFeld = () => d.root.querySelector(sel.value === 'blood_pressure' ? '#heSys' : '#heWert');
+    const fokus = () => { if (window.innerWidth > 720) { const f = ersteFeld(); if (f) f.focus(); } };
     const zeichneWerte = () => {
         const a = artLabel(sel.value);
         const box = d.root.querySelector('#heWerte');
-        const einheit = a.unit ? ` <span class="he-einheit">${escHtml(a.unit)}</span>` : '';
+        const einheit = a.unit ? `<span class="he-einheit" aria-hidden="true">${escHtml(a.unit)}</span>` : '';
         box.innerHTML = sel.value === 'blood_pressure'
             ? `<div class="he-zeile">
-                   <div><label for="heSys">Oben (systolisch)</label><input type="number" id="heSys" inputmode="numeric" step="1" placeholder="120"></div>
-                   <div><label for="heDia">Unten (diastolisch)</label><input type="number" id="heDia" inputmode="numeric" step="1" placeholder="80"></div>
+                   <div><label for="heSys">Oben (systolisch)</label><div class="he-wert"><input type="number" id="heSys" inputmode="numeric" step="1" placeholder="120"><span class="he-einheit" aria-hidden="true">mmHg</span></div></div>
+                   <div><label for="heDia">Unten (diastolisch)</label><div class="he-wert"><input type="number" id="heDia" inputmode="numeric" step="1" placeholder="80"><span class="he-einheit" aria-hidden="true">mmHg</span></div></div>
                </div>`
-            : `<label for="heWert">Wert${einheit}</label><input type="number" id="heWert" inputmode="decimal" step="any">`;
+            : `<label for="heWert">Wert</label>
+               <div class="he-wert"><input type="number" id="heWert" inputmode="decimal" step="any">${einheit}</div>`;
+        letzterHinweis();
     };
+    // Der letzte eigene Wert dieser Groesse als Platzhalter und darunter mit Tag.
+    const letzterHinweis = () => {
+        const hin = d.root.querySelector('#heLetzter');
+        const e = (d.vonHand || []).find(x => x.metrik === sel.value);
+        hin.hidden = !e;
+        if (!e) return;
+        // Die Einheit steht schon im Feld darueber.
+        hin.textContent = `Zuletzt ${vonHandWert(e)} am ${fmtDateTimeJahr(e.recorded_at)}`;
+        const f = d.root.querySelector('#heWert');
+        if (f && e.art !== 'blutdruck') f.placeholder = vonHandWert(e);
+    };
+    d.letzterHinweis = letzterHinweis;
     sel.addEventListener('change', () => {
         if (sel.value === '__neu') { d.close(); dlgGroesse(null); return; }
+        sel.dataset.angefasst = '1';
         zeichneWerte();
+        fokus();
     });
     zeichneWerte();
-    ladeZuletzt(d);
+    fokus();
+    // Ohne Vorwahl gilt die zuletzt eingetragene Groesse -- solange man
+    // weder die Auswahl angefasst noch schon etwas getippt hat.
+    ladeZuletzt(d).then(() => {
+        const e = (d.vonHand || [])[0];
+        const f = ersteFeld();
+        if (vorwahl || !e || sel.dataset.angefasst || (f && f.value) || e.metrik === sel.value) return;
+        if (![...sel.options].some(o => o.value === e.metrik)) return;
+        sel.value = e.metrik;
+        zeichneWerte();
+        fokus();
+    });
 
     d.root.querySelector('[data-form]').addEventListener('submit', async (e) => {
         e.preventDefault();
         const metrik = sel.value;
-        const datum = d.root.querySelector('#heDatum').value;
+        const tag = datum.value;
         const zeit = d.root.querySelector('#heZeit').value || '12:00';
-        if (!datum) { showToast('Der Tag fehlt', true); return; }
-        const zp = new Date(datum + 'T' + zeit);
-        const body = { metrik, datum, zeitpunkt: zp.toISOString() };
+        if (!tag) { showToast('Der Tag fehlt', true); return; }
+        const zp = new Date(tag + 'T' + zeit);
+        const body = { metrik, datum: tag, zeitpunkt: zp.toISOString() };
         const zahl = (id) => { const v = (d.root.querySelector(id).value || '').replace(',', '.'); return v === '' ? null : Number(v); };
         if (metrik === 'blood_pressure') { body.systolisch = zahl('#heSys'); body.diastolisch = zahl('#heDia'); }
         else body.wert = zahl('#heWert');
@@ -853,6 +914,7 @@ function dlgEintragen(vorwahl) {
             showToast(artLabel(metrik).label + ' eingetragen');
             // Fuer den naechsten Wert: das Feld leer, Groesse und Tag bleiben.
             zeichneWerte();
+            fokus();
             ladeZuletzt(d);
             loadMetricCharts();
             if (metrik === 'blood_pressure' || metrik === 'blood_glucose') loadBpGlucoseCharts();
@@ -869,15 +931,14 @@ async function ladeZuletzt(d) {
     try { liste = await HEALTH_API.vonHand() || []; }
     catch (e) { box.innerHTML = '<p class="he-hinweis">Konnte nicht geladen werden.</p>'; return; }
     if (!box.isConnected) return;
+    d.vonHand = liste;
+    if (d.letzterHinweis) d.letzterHinweis();
     if (!liste.length) { box.innerHTML = '<p class="he-hinweis">Noch nichts von Hand eingetragen.</p>'; return; }
     box.innerHTML = '<div class="rec-list">' + liste.map((e, i) => {
         const a = artLabel(e.metrik);
-        // Ganze Zahlen mit Tausenderpunkt (8.536 Schritte), sonst eine
-        // Nachkommastelle (141,4 kg) -- so, wie man es eingetragen hat.
-        const wert = e.art === 'blutdruck' ? `${fmt0(e.systolisch)}/${fmt0(e.diastolisch)}`
-                   : (Number.isInteger(Number(e.wert)) ? fmt0(e.wert) : fmt1(e.wert));
+        const wert = vonHandWert(e);
         return `<button type="button" class="rec-row" data-i="${i}">
-            <span class="rec-main"><span class="rec-title">${escHtml(a.label)}</span><span class="rec-meta">${escHtml(fmtDateTime(e.recorded_at))}</span></span>
+            <span class="rec-main"><span class="rec-title">${escHtml(a.label)}</span><span class="rec-meta">${escHtml(fmtDateTimeJahr(e.recorded_at))}</span></span>
             <span class="rec-side"><span class="rec-val">${escHtml(wert)}${a.unit ? ' ' + escHtml(a.unit) : ''}</span></span>
         </button>`;
     }).join('') + '</div>';
@@ -885,7 +946,7 @@ async function ladeZuletzt(d) {
     // Papierkorbs an jeder Zeile.
     box.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', async () => {
         const e = liste[Number(b.dataset.i)];
-        if (!await askConfirm({ title: 'Eintrag löschen?', text: `${artLabel(e.metrik).label} vom ${fmtDateTime(e.recorded_at)}`,
+        if (!await askConfirm({ title: 'Eintrag löschen?', text: `${artLabel(e.metrik).label} vom ${fmtDateTimeJahr(e.recorded_at)}`,
                                 ok: 'Löschen', danger: true })) return;
         try {
             await HEALTH_API.vonHandLoeschen(e.art, e.id);
@@ -1083,6 +1144,7 @@ function mountMetricChart(key, labels, data, trend, win) {
                 },
             ],
         },
+        plugins: [jahresStriche()],
         options: chartDefaults({
             plugins: { legend: { display: false }, tooltip: themedTooltip() },
             scales: {

@@ -24,6 +24,7 @@ async function init() {
         o.value = s.id; o.textContent = (s.icon || '') + ' ' + s.name;
         sel.appendChild(o);
     });
+    VexAuswahl.suchbar(sel, { platzhalter: 'Laden suchen …' });
     document.getElementById('newBtn').onclick = createBrand;
     document.getElementById('q').addEventListener('input', render);
     document.querySelectorAll('.filter-chip').forEach(btn => {

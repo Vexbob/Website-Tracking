@@ -85,6 +85,7 @@ function dlgBearbeiten() {
             <button type="submit" class="v-btn v-btn--primary" id="eSave">Speichern</button>
         </div>
     </form>`);
+    VexAuswahl.suchbar(d.root.querySelector('#eStore'), { platzhalter: 'Laden suchen …' });
     d.root.querySelector('[data-form]').addEventListener('submit', (ev) => { ev.preventDefault(); saveExpense(d); });
     d.root.querySelector('[data-weg]').addEventListener('click', () => deleteExpense(d));
 }

@@ -511,6 +511,16 @@ LAEDEN = [
     {"id": 1, "name": "REWE", "color": "#e11d48", "icon": "R", "receipt_count": 48},
     {"id": 2, "name": "Aldi Süd", "color": "#0ea5e9", "icon": "A", "receipt_count": 31},
     {"id": 3, "name": "dm", "color": "#22c55e", "icon": "D", "receipt_count": 12},
+] + [
+    # v2.46.0: eine lange Liste, wie sie der Bank-Import hinterlaesst -- fuer
+    # die Laden-Auswahl mit Suchfeld. Erfundene Namen.
+    {"id": 10 + i, "name": n, "color": "#6b7280", "icon": None, "receipt_count": 1 + i % 5}
+    for i, n in enumerate(["Apotheke am Markt", "Bäckerei Müller", "Café Süß", "Edeka Center",
+                           "Getränke Hoffmann", "Kaufland", "Lidl", "Netto", "Penny",
+                           "Rossmann", "Tankstelle Nord", "Baumarkt West", "Buchhandlung Seite 1",
+                           "Online-Versand", "Streamingdienst", "Fitnessstudio", "Kino am Ring",
+                           "Pizzeria Roma", "Döner Eck", "Drogerie Mitte", "Elektromarkt",
+                           "Zoohandlung", "Blumen Rosa", "Optiker Klar"])
 ]
 
 KATEGORIEN = [
@@ -652,12 +662,12 @@ def _welle(i, basis, hub, woche=0.0, rauschen=0.0):
             + rauschen * math.sin(i * 12.9898) * math.cos(i * 4.1414))
 
 
-def _g_reihe(fn, luecken=(), rund=0, einheit=None, mittel=False):
+def _g_reihe(fn, luecken=(), rund=0, einheit=None, mittel=False, tage=_GTAGE):
     raus = []
-    for i in range(_GTAGE):
+    for i in range(tage):
         if i in luecken:
             continue
-        tag = HEUTE - datetime.timedelta(days=_GTAGE - i)
+        tag = HEUTE - datetime.timedelta(days=tage - i)
         wert = round(fn(i), rund) if rund else int(round(fn(i)))
         zeile = {"sample_date": tag.isoformat(),
                  "recorded_at": tag.isoformat() + "T00:00:00+02:00",
@@ -675,8 +685,9 @@ ENERGIE_REIHE = _g_reihe(lambda i: _welle(i, 470, 90, 80, 60),
 PULS_REIHE = _g_reihe(lambda i: _welle(i, 74, 2, 1.5, 1.5), einheit="bpm", mittel=True)
 RUHEPULS_REIHE = _g_reihe(lambda i: _welle(i, 58.5 - i * 0.02, 1.2, 0.5, 0.8), einheit="bpm", mittel=True)
 HRV_REIHE = _g_reihe(lambda i: _welle(i, 42, 5, 2, 4), einheit="ms", mittel=True)
-GEWICHT_REIHE = _g_reihe(lambda i: 145.2 - i * 0.065 + 0.4 * ((i * 7) % 5) / 5, rund=1,
-                         luecken=set(range(0, _GTAGE, 3)) | {1, 2}, einheit="kg")
+# Gewicht ueber gut ein Jahr: so liegt ein Jahreswechsel im Bild (v2.46.0).
+GEWICHT_REIHE = _g_reihe(lambda i: 152.0 - i * 0.026 + 0.4 * ((i * 7) % 5) / 5, rund=1,
+                         luecken=set(range(0, 420, 3)) | {1, 2}, einheit="kg", tage=420)
 VO2_REIHE = _g_reihe(lambda i: 37.6 + i * 0.009, rund=1,
                      luecken={i for i in range(_GTAGE) if i % 6}, einheit="ml/kg/min")
 STRECKE_REIHE = _g_reihe(lambda i: _welle(i, 6.1, 1.0, 0.9, 0.7), rund=1,

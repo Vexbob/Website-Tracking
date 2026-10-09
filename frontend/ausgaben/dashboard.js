@@ -36,6 +36,8 @@ function populateFilters() {
     stores.forEach(x => s.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(x.id)}">${escapeHtml((x.icon || '') + ' ' + x.name)}</option>`));
     const c = document.getElementById('filterCategory');
     categories.forEach(x => c.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(x.id)}">${escapeHtml((x.icon || '') + ' ' + x.name)}</option>`));
+    // Laeden gibt es nach dem Bank-Import ein paar hundert: oben ein Suchfeld (v2.46.0).
+    VexAuswahl.suchbar(s, { platzhalter: 'Laden suchen …' });
 }
 
 /* Eine Hauptzahl, der Rest ordnet sich unter. Der laufende Monat ist die

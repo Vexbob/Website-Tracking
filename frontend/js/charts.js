@@ -179,6 +179,56 @@
         };
     }
 
+    /* Jahreswechsel als senkrechter Strich (v2.46.0). Die Achse nennt nur
+       Tag und Monat ("05.01."), und ueber ein Jahr gesehen steht dort zweimal
+       derselbe Tag -- welcher Teil der Kurve in welches Jahr faellt, sah man
+       nur im Tooltip. Der Strich steht zwischen dem letzten Punkt des alten
+       und dem ersten des neuen Jahres, die Jahreszahl klein oben daneben.
+
+       ``tage`` liefert die ISO-Daten der Punkte, in derselben Reihenfolge wie
+       die Beschriftungen: ``plugins: [VexCharts.jahresStriche(c => c.$vexIso)]``.
+       Farbe aus dem Token --chart-axis, keine eigene. */
+    function jahresStriche(tage) {
+        return {
+            id: 'vexJahre',
+            // Vor den Kurven: der Strich liegt hinter den Daten, nicht darauf.
+            beforeDatasetsDraw: function (chart) {
+                var liste = (typeof tage === 'function' ? tage(chart) : tage) || [];
+                var x = chart.scales && chart.scales.x, flaeche = chart.chartArea;
+                if (liste.length < 2 || !x || !flaeche) return;
+                var css = getComputedStyle(document.documentElement);
+                var schrift = css.getPropertyValue('--chart-axis').trim();
+                var ctx = chart.ctx;
+                ctx.save();
+                ctx.font = '600 10px ' + (Chart.defaults.font.family || 'sans-serif');
+                ctx.textBaseline = 'top';
+                for (var i = 1; i < liste.length; i++) {
+                    var a = safeDate(liste[i - 1]), b = safeDate(liste[i]);
+                    if (!a || !b || a.getFullYear() === b.getFullYear()) continue;
+                    var px = (x.getPixelForValue(i - 1) + x.getPixelForValue(i)) / 2;
+                    if (px < flaeche.left || px > flaeche.right) continue;
+                    ctx.strokeStyle = schrift;
+                    ctx.globalAlpha = 0.6;
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([4, 3]);
+                    ctx.beginPath();
+                    ctx.moveTo(Math.round(px) + 0.5, flaeche.top);
+                    ctx.lineTo(Math.round(px) + 0.5, flaeche.bottom);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                    // Die Zahl rechts vom Strich, ausser ganz am rechten Rand.
+                    var text = String(b.getFullYear());
+                    var breite = ctx.measureText(text).width;
+                    var rechts = px + 4 + breite <= flaeche.right;
+                    ctx.fillStyle = schrift;
+                    ctx.textAlign = rechts ? 'left' : 'right';
+                    ctx.fillText(text, rechts ? px + 4 : px - 4, flaeche.top + 2);
+                }
+                ctx.restore();
+            },
+        };
+    }
+
     /* Chart.js kommt mit ``defer`` vom CDN und kann NACH den Daten ankommen.
        Wer zeichnet, wartet hierauf (v2.25.0): in der Statistik fiel das erst
        auf, als ein zweiter Abruf wegfiel, der das Zeichnen bis dahin zufaellig
@@ -198,6 +248,7 @@
     window.VexCharts = {
         ORDER: ORDER,
         balken: balken,
+        jahresStriche: jahresStriche,
         bereit: bereit,
         fullDay: fullDay,
         fullMonth: fullMonth,
