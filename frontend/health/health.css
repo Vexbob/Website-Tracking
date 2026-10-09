@@ -169,6 +169,24 @@ body{visibility:hidden}body.ready{visibility:visible}
 /* Eine Messgröße ohne Werte im Zeitraum steht nicht als leere Karte da; sie
    ist in der Zeile darunter genannt (#hMetricOhne). */
 .h-metric-card.is-empty { display: none; }
+/* v2.48.0: Ein Tipp macht eine Karte zur Hauptsache: oben, volle Breite,
+   hohes Diagramm (metrikGross in health.js). */
+.h-metric-card { cursor: zoom-in; transition: border-color var(--dur-1) var(--ease); }
+.h-metric-card:hover { border-color: var(--line-strong); }
+.h-metric-card:focus-visible { outline: none; box-shadow: var(--kante-licht), var(--focus-ring); }
+.h-metric-card.is-gross { grid-column: 1 / -1; cursor: default; padding: 1.125rem 1.25rem 1rem 1.75rem; }
+.h-metric-card.is-gross .h-metric-head { cursor: zoom-out; }
+.h-metric-card.is-gross .chart-wrap.mini { height: clamp(260px, 42vh, 400px); }
+.h-metric-card.is-gross .h-metric-name { font-size: 1rem; }
+.h-metric-card.is-gross .h-metric-big { margin-left: auto; font-size: 2.125rem; font-weight: 700; letter-spacing: -0.03em; }
+.h-metric-card.is-gross .h-metric-big small { font-size: 0.875rem; }
+.h-metric-card.is-gross .h-metric-stats { font-size: 0.8125rem; margin-bottom: 0.75rem; }
+.h-metric-klein { display: none; flex: none; width: 32px; height: 32px; margin: -4px -6px -4px 0; color: var(--text-3); align-self: center; }
+.h-metric-card.is-gross .h-metric-klein { display: inline-flex; }
+.h-metric-grid.hat-gross .drag-handle { visibility: hidden; }
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+    .h-metric-klein { width: 44px; height: 44px; margin: -10px -10px -10px 0; }
+}
 .chart-wrap.mini { height: 140px; position: relative; }
 .h-metric-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
 .h-metric-name { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 700; color: var(--text-1); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

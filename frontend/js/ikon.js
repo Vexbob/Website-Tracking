@@ -73,6 +73,8 @@
         kopie:  '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>',
         stern:  '<path d="M12 3.8l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.8l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z"/>',
         bank:   '<path d="M3.5 9.5 12 4l8.5 5.5"/><path d="M5.5 10.5v7M10 10.5v7M14 10.5v7M18.5 10.5v7M3.5 20h17"/>',
+        // v2.48.0: eine grosse Karte wieder klein machen (Vitalwerte).
+        verkleinern: '<path d="M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"/>',
     };
 
     /* Das Zeichen als SVG-Text. `groesse` ist die Kantenlänge in Pixeln; 18

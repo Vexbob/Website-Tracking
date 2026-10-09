@@ -14,6 +14,11 @@
  *     Zeilen im Zeitstrahl.
  */
 window.VEXBOB_CHANGELOG = [
+    { v: 'v2.48.0', date: '2026-10-09', title: 'Vitalwerte: Diagramm groß anzeigen', notes: [
+        'Ein Tipp auf eine Karte macht sie zur Hauptsache: ganz oben, volle Breite, hohes Diagramm.',
+        'Ins große Diagramm tippen zeigt Werte; der Kopf oder der Knopf rechts macht es wieder klein.',
+        'Die gespeicherte Reihenfolge bleibt; solange eine Karte groß ist, ruht das Sortieren.',
+    ]},
     { v: 'v2.47.0', date: '2026-10-09', title: 'Datum überall als TT.MM.JJJJ', notes: [
         'Jedes Datumsfeld zeigt und nimmt Tag.Monat.Jahr – unabhängig von der Sprache des Browsers.',
         'Getippt wird mit oder ohne Punkte („09102026“, „9.10.26“), der Kalenderknopf daneben bleibt.',

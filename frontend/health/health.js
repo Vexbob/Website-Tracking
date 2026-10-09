@@ -653,9 +653,22 @@ function initVitalwerte() {
     document.getElementById('hEintragen').addEventListener('click', () => dlgEintragen());
     // Der Knopf an einer eigenen Messgroesse sitzt in einer Karte, die neu
     // gebaut werden kann -- also am Raster lauschen, nicht an der Karte.
-    document.getElementById('hMetricCharts').addEventListener('click', (e) => {
+    const raster = document.getElementById('hMetricCharts');
+    raster.addEventListener('click', (e) => {
         const b = e.target.closest('[data-eigen]');
-        if (b) dlgGroesse(Number(b.dataset.eigen));
+        if (b) { dlgGroesse(Number(b.dataset.eigen)); return; }
+        if (e.target.closest('[data-klein]')) { metrikGross(null); return; }
+        const karte = e.target.closest('.h-metric-card');
+        if (!karte || e.target.closest('.drag-handle')) return;
+        // Gross: ins Diagramm tippen zeigt Werte, der Kopf macht wieder klein.
+        if (karte.classList.contains('is-gross')) { if (!e.target.closest('canvas')) metrikGross(null); return; }
+        metrikGross(karte.dataset.metric);
+    });
+    raster.addEventListener('keydown', (e) => {
+        const karte = e.target.classList && e.target.classList.contains('h-metric-card') ? e.target : null;
+        if (!karte || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        metrikGross(karte.classList.contains('is-gross') ? null : karte.dataset.metric);
     });
     // Nach dem Loeschen von Daten wird neu aufgebaut -- auf derselben
     // Leinwand darf dann nicht noch das alte Diagramm haengen.
@@ -742,6 +755,8 @@ async function loadMetricCharts() {
     const ohneEl = document.getElementById('hMetricOhne');
     ohneEl.hidden = !ohne.length;
     ohneEl.textContent = ohne.length ? 'Ohne Werte in diesem Zeitraum: ' + ohne.join(', ') + '.' : '';
+    // Die grosse Karte hat im neuen Zeitraum nichts: dann ist keine gross.
+    if (state.metricGross && state.metricCards[state.metricGross].classList.contains('is-empty')) metrikGross(null);
     const mit = keys.length - ohne.length;
     document.getElementById('hVitalInfo').textContent =
         `${mit} ${mit === 1 ? 'Messgröße' : 'Messgrößen'} mit Werten · ${range.label || 'Zeitraum'}`;
@@ -1006,6 +1021,41 @@ function dlgGroesse(gid) {
     });
 }
 
+/* v2.48.0: Eine Karte wird zur Hauptsache -- ganz oben, volle Breite, hohes
+   Diagramm. Es ist immer hoechstens eine. Die gespeicherte Reihenfolge
+   bleibt unberuehrt: beim Verkleinern kehrt die Karte an ihren Platz zurueck,
+   und solange eine gross ist, ruht das Sortieren (sonst speicherte ein
+   Ziehen die vorgezogene Karte als neue Reihenfolge). */
+function metrikGross(key) {
+    const box = document.getElementById('hMetricCharts');
+    const karten = state.metricCards || {};
+    if (key && !karten[key]) key = null;
+    Object.keys(karten).forEach(k => {
+        const an = k === key;
+        karten[k].classList.toggle('is-gross', an);
+        karten[k].setAttribute('aria-expanded', an ? 'true' : 'false');
+        const ch = (state.metricChartMap || {})[k];
+        if (!ch) return;
+        ch.options.scales.y.ticks.maxTicksLimit = an ? 6 : 4;
+        ch.options.scales.x.ticks.autoSkipPadding = an ? 14 : 20;
+        ch.options.scales.x.ticks.font.size = an ? 11 : 10;
+        ch.options.scales.y.ticks.font.size = an ? 11 : 10;
+        ch.update('none');
+    });
+    // Zurueck in die gespeicherte Reihenfolge, dann die grosse nach vorn.
+    orderedMetricKeys().forEach(k => { if (karten[k]) box.appendChild(karten[k]); });
+    if (key) box.prepend(karten[key]);
+    box.classList.toggle('hat-gross', !!key);
+    if (state.sortableMetrics) state.sortableMetrics.option('disabled', !!key);
+    state.metricGross = key;
+    const ziel = key ? karten[key] : box;
+    const oben = ziel.getBoundingClientRect().top;
+    if (oben < 70 || oben > window.innerHeight * 0.6) {
+        const ruhig = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({ top: oben + window.scrollY - 90, behavior: ruhig ? 'auto' : 'smooth' });
+    }
+}
+
 // Gleiche Wert-Ermittlung wie fuer die Chart-Linie (qty, sonst avg_value).
 function metricValueOf(r) {
     const v = Number(r.qty);
@@ -1017,12 +1067,17 @@ function buildMetricShell(key) {
     const card = document.createElement('div');
     card.className = 'h-metric-card';
     card.dataset.metric = key;
+    // Ein Tipp macht die Karte gross (metrikGross).
+    card.tabIndex = 0;
+    card.setAttribute('aria-expanded', 'false');
+    card.setAttribute('aria-label', meta.label + ': groß anzeigen');
     card.innerHTML = `
         <span class="drag-handle" title="Ziehen zum Sortieren" aria-hidden="true">${ikon('griff', 16)}</span>
         <div class="h-metric-head">
             <div class="h-metric-name"><span class="gh-punkt" style="--ton:var(${meta.ton})"></span>${escHtml(meta.label)}${meta.eigen
                 ? `<button type="button" class="v-btn v-btn--ghost v-btn--icon h-metric-mehr" data-eigen="${meta.eigen}" aria-label="„${escHtml(meta.label)}“ bearbeiten">${ikon('mehr', 16)}</button>` : ''}</div>
             <div class="h-metric-big" data-role="big">–</div>
+            <button type="button" class="v-btn v-btn--ghost v-btn--icon h-metric-klein" data-klein aria-label="Verkleinern">${ikon('verkleinern', 16)}</button>
         </div>
         <div class="h-metric-stats" data-role="stats"></div>
         <div class="chart-wrap mini">
